@@ -55,3 +55,22 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
 - `/tasks/list` corta en 500 ítems y puede devolver registros `act_*` / `rec_*`
   además de tareas normales.
 - Usar el token equivocado en `create`/`update` da `PUBLISHER_AUTH_FAILED`.
+
+## Skills de diseño instalados (`.claude/skills/`)
+
+Copiados desde `kwsystems/krealo-publisher` (`.claude/skills/`), commit origen `fff45b1`.
+
+| Skill | Para qué |
+|---|---|
+| `frontend-design` | Proceso anti-template: brainstorm → explorar → plan → crítica → codear → crítica. |
+| `ui-ux-pro-max` | Motor generador de sistemas de diseño. CLI: `python3 .claude/skills/ui-ux-pro-max/scripts/search.py "<query>" --design-system --project-name "Krealo Shift" --stack <stack>`. Dominios: style, color, chart, landing, product, ux, typography, icons, gsap, react, web, google-fonts. |
+| `design`, `design-system`, `brand`, `ui-styling` | Sistema de diseño, tokens, marca y estilos. |
+| `banner-design` | Banners. |
+| `slides` | Presentaciones. |
+| `gsap-core`, `gsap-scrolltrigger`, `gsap-timeline`, `gsap-plugins`, `gsap-react`, `gsap-frameworks`, `gsap-performance`, `gsap-utils` | GSAP: scroll-driven, timelines, integración con React y performance. |
+
+Animación por npm según el stack que se elija: `motion`/`framer-motion` (micro-interacciones)
+y `gsap` + ScrollTrigger (scroll-driven). No son skills, son dependencias.
+
+**21st.dev** (patrones de sección premium, servicio pagado): CLI `npx -y @21st-dev/cli`.
+Requiere `TWENTYFIRST_TOKEN` en el entorno — sin él, solo funciona `21st logo`.
