@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
+import { RPC, TABLES, VIEWS } from '@/lib/supabase/types';
 
 /**
  * Horas y hojas de tiempo (§11.4).
@@ -97,7 +98,7 @@ export async function fetchDailySummaries(params: {
 }): Promise<DailySummary[]> {
   return selectRows(z.array(dailySummarySchema), (db) =>
     db
-      .from('daily_time_summary')
+      .from(VIEWS.dailyTimeSummary)
       .select(
         'employee_id, location_id, work_date, sessions, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, needs_review, flags',
       )
@@ -115,7 +116,7 @@ export async function fetchWorkSessions(params: {
 }): Promise<WorkSession[]> {
   return selectRows(z.array(workSessionSchema), (db) =>
     db
-      .from('work_sessions')
+      .from(TABLES.workSessions)
       .select(
         'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, updated_at',
       )
@@ -133,7 +134,7 @@ export async function fetchTimeEvents(params: {
 }): Promise<TimeEvent[]> {
   return selectRows(z.array(timeEventSchema), (db) =>
     db
-      .from('time_events')
+      .from(TABLES.timeEvents)
       .select('id, employee_id, event_type, break_type, occurred_at, source, is_offline')
       .eq('employee_id', params.employeeId)
       .gte('occurred_at', params.fromISO)
@@ -146,8 +147,10 @@ export async function fetchAdjustments(sessionIds: string[]): Promise<TimeAdjust
   if (sessionIds.length === 0) return [];
   return selectRows(z.array(adjustmentSchema), (db) =>
     db
-      .from('time_adjustments')
-      .select('id, work_session_id, target_type, before_value, after_value, reason, created_at, channel')
+      .from(TABLES.timeAdjustments)
+      .select(
+        'id, work_session_id, target_type, before_value, after_value, reason, created_at, channel',
+      )
       .in('work_session_id', sessionIds)
       .order('created_at', { ascending: false }),
   );
@@ -172,7 +175,7 @@ export async function adjustWorkSession(params: {
 
   const db = requireClient();
   try {
-    const { error } = await db.rpc('manager_adjust_time', {
+    const { error } = await db.rpc(RPC.managerAdjustTime, {
       p_work_session_id: params.workSessionId,
       p_expected_updated_at: params.expectedUpdatedAt,
       p_new_starts_at: params.newStartsAt,
@@ -193,7 +196,7 @@ export async function fetchPeriod(params: {
 }): Promise<TimesheetPeriod | null> {
   const rows = await selectRows(z.array(periodSchema), (db) =>
     db
-      .from('timesheet_periods')
+      .from(TABLES.timesheetPeriods)
       .select('id, location_id, starts_on, ends_on, status, approved_at')
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
@@ -216,7 +219,7 @@ export async function ensurePeriod(params: {
 
   return selectRows(periodSchema, (db) =>
     db
-      .from('timesheet_periods')
+      .from(TABLES.timesheetPeriods)
       .insert({
         organization_id: params.organizationId,
         location_id: params.locationId,
@@ -231,7 +234,7 @@ export async function ensurePeriod(params: {
 export async function approvePeriod(periodId: string): Promise<void> {
   const db = requireClient();
   try {
-    const { error } = await db.rpc('approve_timesheet_period', { p_period_id: periodId });
+    const { error } = await db.rpc(RPC.approveTimesheetPeriod, { p_period_id: periodId });
     if (error !== null) throw toAdminError(error);
   } catch (error) {
     throw toAdminError(error);
@@ -242,7 +245,7 @@ export async function approvePeriod(periodId: string): Promise<void> {
 export async function reopenPeriod(periodId: string): Promise<void> {
   await execute((db) =>
     db
-      .from('timesheet_periods')
+      .from(TABLES.timesheetPeriods)
       .update({ status: 'reopened', approved_at: null, approved_by: null })
       .eq('id', periodId),
   );
@@ -272,7 +275,7 @@ export async function fetchExportRows(params: {
 }): Promise<TimesheetExportRow[]> {
   const db = requireClient();
   try {
-    const { data, error } = await db.rpc('export_timesheet_rows', {
+    const { data, error } = await db.rpc(RPC.exportTimesheetRows, {
       p_location_id: params.locationId,
       p_from: params.from,
       p_to: params.to,
@@ -312,7 +315,7 @@ export async function createManualEntryRequest(params: {
   if (reason.length === 0) throw toAdminError({ code: '23514', message: 'REASON_REQUIRED' });
 
   await execute((db) =>
-    db.from('time_edit_requests').insert({
+    db.from(TABLES.timeEditRequests).insert({
       organization_id: params.organizationId,
       employee_id: params.employeeId,
       location_id: params.locationId,

@@ -22,7 +22,9 @@ export function isTrivialPin(pin: string): boolean {
   if (allEqual) return true;
 
   const ascending = digits.every((digit, index) => index === 0 || digit === digits[index - 1]! + 1);
-  const descending = digits.every((digit, index) => index === 0 || digit === digits[index - 1]! - 1);
+  const descending = digits.every(
+    (digit, index) => index === 0 || digit === digits[index - 1]! - 1,
+  );
   return ascending || descending;
 }
 

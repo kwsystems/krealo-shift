@@ -2,9 +2,10 @@ import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
+import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
-import { ManagerScopeProvider } from '@/hooks/use-manager-scope';
+import { ManagerScopeProvider, useManagerMembership } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
@@ -43,9 +44,16 @@ export default function ManagerLayout() {
   const { useSidebar } = useResponsive();
 
   const phase = useSessionStore((s) => s.phase);
-  const role = useSessionStore((s) => s.role);
+  const storedRole = useSessionStore((s) => s.role);
   const kioskHydrated = useKioskStore((s) => s.hydrated);
   const binding = useKioskStore((s) => s.binding);
+
+  // La membresía se resuelve aquí, antes de la guarda de rol: la sesión de
+  // Supabase dice quién eres, no qué puedes hacer. La consulta comparte clave con
+  // el provider, así que no se pregunta dos veces.
+  const membership = useManagerMembership(
+    phase === 'signedIn' && kioskHydrated && binding === null,
+  );
 
   // Mientras no se sabe, no se muestra nada: ni el panel ni el acceso. Mandar a
   // iniciar sesión a quien SÍ la tiene sería peor que esperar un instante.
@@ -65,6 +73,18 @@ export default function ManagerLayout() {
   if (phase !== 'signedIn') {
     return <Redirect href="/(auth)/sign-in" />;
   }
+
+  // La membresía no se pudo leer: se explica y se ofrece reintentar, en vez de
+  // dejar el panel cargando para siempre (§20).
+  if (membership.error !== null) {
+    return (
+      <AppScreen tone="canvas">
+        <AdminErrorState error={membership.error} onRetry={() => void membership.refetch()} />
+      </AppScreen>
+    );
+  }
+
+  const role = membership.data?.role ?? storedRole;
 
   // Rol todavía sin resolver: se espera, igual que en el arranque.
   if (role === null) {

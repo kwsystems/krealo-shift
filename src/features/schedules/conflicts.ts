@@ -79,7 +79,10 @@ export function scheduledMinutesByEmployee(shifts: ScheduledShift[]): Map<string
   const totals = new Map<string, number>();
   for (const shift of shifts) {
     if (!isCountable(shift)) continue;
-    totals.set(shift.employeeId, (totals.get(shift.employeeId) ?? 0) + shiftScheduledMinutes(shift));
+    totals.set(
+      shift.employeeId,
+      (totals.get(shift.employeeId) ?? 0) + shiftScheduledMinutes(shift),
+    );
   }
   return totals;
 }

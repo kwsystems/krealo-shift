@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
 import { AdminError, execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
+import { TABLES } from '@/lib/supabase/types';
 
 /**
  * Turnos y publicaciones (§11.3).
@@ -58,7 +59,7 @@ export async function fetchWeekShifts(params: {
 }): Promise<ShiftRow[]> {
   return selectRows(z.array(shiftRowSchema), (db) =>
     db
-      .from('shifts')
+      .from(TABLES.shifts)
       .select(SHIFT_COLUMNS)
       .eq('location_id', params.locationId)
       .gte('starts_at', params.fromISO)
@@ -122,7 +123,7 @@ export async function createShift(params: {
   const createdBy = actorId();
 
   await execute((db) =>
-    db.from('shifts').insert({
+    db.from(TABLES.shifts).insert({
       ...row,
       status: 'draft',
       created_by: createdBy,
@@ -146,7 +147,7 @@ export async function updateShift(params: {
 
   await execute((db) =>
     db
-      .from('shifts')
+      .from(TABLES.shifts)
       .update({ ...row, status: 'draft', updated_by: actorId() })
       .eq('id', params.shiftId),
   );
@@ -184,14 +185,14 @@ export async function removeShift(params: { shiftId: string; status: string }): 
   if (params.status === 'published') {
     await execute((db) =>
       db
-        .from('shifts')
+        .from(TABLES.shifts)
         .update({ status: 'cancelled', updated_by: actorId() })
         .eq('id', params.shiftId),
     );
     return;
   }
 
-  await execute((db) => db.from('shifts').delete().eq('id', params.shiftId));
+  await execute((db) => db.from(TABLES.shifts).delete().eq('id', params.shiftId));
 }
 
 /**
@@ -210,11 +211,13 @@ export async function copyPreviousWeek(params: {
   const previousWeekStart = addDaysToKey(targetWeekStart, -7);
   const range = weekRangeInstants(previousWeekStart, timezone);
 
-  const source = (await fetchWeekShifts({
-    locationId,
-    fromISO: range.fromISO,
-    toISO: range.toISO,
-  })).filter(
+  const source = (
+    await fetchWeekShifts({
+      locationId,
+      fromISO: range.fromISO,
+      toISO: range.toISO,
+    })
+  ).filter(
     (shift) =>
       shift.status !== 'cancelled' &&
       (employeeId === undefined || employeeId === null || shift.employee_id === employeeId),
@@ -250,7 +253,7 @@ export async function copyPreviousWeek(params: {
     };
   });
 
-  await execute((db) => db.from('shifts').insert(rows));
+  await execute((db) => db.from(TABLES.shifts).insert(rows));
   return rows.length;
 }
 
@@ -272,7 +275,7 @@ export async function publishShifts(params: {
 
   await execute((db) =>
     db
-      .from('shifts')
+      .from(TABLES.shifts)
       .update({ status: 'published', updated_by: actorId() })
       .in('id', shiftIds)
       .eq('status', 'draft'),
@@ -282,7 +285,7 @@ export async function publishShifts(params: {
   const nextVersion = (previous[0]?.publication_version ?? 0) + 1;
 
   await execute((db) =>
-    db.from('shift_publications').insert({
+    db.from(TABLES.shiftPublications).insert({
       organization_id: organizationId,
       location_id: locationId,
       week_starts_on: weekStart,
@@ -299,7 +302,7 @@ export async function fetchPublications(params: {
 }): Promise<ShiftPublication[]> {
   return selectRows(z.array(publicationSchema), (db) =>
     db
-      .from('shift_publications')
+      .from(TABLES.shiftPublications)
       .select('id, publication_version, published_at, changed_shift_ids')
       .eq('location_id', params.locationId)
       .eq('week_starts_on', params.weekStart)

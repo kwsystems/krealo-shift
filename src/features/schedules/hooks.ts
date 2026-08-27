@@ -31,7 +31,8 @@ import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
  */
 
 export const scheduleKeys = {
-  week: (locationId: string, weekStart: string) => ['schedule', 'week', locationId, weekStart] as const,
+  week: (locationId: string, weekStart: string) =>
+    ['schedule', 'week', locationId, weekStart] as const,
   publications: (locationId: string, weekStart: string) =>
     ['schedule', 'publications', locationId, weekStart] as const,
 };
@@ -68,10 +69,7 @@ export function usePublications(params: { locationId: string | null; weekStart: 
 }
 
 /** Convierte filas de la base en la forma que entienden los cálculos puros. */
-export function toScheduledShifts(
-  rows: ShiftRow[],
-  names: Map<string, string>,
-): ScheduledShift[] {
+export function toScheduledShifts(rows: ShiftRow[], names: Map<string, string>): ScheduledShift[] {
   return rows.map((row) => ({
     id: row.id,
     employeeId: row.employee_id,

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { generatePin } from './pin';
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
+import { RPC, TABLES } from '@/lib/supabase/types';
 
 /**
  * Datos del equipo (§11.2).
@@ -63,7 +64,7 @@ export type JobRole = z.infer<typeof jobRoleSchema>;
 export async function fetchEmployees(organizationId: string): Promise<Employee[]> {
   return selectRows(z.array(employeeSchema), (db) =>
     db
-      .from('employees')
+      .from(TABLES.employees)
       .select('id, full_name, preferred_name, email, employee_number, status, hire_date, user_id')
       .eq('organization_id', organizationId)
       .order('full_name', { ascending: true }),
@@ -80,7 +81,7 @@ export async function fetchLocationAssignments(
   if (locationIds.length === 0) return [];
   return selectRows(z.array(assignmentSchema), (db) =>
     db
-      .from('employee_location_assignments')
+      .from(TABLES.employeeLocationAssignments)
       .select('employee_id, location_id, can_manage, is_primary')
       .in('location_id', locationIds),
   );
@@ -90,7 +91,7 @@ export async function fetchEmployeeJobRoles(employeeIds: string[]): Promise<Empl
   if (employeeIds.length === 0) return [];
   return selectRows(z.array(employeeJobRoleSchema), (db) =>
     db
-      .from('employee_job_roles')
+      .from(TABLES.employeeJobRoles)
       .select('employee_id, job_role_id, is_primary')
       .in('employee_id', employeeIds),
   );
@@ -99,7 +100,7 @@ export async function fetchEmployeeJobRoles(employeeIds: string[]): Promise<Empl
 export async function fetchJobRoles(organizationId: string): Promise<JobRole[]> {
   return selectRows(z.array(jobRoleSchema), (db) =>
     db
-      .from('job_roles')
+      .from(TABLES.jobRoles)
       .select('id, name, color, is_active')
       .eq('organization_id', organizationId)
       .order('name', { ascending: true }),
@@ -123,12 +124,12 @@ async function replaceAssignments(params: {
   locationIds: string[];
 }): Promise<void> {
   await execute((db) =>
-    db.from('employee_location_assignments').delete().eq('employee_id', params.employeeId),
+    db.from(TABLES.employeeLocationAssignments).delete().eq('employee_id', params.employeeId),
   );
   if (params.locationIds.length === 0) return;
 
   await execute((db) =>
-    db.from('employee_location_assignments').insert(
+    db.from(TABLES.employeeLocationAssignments).insert(
       params.locationIds.map((locationId, index) => ({
         employee_id: params.employeeId,
         location_id: locationId,
@@ -143,12 +144,12 @@ async function replaceJobRoles(params: {
   jobRoleIds: string[];
 }): Promise<void> {
   await execute((db) =>
-    db.from('employee_job_roles').delete().eq('employee_id', params.employeeId),
+    db.from(TABLES.employeeJobRoles).delete().eq('employee_id', params.employeeId),
   );
   if (params.jobRoleIds.length === 0) return;
 
   await execute((db) =>
-    db.from('employee_job_roles').insert(
+    db.from(TABLES.employeeJobRoles).insert(
       params.jobRoleIds.map((jobRoleId, index) => ({
         employee_id: params.employeeId,
         job_role_id: jobRoleId,
@@ -166,7 +167,7 @@ export async function createEmployee(params: {
 
   const inserted = await selectRows(insertedIdSchema, (db) =>
     db
-      .from('employees')
+      .from(TABLES.employees)
       .insert({
         organization_id: organizationId,
         full_name: draft.fullName.trim(),
@@ -193,7 +194,7 @@ export async function updateEmployee(params: {
 
   await execute((db) =>
     db
-      .from('employees')
+      .from(TABLES.employees)
       .update({
         full_name: draft.fullName.trim(),
         preferred_name: draft.preferredName,
@@ -213,7 +214,7 @@ export async function setEmployeeStatus(params: {
   status: EmployeeStatus;
 }): Promise<void> {
   await execute((db) =>
-    db.from('employees').update({ status: params.status }).eq('id', params.employeeId),
+    db.from(TABLES.employees).update({ status: params.status }).eq('id', params.employeeId),
   );
 }
 
@@ -229,7 +230,7 @@ export async function resetEmployeePin(params: {
 
   const db = requireClient();
   try {
-    const { error } = await db.rpc('set_employee_pin', {
+    const { error } = await db.rpc(RPC.setEmployeePin, {
       p_employee_id: params.employeeId,
       p_pin: pin,
     });
@@ -259,7 +260,7 @@ export async function fetchUpcomingShifts(params: {
 }): Promise<UpcomingShift[]> {
   return selectRows(z.array(upcomingShiftSchema), (db) =>
     db
-      .from('shifts')
+      .from(TABLES.shifts)
       .select('id, starts_at, ends_at, location_id, job_role_id, status')
       .eq('employee_id', params.employeeId)
       .neq('status', 'cancelled')

@@ -89,7 +89,10 @@ export function toAdminError(error: unknown): AdminError {
   }
 
   if (error instanceof Error) {
-    return new AdminError(/network|fetch/i.test(error.message) ? 'offline' : 'server', error.message);
+    return new AdminError(
+      /network|fetch/i.test(error.message) ? 'offline' : 'server',
+      error.message,
+    );
   }
 
   return new AdminError('server');

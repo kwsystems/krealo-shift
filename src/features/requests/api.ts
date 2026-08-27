@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { adjustWorkSession } from '@/features/timesheets/api';
 import { execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
+import { TABLES } from '@/lib/supabase/types';
 
 /**
  * Bandeja de solicitudes (§11.5).
@@ -66,7 +67,7 @@ export async function fetchRequests(params: {
 }): Promise<TimeEditRequest[]> {
   return selectRows(z.array(requestSchema), (db) =>
     db
-      .from('time_edit_requests')
+      .from(TABLES.timeEditRequests)
       .select(
         'id, employee_id, location_id, work_session_id, target_date, kind, proposed_value, reason, status, reviewer_comment, reviewed_at, created_at',
       )
@@ -83,7 +84,7 @@ export async function countPendingRequests(params: {
 }): Promise<number> {
   const rows = await selectRows(z.array(z.object({ id: z.string().uuid() })), (db) =>
     db
-      .from('time_edit_requests')
+      .from(TABLES.timeEditRequests)
       .select('id')
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
@@ -99,7 +100,7 @@ export async function commentRequest(params: {
 }): Promise<void> {
   await execute((db) =>
     db
-      .from('time_edit_requests')
+      .from(TABLES.timeEditRequests)
       .update({ reviewer_comment: params.comment.trim() })
       .eq('id', params.requestId),
   );
@@ -121,7 +122,8 @@ export async function reviewRequest(params: {
   const { request, decision, comment } = params;
   let applied = false;
 
-  const proposedStart = request.proposed_value.startsAt ?? request.proposed_value.proposedAt ?? null;
+  const proposedStart =
+    request.proposed_value.startsAt ?? request.proposed_value.proposedAt ?? null;
   const proposedEnd = request.proposed_value.endsAt ?? null;
 
   if (
@@ -143,7 +145,7 @@ export async function reviewRequest(params: {
 
   await execute((db) =>
     db
-      .from('time_edit_requests')
+      .from(TABLES.timeEditRequests)
       .update({
         status: decision,
         reviewed_by: useSessionStore.getState().user?.userId ?? null,

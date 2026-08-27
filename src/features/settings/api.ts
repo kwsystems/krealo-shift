@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import type { LocationSettings } from '@/hooks/use-manager-scope';
+import { RPC, TABLES } from '@/lib/supabase/types';
 
 /**
  * Configuración de organización, ubicación, kioscos y notificaciones (§11.6).
@@ -23,7 +24,7 @@ export async function updateOrganization(params: {
   patch: OrganizationPatch;
 }): Promise<void> {
   await execute((db) =>
-    db.from('organizations').update(params.patch).eq('id', params.organizationId),
+    db.from(TABLES.organizations).update(params.patch).eq('id', params.organizationId),
   );
 }
 
@@ -35,7 +36,7 @@ export async function updateLocation(params: {
 }): Promise<void> {
   await execute((db) =>
     db
-      .from('locations')
+      .from(TABLES.locations)
       .update({
         name: params.name.trim(),
         address: params.address.trim(),
@@ -67,7 +68,7 @@ export type KioskDevice = z.infer<typeof kioskDeviceSchema>;
 export async function fetchKioskDevices(organizationId: string): Promise<KioskDevice[]> {
   return selectRows(z.array(kioskDeviceSchema), (db) =>
     db
-      .from('kiosk_devices')
+      .from(TABLES.kioskDevices)
       .select('id, display_name, location_id, status, app_version, last_seen_at, last_sync_at')
       .eq('organization_id', organizationId)
       .order('display_name', { ascending: true }),
@@ -81,7 +82,7 @@ export async function createActivationCode(params: {
 }): Promise<string> {
   const db = requireClient();
   try {
-    const { data, error } = await db.rpc('create_kiosk_activation_code', {
+    const { data, error } = await db.rpc(RPC.createKioskActivationCode, {
       p_location_id: params.locationId,
       p_valid_minutes: params.validMinutes,
     });
@@ -97,7 +98,7 @@ export async function createActivationCode(params: {
 export async function revokeKioskDevice(deviceId: string): Promise<void> {
   const db = requireClient();
   try {
-    const { error } = await db.rpc('revoke_kiosk_device', { p_device_id: deviceId });
+    const { error } = await db.rpc(RPC.revokeKioskDevice, { p_device_id: deviceId });
     if (error !== null) throw toAdminError(error);
   } catch (error) {
     throw toAdminError(error);
@@ -150,7 +151,7 @@ export async function fetchNotificationPreferences(params: {
 }): Promise<NotificationPreferences> {
   const rows = await selectRows(z.array(preferencesRowSchema), (db) =>
     db
-      .from('notification_preferences')
+      .from(TABLES.notificationPreferences)
       .select('preferences')
       .eq('user_id', params.userId)
       .eq('organization_id', params.organizationId)
@@ -165,7 +166,7 @@ export async function saveNotificationPreferences(params: {
   preferences: NotificationPreferences;
 }): Promise<void> {
   await execute((db) =>
-    db.from('notification_preferences').upsert(
+    db.from(TABLES.notificationPreferences).upsert(
       {
         user_id: params.userId,
         organization_id: params.organizationId,

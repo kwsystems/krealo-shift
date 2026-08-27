@@ -1,0 +1,484 @@
+import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
+
+import { fetchExportRows, type WorkSession } from './api';
+import { alertsForSession, overlappingSessionIds, type TimesheetAlert } from './alerts';
+import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
+import {
+  useAdjustments,
+  useDailySummaries,
+  usePeriod,
+  useTimeEvents,
+  useTimesheetMutations,
+  useTimesheetTotals,
+  useWorkSessions,
+} from './hooks';
+import { shareCsv } from './share-csv';
+import { AsyncSection } from '@/components/schedule/data-states';
+import {
+  InlineNotice,
+  SegmentedControl,
+  SelectField,
+  StatTile,
+  type Option,
+} from '@/components/schedule/fields';
+import { WeekNavigator } from '@/components/schedule/week-tools';
+import { ManualEntrySheet, SessionDetailSheet } from '@/components/timesheets/session-detail';
+import { SessionRow } from '@/components/timesheets/session-row';
+import { AppText } from '@/components/ui/app-text';
+import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { StatusBadge } from '@/components/ui/states';
+import {
+  addWeeks,
+  currentWeekStart,
+  dateKeyOf,
+  localDateTimeToInstant,
+  weekEnd,
+  weekRangeInstants,
+} from '@/features/schedules/week';
+import { useEmployeeNames, useTeam } from '@/features/team/hooks';
+import { adminErrorKind } from '@/hooks/use-admin-query';
+import { useLiveClock } from '@/hooks/use-live-clock';
+import { useManagerScope } from '@/hooks/use-manager-scope';
+import { currentLanguage } from '@/i18n';
+import { spacing } from '@/theme/tokens';
+import { minutesToHHmm } from '@/utils/time';
+
+/**
+ * Horas y hojas de tiempo (§11.4).
+ *
+ * El periodo por defecto es la semana en curso, con la misma navegación que el
+ * editor de horarios para que no haya dos formas distintas de moverse en el
+ * tiempo dentro de la misma app.
+ */
+
+type StatusFilter = 'all' | 'needsReview' | 'approved';
+
+export function TimesheetsScreen() {
+  const { t } = useTranslation();
+  const scope = useManagerScope();
+  const language = currentLanguage();
+  const now = useLiveClock('minute');
+
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [selected, setSelected] = useState<WorkSession | null>(null);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  const nowISO = now.toISOString();
+  const thisWeekStart = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
+  const weekStart = addWeeks(thisWeekStart, weekOffset);
+  const from = weekStart;
+  const to = weekEnd(weekStart);
+  const range = useMemo(
+    () => weekRangeInstants(weekStart, scope.timezone),
+    [weekStart, scope.timezone],
+  );
+
+  const organizationId = scope.organization?.id ?? null;
+  const summaries = useDailySummaries({ locationId: scope.locationId, from, to });
+  const sessions = useWorkSessions({
+    locationId: scope.locationId,
+    fromISO: range.fromISO,
+    toISO: range.toISO,
+    cacheKey: { from, to },
+  });
+  const period = usePeriod({ organizationId, locationId: scope.locationId, from, to });
+  const names = useEmployeeNames(organizationId);
+  const team = useTeam({
+    organizationId,
+    locationIds: scope.locationId === null ? [] : [scope.locationId],
+  });
+
+  const mutations = useTimesheetMutations({
+    organizationId,
+    locationId: scope.locationId,
+    from,
+    to,
+  });
+
+  const selectedDayRange = useMemo(() => {
+    if (selected === null) return { fromISO: range.fromISO, toISO: range.toISO, key: 'none' };
+    const dayKey = dateKeyOf(selected.starts_at, scope.timezone);
+    const startInstant = localDateTimeToInstant(dayKey, '00:00', scope.timezone);
+    const endInstant = localDateTimeToInstant(dayKey, '23:59', scope.timezone);
+    return {
+      fromISO: startInstant ?? range.fromISO,
+      toISO: endInstant ?? range.toISO,
+      key: dayKey,
+    };
+  }, [selected, scope.timezone, range.fromISO, range.toISO]);
+
+  const events = useTimeEvents({
+    employeeId: selected?.employee_id ?? null,
+    fromISO: selectedDayRange.fromISO,
+    toISO: selectedDayRange.toISO,
+    cacheKey: selectedDayRange.key,
+  });
+  const adjustments = useAdjustments(selected === null ? [] : [selected.id]);
+
+  const allSessions = useMemo(() => sessions.data ?? [], [sessions.data]);
+  const overlapping = useMemo(() => overlappingSessionIds(allSessions), [allSessions]);
+
+  const alertsBySession = useMemo(() => {
+    const map = new Map<string, TimesheetAlert[]>();
+    for (const session of allSessions) {
+      const alerts = alertsForSession(session, nowISO);
+      if (overlapping.has(session.id) && !alerts.includes('overlap')) alerts.push('overlap');
+      map.set(session.id, alerts);
+    }
+    return map;
+  }, [allSessions, overlapping, nowISO]);
+
+  const visibleSummaries = useMemo(
+    () =>
+      (summaries.data ?? []).filter(
+        (day) => employeeFilter === null || day.employee_id === employeeFilter,
+      ),
+    [summaries.data, employeeFilter],
+  );
+
+  const totals = useTimesheetTotals(visibleSummaries, scope.settings.dailyOvertimeThresholdMinutes);
+
+  const visibleSessions = useMemo(
+    () =>
+      allSessions.filter((session) => {
+        if (employeeFilter !== null && session.employee_id !== employeeFilter) return false;
+        if (statusFilter === 'needsReview') {
+          return (alertsBySession.get(session.id) ?? []).length > 0;
+        }
+        if (statusFilter === 'approved') return session.status === 'approved';
+        return true;
+      }),
+    [allSessions, employeeFilter, statusFilter, alertsBySession],
+  );
+
+  const employeeOptions = useMemo<Option<string>[]>(
+    () =>
+      team.members
+        .filter(
+          (member) => scope.locationId === null || member.locationIds.includes(scope.locationId),
+        )
+        .map((member) => ({ value: member.id, label: member.displayName })),
+    [team.members, scope.locationId],
+  );
+
+  const csvLabels: CsvLabels = {
+    employee: t('csv.employee'),
+    date: t('csv.date'),
+    clockIn: t('csv.clockIn'),
+    clockOut: t('csv.clockOut'),
+    grossHours: t('csv.grossHours'),
+    paidBreak: t('csv.paidBreak'),
+    unpaidBreak: t('csv.unpaidBreak'),
+    netHours: t('csv.netHours'),
+    netDecimal: t('csv.netDecimal'),
+    status: t('csv.status'),
+    flags: t('csv.flags'),
+  };
+
+  const exportCsv = useMutation({
+    mutationFn: async () => {
+      const rows = await fetchExportRows({
+        locationId: scope.locationId ?? '',
+        from,
+        to,
+      });
+      const content = buildTimesheetCsv(rows, {
+        labels: csvLabels,
+        timezone: scope.timezone,
+        timeFormat: scope.timeFormat,
+        language,
+      });
+      await shareCsv({ fileName: timesheetFileName({ from, to }), content });
+      return rows.length;
+    },
+    onSuccess: (count) => setFeedback(t('timesheet.exported', { count })),
+  });
+
+  const periodStatus = period.data?.status ?? 'open';
+  const conflict = adminErrorKind(mutations.adjust.error) === 'conflict';
+
+  return (
+    <AppScreen tone="canvas" scroll>
+      <ResponsiveContainer>
+        <Stack gap={spacing.lg}>
+          <AppText variant="title" accessibilityRole="header">
+            {t('timesheet.title')}
+          </AppText>
+
+          <AsyncSection
+            isPending={scope.isLoading}
+            error={scope.error}
+            isEmpty={scope.locations.length === 0}
+            emptyTitle={t('settings.noLocations')}
+            emptyBody={t('settings.noLocationsHint')}
+            onRetry={scope.refetch}
+          >
+            <Stack gap={spacing.lg}>
+              {scope.locations.length > 1 ? (
+                <SelectField
+                  label={t('schedule.location')}
+                  value={scope.locationId}
+                  options={scope.locations.map((location) => ({
+                    value: location.id,
+                    label: location.name,
+                  }))}
+                  onChange={scope.setLocationId}
+                  testID="timesheet-location"
+                />
+              ) : null}
+
+              <WeekNavigator
+                weekStart={weekStart}
+                language={language}
+                isCurrentWeek={weekOffset === 0}
+                onPrevious={() => setWeekOffset((current) => current - 1)}
+                onNext={() => setWeekOffset((current) => current + 1)}
+                onGoToCurrent={() => setWeekOffset(0)}
+              />
+
+              <SelectField
+                label={t('schedule.employee')}
+                value={employeeFilter}
+                options={employeeOptions}
+                onChange={(value) =>
+                  setEmployeeFilter((current) => (current === value ? null : value))
+                }
+                emptyLabel={t('team.noEmployeesForLocation')}
+                testID="timesheet-employee-filter"
+              />
+
+              <SegmentedControl
+                label={t('timesheet.statusFilter')}
+                value={statusFilter}
+                options={[
+                  { value: 'all', label: t('team.statusAll') },
+                  { value: 'needsReview', label: t('timesheet.statusNeedsReview') },
+                  { value: 'approved', label: t('timesheet.statusApproved') },
+                ]}
+                onChange={setStatusFilter}
+                testID="timesheet-status-filter"
+              />
+
+              <Row gap={spacing.sm} wrap align="flex-start">
+                <StatTile
+                  label={t('timesheet.netHours')}
+                  value={minutesToHHmm(totals.netMinutes)}
+                  tone="info"
+                  icon="time-outline"
+                  testID="total-net"
+                />
+                <StatTile
+                  label={t('timesheet.regular')}
+                  value={minutesToHHmm(totals.regularMinutes)}
+                  tone="working"
+                  icon="checkmark-circle"
+                />
+                <StatTile
+                  label={t('timesheet.overtimeInformative')}
+                  value={minutesToHHmm(totals.overtimeMinutes)}
+                  tone="onBreak"
+                  icon="trending-up-outline"
+                />
+                <StatTile
+                  label={t('timesheet.breaks')}
+                  value={minutesToHHmm(totals.unpaidBreakMinutes + totals.paidBreakMinutes)}
+                  tone="offShift"
+                  icon="cafe-outline"
+                />
+                <StatTile
+                  label={t('states.needsReviewBadge')}
+                  value={String(totals.needsReviewDays)}
+                  tone={totals.needsReviewDays > 0 ? 'late' : 'offShift'}
+                  icon="alert-circle"
+                />
+              </Row>
+
+              <Card>
+                <Row justify="space-between" gap={spacing.md} wrap align="center">
+                  <Stack gap={spacing.xs}>
+                    <AppText variant="bodyStrong">{t('timesheet.period')}</AppText>
+                    <AppText variant="help" tone="subtle" tabular>
+                      {`${from} – ${to}`}
+                    </AppText>
+                  </Stack>
+                  <StatusBadge
+                    label={
+                      periodStatus === 'approved'
+                        ? t('timesheet.statusApproved')
+                        : periodStatus === 'reopened'
+                          ? t('timesheet.statusReopened')
+                          : t('timesheet.statusOpen')
+                    }
+                    tone={periodStatus === 'approved' ? 'working' : 'info'}
+                    icon={periodStatus === 'approved' ? 'checkmark-circle' : 'lock-open-outline'}
+                    compact
+                  />
+                </Row>
+
+                <Row gap={spacing.sm} wrap>
+                  {periodStatus === 'approved' ? (
+                    <SecondaryButton
+                      label={t('timesheet.reopenPeriod')}
+                      onPress={() => {
+                        const periodId = period.data?.id;
+                        if (periodId === undefined) return;
+                        mutations.reopen.mutate(
+                          { periodId },
+                          { onSuccess: () => setFeedback(t('timesheet.reopened')) },
+                        );
+                      }}
+                      fullWidth={false}
+                      loading={mutations.reopen.isPending}
+                      testID="timesheet-reopen"
+                    />
+                  ) : (
+                    <PrimaryButton
+                      label={t('timesheet.approvePeriod')}
+                      hint={t('timesheet.approveHint')}
+                      onPress={() =>
+                        mutations.approve.mutate(undefined, {
+                          onSuccess: () => setFeedback(t('timesheet.approved')),
+                        })
+                      }
+                      fullWidth={false}
+                      loading={mutations.approve.isPending}
+                      disabled={!scope.isAdmin}
+                      testID="timesheet-approve"
+                    />
+                  )}
+                  <SecondaryButton
+                    label={t('timesheet.exportCsv')}
+                    onPress={() => exportCsv.mutate()}
+                    fullWidth={false}
+                    loading={exportCsv.isPending}
+                    testID="timesheet-export"
+                  />
+                  <SecondaryButton
+                    label={t('timesheet.addManualEntry')}
+                    onPress={() => setManualOpen(true)}
+                    fullWidth={false}
+                    testID="timesheet-manual"
+                  />
+                </Row>
+
+                {mutations.approve.error !== null ? (
+                  <InlineNotice
+                    tone="late"
+                    icon="warning-outline"
+                    title={t('timesheet.approveBlockedTitle')}
+                    body={t('timesheet.approveBlockedBody')}
+                  />
+                ) : null}
+                {exportCsv.error !== null ? (
+                  <InlineNotice
+                    tone="late"
+                    icon="warning-outline"
+                    title={t('timesheet.exportFailedTitle')}
+                    body={t('timesheet.exportFailedBody')}
+                  />
+                ) : null}
+              </Card>
+
+              {feedback !== null ? (
+                <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
+              ) : null}
+
+              <AsyncSection
+                isPending={sessions.isPending}
+                error={sessions.error}
+                isEmpty={visibleSessions.length === 0}
+                emptyTitle={t('timesheet.noEntries')}
+                emptyBody={t('timesheet.noEntriesHint')}
+                onRetry={() => void sessions.refetch()}
+              >
+                <Stack gap={spacing.sm}>
+                  {visibleSessions.map((session) => (
+                    <SessionRow
+                      key={session.id}
+                      session={session}
+                      employeeName={names.get(session.employee_id) ?? t('team.unknownEmployee')}
+                      alerts={alertsBySession.get(session.id) ?? []}
+                      timezone={scope.timezone}
+                      timeFormat={scope.timeFormat}
+                      language={language}
+                      onPress={setSelected}
+                      testID={`session-${session.id}`}
+                    />
+                  ))}
+                </Stack>
+              </AsyncSection>
+            </Stack>
+          </AsyncSection>
+        </Stack>
+      </ResponsiveContainer>
+
+      {selected !== null ? (
+        <SessionDetailSheet
+          key={selected.id}
+          session={selected}
+          employeeName={names.get(selected.employee_id) ?? t('team.unknownEmployee')}
+          events={events.data ?? []}
+          adjustments={adjustments.data ?? []}
+          alerts={alertsBySession.get(selected.id) ?? []}
+          timezone={scope.timezone}
+          timeFormat={scope.timeFormat}
+          language={language}
+          saving={mutations.adjust.isPending}
+          conflict={conflict}
+          onSubmitCorrection={({ newStartsAt, newEndsAt, reason }) =>
+            mutations.adjust.mutate(
+              {
+                workSessionId: selected.id,
+                expectedUpdatedAt: selected.updated_at,
+                newStartsAt,
+                newEndsAt,
+                reason,
+              },
+              {
+                onSuccess: () => {
+                  setSelected(null);
+                  setFeedback(t('timesheet.corrected'));
+                },
+              },
+            )
+          }
+          onClose={() => setSelected(null)}
+        />
+      ) : null}
+
+      {manualOpen ? (
+        <ManualEntrySheet
+          employees={employeeOptions}
+          dateKey={dateKeyOf(nowISO, scope.timezone)}
+          saving={mutations.manualEntry.isPending}
+          onSubmit={({ employeeId, kind, time, reason }) => {
+            const targetDate = dateKeyOf(nowISO, scope.timezone);
+            mutations.manualEntry.mutate(
+              {
+                employeeId,
+                kind,
+                targetDate,
+                proposedAt: localDateTimeToInstant(targetDate, time, scope.timezone),
+                proposedEndAt: null,
+                reason,
+              },
+              {
+                onSuccess: () => {
+                  setManualOpen(false);
+                  setFeedback(t('timesheet.manualEntrySent'));
+                },
+              },
+            );
+          }}
+          onClose={() => setManualOpen(false)}
+        />
+      ) : null}
+    </AppScreen>
+  );
+}

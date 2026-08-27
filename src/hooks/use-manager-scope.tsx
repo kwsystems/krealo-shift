@@ -2,10 +2,11 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
-import { ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
+import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
 import { getSupabase } from '@/lib/supabase/client';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
 import type { TimeFormatPreference } from '@/utils/time';
+import { TABLES } from '@/lib/supabase/types';
 
 /**
  * Contexto del panel administrativo: organización, rol, ubicaciones y la
@@ -38,16 +39,18 @@ const locationSettingsSchema = z
   .object({
     pinLength: z.number().int().min(4).max(6).default(DEFAULT_LOCATION_SETTINGS.pinLength),
     photoEnabled: z.boolean().default(DEFAULT_LOCATION_SETTINGS.photoEnabled),
-    photoRetentionDays: z.number().int().min(0).default(DEFAULT_LOCATION_SETTINGS.photoRetentionDays),
+    photoRetentionDays: z
+      .number()
+      .int()
+      .min(0)
+      .default(DEFAULT_LOCATION_SETTINGS.photoRetentionDays),
     earlyClockInMinutes: z
       .number()
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.earlyClockInMinutes),
     lateGraceMinutes: z.number().int().min(0).default(DEFAULT_LOCATION_SETTINGS.lateGraceMinutes),
-    allowUnscheduledShifts: z
-      .boolean()
-      .default(DEFAULT_LOCATION_SETTINGS.allowUnscheduledShifts),
+    allowUnscheduledShifts: z.boolean().default(DEFAULT_LOCATION_SETTINGS.allowUnscheduledShifts),
     timeFormat: z.enum(['12h', '24h']).default(DEFAULT_LOCATION_SETTINGS.timeFormat),
     requiredBreakMinutes: z
       .number()
@@ -114,7 +117,7 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
 
   const memberships = await selectRows(z.array(membershipSchema), (client) => {
     const query = client
-      .from('organization_memberships')
+      .from(TABLES.organizationMemberships)
       .select('organization_id, role')
       .eq('status', 'active')
       .order('created_at', { ascending: true })
@@ -124,14 +127,15 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
 
   const membership = memberships[0];
   if (membership === undefined) {
-    // Sin membresía activa no hay panel que mostrar: la pantalla lo dice en vez
-    // de quedarse cargando para siempre.
-    throw new Error('NO_MEMBERSHIP');
+    // Sin membresía activa no hay panel que mostrar. Se trata como acceso
+    // denegado para que la pantalla diga qué hacer —pedir que te agreguen al
+    // equipo— en lugar de quedarse cargando para siempre.
+    throw new AdminError('forbidden', 'NO_MEMBERSHIP');
   }
 
   const organization = await selectRows(organizationSchema, (client) =>
     client
-      .from('organizations')
+      .from(TABLES.organizations)
       .select('id, name, default_locale, default_timezone, week_starts_on')
       .eq('id', membership.organization_id)
       .single(),
@@ -139,7 +143,7 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
 
   const locations = await selectRows(z.array(locationSchema), (client) =>
     client
-      .from('locations')
+      .from(TABLES.locations)
       .select('id, name, address, timezone, is_active, settings')
       .eq('organization_id', membership.organization_id)
       .order('name', { ascending: true }),
@@ -166,6 +170,28 @@ function useManagerScopeQuery() {
     queryKey: managerScopeKey,
     queryFn: fetchManagerScope,
     staleTime: 5 * ADMIN_LIST_STALE_MS,
+  });
+}
+
+/**
+ * Resolución de la membresía para la guarda de rol del layout (§6.3, §7).
+ *
+ * Comparte `queryKey` con el provider, así que la consulta se hace UNA vez: el
+ * layout la usa para saber el rol antes de montar las pestañas, y el provider
+ * lee el mismo resultado desde la caché.
+ *
+ * Existe porque el rol no se conoce en el arranque: la sesión de Supabase dice
+ * quién eres, no qué puedes hacer. Sin resolverlo aquí, el panel se queda
+ * esperando un rol que nadie va a poner.
+ */
+export function useManagerMembership(enabled: boolean) {
+  return useQuery({
+    queryKey: managerScopeKey,
+    queryFn: fetchManagerScope,
+    staleTime: 5 * ADMIN_LIST_STALE_MS,
+    enabled,
+    // Sin membresía o sin permiso, reintentar da el mismo resultado.
+    retry: false,
   });
 }
 

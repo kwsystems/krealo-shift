@@ -1,26 +1,9 @@
-import { useTranslation } from 'react-i18next';
+import { useRouter } from 'expo-router';
 
-import { AppText } from '@/components/ui/app-text';
-import { AppScreen, ResponsiveContainer, Stack } from '@/components/ui/layout';
-import { EmptyState } from '@/components/ui/states';
-import { spacing } from '@/theme/tokens';
+import { ScheduleScreen } from '@/features/schedules/schedule-screen';
 
-/**
- * Pantalla del panel administrativo. El contenido real depende del backend
- * (tarea P0-2) y de las vistas de la tarea P0-5: hasta que existan, la pantalla
- * muestra un estado vacío honesto en lugar de datos inventados.
- */
-export default function ManagerScheduleScreen() {
-  const { t } = useTranslation();
-
-  return (
-    <AppScreen tone="canvas" scroll>
-      <ResponsiveContainer>
-        <Stack gap={spacing.lg}>
-          <AppText variant="title">{t('schedule.title')}</AppText>
-          <EmptyState title={t('schedule.noShiftsThisWeek')} body={t('states.emptyTitle')} />
-        </Stack>
-      </ResponsiveContainer>
-    </AppScreen>
-  );
+/** Pestaña Horario (§6.3, §11.3): la función principal del panel administrativo. */
+export default function ManagerScheduleRoute() {
+  const router = useRouter();
+  return <ScheduleScreen onGoToTeam={() => router.push('/(manager)/team')} />;
 }
