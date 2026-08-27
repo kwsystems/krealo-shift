@@ -90,6 +90,12 @@ jobs:
       - name: Auditar accesibilidad
         run: node scripts/a11y-check.mjs /tmp/export-web
 
+      # Que los flujos de e2e/ apunten a testID que existen. No hay simulador de iOS
+      # aqui, asi que los flujos no se ejecutan: sin esto, un id mal escrito no se
+      # detecta nunca y e2e/ pasa a ser documentacion equivocada.
+      - name: Comprobar los testID de los flujos
+        run: node scripts/e2e-ids-check.mjs
+
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
     runs-on: ubuntu-latest

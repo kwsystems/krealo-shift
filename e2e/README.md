@@ -124,44 +124,25 @@ en `supabase/functions/README.md`. La credencial del kiosco demo es un valor
 conocido definido en `supabase/seed.sql`, y sirve solo para el proyecto de
 desarrollo.
 
-## testID que faltan
+## testID: reconciliado el 2026-08-27
 
-Los flujos usan **solo** testID que existen hoy en el código. Estos otros harían
-falta para completar los ocho flujos sin depender de textos traducidos, y no se
-inventaron aquí:
+**Los 28 `testID` que usan los flujos existen en el código.** Se comprueba con
+`node scripts/e2e-ids-check.mjs`, que está en CI.
 
-### Ya agregados
+Esa comprobación hace falta por un motivo concreto: un flujo que apunta a un id
+inexistente no falla al escribirlo, falla cuando alguien lo ejecuta — y aquí eso es
+"nunca", porque no hay simulador de iOS en la máquina de desarrollo remoto. Sin ella,
+este directorio sería documentación que aparenta ser una prueba.
 
-| testID | Dónde | Para qué |
-|---|---|---|
-| `sync-indicator` | `SyncIndicator` en `src/components/ui/states.tsx` | flujo 02: afirmar "estamos sin conexión" sin mirar la pantalla |
-| `offline-banner` | `OfflineBanner`, mismo archivo | flujo 02: aviso de trabajo sin red |
-| `kiosk-revoked` | pantalla de revocado en `app/kiosk/index.tsx` | flujo 04 |
-| `kiosk-pending-count` | pie de `app/kiosk/index.tsx` | flujo 02: contar pendientes sin depender del texto en plural |
-| `kiosk-error` | tarjeta de error de `app/kiosk/actions.tsx` | flujos 03 y 04 |
-| `kiosk-exit-gate` | pantalla de PIN de gerente en `app/kiosk/exit.tsx` | flujo 08 |
-| `manager-home`, `manager-team`, `manager-schedule`, `manager-hours`, `manager-more` | rutas de `app/(manager)/` | flujos 05, 06 y 08: afirmar que se llegó —o que NO se llegó— al panel sin usar las etiquetas de las pestañas |
-| `sign-in-language-toggle` | `app/(auth)/sign-in.tsx` | flujo 07 en el lado administrativo |
+**Cuidado con una trampa al comprobarlo a mano:** muchos `testID` se construyen con
+plantilla (`` testID={`keypad-${digit}`} ``), así que buscar solo `testID="..."` dice
+que faltan las diez teclas del teclado numérico. No faltan. El script resuelve las
+plantillas y también los comodines `*` de Maestro.
 
-`EmptyState`, `ErrorState` y `LoadingState` también aceptan ya `testID`, sin valor
-por defecto: lo pone quien los usa. `OfflineBanner` y `SyncIndicator` traen uno por
-defecto porque solo hay uno de cada en pantalla.
-
-Los `manager-*` van en la RUTA y no dentro de la pantalla a propósito: identifican
-"se llegó a esta pestaña", que es lo que un flujo necesita afirmar, y permiten
-comprobar lo contrario —que alguien sin permiso no llega—, que es la última parte
-del flujo 08.
-
-Con eso, los ocho flujos ya se pueden afirmar por id sin depender de textos
-traducidos. Lo que sigue faltando para ejecutarlos son los testID de las hojas de
-tiempo y del editor de horarios, que se listan abajo, y un simulador de iOS.
-
-### Todavía faltan
-
-| testID pedido | Dónde | Para qué |
-|---|---|---|
-| `timesheet-correct-entry`, `timesheet-reason`, `timesheet-save`, `timesheet-history`, `timesheet-previous-value` | hojas de tiempo (por implementar) | flujo 05 completo |
-| `schedule-copy-previous-week`, `schedule-shift-{id}`, `schedule-save-draft`, `schedule-publish`, `schedule-status` | editor de horarios (por implementar) | flujo 06 completo |
+La lista de "testID que faltan" que había aquí quedó obsoleta: el panel
+administrativo los añadió todos, con nombres distintos y mejores (`session-correct-*`
+en vez de `timesheet-*`, `schedule-copy-week` en vez de `schedule-copy-previous-week`).
+Los flujos ya usan los nombres reales.
 
 ## Lo que hace falta en el código
 
