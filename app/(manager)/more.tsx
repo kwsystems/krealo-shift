@@ -19,7 +19,7 @@ export default function ManagerMoreRoute() {
   const [section, setSection] = useState<Section>('requests');
 
   return (
-    <AppScreen tone="canvas" scroll>
+    <AppScreen tone="canvas" scroll testID="manager-more">
       <ResponsiveContainer>
         <Stack gap={spacing.lg}>
           <SegmentedControl

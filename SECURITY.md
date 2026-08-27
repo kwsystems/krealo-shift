@@ -277,6 +277,39 @@ personas guardadas indefinidamente.
 El trabajo es idempotente y tolera fallos: la función busca por fecha y no lleva
 marcador de progreso, así que si un día no corre, al siguiente recoge lo que quedó.
 
+## Logotipo de organización: el bucket que SÍ es público
+
+`organization-logos` es **público de lectura**, al contrario que el de las fotos.
+Es la única decisión de este archivo que va en dirección contraria, así que conviene
+que quede dicha:
+
+- un logotipo es material de marca: se pinta en la pantalla de reposo del kiosco,
+  que está a la vista de cualquiera que entre a la tienda, y a veces va en un correo
+  o un PDF exportado;
+- tratarlo como secreto obligaría a firmar una URL cada vez que el kiosco pinta su
+  pantalla —incluido un kiosco sin sesión de usuario— y no protegería nada: la
+  imagen ya es pública de hecho.
+
+La comparación con el otro bucket es lo que hace la decisión defendible: **la foto
+de fichaje es la cara de una persona trabajando** y va en bucket privado con URL
+firmada; **el logotipo es el letrero de la puerta**. Los dos casos viven en la misma
+app y merecen tratos opuestos. Confundirlos en cualquiera de las dos direcciones
+sería el error.
+
+**Escribir sí está restringido:** público es la lectura, no la subida. Solo owner o
+admin de la organización del primer segmento de la ruta puede escribir, reemplazar o
+borrar (`app_administers_organization`). Si no, cualquier sesión podría reemplazar el
+logotipo de cualquier empresa, que es una forma barata de suplantación.
+
+Eso separa dos permisos que se confunden fácil: administrar **una tienda**
+(`app_manages_location`) no es administrar **la empresa**. Una gerenta gestiona su
+ubicación pero no cambia el logotipo ni los ajustes de la organización. Hay pruebas
+de las tres capas: propietaria sí, gerenta no, empleada no.
+
+Ruta: `{organization_id}/logo.{ext}`, sin fecha ni identificador aleatorio, porque
+hay UN logotipo por organización y sustituirlo debe sustituirlo, no acumular
+versiones que nadie va a limpiar.
+
 ## Qué NO se registra
 
 Ni en logs, ni en auditoría, ni en telemetría, ni en mensajes de error:

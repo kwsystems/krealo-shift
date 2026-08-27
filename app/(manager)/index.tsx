@@ -61,7 +61,7 @@ export default function ManagerHomeScreen() {
   };
 
   return (
-    <AppScreen tone="canvas" scroll>
+    <AppScreen tone="canvas" scroll testID="manager-home">
       <ResponsiveContainer>
         <Stack gap={spacing.lg}>
           <Row justify="space-between" align="flex-start" gap={spacing.md} wrap>

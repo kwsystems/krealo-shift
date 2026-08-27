@@ -140,20 +140,26 @@ inventaron aquí:
 | `kiosk-pending-count` | pie de `app/kiosk/index.tsx` | flujo 02: contar pendientes sin depender del texto en plural |
 | `kiosk-error` | tarjeta de error de `app/kiosk/actions.tsx` | flujos 03 y 04 |
 | `kiosk-exit-gate` | pantalla de PIN de gerente en `app/kiosk/exit.tsx` | flujo 08 |
+| `manager-home`, `manager-team`, `manager-schedule`, `manager-hours`, `manager-more` | rutas de `app/(manager)/` | flujos 05, 06 y 08: afirmar que se llegó —o que NO se llegó— al panel sin usar las etiquetas de las pestañas |
+| `sign-in-language-toggle` | `app/(auth)/sign-in.tsx` | flujo 07 en el lado administrativo |
 
 `EmptyState`, `ErrorState` y `LoadingState` también aceptan ya `testID`, sin valor
 por defecto: lo pone quien los usa. `OfflineBanner` y `SyncIndicator` traen uno por
 defecto porque solo hay uno de cada en pantalla.
 
-Con eso, los flujos del kiosco (01 a 04, 07 y la primera mitad del 08) ya se pueden
-afirmar por id, sin depender de textos traducidos.
+Los `manager-*` van en la RUTA y no dentro de la pantalla a propósito: identifican
+"se llegó a esta pestaña", que es lo que un flujo necesita afirmar, y permiten
+comprobar lo contrario —que alguien sin permiso no llega—, que es la última parte
+del flujo 08.
+
+Con eso, los ocho flujos ya se pueden afirmar por id sin depender de textos
+traducidos. Lo que sigue faltando para ejecutarlos son los testID de las hojas de
+tiempo y del editor de horarios, que se listan abajo, y un simulador de iOS.
 
 ### Todavía faltan
 
 | testID pedido | Dónde | Para qué |
 |---|---|---|
-| `manager-home`, `manager-team`, `manager-schedule`, `manager-hours`, `manager-more` | pantallas de `app/(manager)/` | flujos 05, 06 y 08: afirmar que se llegó (o que NO se llegó) al panel sin usar las etiquetas de las pestañas |
-| `sign-in-language-toggle` | `app/(auth)/sign-in.tsx` | flujo 07 en el lado administrativo |
 | `timesheet-correct-entry`, `timesheet-reason`, `timesheet-save`, `timesheet-history`, `timesheet-previous-value` | hojas de tiempo (por implementar) | flujo 05 completo |
 | `schedule-copy-previous-week`, `schedule-shift-{id}`, `schedule-save-draft`, `schedule-publish`, `schedule-status` | editor de horarios (por implementar) | flujo 06 completo |
 

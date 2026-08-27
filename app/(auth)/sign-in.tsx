@@ -145,6 +145,7 @@ export default function SignInScreen() {
                 label={t('common.language')}
                 onPress={() => void toggleLanguage()}
                 fullWidth={false}
+                testID="sign-in-language-toggle"
               />
             </Row>
           </Card>

@@ -446,6 +446,50 @@ begin;
     'La duena de otra empresa no ve ningun kiosco de Krealo Media Demo');
 rollback;
 
+-- ===========================================================================
+-- Quien puede administrar una organizacion (logotipos, ajustes de empresa)
+-- ===========================================================================
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_owner, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  select test_assert(
+    app_administers_organization(:org_demo),
+    'La propietaria administra su organizacion');
+  select test_assert(
+    not app_administers_organization(:org_other),
+    'La propietaria NO administra la organizacion ajena');
+rollback;
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_manager, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- Esto es lo que separa "administrar una tienda" de "administrar la empresa".
+  -- Una gerenta gestiona su ubicacion pero no cambia el logotipo ni los ajustes de
+  -- la organizacion: si pudiera, el logotipo de la empresa quedaria en manos de
+  -- cualquiera con permiso de tienda, que es una suplantacion barata.
+  select test_assert(
+    not app_administers_organization(:org_demo),
+    'Una gerenta de tienda NO administra la organizacion');
+  select test_assert(
+    app_manages_location(:loc_main),
+    'Pero si administra su propia ubicacion');
+rollback;
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_employee, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  select test_assert(
+    not app_administers_organization(:org_demo),
+    'Una empleada NO administra la organizacion');
+rollback;
+
 begin;
   do $$
   declare v_id uuid;
