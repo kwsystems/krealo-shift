@@ -377,3 +377,46 @@ $$;
 rollback;
 
 \echo '  --- pruebas de contexto del kiosco completas ---'
+
+-- ===========================================================================
+-- El contexto informa los minutos de descanso ya tomados
+-- ===========================================================================
+
+begin;
+do $$
+declare
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_marcos uuid := '55555555-5555-4555-8555-555555555552';  -- ON_BREAK
+  v_ctx jsonb;
+begin
+  v_ctx := kiosk_employee_context(v_marcos, v_loc);
+  perform test_assert(v_ctx -> 'openSession' ->> 'takenBreakMinutes' is not null,
+    'El contexto informa los minutos de descanso ya tomados');
+  perform test_assert((v_ctx -> 'openSession' ->> 'requiredBreakMinutes')::int = 30,
+    'El contexto informa el descanso obligatorio de la ubicacion');
+  perform test_assert(v_ctx -> 'openSession' -> 'openBreak' ->> 'startedAt' is not null,
+    'El contexto informa el descanso en curso');
+end
+$$;
+rollback;
+
+-- ===========================================================================
+-- El contexto dice quien puede administrar la tienda
+-- ===========================================================================
+
+begin;
+do $$
+declare
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_gerenta uuid := '55555555-5555-4555-8555-555555555550';
+  v_sofia uuid := '55555555-5555-4555-8555-555555555551';
+begin
+  perform test_assert(
+    (kiosk_employee_context(v_gerenta, v_loc) -> 'employee' ->> 'canManageLocation')::boolean,
+    'La gerenta puede administrar su tienda, y el servidor lo dice');
+  perform test_assert(
+    not (kiosk_employee_context(v_sofia, v_loc) -> 'employee' ->> 'canManageLocation')::boolean,
+    'Una empleada normal NO puede autorizar excepciones');
+end
+$$;
+rollback;

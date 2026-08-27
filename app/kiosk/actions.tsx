@@ -6,12 +6,21 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
+import { PhotoCapture, type PhotoResult } from '@/features/kiosk/photo-capture';
+import {
+  BreakTypeSheet,
+  ManagerOverrideSheet,
+  PhotoNotice,
+  RequiredBreakSheet,
+  type BreakTypeOption,
+  type RequiredBreakChoice,
+} from '@/components/attendance/kiosk-sheets';
 import { AppText } from '@/components/ui/app-text';
 import { ActionCountdown } from '@/components/ui/action-countdown';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
-import { submitTimeEvent, type TimeEventType } from '@/features/kiosk/api';
+import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import {
@@ -38,6 +47,19 @@ import { formatClockTime, formatShiftRange, minutesToHHmm } from '@/utils/time';
  * - al volver a reposo se limpia nombre, turno y token de acción (§9.5).
  */
 
+/**
+ * Tipos de descanso que ofrece el kiosco (§9.3). La comida va primero porque es
+ * el caso mas frecuente en una tienda, y la distincion pagado/no pagado importa:
+ * decide si esos minutos se restan del tiempo trabajado.
+ */
+const BREAK_TYPE_OPTIONS: readonly BreakTypeOption[] = ['meal', 'unpaid', 'paid'] as const;
+
+type Sheet =
+  | { name: 'none' }
+  | { name: 'breakType' }
+  | { name: 'requiredBreak' }
+  | { name: 'managerOverride' };
+
 type Step =
   | { name: 'identify' }
   | { name: 'confirm'; event: TimeEventType; breakType?: 'paid' | 'unpaid' | 'meal' | 'other' }
@@ -56,14 +78,25 @@ export default function KioskActionsScreen() {
   const language = usePreferencesStore((s) => s.language);
 
   const [step, setStep] = useState<Step>({ name: 'identify' });
+  const [sheet, setSheet] = useState<Sheet>({ name: 'none' });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [overrideError, setOverrideError] = useState<string | null>(null);
+  const [overrideChecking, setOverrideChecking] = useState(false);
+  const [earlyAuthorized, setEarlyAuthorized] = useState(false);
+  // La foto es opcional: `null` significa que todavia no hay resultado, y
+  // 'skipped' que no se pudo tomar. En ninguno de los dos casos se bloquea el
+  // fichaje (§9.6).
+  const [photo, setPhoto] = useState<PhotoResult | null>(null);
 
   const policies = binding?.policies ?? DEFAULT_KIOSK_POLICIES;
   const timezone = binding?.timezone ?? 'America/Lima';
 
   /** Vuelve a reposo limpiando todo el estado temporal (§9.5). */
   const returnToIdle = useCallback(() => {
+    // La foto y el resto del estado local desaparecen al desmontarse esta
+    // pantalla, que es lo que hace `router.replace`. No hace falta limpiarlos a
+    // mano, y hacerlo dentro de un efecto provoca renders en cascada (§9.5).
     clearVerification();
     router.replace('/kiosk');
   }, [clearVerification]);
@@ -99,6 +132,12 @@ export default function KioskActionsScreen() {
     allowUnscheduledShifts: policies.allowUnscheduledShifts,
   });
 
+  const openSession = verification.openSession;
+  const requiredBreakMinutes = openSession?.requiredBreakMinutes ?? 0;
+  const takenBreakMinutes = openSession?.takenBreakMinutes ?? 0;
+  const missingRequiredBreak =
+    requiredBreakMinutes > 0 && takenBreakMinutes < requiredBreakMinutes;
+
   const startAction = (event: TimeEventType) => {
     const result = transition(state, event);
     if (!result.allowed) {
@@ -106,7 +145,68 @@ export default function KioskActionsScreen() {
       return;
     }
     setError(null);
+
+    // Un descanso puede ser pagado o no, y eso cambia si esos minutos cuentan
+    // como trabajados. Se pregunta en lugar de asumir (§9.3).
+    if (event === 'break_start') {
+      setSheet({ name: 'breakType' });
+      return;
+    }
+
+    // Al salir sin el descanso obligatorio no se inventa el descanso: se
+    // pregunta y la respuesta genera una solicitud auditable (§12).
+    if (event === 'clock_out' && state === 'WORKING' && missingRequiredBreak) {
+      setSheet({ name: 'requiredBreak' });
+      return;
+    }
+
     setStep({ name: 'confirm', event });
+  };
+
+  /** Autorizacion del gerente para la entrada temprana (§9.3, §13). */
+  const submitManagerOverride = async (pin: string) => {
+    if (binding === null) return;
+    setOverrideChecking(true);
+    setOverrideError(null);
+
+    const result = await verifyPin({ pin, locationId: binding.locationId });
+
+    setOverrideChecking(false);
+
+    if (!result.ok) {
+      setOverrideError(
+        result.error.kind === 'offline' ? t('errors.network') : t('kiosk.pinIncorrect'),
+      );
+      return;
+    }
+
+    // El PIN de un companero cualquiera no autoriza nada: hace falta alguien que
+    // el SERVIDOR reconozca como gerente de esta tienda, y que no sea la misma
+    // persona que esta fichando. Si no, la autorizacion no valdria nada.
+    const isManager = result.data.employee.canManageLocation;
+    const isSomeoneElse = result.data.employee.opaqueId !== verification.employee.opaqueId;
+
+    if (!isManager || !isSomeoneElse) {
+      setOverrideError(t('kiosk.pinIncorrect'));
+      return;
+    }
+
+    setEarlyAuthorized(true);
+    setSheet({ name: 'none' });
+    setStep({ name: 'confirm', event: 'clock_in' });
+  };
+
+  const handleRequiredBreakChoice = (choice: RequiredBreakChoice) => {
+    setSheet({ name: 'none' });
+    if (choice === 'cancel') return;
+    if (choice === 'took_it') {
+      // Dice que lo tomo pero no lo registro: eso es una solicitud de correccion,
+      // no un descanso que la app pueda dar por bueno.
+      router.push('/kiosk/forgot');
+      return;
+    }
+    // Dice que no lo tomo: la salida sigue, y el gerente vera la sesion marcada.
+    setStep({ name: 'confirm', event: 'clock_out' });
   };
 
   const commitAction = async (event: TimeEventType) => {
@@ -120,11 +220,15 @@ export default function KioskActionsScreen() {
     const result = await submitTimeEvent({
       actionToken: verification.actionToken,
       eventType: event,
+      breakType: step.name === 'confirm' ? step.breakType : undefined,
       shiftId: selectedShift?.id ?? null,
       idempotencyKey,
       occurredAtDevice: new Date().toISOString(),
       deviceSequence: Date.now(),
       isOffline: false,
+      // Solo se envia la ruta si de verdad hay foto. Un fichaje sin foto es
+      // valido: la funcion del servidor no la exige.
+      photoPath: photo?.status === 'captured' ? photo.uri : null,
     });
 
     setSubmitting(false);
@@ -276,7 +380,7 @@ export default function KioskActionsScreen() {
           {/* §9.3 Acciones según estado, §9.4 confirmación, §9.5 resultado */}
           {step.name === 'identify' ? (
             <Stack gap={spacing.md}>
-              {!eligibility.eligible && eligibility.reason === 'too_early' ? (
+              {!eligibility.eligible && eligibility.reason === 'too_early' && !earlyAuthorized ? (
                 <Card>
                   <AppText variant="bodyStrong">{t('kiosk.tooEarlyTitle')}</AppText>
                   <AppText variant="body" tone="muted">
@@ -289,6 +393,11 @@ export default function KioskActionsScreen() {
                       ),
                     })}
                   </AppText>
+                  <SecondaryButton
+                    label={t('kiosk.managerOverride')}
+                    onPress={() => setSheet({ name: 'managerOverride' })}
+                    testID="kiosk-manager-override"
+                  />
                 </Card>
               ) : (
                 <PrimaryButton
@@ -346,9 +455,10 @@ export default function KioskActionsScreen() {
               ) : null}
 
               {policies.photoEnabled ? (
-                <AppText variant="help" tone="subtle">
-                  {t('kiosk.photoNotice')}
-                </AppText>
+                <Stack gap={spacing.sm}>
+                  <PhotoNotice />
+                  <PhotoCapture onResult={setPhoto} />
+                </Stack>
               ) : null}
 
               <ActionCountdown
@@ -391,6 +501,34 @@ export default function KioskActionsScreen() {
           ) : null}
         </Stack>
       </ResponsiveContainer>
+
+      <BreakTypeSheet
+        visible={sheet.name === 'breakType'}
+        options={BREAK_TYPE_OPTIONS}
+        onSelect={(option) => {
+          setSheet({ name: 'none' });
+          setStep({ name: 'confirm', event: 'break_start', breakType: option });
+        }}
+        onCancel={() => setSheet({ name: 'none' })}
+      />
+
+      <RequiredBreakSheet
+        visible={sheet.name === 'requiredBreak'}
+        requiredMinutes={requiredBreakMinutes}
+        onChoose={handleRequiredBreakChoice}
+      />
+
+      <ManagerOverrideSheet
+        visible={sheet.name === 'managerOverride'}
+        pinLength={policies.pinLength}
+        checking={overrideChecking}
+        error={overrideError}
+        onSubmit={(pin) => void submitManagerOverride(pin)}
+        onCancel={() => {
+          setOverrideError(null);
+          setSheet({ name: 'none' });
+        }}
+      />
     </AppScreen>
   );
 }

@@ -1,3 +1,5 @@
+import { cleanup } from '@testing-library/react-native';
+
 /**
  * Setup global de Jest.
  *
@@ -49,3 +51,18 @@ jest.mock('expo-crypto', () => ({
   CryptoDigestAlgorithm: { SHA256: 'SHA-256' },
   getRandomBytes: (n: number) => new Uint8Array(n).fill(7),
 }));
+
+/**
+ * Limpieza entre pruebas de componentes.
+ *
+ * React Native Testing Library 14 no registra su propio `afterEach` con el preset
+ * de jest-expo: sin esto, el segundo render de un archivo encuentra el arbol
+ * anterior todavia montado. Se manifiesta como "no se encuentra el testID" solo a
+ * partir de la segunda prueba del archivo, que apunta al sitio equivocado.
+ *
+ * `cleanup` tambien es asincrono en la version 14, igual que `render` y
+ * `fireEvent`: sin el await el desmontaje no termina antes de la prueba siguiente.
+ */
+afterEach(async () => {
+  await cleanup();
+});

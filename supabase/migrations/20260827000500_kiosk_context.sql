@@ -51,7 +51,8 @@ begin
   );
 
   -- Sesión abierta y descanso en curso, si hay.
-  select s.starts_at, s.shift_id into v_session
+  select s.starts_at, s.shift_id, s.paid_break_minutes, s.unpaid_break_minutes
+  into v_session
   from public.work_sessions s
   where s.employee_id = p_employee_id and s.status = 'open'
   limit 1;
@@ -123,6 +124,16 @@ begin
         where ejr.employee_id = p_employee_id
         order by ejr.is_primary desc
         limit 1
+      ),
+      -- Si esta persona puede administrar ESTA tienda. Es lo que habilita la
+      -- excepcion de entrada temprana: el cliente no puede deducirlo por su
+      -- cuenta, y dejarselo adivinar convertiria cualquier PIN en un PIN de
+      -- gerente (§9.3, §13).
+      'canManageLocation', exists (
+        select 1 from public.employee_location_assignments a
+        where a.employee_id = p_employee_id
+          and a.location_id = p_location_id
+          and a.can_manage
       )
     ),
     'attendanceState', v_state,
@@ -135,6 +146,12 @@ begin
         'shiftEndsAt', (
           select s.ends_at from public.shifts s where s.id = v_session.shift_id
         ),
+        -- Minutos de descanso ya tomados en esta sesion. El kiosco los necesita
+        -- para saber si al marcar salida falta el descanso obligatorio, y para
+        -- no preguntar por un descanso que la persona si tomo (§12).
+        'takenBreakMinutes',
+          coalesce(v_session.paid_break_minutes, 0) + coalesce(v_session.unpaid_break_minutes, 0),
+        'requiredBreakMinutes', coalesce((v_settings ->> 'requiredBreakMinutes')::int, 0),
         'openBreak', case
           when v_break.starts_at is null then null
           else jsonb_build_object('startedAt', v_break.starts_at,

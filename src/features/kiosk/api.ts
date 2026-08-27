@@ -62,6 +62,8 @@ const verifyPinResponseSchema = z.object({
     displayName: z.string().min(1),
     initials: z.string().min(1),
     jobRoleName: z.string().nullable(),
+    // Lo decide el servidor: el kiosco no puede deducir quien es gerente.
+    canManageLocation: z.boolean().default(false),
   }),
   attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']),
   allowedActions: z.array(z.enum(['clock_in', 'break_start', 'break_end', 'clock_out'])),
@@ -80,6 +82,11 @@ const verifyPinResponseSchema = z.object({
     .object({
       startedAt: z.string(),
       shiftEndsAt: z.string().nullable(),
+      // Minutos de descanso ya tomados y minutos obligatorios de la ubicacion:
+      // con estos dos el kiosco sabe si al salir falta el descanso, sin tener
+      // que replicar la regla de la base.
+      takenBreakMinutes: z.number().int().min(0).default(0),
+      requiredBreakMinutes: z.number().int().min(0).default(0),
       openBreak: z.object({ startedAt: z.string(), breakType: z.string() }).nullable(),
     })
     .nullable(),
