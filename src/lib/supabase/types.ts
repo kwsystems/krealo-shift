@@ -91,6 +91,12 @@ export const TABLES = {
 export const VIEWS = {
   employeesWorkingNow: 'employees_working_now',
   dailyTimeSummary: 'daily_time_summary',
+  /**
+   * Inventario de kioscos. Se lee la VISTA y nunca la tabla: `kiosk_devices` está
+   * revocada para `authenticated` porque tiene dos secretos del dispositivo
+   * (`credential_hash` y `offline_key`) que ninguna sesión de la app debe leer.
+   */
+  kioskDevicesAdmin: 'kiosk_devices_admin',
 } as const;
 
 /** Funciones invocables por RPC desde la app. Cada una valida el rol por dentro. */

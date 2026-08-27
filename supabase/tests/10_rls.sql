@@ -399,6 +399,53 @@ rollback;
 -- Un turno publicado no se borra: se cancela
 -- ===========================================================================
 
+-- ===========================================================================
+-- La vista de kioscos del administrador no filtra los secretos del dispositivo
+-- ===========================================================================
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_manager, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- La gerenta SI ve el inventario de su tienda: sin esto no puede revocar un
+  -- iPad perdido, que es el corte de emergencia del modelo kiosco.
+  select test_assert(
+    (select count(*) from kiosk_devices_admin where location_id = :loc_main) >= 1,
+    'La gerenta ve el inventario de kioscos de su tienda');
+
+  -- Que la TABLA siga revocada ya se comprueba mas arriba ("kiosk_devices no se
+  -- lee directo desde el cliente"). La vista existe justamente para que esa
+  -- revocacion pueda seguir en pie, y las dos pruebas juntas son el par que
+  -- importa: se ve el inventario, no se ve el secreto.
+rollback;
+
+begin;
+  set local role authenticated;
+
+  -- LOS DOS SECRETOS DEL DISPOSITIVO NO ESTAN EN LA VISTA. Con offline_key mas el
+  -- archivo SQLite de un iPad se pueden probar los 10^6 PIN posibles, asi que esta
+  -- comprobacion es la que sostiene todo el modelo de PIN sin conexion.
+  select test_assert(
+    not exists (
+      select 1 from information_schema.columns
+      where table_name = 'kiosk_devices_admin'
+        and column_name in ('credential_hash', 'offline_key')
+    ),
+    'La vista de kioscos NO expone credential_hash ni offline_key');
+rollback;
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_other, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- Aislamiento entre empresas, tambien en la vista.
+  select test_assert(
+    (select count(*) from kiosk_devices_admin) = 0,
+    'La duena de otra empresa no ve ningun kiosco de Krealo Media Demo');
+rollback;
+
 begin;
   do $$
   declare v_id uuid;

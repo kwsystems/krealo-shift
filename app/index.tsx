@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/ui/app-text';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
+import { useManagerMembership } from '@/hooks/use-manager-scope';
 import { isEnvConfigured, missingEnvKeys } from '@/lib/env';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
@@ -34,6 +35,26 @@ export default function BootRoute() {
     return subscribeSession();
   }, [hydrateSession, subscribeSession]);
 
+  /**
+   * AQUÍ SE RESUELVE EL ROL, Y HACE FALTA QUE SEA AQUÍ.
+   *
+   * La sesión de Supabase dice quién eres, no qué puedes hacer: el rol vive en
+   * `organization_memberships`. Sin esta consulta el arranque se quedaba
+   * bloqueado para siempre en un caso concreto y nada raro: una persona con
+   * sesión válida en un dispositivo que no es kiosco. Esta pantalla esperaba
+   * `role !== null`, pero lo único que ponía el rol era el layout de `(manager)`,
+   * al que no se llega sin rol. Un ciclo cerrado.
+   *
+   * La consulta comparte `queryKey` con `ManagerScopeProvider`, así que se hace
+   * UNA vez: el layout y el provider leen este mismo resultado de la caché.
+   *
+   * `enabled` la limita a cuando de verdad hace falta. En un iPad de tienda no se
+   * pregunta nada: el kiosco no tiene sesión personal ni la necesita.
+   */
+  const membership = useManagerMembership(
+    phase === 'signedIn' && kioskHydrated && binding === null,
+  );
+
   // Falta configuración de entorno: se explica qué falta en vez de reventar (§30).
   if (!isEnvConfigured) {
     return <MissingConfigScreen />;
@@ -58,8 +79,15 @@ export default function BootRoute() {
     return <Redirect href="/(manager)" />;
   }
 
-  // Con sesión pero sin rol administrativo resuelto todavía, esperamos: mandar a
-  // (manager) sin permisos daría una pantalla vacía y confusa.
+  // La membresía no se pudo leer: es una sesión válida sin pertenencia a ninguna
+  // empresa, o RLS la negó. No se espera para siempre ni se manda al panel: se
+  // devuelve al acceso, que es donde esa persona puede hacer algo (§20).
+  if (phase === 'signedIn' && membership.isError) {
+    return <Redirect href="/(auth)/sign-in" />;
+  }
+
+  // Con sesión pero sin rol resuelto todavía, esperamos: mandar a (manager) sin
+  // permisos daría una pantalla vacía y confusa.
   if (phase === 'signedIn' && role === null) {
     return (
       <AppScreen tone="kiosk">

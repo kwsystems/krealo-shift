@@ -304,8 +304,12 @@ revoke all on employee_pin_credentials from anon, authenticated;
 revoke all on kiosk_activation_codes from anon, authenticated;
 
 -- De los kioscos, el administrador sí necesita ver el inventario para revocarlos
--- (§11.6), pero nunca la columna del secreto: eso se resuelve con la vista
--- `kiosk_devices_admin` de la migración de funciones, que no expone el hash.
+-- (§11.6), pero nunca las columnas de los secretos. Eso se resuelve con la vista
+-- `kiosk_devices_admin`, que se crea en
+-- `20260827001000_kiosk_devices_admin.sql` y no expone `credential_hash` ni
+-- `offline_key`. (Este comentario decía "de la migración de funciones", donde esa
+-- vista nunca se escribió: el administrador podía generar códigos de activación
+-- pero no ver la lista, así que no podía revocar ningún iPad.)
 revoke all on kiosk_devices from anon, authenticated;
 
 -- ---------------------------------------------------------------------------
