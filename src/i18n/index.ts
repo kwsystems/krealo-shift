@@ -3,7 +3,6 @@
    metodos, no exportaciones nombradas del modulo. La regla da un falso positivo. */
 import i18n from 'i18next';
 import { initReactI18next } from 'react-i18next';
-import { getLocales } from 'expo-localization';
 
 import en from './locales/en.json';
 import esPE from './locales/es-PE.json';
@@ -28,20 +27,22 @@ const resources = {
   en: { translation: en },
 } as const;
 
-/** Resuelve el idioma del dispositivo a uno soportado; cae en es-PE. */
-export function resolveDeviceLanguage(): SupportedLanguage {
-  const locales = getLocales();
-  for (const locale of locales) {
-    const tag = locale.languageTag;
-    if (SUPPORTED_LANGUAGES.includes(tag as SupportedLanguage)) {
-      return tag as SupportedLanguage;
-    }
-    // es-MX, es-ES y cualquier otro español caen en es-PE.
-    if (locale.languageCode === 'es') return 'es-PE';
-    if (locale.languageCode === 'en') return 'en';
-  }
-  return DEFAULT_LANGUAGE;
-}
+/*
+ * AQUI HABIA UN `resolveDeviceLanguage()` que resolvia el locale del sistema. Se
+ * quito, y conviene saber por que para no volver a ponerlo:
+ *
+ * §18 fija el español como idioma predeterminado. Mientras esa funcion existia, el
+ * arranque y la hidratacion de preferencias la usaban, y el resultado era que un
+ * iPad en configuracion inglesa mostraba la app en ingles a un equipo peruano sin
+ * que nadie lo hubiera elegido.
+ *
+ * Dejarla ahi sin usar era peor que borrarla: una funcion con ese nombre invita a
+ * recablearla y a reintroducir exactamente el mismo problema.
+ *
+ * Quien quiera ingles lo tiene a un toque —el conmutador del kiosco en reposo y el
+ * selector de Ajustes— y su eleccion se guarda en el almacenamiento seguro. Eso es
+ * mejor que adivinar, porque una eleccion explicita no se equivoca.
+ */
 
 let initialized = false;
 
@@ -50,7 +51,19 @@ export function initI18n(language?: SupportedLanguage): typeof i18n {
 
   i18n.use(initReactI18next).init({
     resources,
-    lng: language ?? resolveDeviceLanguage(),
+    // ARRANCA EN ESPAÑOL, no en el idioma del dispositivo (§18).
+    //
+    // `app/_layout.tsx` llama a esto en el arranque, ANTES de que el store de
+    // preferencias hidrate desde el almacenamiento seguro. Si aqui se resolviera el
+    // locale del dispositivo, un iPad en ingles pintaria el primer fotograma en
+    // ingles y despues saltaria a la preferencia guardada: un parpadeo de idioma en
+    // la pantalla de arranque, que es de las cosas que hacen que una app parezca mal
+    // hecha.
+    //
+    // Empezar en español y dejar que `hydrate()` aplique la preferencia real hace que
+    // el unico salto posible sea hacia lo que la persona eligio, no hacia lo que el
+    // sistema operativo adivino.
+    lng: language ?? DEFAULT_LANGUAGE,
     fallbackLng: DEFAULT_LANGUAGE,
     supportedLngs: [...SUPPORTED_LANGUAGES],
     defaultNS: 'translation',

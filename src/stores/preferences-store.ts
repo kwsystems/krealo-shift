@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { DEFAULT_LANGUAGE, changeLanguage, resolveDeviceLanguage, type SupportedLanguage } from '@/i18n';
+import { DEFAULT_LANGUAGE, changeLanguage, type SupportedLanguage } from '@/i18n';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import type { TimeFormatPreference } from '@/utils/time';
 
@@ -42,8 +42,18 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const stored = await secureStorage.getJson<Partial<PersistedPreferences>>(
       SECURE_KEYS.preferences,
     );
-    // Sin preferencia guardada seguimos el idioma del dispositivo.
-    const language = stored?.language ?? resolveDeviceLanguage();
+    // SIN PREFERENCIA GUARDADA, ESPAÑOL. Y no el idioma del dispositivo.
+    //
+    // §18 lo dice literal: "Idioma predeterminado: español (es-PE). Segundo idioma
+    // completo: inglés". Antes esto seguia el locale del dispositivo, y el efecto
+    // practico era que un iPad en configuracion inglesa mostraba la app en ingles a
+    // un equipo peruano sin que nadie hubiera elegido eso.
+    //
+    // NO se hace ninguna excepcion por dispositivo en ingles, aunque suene razonable:
+    // el español es el idioma del proyecto, y quien quiera ingles lo tiene a un toque
+    // —el conmutador del kiosco en reposo y el selector de Ajustes— y su eleccion se
+    // guarda. Adivinar a partir del locale es lo que producia el problema.
+    const language = stored?.language ?? DEFAULT_LANGUAGE;
     const timeFormat = stored?.timeFormat ?? DEFAULTS.timeFormat;
 
     await changeLanguage(language);

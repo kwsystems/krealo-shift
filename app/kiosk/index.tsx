@@ -8,6 +8,7 @@ import { NumericKeypad, PinDots } from '@/components/attendance/pin-pad';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton } from '@/components/ui/buttons';
 import { AppScreen, Row, Stack } from '@/components/ui/layout';
+import { LanguageSwitch } from '@/components/ui/language-switch';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
 import { buildOfflineSession, cacheAttendanceState } from '@/features/kiosk/offline-session';
@@ -44,7 +45,6 @@ export default function KioskIdleScreen() {
   const revoked = useKioskStore((s) => s.revoked);
   const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
-  const toggleLanguage = usePreferencesStore((s) => s.toggleLanguage);
   const { online, syncing, pendingCount } = useNetworkStore();
   const setFromOnline = useKioskVerificationStore((s) => s.setFromOnline);
   const setFromOffline = useKioskVerificationStore((s) => s.setFromOffline);
@@ -293,13 +293,13 @@ export default function KioskIdleScreen() {
           ) : null}
 
           <Row justify="space-between" align="center">
-            <GhostButton
-              label={language === 'es-PE' ? 'ES | en' : 'es | EN'}
-              onPress={() => void toggleLanguage()}
-              fullWidth={false}
-              haptic={false}
-              testID="kiosk-language-toggle"
-            />
+            {/*
+              §18 pide que el kiosco permita alternar ES/EN en reposo. Antes era un
+              solo boton con la etiqueta "ES | en", donde la unica señal del idioma
+              activo eran las mayusculas. Ahora son dos opciones con estado visible y
+              accesible. Ver src/components/ui/language-switch.tsx.
+            */}
+            <LanguageSwitch testID="kiosk-language-toggle" />
             <GhostButton
               label={t('kiosk.helpLink')}
               onPress={() => router.push('/kiosk/help')}

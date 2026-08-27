@@ -8,9 +8,9 @@ import { z } from 'zod';
 
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { getSupabase } from '@/lib/supabase/client';
-import { usePreferencesStore } from '@/stores/preferences-store';
 import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -32,7 +32,6 @@ type SignInValues = z.infer<typeof signInSchema>;
 
 export default function SignInScreen() {
   const { t } = useTranslation();
-  const toggleLanguage = usePreferencesStore((s) => s.toggleLanguage);
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
@@ -141,12 +140,13 @@ export default function SignInScreen() {
                 onPress={() => undefined}
                 fullWidth={false}
               />
-              <GhostButton
-                label={t('common.language')}
-                onPress={() => void toggleLanguage()}
-                fullWidth={false}
-                testID="sign-in-language-toggle"
-              />
+              {/*
+                Aqui tambien, y no solo en Ajustes: Ajustes vive DETRAS del acceso,
+                asi que alguien que no entiende esta pantalla no puede llegar a el
+                para cambiar el idioma. Un selector de idioma inalcanzable sin
+                entender el idioma actual no sirve para nada.
+              */}
+              <LanguageSwitch testID="sign-in-language-toggle" />
             </Row>
           </Card>
 

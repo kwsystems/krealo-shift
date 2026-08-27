@@ -33,8 +33,8 @@ import {
   type ManagerLocation,
   type ManagerOrganization,
 } from '@/hooks/use-manager-scope';
-import { currentLanguage, SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n';
-import { usePreferencesStore } from '@/stores/preferences-store';
+import { LanguageSwitch } from '@/components/ui/language-switch';
+import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 
@@ -92,21 +92,15 @@ export function SettingsPanel() {
 /** Idioma de esta app en este dispositivo: cambia al instante, sin reiniciar (§18). */
 function AppLanguageCard() {
   const { t } = useTranslation();
-  const language = currentLanguage();
-  const setLanguage = usePreferencesStore((state) => state.setLanguage);
 
   return (
     <FormCard title={t('common.language')} description={t('settings.appLanguageHint')}>
-      <SegmentedControl
-        label={t('common.language')}
-        value={language}
-        options={SUPPORTED_LANGUAGES.map((code) => ({
-          value: code,
-          label: code === 'es-PE' ? t('common.spanish') : t('common.english'),
-        }))}
-        onChange={(value: SupportedLanguage) => void setLanguage(value)}
-        testID="app-language"
-      />
+      {/*
+        El MISMO control que el kiosco y el acceso, en su variante de nombre completo.
+        Tres pantallas con tres selectores distintos era pedir que se comportaran
+        distinto: aqui es un componente y el estado sale del mismo store.
+      */}
+      <LanguageSwitch size="full" testID="app-language" />
     </FormCard>
   );
 }
