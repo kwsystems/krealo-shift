@@ -62,6 +62,17 @@ update locations
   where not (settings ? 'kioskSyncStaleMinutes');
 
 -- ---------------------------------------------------------------------------
+-- Índice que faltaba en `push_tokens`
+-- ---------------------------------------------------------------------------
+-- La tabla solo tenía la clave primaria y el único de `expo_token`, porque hasta
+-- ahora nadie la consultaba. Las dos consultas que introduce este archivo la leen
+-- por usuario: `pending_manager_alerts` pregunta "¿tiene algún dispositivo
+-- activo?" una vez por destinatario y por ubicación, y el envío lee los tokens de
+-- todos los destinatarios de la ronda.
+create index if not exists push_tokens_user_active_idx
+  on push_tokens (user_id) where is_active;
+
+-- ---------------------------------------------------------------------------
 -- ¿Quién administra esta ubicación? Ahora también sin sesión
 -- ---------------------------------------------------------------------------
 -- `app_manages_location(location)` resuelve contra `auth.uid()`, y eso es lo
@@ -117,8 +128,21 @@ as $$
   select public.app_user_manages_location(auth.uid(), p_location_id);
 $$;
 
-revoke all on function app_user_manages_location(uuid, uuid) from public;
-grant execute on function app_user_manages_location(uuid, uuid) to authenticated;
+-- OJO CON LOS PERMISOS DE FUNCIÓN EN SUPABASE, aquí y en todo lo que sigue.
+--
+-- Supabase deja puesto `alter default privileges ... grant all on functions to
+-- postgres, anon, authenticated, service_role` sobre el esquema `public`. O sea que
+-- CADA función nueva nace con `execute` concedido explícitamente a esos cuatro
+-- roles, y un `revoke ... from public` NO se los quita: revoca el permiso de
+-- PUBLIC, que es otra cosa.
+--
+-- Por eso este archivo revoca a `anon` y `authenticated` por su nombre y concede a
+-- `service_role` donde hace falta, en vez de confiar en `from public`. En el
+-- Postgres local de pruebas da lo mismo —no hay `default privileges`, así que
+-- `public` sí es la vía— y precisamente por eso el error no se vería en las
+-- pruebas.
+revoke all on function app_user_manages_location(uuid, uuid) from public, anon;
+grant execute on function app_user_manages_location(uuid, uuid) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Inicio de semana según la organización
@@ -141,8 +165,8 @@ as $$
   );
 $$;
 
-revoke all on function week_start_for(date, smallint) from public;
-grant execute on function week_start_for(date, smallint) to authenticated;
+revoke all on function week_start_for(date, smallint) from public, anon;
+grant execute on function week_start_for(date, smallint) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
 -- Intentos de fichaje rechazados
@@ -247,7 +271,10 @@ begin
 end;
 $$;
 
-revoke all on function record_kiosk_rejection(text, text, uuid) from public;
+-- Solo `service_role`. Con acceso desde la app, cualquiera con sesión podría
+-- inventar intentos rechazados y provocar avisos falsos a un gerente.
+revoke all on function record_kiosk_rejection(text, text, uuid) from public, anon, authenticated;
+grant execute on function record_kiosk_rejection(text, text, uuid) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- LA TABLA DE DEDUPLICACIÓN
@@ -614,7 +641,11 @@ as $$
   where a.occurred_at > now() - interval '2 hours'
 $$;
 
-revoke all on function pending_manager_alerts(uuid) from public;
+-- Solo `service_role`. Devuelve qué alertas tiene pendiente CADA persona de CADA
+-- organización: es la única función de este archivo que cruza empresas, así que
+-- desde la app no debe alcanzarse por ninguna vía.
+revoke all on function pending_manager_alerts(uuid) from public, anon, authenticated;
+grant execute on function pending_manager_alerts(uuid) to service_role;
 
 /**
  * Reserva las alertas que todavía no se avisaron y las devuelve para enviar.
@@ -687,7 +718,9 @@ begin
 end;
 $$;
 
-revoke all on function claim_manager_alerts(uuid, integer, interval) from public;
+revoke all on function claim_manager_alerts(uuid, integer, interval)
+  from public, anon, authenticated;
+grant execute on function claim_manager_alerts(uuid, integer, interval) to service_role;
 
 /** Marca enviado lo que Expo aceptó. */
 create or replace function mark_manager_alerts_sent(p_ids uuid[])
@@ -751,9 +784,16 @@ begin
 end;
 $$;
 
-revoke all on function mark_manager_alerts_sent(uuid[]) from public;
-revoke all on function mark_manager_alerts_failed(uuid[], text) from public;
-revoke all on function deactivate_push_token(text) from public;
+revoke all on function mark_manager_alerts_sent(uuid[]) from public, anon, authenticated;
+revoke all on function mark_manager_alerts_failed(uuid[], text) from public, anon, authenticated;
+-- `deactivate_push_token` NO comprueba de quién es el token, y no le hace falta
+-- porque solo la llama el envío con `service_role`. Si algún día se abriera a la
+-- app, habría que añadir la comprobación de dueño: sin ella, conocer un token
+-- ajeno bastaría para dejar a esa persona sin notificaciones.
+revoke all on function deactivate_push_token(text) from public, anon, authenticated;
+grant execute on function mark_manager_alerts_sent(uuid[]) to service_role;
+grant execute on function mark_manager_alerts_failed(uuid[], text) to service_role;
+grant execute on function deactivate_push_token(text) to service_role;
 
 /**
  * Purga el historial de deduplicación.
@@ -797,7 +837,9 @@ begin
 end;
 $$;
 
-revoke all on function purge_manager_alert_deliveries(integer) from public;
+revoke all on function purge_manager_alert_deliveries(integer)
+  from public, anon, authenticated;
+grant execute on function purge_manager_alert_deliveries(integer) to service_role;
 
 -- ---------------------------------------------------------------------------
 -- Programación

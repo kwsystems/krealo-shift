@@ -1119,3 +1119,53 @@ begin
 end
 $$;
 rollback;
+
+begin;
+-- Las funciones de alertas NO son alcanzables desde una sesión de la app.
+--
+-- LÍMITE HONESTO DE ESTA PRUEBA: el Postgres local no tiene los `default
+-- privileges` que Supabase deja puestos sobre el esquema `public`, así que aquí
+-- basta un `revoke ... from public` para que falle. En Supabase real hacen falta
+-- los `revoke` nominales a `anon` y `authenticated` que pone la migración, y esta
+-- prueba no puede distinguir las dos situaciones. Sirve para que un `grant ... to
+-- authenticated` futuro no pase inadvertido.
+do $$
+begin
+  set local role authenticated;
+  perform set_config(
+    'request.jwt.claims',
+    json_build_object('sub', '33333333-3333-4333-8333-333333333332', 'role', 'authenticated')::text,
+    true);
+
+  begin
+    perform count(*) from public.pending_manager_alerts();
+    raise exception 'FALLO: una sesion de la app pudo listar las alertas de todas las empresas'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — una sesion de la app no puede llamar a pending_manager_alerts';
+  end;
+
+  begin
+    perform count(*) from public.claim_manager_alerts();
+    raise exception 'FALLO: una sesion de la app pudo reservar alertas'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — una sesion de la app no puede llamar a claim_manager_alerts';
+  end;
+
+  begin
+    perform public.record_kiosk_rejection('demo-kiosk-main', 'revoked');
+    raise exception 'FALLO: una sesion de la app pudo inventar un intento rechazado'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — una sesion de la app no puede inventar intentos rechazados';
+  end;
+
+  reset role;
+  raise notice '  --- permisos de las funciones de alertas comprobados ---';
+end
+$$;
+rollback;

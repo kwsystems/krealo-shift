@@ -1,6 +1,4 @@
-import { z } from 'zod';
-
-import { execute, selectRows } from '@/hooks/use-admin-query';
+import { execute } from '@/hooks/use-admin-query';
 import { TABLES } from '@/lib/supabase/types';
 import type { PushPlatform } from './push-adapter';
 
@@ -10,11 +8,6 @@ import type { PushPlatform } from './push-adapter';
  * `push_tokens` es una tabla del usuario: su política RLS limita cada fila a
  * `user_id = auth.uid()`, así que nadie ve los dispositivos de otra persona.
  */
-
-const tokenRowSchema = z.object({
-  expo_token: z.string(),
-  is_active: z.boolean(),
-});
 
 /**
  * Guarda o revive el token de este dispositivo.
@@ -50,31 +43,49 @@ export async function savePushToken(params: {
   );
 }
 
-/**
- * ¿Está este dispositivo registrado y activo?
- *
- * Sirve para que el panel no diga "activadas" cuando el permiso del sistema está
- * concedido pero el token nunca llegó a guardarse: son dos cosas distintas y
- * confundirlas hace que el gerente crea que va a recibir avisos que no llegan.
- */
-export async function isPushTokenActive(expoToken: string): Promise<boolean> {
-  const rows = await selectRows(z.array(tokenRowSchema), (db) =>
-    db
-      .from(TABLES.pushTokens)
-      .select('expo_token, is_active')
-      .eq('expo_token', expoToken)
-      .limit(1),
-  );
-  return rows[0]?.is_active === true;
-}
-
-/**
- * Desactiva el token de este dispositivo. Lo usa el cierre de sesión: el
- * dispositivo puede quedar en manos de otra persona y las alertas de una tienda no
- * deben seguir llegando a un teléfono ajeno.
- */
-export async function deactivatePushToken(expoToken: string): Promise<void> {
+/** Desactiva un token concreto. Solo alcanza a filas propias, por la política RLS. */
+async function deactivatePushToken(expoToken: string): Promise<void> {
   await execute((db) =>
     db.from(TABLES.pushTokens).update({ is_active: false }).eq('expo_token', expoToken),
   );
+}
+
+/**
+ * Token de ESTE dispositivo, recordado en memoria.
+ *
+ * POR QUÉ EN UNA VARIABLE DE MÓDULO Y NO EN LA CACHÉ DE CONSULTAS
+ * Porque quien lo necesita es el cierre de sesión, y lo necesita ANTES de cerrarla:
+ * después, la política RLS de `push_tokens` ya no deja escribir nada, porque
+ * `auth.uid()` es nulo. La clave de la consulta de registro lleva el `userId` y se
+ * descarta justo en ese momento, así que leerla desde ahí no sirve.
+ *
+ * No se persiste: si la app se cierra sin cerrar sesión, el token sigue siendo
+ * válido y debe seguir recibiendo. Solo importa el cierre explícito.
+ */
+let rememberedToken: string | null = null;
+
+export function rememberPushToken(expoToken: string): void {
+  rememberedToken = expoToken;
+}
+
+/**
+ * Desactiva el token de este dispositivo al cerrar sesión.
+ *
+ * POR QUÉ IMPORTA: el iPhone o el iPad pueden cambiar de manos, y sin esto las
+ * alertas de una tienda —tardanzas, ausencias— seguirían llegando al dispositivo de
+ * quien ya no trabaja ahí. Se desactiva SOLO el de este dispositivo y no todos los
+ * de la persona: cerrar sesión en el iPad no debe dejarla sin avisos en su teléfono.
+ *
+ * Nunca lanza. Cerrar sesión tiene que funcionar aunque no haya red.
+ */
+export async function deactivateRememberedPushToken(): Promise<void> {
+  const token = rememberedToken;
+  if (token === null) return;
+  rememberedToken = null;
+  try {
+    await deactivatePushToken(token);
+  } catch {
+    // Sin red el token se queda activo y seguirá recibiendo hasta que Expo lo
+    // declare muerto. Es un costo aceptado: bloquear el cierre de sesión sería peor.
+  }
 }

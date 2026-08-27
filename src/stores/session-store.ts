@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { deactivateRememberedPushToken } from '@/features/notifications/api';
 import { getSupabase } from '@/lib/supabase/client';
 
 /**
@@ -67,6 +68,12 @@ export const useSessionStore = create<SessionState>((set) => ({
   setMembership: ({ role, organizationId }) => set({ role, organizationId }),
 
   signOut: async () => {
+    // ANTES de cerrar la sesión, y no después: la política RLS de `push_tokens`
+    // exige `auth.uid()`, así que en cuanto la sesión se cierra ya no hay forma de
+    // apagar el token. Sin esto, un iPhone que cambia de manos sigue recibiendo las
+    // alertas de la tienda. No lanza: cerrar sesión funciona aunque falle.
+    await deactivateRememberedPushToken();
+
     const supabase = getSupabase();
     if (supabase !== null) await supabase.auth.signOut();
     set({ phase: 'signedOut', user: null, role: null, organizationId: null });

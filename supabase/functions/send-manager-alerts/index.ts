@@ -242,7 +242,10 @@ Deno.serve(async (request) => {
   const owners: { groupKey: string; token: string }[] = [];
 
   const sentIds: string[] = [];
-  const failedIds: string[] = [];
+  /** Grupos sin ningún dispositivo al que enviar. */
+  const noTokenIds: string[] = [];
+  /** Grupos que Expo rechazó de forma definitiva. */
+  const rejectedIds: string[] = [];
   const attemptedGroups = new Map<string, AlertGroup>();
 
   for (const group of groups) {
@@ -251,7 +254,7 @@ Deno.serve(async (request) => {
     if (tokens.length === 0) {
       // El token se desactivó entre la reserva y el envío. No hay a dónde enviar y
       // reintentar daría lo mismo: se marca fallido en lugar de dejarlo colgado.
-      failedIds.push(...group.deliveryIds);
+      noTokenIds.push(...group.deliveryIds);
       continue;
     }
 
@@ -360,7 +363,7 @@ Deno.serve(async (request) => {
     }
     // Si el fallo fue de transporte no se marca: se deja `queued` para el
     // reintento. Si Expo respondió y rechazó, reintentar da el mismo rechazo.
-    if (!transportFailed) failedIds.push(...group.deliveryIds);
+    if (!transportFailed) rejectedIds.push(...group.deliveryIds);
   }
 
   if (sentIds.length > 0) {
@@ -372,10 +375,17 @@ Deno.serve(async (request) => {
     }
   }
 
-  if (failedIds.length > 0) {
+  // Dos motivos distintos y dos llamadas: `failure_reason` es lo único que queda
+  // para diagnosticar después, y escribir "expo_http_500" en un grupo que en
+  // realidad no tenía a dónde enviar manda a mirar al sitio equivocado.
+  for (const failure of [
+    { ids: noTokenIds, reason: 'no_active_token' },
+    { ids: rejectedIds, reason: firstFailure === '' ? 'expo_rejected' : firstFailure },
+  ]) {
+    if (failure.ids.length === 0) continue;
     const marked = await supabase.rpc('mark_manager_alerts_failed', {
-      p_ids: failedIds,
-      p_reason: firstFailure === '' ? 'no_active_token' : firstFailure,
+      p_ids: failure.ids,
+      p_reason: failure.reason,
     });
     if (marked.error) {
       console.error('[send-manager-alerts] no se pudo marcar el fallo', marked.error.code);
@@ -388,7 +398,8 @@ Deno.serve(async (request) => {
     groups: groups.length,
     messages: messages.length,
     sent: sentIds.length,
-    failed: failedIds.length,
+    failedNoToken: noTokenIds.length,
+    failedRejected: rejectedIds.length,
     deactivatedTokens: deadTokens.size,
   });
 });

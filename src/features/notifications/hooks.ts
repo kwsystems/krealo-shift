@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
 import { parseAlertData, routeForAlertType } from './alerts';
-import { savePushToken } from './api';
+import { rememberPushToken, savePushToken } from './api';
 import { deviceLabel, pushAdapter, pushPlatform, type PushPermissionState } from './push-adapter';
 import { pushRegistrationDecision, type PushRegistrationDecision } from './registration-policy';
 import { useKioskStore } from '@/stores/kiosk-store';
@@ -109,6 +109,9 @@ export function usePushRegistration(): PushRegistration {
         platform: pushPlatform(),
         deviceName: deviceLabel(),
       });
+      // Se recuerda para poder desactivarlo al cerrar sesión, que es el único
+      // momento en que hace falta y el único en que ya no se puede consultar.
+      rememberPushToken(token);
       return token;
     },
     enabled: decision.allowed && granted && userId !== null,
