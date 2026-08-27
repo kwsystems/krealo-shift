@@ -239,6 +239,64 @@ expo.dev. Aun siendo públicas, no se commitean.
 
 ## Configurar Supabase paso a paso
 
+Hay dos rutas. La corta no necesita instalar nada y es la que sirve para ver la app
+funcionando hoy; la larga usa el CLI de Supabase y es la que se usa para trabajar el
+proyecto a diario.
+
+### Ruta corta: sin CLI, pegando dos archivos en el panel
+
+Cuatro pasos. No hace falta la `service_role key` en ningún momento: todo pasa dentro
+del propio panel de Supabase.
+
+1. **Crear el proyecto.** En [supabase.com](https://supabase.com) → *New project*. El
+   plan gratuito alcanza. Guarda la contraseña de base de datos que te pida, aunque
+   para esto no la vas a usar.
+
+2. **Crear el esquema.** Menú lateral → **SQL Editor** → *New query* → pega TODO
+   `supabase/instalar-todo.sql` → **Run**. Son las 16 migraciones y los datos de
+   demostración en un solo archivo. Al terminar dice *Success. No rows returned*.
+
+3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → *Add user* →
+   *Create new user*:
+   - tu correo y una contraseña;
+   - marca **Auto Confirm User**. Sin eso el usuario queda sin confirmar y el acceso
+     falla sin decir por qué.
+
+   Después, otra vez en **SQL Editor**, pega `supabase/crear-mi-usuario.sql` —
+   cambiando el correo de la primera línea por el tuyo — y **Run**. Eso te hace
+   propietario de la organización de demostración y te da una ficha de empleado con
+   PIN `246810`, para poder probar también el kiosco.
+
+   El usuario se crea en el panel y no por SQL a propósito: una cuenta que pueda
+   iniciar sesión necesita filas exactas en `auth.users` y en `auth.identities`, con
+   el formato que espera la versión de GoTrue que corra tu proyecto. Desde el panel
+   sale bien siempre.
+
+4. **Apuntar la app al proyecto.** *Project Settings* → *API*. Copia **Project URL** y
+   **anon public** al `.env` del repositorio:
+
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
+   ```
+
+   Y reinicia la previsualización con la caché limpia, porque esos valores se leen al
+   empaquetar:
+
+   ```powershell
+   npx expo start --web --clear
+   ```
+
+Con eso el acceso ya funciona con tu correo y tu contraseña. Lo que sigue sin
+funcionar en la web es el kiosco de verdad: necesita un dispositivo activado, y eso
+va en el iPad (ver «Lo que NO se puede verificar en la web»).
+
+`instalar-todo.sql` es un archivo **generado**. Si cambia una migración se regenera
+con `python3 scripts/generar-instalacion.py`, y CI comprueba que no se haya quedado
+viejo. No se edita a mano.
+
+### Ruta larga: con el CLI de Supabase
+
 ### 1. Crear el proyecto
 
 En [supabase.com](https://supabase.com) crea un proyecto. Anota:
@@ -270,17 +328,28 @@ Aplica, en orden, los archivos de `supabase/migrations/`:
 
 | Migración | Qué crea |
 |---|---|
-| `…000100_initial_schema.sql` | 23 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son *append-only* |
+| `…000100_initial_schema.sql` | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son *append-only* |
 | `…000200_rls.sql` | Row Level Security en todas las tablas expuestas |
 | `…000300_functions.sql` | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación |
 | `…000400_guards.sql` | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada) |
 | `…000500_kiosk_context.sql` | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN |
 | `…000600_offline_pin.sql` | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline |
+| `…000700_offline_verifier_device_key.sql` | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió |
+| `…000800_attendance_photos.sql` | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad |
+| `…000900_scheduled_jobs.sql` | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada |
+| `…001000_kiosk_devices_admin.sql` | vista de inventario de kioscos para el panel, sin exponer las credenciales |
+| `…001100_manager_alerts.sql` | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes |
+| `…001200_organization_logo.sql` | bucket de logo de la organización, de lectura pública y escritura solo del administrador |
+| `…001300_manager_add_time_event.sql` | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado |
+| `…001400_function_privileges.sql` | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca |
+| `…001500_authorize_rpc.sql` | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso |
+| `…001600_close_direct_writes.sql` | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.
 
-Alternativa sin CLI: pegar cada archivo, en orden, en el SQL Editor del panel.
+Alternativa sin CLI: `supabase/instalar-todo.sql`, que es exactamente estos
+archivos concatenados en orden — ver la ruta corta más arriba.
 
 ### 4. Crear los usuarios demo
 

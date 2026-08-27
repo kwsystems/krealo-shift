@@ -96,6 +96,13 @@ jobs:
       - name: Comprobar los testID de los flujos
         run: node scripts/e2e-ids-check.mjs
 
+      # supabase/instalar-todo.sql es una copia de 230 KB de las migraciones, para
+      # poder crear el esquema pegando un solo archivo en el editor SQL de Supabase.
+      # Una copia que nadie comprueba se queda vieja en silencio, y el sintoma es un
+      # proyecto nuevo con un esquema que ya no es el del repositorio.
+      - name: Comprobar que el instalador SQL esta al dia
+        run: python3 scripts/generar-instalacion.py --verificar
+
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
     runs-on: ubuntu-latest
