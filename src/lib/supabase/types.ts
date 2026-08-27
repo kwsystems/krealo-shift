@@ -105,6 +105,19 @@ export const RPC = {
   revokeKioskDevice: 'revoke_kiosk_device',
   setEmployeePin: 'set_employee_pin',
   managerAdjustTime: 'manager_adjust_time',
+  /**
+   * Fichaje manual del gerente (§11.4 "agregar fichaje manual con motivo").
+   *
+   * CREA un evento nuevo marcado `source = 'manager'`; no edita ninguno existente,
+   * porque `time_events` es append-only. El motivo es obligatorio y queda en
+   * `time_adjustments` y en `audit_logs`: un fichaje que el gerente añade sin
+   * explicación es indistinguible de un fraude en una auditoría laboral.
+   *
+   * Valida la transición contra el estado del empleado EN EL INSTANTE del fichaje,
+   * no en el actual, porque una corrección casi siempre se pone en el pasado.
+   */
+  managerAddTimeEvent: 'manager_add_time_event',
+  attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',
   rebuildWorkSession: 'rebuild_work_session',
