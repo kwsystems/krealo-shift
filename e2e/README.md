@@ -130,12 +130,23 @@ Los flujos usan **solo** testID que existen hoy en el código. Estos otros harí
 falta para completar los ocho flujos sin depender de textos traducidos, y no se
 inventaron aquí:
 
+### Ya agregados
+
+| testID | Dónde | Para qué |
+|---|---|---|
+| `sync-indicator` | `SyncIndicator` en `src/components/ui/states.tsx` | flujo 02: afirmar "estamos sin conexión" sin mirar la pantalla |
+| `offline-banner` | `OfflineBanner`, mismo archivo | flujo 02: aviso de trabajo sin red |
+| `kiosk-revoked` | pantalla de revocado en `app/kiosk/index.tsx` | flujo 04 |
+
+`EmptyState`, `ErrorState` y `LoadingState` también aceptan ya `testID`, sin valor
+por defecto: lo pone quien los usa. `OfflineBanner` y `SyncIndicator` traen uno por
+defecto porque solo hay uno de cada en pantalla.
+
+### Todavía faltan
+
 | testID pedido | Dónde | Para qué |
 |---|---|---|
-| `sync-indicator`, con estado accesible | `SyncIndicator` en `src/components/ui/states.tsx` | flujo 02: afirmar "estamos sin conexión" sin mirar la pantalla |
-| `offline-banner` | `OfflineBanner`, mismo archivo | flujo 02: aviso de trabajo sin red |
 | `kiosk-pending-count` | pie de `app/kiosk/index.tsx` | flujo 02: contar pendientes sin depender del texto en plural |
-| `kiosk-revoked` | pantalla de revocado en `app/kiosk/index.tsx` | flujo 04 |
 | `kiosk-error` | tarjeta de error de `app/kiosk/actions.tsx` | flujos 03 y 04: distinguir el error del kiosco de cualquier otro texto |
 | `kiosk-exit-gate` | pantalla de PIN de gerente en `app/kiosk/exit.tsx` | flujo 08 |
 | `manager-home`, `manager-team`, `manager-schedule`, `manager-hours`, `manager-more` | pantallas de `app/(manager)/` | flujos 05, 06 y 08: afirmar que se llegó (o que NO se llegó) al panel sin usar las etiquetas de las pestañas |
@@ -143,29 +154,27 @@ inventaron aquí:
 | `timesheet-correct-entry`, `timesheet-reason`, `timesheet-save`, `timesheet-history`, `timesheet-previous-value` | hojas de tiempo (por implementar) | flujo 05 completo |
 | `schedule-copy-previous-week`, `schedule-shift-{id}`, `schedule-save-draft`, `schedule-publish`, `schedule-status` | editor de horarios (por implementar) | flujo 06 completo |
 
-Los componentes `EmptyState`, `ErrorState`, `LoadingState`, `OfflineBanner` y
-`SyncIndicator` **no aceptan** la prop `testID` todavía; hay que agregarla antes
-de poder pedirlos por id.
-
 ## Lo que hace falta en el código
 
-Hallazgos detectados al escribir estos flujos. **No se arreglaron aquí**: este
-directorio solo contiene pruebas.
+Hallazgos detectados al escribir estos flujos. Los tres primeros eran defectos
+reales y **ya están arreglados**; se dejan escritos porque el motivo importa más
+que el parche.
 
-1. **`app/kiosk/exit.tsx` autoriza con cualquier PIN válido.** `tryAuthorize` da
-   por bueno cualquier `verifyPin` correcto, sin comprobar que la persona
-   administre la ubicación. Con el PIN de una empleada se llega al menú de
-   diagnóstico y al botón que desactiva el kiosco. El dato para decidirlo ya
-   existe y ya se usa en otro sitio: `canManageLocation`, que devuelve
-   `kiosk_employee_context`. Es el hallazgo más serio y hace fallar el flujo 08.
-2. **`app/(manager)/_layout.tsx` no tiene guarda de sesión ni de rol.** Como
-   `(manager)` es un grupo, sus rutas viven en la raíz (`/hours`, `/team`,
-   `/schedule`, `/more`) y son alcanzables por enlace profundo o, en la
-   previsualización web, escribiendo la URL. La redirección por rol solo ocurre en
-   `app/index.tsx`, que esas rutas no atraviesan. Hace fallar el último bloque del
-   flujo 08.
-3. **Nada llama a `markRevoked()`** en `src/stores/kiosk-store.ts`, así que la
-   pantalla "Este reloj fue desactivado" no se puede alcanzar. El flujo 04 se
-   escribió contra el mensaje de error, que sí aparece.
+1. ~~**`app/kiosk/exit.tsx` autoriza con cualquier PIN válido.**~~ **ARREGLADO.**
+   `tryAuthorize` daba por bueno cualquier `verifyPin` correcto, sin comprobar que
+   la persona administre la ubicación: con el PIN de una empleada se llegaba al
+   menú de diagnóstico y al botón que desactiva el kiosco. Ahora exige
+   `canManageLocation`, que decide el servidor. Sin conexión el menú no abre, y se
+   explica por qué en vez de dar un error genérico.
+2. ~~**`app/(manager)/_layout.tsx` no tiene guarda de sesión ni de rol.**~~
+   **ARREGLADO.** Como `(manager)` es un grupo, sus rutas viven en la raíz
+   (`/hours`, `/team`, `/schedule`, `/more`) y eran alcanzables por enlace profundo
+   o escribiendo la URL en la previsualización web, sin atravesar la redirección de
+   `app/index.tsx`. El layout ahora comprueba sesión, kiosco y rol.
+3. ~~**Nada llama a `markRevoked()`**~~ **ARREGLADO.** La pantalla "Este reloj fue
+   desactivado" era inalcanzable. Ahora la marcan tanto `app/kiosk/index.tsx` como
+   `app/kiosk/actions.tsx` al recibir `revoked` del servidor, y la pantalla tiene
+   `testID="kiosk-revoked"`. El flujo 04 puede afirmarla directamente.
 4. **Las pantallas administrativas son estados vacíos.** Los flujos 05 y 06 no se
    pueden completar hasta que existan las hojas de tiempo y el editor de horarios.
+   Sigue pendiente: es el trabajo de P0-5.

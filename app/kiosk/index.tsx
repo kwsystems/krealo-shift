@@ -42,6 +42,7 @@ export default function KioskIdleScreen() {
 
   const binding = useKioskStore((s) => s.binding);
   const revoked = useKioskStore((s) => s.revoked);
+  const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
   const toggleLanguage = usePreferencesStore((s) => s.toggleLanguage);
   const { online, syncing, pendingCount } = useNetworkStore();
@@ -100,6 +101,11 @@ export default function KioskIdleScreen() {
           break;
         }
         case 'revoked':
+          // Se marca el estado, no solo el mensaje: el servidor acaba de decir que
+          // este reloj ya no existe para el. Sin esto la pantalla de "reloj
+          // desactivado" era inalcanzable y el iPad seguia pidiendo PIN que
+          // siempre iban a fallar, sin decir por que.
+          markRevoked();
           setError(t('errors.kioskRevoked'));
           break;
         case 'wrong_location':
@@ -149,7 +155,7 @@ export default function KioskIdleScreen() {
           setError(t('errors.generic'));
       }
     },
-    [binding, setFromOnline, setFromOffline, t],
+    [binding, markRevoked, setFromOnline, setFromOffline, t],
   );
 
   // Validación automática al completar el PIN, sin botón "Aceptar" (§9.1).
@@ -165,7 +171,7 @@ export default function KioskIdleScreen() {
 
   if (revoked) {
     return (
-      <AppScreen tone="kiosk">
+      <AppScreen tone="kiosk" testID="kiosk-revoked">
         <Stack gap={spacing.md} style={styles.centered}>
           <AppText variant="kioskTitle">{t('kiosk.revokedTitle')}</AppText>
           <AppText variant="body" tone="muted">

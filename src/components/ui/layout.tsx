@@ -118,6 +118,7 @@ export function Row({
   wrap = false,
   style,
   accessibilityLabel,
+  testID,
 }: {
   children: ReactNode;
   gap?: number;
@@ -126,10 +127,12 @@ export function Row({
   wrap?: boolean;
   style?: ViewStyle;
   accessibilityLabel?: string;
+  testID?: string;
 }) {
   return (
     <View
       accessibilityLabel={accessibilityLabel}
+      testID={testID}
       style={[
         styles.row,
         { gap, alignItems: align, justifyContent: justify, flexWrap: wrap ? 'wrap' : 'nowrap' },

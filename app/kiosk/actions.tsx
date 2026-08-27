@@ -77,6 +77,7 @@ export default function KioskActionsScreen() {
   const clearVerification = useKioskVerificationStore((s) => s.clear);
 
   const binding = useKioskStore((s) => s.binding);
+  const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
 
   const [step, setStep] = useState<Step>({ name: 'identify' });
@@ -304,6 +305,12 @@ export default function KioskActionsScreen() {
       // cola local en lugar de perderse (§17).
       await commitOffline(event);
       return;
+    }
+
+    if (result.error.kind === 'revoked') {
+      // Igual que en la pantalla de reposo: el estado se marca para que el iPad
+      // muestre que fue desactivado en vez de seguir pidiendo PIN.
+      markRevoked();
     }
 
     setError(

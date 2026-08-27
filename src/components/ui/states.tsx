@@ -71,21 +71,33 @@ const defaultIcons: Record<StatusTone, IconName> = {
 };
 
 /** Estado vacío: icono, una frase y una acción. Nunca una caja hueca (§20). */
+/**
+ * Los estados compartidos aceptan `testID` porque son justo lo que un flujo E2E
+ * necesita afirmar: que apareció el vacío y no un error, que el aviso de sin
+ * conexión está visible, que el indicador de sincronización cambió. Sin esto los
+ * flujos de `e2e/` no pueden comprobar el estado offline, que es el caso más
+ * delicado de la app.
+ *
+ * `OfflineBanner` y `SyncIndicator` traen un valor por defecto porque siempre hay
+ * uno solo en pantalla; los demás lo reciben de quien los usa.
+ */
 export function EmptyState({
   title,
   body,
   icon = 'file-tray-outline',
   actionLabel,
   onAction,
+  testID,
 }: {
   title: string;
   body?: string;
   icon?: IconName;
   actionLabel?: string;
   onAction?: () => void;
+  testID?: string;
 }) {
   return (
-    <View style={styles.centeredState}>
+    <View style={styles.centeredState} testID={testID}>
       <Ionicons name={icon} size={40} color={colors.ink500} style={styles.dimIcon} />
       <AppText variant="section" style={styles.centerText}>
         {title}
@@ -108,15 +120,17 @@ export function ErrorState({
   body,
   onRetry,
   retryLabel,
+  testID,
 }: {
   title?: string;
   body?: string;
   onRetry?: () => void;
   retryLabel?: string;
+  testID?: string;
 }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.centeredState}>
+    <View style={styles.centeredState} testID={testID}>
       <Ionicons name="warning-outline" size={40} color={colors.danger600} />
       <AppText variant="section" style={styles.centerText}>
         {title ?? t('states.errorTitle')}
@@ -136,10 +150,10 @@ export function ErrorState({
 }
 
 /** Carga: skeleton o spinner con texto, nunca una pantalla en blanco (§20). */
-export function LoadingState({ label }: { label?: string }) {
+export function LoadingState({ label, testID }: { label?: string; testID?: string }) {
   const { t } = useTranslation();
   return (
-    <View style={styles.centeredState}>
+    <View style={styles.centeredState} testID={testID}>
       <ActivityIndicator color={colors.primary600} />
       <AppText variant="help" tone="subtle">
         {label ?? t('common.loading')}
@@ -151,10 +165,16 @@ export function LoadingState({ label }: { label?: string }) {
 /**
  * Aviso de sin conexión. No bloquea el uso: el kiosco debe seguir fichando (§9.7).
  */
-export function OfflineBanner({ pendingCount = 0 }: { pendingCount?: number }) {
+export function OfflineBanner({
+  pendingCount = 0,
+  testID = 'offline-banner',
+}: {
+  pendingCount?: number;
+  testID?: string;
+}) {
   const { t } = useTranslation();
   return (
-    <View style={styles.offlineBanner} accessibilityRole="alert">
+    <View style={styles.offlineBanner} accessibilityRole="alert" testID={testID}>
       <Ionicons name="cloud-offline-outline" size={18} color={colors.warning600} />
       <AppText variant="label" style={{ color: colors.warning600 }}>
         {t('states.offlineBanner', { count: pendingCount })}
@@ -168,10 +188,12 @@ export function SyncIndicator({
   online,
   syncing = false,
   pendingCount = 0,
+  testID = 'sync-indicator',
 }: {
   online: boolean;
   syncing?: boolean;
   pendingCount?: number;
+  testID?: string;
 }) {
   const { t } = useTranslation();
   const tone = !online ? colors.warning600 : pendingCount > 0 ? colors.info600 : colors.success600;
@@ -179,6 +201,7 @@ export function SyncIndicator({
   return (
     <Row
       gap={spacing.xs}
+      testID={testID}
       accessibilityLabel={`${t('a11y.syncIndicator')}: ${
         online ? t('a11y.connectionOnline') : t('a11y.connectionOffline')
       }`}
