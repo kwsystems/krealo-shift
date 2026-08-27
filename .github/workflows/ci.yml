@@ -75,6 +75,21 @@ jobs:
           EXPO_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
           EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ejemplo-solo-para-empaquetar
 
+      # ABRIR LA APP DE VERDAD. Empaquetar prueba que el grafo de modulos se
+      # construye; no prueba que la app arranque. Una pantalla en blanco por un
+      # error en el arranque pasa las tres comprobaciones de arriba.
+      #
+      # Se reusa el export de web: `--clear` no hace falta aqui porque el runner
+      # empieza sin cache.
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Comprobar que las pantallas renderizan
+        run: node scripts/render-check.mjs /tmp/export-web
+
+      - name: Auditar accesibilidad
+        run: node scripts/a11y-check.mjs /tmp/export-web
+
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
     runs-on: ubuntu-latest

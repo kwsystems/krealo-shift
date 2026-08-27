@@ -18,7 +18,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
-import { colors, fontSize, spacing } from '@/theme/tokens';
+import { colors, fontSize, sizes, spacing } from '@/theme/tokens';
 import { formatClockTime, formatLongDate } from '@/utils/time';
 
 /**
@@ -187,9 +187,27 @@ export default function KioskIdleScreen() {
       <View style={[styles.container, { padding: isCompact ? spacing.lg : spacing.xxl }]}>
         {/* Encabezado: logo e ubicación a la izquierda, sincronización a la derecha */}
         <Row justify="space-between" align="flex-start">
+          {/*
+            El logotipo es el gesto oculto de salida del kiosco (§6.4). Lleva
+            `hitSlop` porque su alto depende del texto: sin nombre de ubicacion
+            cargado son 31 px, muy por debajo del objetivo tactil de 44. Se midio
+            en un navegador de verdad, no se supuso.
+
+            Y ADEMAS `minHeight`, que es lo que de verdad lo arregla: `hitSlop`
+            solo existe en nativo, asi que en la previsualizacion web el objetivo
+            seguia midiendo 31 px. Un alto real de 44 funciona en las dos y no
+            depende de que la plataforma respete `hitSlop`.
+
+            §21 exige que el gesto oculto tenga ALTERNATIVA ADMINISTRATIVA, y la
+            tiene: revocar el dispositivo desde el panel (`revoke_kiosk_device`,
+            listado en la vista `kiosk_devices_admin`). Un iPad revocado deja de
+            funcionar como reloj sin que nadie tenga que tocarlo.
+          */}
           <Pressable
             onLongPress={() => router.push('/kiosk/exit')}
             delayLongPress={EXIT_LONG_PRESS_MS}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            style={styles.logoTarget}
             accessibilityRole="button"
             accessibilityLabel={t('common.appName')}
             accessibilityHint={t('a11y.logoLongPress')}
@@ -302,6 +320,8 @@ function minutesUntil(isoDate: string): number {
 }
 
 const styles = StyleSheet.create({
+  // 44 es el minimo de objetivo tactil de las guias de iOS y de §21.
+  logoTarget: { minHeight: sizes.touchTargetMin, justifyContent: 'center' },
   container: { flex: 1, justifyContent: 'space-between', backgroundColor: colors.primary50 },
   clockBlock: { alignItems: 'center' },
   pinBlock: { alignItems: 'center' },
