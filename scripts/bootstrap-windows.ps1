@@ -56,6 +56,35 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   return
 }
 
+# LA POLITICA DE EJECUCION, comprobada ANTES de tocar npm.
+#
+# Node se instala en Windows con envoltorios de PowerShell (npm.ps1, npx.ps1). Si la
+# politica de ejecucion los bloquea, PowerShell se niega a cargarlos y lanza
+# PSSecurityException. Eso NO pone $LASTEXITCODE, asi que una comprobacion de codigo
+# de salida da el visto bueno a una instalacion que nunca ocurrio: es exactamente lo
+# que paso la primera vez, y el script dijo "Dependencias listas" sin haber
+# instalado nada. Mentir sobre el resultado es peor que fallar.
+$politica = Get-ExecutionPolicy -Scope CurrentUser
+if ($politica -eq 'Restricted' -or $politica -eq 'Undefined') {
+  $efectiva = Get-ExecutionPolicy
+  if ($efectiva -eq 'Restricted' -or $efectiva -eq 'Undefined') {
+    Write-Host ""
+    Write-Host "FALTA UN PASO, y es de Windows, no del proyecto." -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Windows tiene bloqueada la ejecucion de scripts, asi que ni npm ni npx"
+    Write-Host "  pueden correr: son scripts de PowerShell."
+    Write-Host ""
+    Write-Host "  Copia este comando, dale Enter y responde S (o Y) si pregunta:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "      Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  Es por usuario y no necesita permisos de administrador. Despues vuelve a"
+    Write-Host "  correr el comando de instalacion y sigue desde donde iba."
+    Write-Host ""
+    return
+  }
+}
+
 $v = (node --version).TrimStart('v').Split('.')[0]
 if ([int]$v -lt 20) {
   Fallo "Node $v es demasiado antiguo; hace falta 20 o superior." "Actualizalo desde https://nodejs.org (boton LTS)."
@@ -93,8 +122,15 @@ Write-Host "    Rama activa: $(git branch --show-current)" -ForegroundColor Gree
 # --- Dependencias -------------------------------------------------------------
 Paso 3 "Instalando dependencias (varios minutos la primera vez, con mucho texto)"
 npm install
-if ($LASTEXITCODE -ne 0) {
-  Fallo "npm install fallo." "Suele ser la red. Vuelve a correr el mismo comando; retoma donde iba."
+
+# Se comprueba el RESULTADO y no solo el codigo de salida: si PowerShell bloquea
+# npm.ps1, $LASTEXITCODE no se toca y el script daria por buena una instalacion que
+# no ocurrio. Que exista node_modules con contenido es la unica prueba real.
+$instalado = (Test-Path 'node_modules') -and
+             ((Get-ChildItem 'node_modules' -ErrorAction SilentlyContinue | Measure-Object).Count -gt 10)
+
+if (-not $instalado) {
+  Fallo "Las dependencias NO se instalaron." "Si el error de arriba menciona 'la ejecucion de scripts esta deshabilitada', corre esto y repite:`n    Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`n  Si menciona la red, vuelve a correr el mismo comando: retoma donde iba."
   return
 }
 Write-Host "    Dependencias listas" -ForegroundColor Green
