@@ -38,6 +38,35 @@ export type KioskContext = {
 };
 
 /**
+ * Registra un intento de fichaje rechazado, para la alerta de §19 "intento de
+ * fichaje desde un kiosco revocado o incorrecto".
+ *
+ * POR QUÉ SE REGISTRA AQUÍ Y NO EN LA FUNCIÓN SQL
+ * Porque `authenticate_kiosk` y `submit_time_event` rechazan levantando una
+ * excepción, y una excepción aborta la transacción: un `insert` dentro de la misma
+ * función se desharía junto con ella. Postgres no tiene transacciones autónomas,
+ * así que el registro tiene que ocurrir en una petición nueva, o sea desde aquí.
+ *
+ * Nunca lanza. Un fallo al anotar el intento no debe cambiar la respuesta que
+ * recibe el iPad: la respuesta correcta sigue siendo "este reloj no está activo".
+ */
+export async function recordKioskRejection(
+  supabase: SupabaseClient,
+  params: { devicePublicId: string; reason: 'revoked' | 'wrong_location'; employeeId?: string },
+): Promise<void> {
+  try {
+    const { error } = await supabase.rpc('record_kiosk_rejection', {
+      p_device_public_id: params.devicePublicId,
+      p_reason: params.reason,
+      p_employee_id: params.employeeId ?? null,
+    });
+    if (error) console.error('[edge] no se pudo anotar el rechazo', error.code);
+  } catch {
+    console.error('[edge] no se pudo anotar el rechazo');
+  }
+}
+
+/**
  * Valida la credencial del dispositivo. Devuelve `null` si falta la cabecera, y
  * lanza si la credencial es inválida o el dispositivo está revocado.
  */
@@ -54,7 +83,15 @@ export async function authenticateKiosk(
     p_credential: credential,
   });
 
-  if (error) throw error;
+  if (error) {
+    // Este es el punto por el que pasan TODAS las peticiones del kiosco, así que
+    // anotar aquí cubre las siete funciones de una vez: un iPad revocado que sigue
+    // encendido queda registrado sin importar qué endpoint intente.
+    if (error.code === '28000') {
+      await recordKioskRejection(supabase, { devicePublicId: publicId, reason: 'revoked' });
+    }
+    throw error;
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return null;

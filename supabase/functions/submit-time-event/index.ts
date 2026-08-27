@@ -18,7 +18,12 @@ import {
   preflight,
   readJson,
 } from '../_shared/http.ts';
-import { authenticateKiosk, serviceClient, verifyActionToken } from '../_shared/kiosk-auth.ts';
+import {
+  authenticateKiosk,
+  recordKioskRejection,
+  serviceClient,
+  verifyActionToken,
+} from '../_shared/kiosk-auth.ts';
 
 const EVENT_TYPES = ['clock_in', 'break_start', 'break_end', 'clock_out'] as const;
 const BREAK_TYPES = ['paid', 'unpaid', 'meal', 'other'] as const;
@@ -101,7 +106,23 @@ Deno.serve(async (request) => {
     p_source: 'kiosk',
   });
 
-  if (error) return mapPostgresError(error);
+  if (error) {
+    // 42501 es lo que levanta `submit_time_event` cuando el empleado no está
+    // asignado a la tienda de este iPad: el segundo caso de §19, "kiosco
+    // incorrecto". Se anota aquí y no en la función SQL porque la excepción ya
+    // deshizo su transacción.
+    if (error.code === '42501') {
+      const publicId = request.headers.get('x-kiosk-device');
+      if (publicId !== null) {
+        await recordKioskRejection(supabase, {
+          devicePublicId: publicId,
+          reason: 'wrong_location',
+          employeeId: claim.employeeId,
+        });
+      }
+    }
+    return mapPostgresError(error);
+  }
 
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return errorResponse('server_error', 'La base no devolvió resultado.', 500);

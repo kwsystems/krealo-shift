@@ -449,7 +449,26 @@
     "weekDay3": "Wednesday",
     "weekDay4": "Thursday",
     "weekDay5": "Friday",
-    "weekDay6": "Saturday"
+    "weekDay6": "Saturday",
+    "kioskSyncStaleMinutes": "Clock-not-syncing alert (minutes)"
+  },
+  "notifications": {
+    "activeBody": "This device will get the alerts you pick below.",
+    "activeTitle": "Notifications on",
+    "deniedBody": "They are turned off for this app in your system settings. You can turn them back on from there.",
+    "deniedTitle": "Notifications blocked",
+    "enable": "Turn on notifications",
+    "explainBody": "We let you know about late arrivals, missing clock-outs, pending requests and clocks that stopped syncing. Alerts never include names or photos: you see those inside the app.",
+    "explainTitle": "Get alerts on your phone",
+    "openSettings": "Open system settings",
+    "pendingBody": "You granted permission and we are finishing the setup. If no alerts arrive, check your connection.",
+    "pendingTitle": "Registering this device",
+    "registerFailed": "We could not register this device. We will try again next time you open the app.",
+    "unavailableKiosk": "An iPad in clock mode does not receive notifications. Alerts go to the phone of whoever manages the store.",
+    "unavailableProject": "The app notification setup is not finished yet. Let whoever manages the account know.",
+    "unavailableSession": "Sign in with your account to receive alerts.",
+    "unavailableTitle": "Notifications not available here",
+    "unavailableWeb": "The web preview does not receive notifications. Use the app on your iPhone or iPad."
   },
   "states": {
     "emptyTitle": "Nothing here yet",

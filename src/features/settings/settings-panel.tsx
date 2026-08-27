@@ -21,6 +21,7 @@ import {
   ToggleField,
 } from '@/components/schedule/fields';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
+import { PushPermissionCard } from '@/features/notifications/push-permission-card';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
@@ -228,7 +229,8 @@ type NumericSettingKey =
   | 'requiredBreakMinutes'
   | 'dailyOvertimeThresholdMinutes'
   | 'weeklyOvertimeThresholdMinutes'
-  | 'minimumRestMinutes';
+  | 'minimumRestMinutes'
+  | 'kioskSyncStaleMinutes';
 
 const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = [
   { key: 'earlyClockInMinutes', labelKey: 'settings.earlyClockInMinutes' },
@@ -238,6 +240,7 @@ const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = [
   { key: 'weeklyOvertimeThresholdMinutes', labelKey: 'settings.weeklyOvertimeThreshold' },
   { key: 'minimumRestMinutes', labelKey: 'settings.minimumRestMinutes' },
   { key: 'photoRetentionDays', labelKey: 'settings.photoRetentionDays' },
+  { key: 'kioskSyncStaleMinutes', labelKey: 'settings.kioskSyncStaleMinutes' },
 ];
 
 function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdit: boolean }) {
@@ -256,6 +259,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
     dailyOvertimeThresholdMinutes: String(location.settings.dailyOvertimeThresholdMinutes),
     weeklyOvertimeThresholdMinutes: String(location.settings.weeklyOvertimeThresholdMinutes),
     minimumRestMinutes: String(location.settings.minimumRestMinutes),
+    kioskSyncStaleMinutes: String(location.settings.kioskSyncStaleMinutes),
   });
   const [saved, setSaved] = useState(false);
 
@@ -273,6 +277,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
     dailyOvertimeThresholdMinutes: parseNumber('dailyOvertimeThresholdMinutes'),
     weeklyOvertimeThresholdMinutes: parseNumber('weeklyOvertimeThresholdMinutes'),
     minimumRestMinutes: parseNumber('minimumRestMinutes'),
+    kioskSyncStaleMinutes: parseNumber('kioskSyncStaleMinutes'),
   });
 
   return (
@@ -528,6 +533,13 @@ function NotificationsCard() {
 
   return (
     <FormCard title={t('settings.notifications')} description={t('settings.notificationsHint')}>
+      {/*
+        El estado del dispositivo va antes de los interruptores: si el permiso del
+        sistema esta denegado, elegir que avisos quieres recibir no sirve de nada y
+        hay que decirlo antes de que la persona los configure (§20).
+      */}
+      <PushPermissionCard />
+
       <AsyncSection
         isPending={stored.isPending}
         error={stored.error}

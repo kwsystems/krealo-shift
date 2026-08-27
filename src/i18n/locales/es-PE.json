@@ -449,7 +449,26 @@
     "weekDay3": "Miércoles",
     "weekDay4": "Jueves",
     "weekDay5": "Viernes",
-    "weekDay6": "Sábado"
+    "weekDay6": "Sábado",
+    "kioskSyncStaleMinutes": "Aviso de reloj sin sincronizar (minutos)"
+  },
+  "notifications": {
+    "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",
+    "activeTitle": "Notificaciones activadas",
+    "deniedBody": "Están desactivadas para esta app en los ajustes del sistema. Puedes volver a activarlas desde ahí.",
+    "deniedTitle": "Notificaciones bloqueadas",
+    "enable": "Activar notificaciones",
+    "explainBody": "Te avisamos de tardanzas, turnos sin salida, solicitudes pendientes y relojes sin sincronizar. Los avisos nunca llevan nombres ni fotos: eso se ve dentro de la app.",
+    "explainTitle": "Recibe avisos en tu teléfono",
+    "openSettings": "Abrir ajustes del sistema",
+    "pendingBody": "Diste el permiso y estamos terminando el registro. Si no llegan avisos, revisa tu conexión.",
+    "pendingTitle": "Registrando este dispositivo",
+    "registerFailed": "No pudimos registrar este dispositivo. Lo intentaremos otra vez al abrir la app.",
+    "unavailableKiosk": "Un iPad en modo reloj no recibe notificaciones. Los avisos van al teléfono de quien administra la tienda.",
+    "unavailableProject": "Falta terminar la configuración de notificaciones de la app. Avísale a quien administra la cuenta.",
+    "unavailableSession": "Inicia sesión con tu cuenta para recibir avisos.",
+    "unavailableTitle": "Notificaciones no disponibles aquí",
+    "unavailableWeb": "La previsualización web no recibe notificaciones. Usa la app en tu iPhone o iPad."
   },
   "states": {
     "emptyTitle": "Nada por aquí todavía",

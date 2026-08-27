@@ -321,7 +321,12 @@ create table manager_alert_deliveries (
   queued_at timestamptz not null default now(),
   sent_at timestamptz,
   failure_reason text,
-  unique (recipient_user_id, alert_type, subject_id, occurrence_key)
+  -- La restricción lleva nombre a propósito: `claim_manager_alerts` la referencia
+  -- con `on conflict on constraint`. Escribir ahí la lista de columnas hace que
+  -- Postgres las confunda con los parámetros de salida de la función, y el error
+  -- que da —"column reference is ambiguous"— no señala la causa.
+  constraint manager_alert_deliveries_key
+    unique (recipient_user_id, alert_type, subject_id, occurrence_key)
 );
 
 create index manager_alert_deliveries_queued_idx
@@ -668,7 +673,7 @@ begin
       c.recipient_user_id, c.alert_type, c.subject_id, c.occurrence_key,
       c.organization_id, c.location_id, c.recipient_locale, c.payload
     from candidates c
-    on conflict (recipient_user_id, alert_type, subject_id, occurrence_key) do update
+    on conflict on constraint manager_alert_deliveries_key do update
       set attempts = d.attempts + 1,
           queued_at = now()
       where d.status = 'queued'

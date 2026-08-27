@@ -45,6 +45,35 @@ jest.mock('expo-network', () => ({
   addNetworkStateListener: jest.fn(() => ({ remove: jest.fn() })),
 }));
 
+/**
+ * Notificaciones. El adaptador de `src/features/notifications/push-adapter.ts` es
+ * el unico que toca este modulo, y estas funciones devuelven lo minimo para que la
+ * decision de registro y el enrutado del toque se puedan probar. El envio y la
+ * entrega reales solo se comprueban en un dispositivo (§29).
+ */
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true, status: 'undetermined' })),
+  requestPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: false, status: 'granted' })),
+  getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[prueba]' })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  getLastNotificationResponse: jest.fn(() => null),
+  clearLastNotificationResponse: jest.fn(),
+  setNotificationHandler: jest.fn(),
+  IosAuthorizationStatus: {
+    NOT_DETERMINED: 0,
+    DENIED: 1,
+    AUTHORIZED: 2,
+    PROVISIONAL: 3,
+    EPHEMERAL: 4,
+  },
+}));
+
+jest.mock('expo-device', () => ({
+  deviceName: 'iPhone de prueba',
+  modelName: 'iPhone',
+  isDevice: true,
+}));
+
 jest.mock('expo-crypto', () => ({
   randomUUID: () => '00000000-0000-4000-8000-000000000000',
   digestStringAsync: jest.fn(async (_alg: string, data: string) => `digest:${data}`),

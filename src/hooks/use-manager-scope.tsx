@@ -31,6 +31,13 @@ export const DEFAULT_LOCATION_SETTINGS = {
   weeklyOvertimeThresholdMinutes: 2880,
   /** Descanso mínimo entre dos turnos antes de advertir (§11.3). */
   minimumRestMinutes: 660,
+  /**
+   * Cuánto puede pasar un reloj sin sincronizar antes de avisar al gerente (§19).
+   * El razonamiento del valor está en
+   * `supabase/migrations/20260827001100_manager_alerts.sql`, que es donde manda:
+   * la alerta la calcula la base leyendo esta misma clave.
+   */
+  kioskSyncStaleMinutes: 120,
 };
 
 export type LocationSettings = typeof DEFAULT_LOCATION_SETTINGS;
@@ -72,6 +79,11 @@ const locationSettingsSchema = z
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.minimumRestMinutes),
+    kioskSyncStaleMinutes: z
+      .number()
+      .int()
+      .min(1)
+      .default(DEFAULT_LOCATION_SETTINGS.kioskSyncStaleMinutes),
   })
   // Una ubicación con `settings` incompleto o nulo no debe romper el panel: se
   // usan los valores por defecto de la especificación (§11.6).

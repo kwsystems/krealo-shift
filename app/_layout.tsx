@@ -14,6 +14,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 
+import { NotificationsGate } from '@/features/notifications/notifications-gate';
 import { initI18n } from '@/i18n';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
@@ -102,6 +103,13 @@ export default function RootLayout() {
             <Stack.Screen name="(manager)" />
             <Stack.Screen name="kiosk" />
           </Stack>
+          {/*
+            Va DESPUES del Stack a proposito. Los efectos de los hermanos corren en
+            orden de arbol, y el manejador del toque navega en su efecto: si se
+            montara antes, ese `router.push` ocurriria con el navegador raiz todavia
+            sin montar y se perderia. No pinta nada (§19).
+          */}
+          <NotificationsGate />
         </QueryClientProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
