@@ -33,11 +33,22 @@ const raw = {
 
 const parsed = envSchema.safeParse(raw);
 
-/** Claves obligatorias que faltan. Vacío significa configuración completa. */
+/**
+ * Claves obligatorias que faltan o no valen. Vacío significa configuración completa.
+ *
+ * SE REPORTAN TODOS LOS PROBLEMAS, no solo dos códigos de error. La versión anterior
+ * filtraba por `invalid_type` y `too_small`, y eso dejaba fuera un caso que se da
+ * siempre: con `EXPO_PUBLIC_SUPABASE_URL=` vacío, Zod devuelve `invalid_string`
+ * —porque falla el `.url()`, no el tipo—, así que la pantalla decía que faltaba solo
+ * la anon key y callaba la URL.
+ *
+ * Alguien pega entonces la clave, vuelve a arrancar y sigue sin funcionar, sin saber
+ * por qué. Un mensaje que enumera la mitad de los problemas es peor que uno genérico:
+ * hace perder un ciclo entero de prueba y error.
+ */
 export const missingEnvKeys: string[] = parsed.success
   ? []
   : parsed.error.issues
-      .filter((issue) => issue.code === 'invalid_type' || issue.code === 'too_small')
       .map((issue) => String(issue.path[0] ?? ''))
       .filter((key, index, all) => key !== '' && all.indexOf(key) === index);
 

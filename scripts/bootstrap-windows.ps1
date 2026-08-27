@@ -140,8 +140,30 @@ Paso 4 "Configuracion"
 if (Test-Path '.env') {
   Write-Host "    Ya habia un .env; no lo toco" -ForegroundColor Green
 } else {
-  Copy-Item '.env.example' '.env'
-  Write-Host "    .env creado a partir de .env.example" -ForegroundColor Green
+  # Se escriben VALORES DE RELLENO y no se copia .env.example, que viene vacio a
+  # proposito. Copiarlo dejaba la app mostrando "Falta configuracion del entorno",
+  # que es lo correcto por parte de la app pero un final absurdo para un script cuyo
+  # unico trabajo es dejarla funcionando.
+  #
+  # Con estos valores la app arranca y el kiosco se recorre entero. No apuntan a
+  # ningun servidor, asi que el PIN no valida y el panel no carga: se dice abajo.
+  $lineas = @(
+    '# Generado por scripts/bootstrap-windows.ps1',
+    '#',
+    '# VALORES DE RELLENO: la app arranca y el kiosco se puede recorrer, pero no hay',
+    '# servidor, asi que el PIN no valida y el panel administrativo no carga.',
+    '#',
+    '# Para que funcione de verdad, reemplaza las dos siguientes por las de tu',
+    '# proyecto de Supabase (Project Settings > API). Las dos son publicas.',
+    'EXPO_PUBLIC_APP_ENV=development',
+    'EXPO_PUBLIC_SUPABASE_URL=https://ejemplo.supabase.co',
+    'EXPO_PUBLIC_SUPABASE_ANON_KEY=clave-de-relleno-solo-para-ver-la-interfaz',
+    'EXPO_PUBLIC_SENTRY_DSN=',
+    'EXPO_PUBLIC_SUPPORT_EMAIL=soporte@krealomedia.com',
+    'EXPO_PUBLIC_PRIVACY_URL=https://krealomedia.com/privacidad'
+  )
+  Set-Content -Path '.env' -Value $lineas -Encoding UTF8
+  Write-Host "    .env creado con valores de relleno" -ForegroundColor Green
 }
 
 # --- Arrancar -----------------------------------------------------------------
