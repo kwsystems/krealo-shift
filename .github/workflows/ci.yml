@@ -55,6 +55,26 @@ jobs:
       - name: Pruebas
         run: npx jest --ci
 
+      # EMPAQUETAR DE VERDAD, y no solo comprobar tipos. `tsc` resuelve los tipos y
+      # da verde aunque el grafo de modulos no se pueda construir: asi paso
+      # inadvertido que el empaquetado para web fallaba entero porque Metro no
+      # reconocia el `.wasm` de expo-sqlite. Un fallo que solo aparece al empaquetar
+      # es el que llega al primer intento de subir a TestFlight.
+      #
+      # Se empaquetan las dos plataformas porque fallan por motivos distintos: web
+      # por resolucion de assets, iOS por codigo que solo existe en nativo.
+      - name: Empaquetar para web
+        run: npx expo export --platform web --output-dir /tmp/export-web
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ejemplo-solo-para-empaquetar
+
+      - name: Empaquetar para iOS
+        run: npx expo export --platform ios --output-dir /tmp/export-ios
+        env:
+          EXPO_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
+          EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ejemplo-solo-para-empaquetar
+
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
     runs-on: ubuntu-latest
