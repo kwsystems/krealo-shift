@@ -71,9 +71,19 @@ const TIPOS = {
   '.woff': 'font/woff', '.woff2': 'font/woff2', '.wasm': 'application/wasm',
 };
 
-// El export escribe cada ruta como un .html suelto (/team.html) pero el router del
-// cliente espera la URL limpia (/team): si la URL lleva el .html no casa ninguna
-// ruta. Un servidor cualquiera no hace esa reescritura.
+/**
+ * Resuelve una URL a un archivo del export.
+ *
+ * El proyecto usa `web.output: 'single'`, o sea una sola pagina con enrutado en el
+ * cliente: solo existe `index.html` y el router decide la pantalla a partir de la
+ * ruta. Asi que cualquier ruta que no sea un archivo real cae en `index.html`, que
+ * es lo que hace un servidor de SPA.
+ *
+ * Antes el proyecto usaba `output: 'static'`, que escribia un .html por ruta, y esta
+ * funcion buscaba `/team.html`. Se cambio porque el modo estatico ROMPIA el servidor
+ * de desarrollo: fallaba con "Worker chunk not found" de expo-sqlite, o sea que
+ * `npx expo start --web` no arrancaba. Ver app.config.ts.
+ */
 function resolver(url) {
   const limpio = decodeURIComponent(url.split('?')[0]);
   const directo = join(RAIZ, limpio);
@@ -82,9 +92,9 @@ function resolver(url) {
     const indice = join(directo, 'index.html');
     if (existsSync(indice)) return indice;
   }
-  const conHtml = directo.replace(/\/$/, '') + '.html';
-  if (existsSync(conHtml)) return conHtml;
-  return null;
+  // Respaldo de SPA: la ruta la resuelve el router en el navegador.
+  const raizIndice = join(RAIZ, 'index.html');
+  return existsSync(raizIndice) ? raizIndice : null;
 }
 
 const servidor = createServer(async (req, res) => {

@@ -52,6 +52,8 @@ const TIPOS = {
   '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.jpg': 'image/jpeg',
 };
 
+// Respaldo de SPA: el proyecto usa `web.output: 'single'`, asi que solo existe
+// index.html y la ruta la resuelve el router en el navegador.
 function resolver(url) {
   const limpio = decodeURIComponent(url.split('?')[0]);
   const d = join(RAIZ, limpio);
@@ -60,8 +62,8 @@ function resolver(url) {
     const i = join(d, 'index.html');
     if (existsSync(i)) return i;
   }
-  const h = d.replace(/\/$/, '') + '.html';
-  return existsSync(h) ? h : null;
+  const raiz = join(RAIZ, 'index.html');
+  return existsSync(raiz) ? raiz : null;
 }
 
 const servidor = createServer(async (req, res) => {

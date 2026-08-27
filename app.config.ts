@@ -73,7 +73,23 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
 
   web: {
     // Expo Web es superficie de desarrollo para trabajar desde Windows, no producción.
-    output: 'static',
+    //
+    // `single` Y NO `static`, y el motivo es concreto: con `output: 'static'` el
+    // servidor de desarrollo NO ARRANCA. Devuelve 500 con
+    // "Worker chunk not found for: expo-sqlite/web/worker.ts", porque en modo
+    // estático Metro no sirve el chunk del worker de SQLite en desarrollo. O sea que
+    // `npx expo start --web` estaba roto, que es justamente lo único para lo que
+    // existe la superficie web (§33: la previsualización debe permitir recorrer
+    // todas las pantallas).
+    //
+    // El empaquetado `expo export` sí funcionaba en modo estático, así que el fallo
+    // no se veía en CI ni en el chequeo de render: solo al abrir el servidor de
+    // desarrollo, que es lo que usa una persona en Windows.
+    //
+    // Lo que se pierde con `single` es el prerenderizado por ruta, que sirve para
+    // SEO de un sitio desplegado. Aquí no se despliega nada: la web es una
+    // herramienta de desarrollo. No se pierde nada que este proyecto use.
+    output: 'single',
     favicon: './assets/images/favicon.png',
     bundler: 'metro',
   },
