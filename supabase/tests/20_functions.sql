@@ -430,6 +430,9 @@ do $$
 declare
   v_device uuid := '66666666-6666-4666-8666-666666666661';
   v_rows integer;
+  v_salt text;
+  v_verifier text;
+  v_key text;
   v_hash text;
 begin
   select count(*) into v_rows from kiosk_offline_verifiers(v_device);
@@ -445,14 +448,107 @@ begin
     ),
     'No recibe verificadores de empleados de otra tienda');
 
-  -- El hash offline es bcrypt de coste 10, distinto del de coste 12 del servidor.
-  select pin_offline_hash into v_hash from kiosk_offline_verifiers(v_device) limit 1;
-  perform test_assert(v_hash like '$2a$10$%' or v_hash like '$2b$10$%',
-    'El verificador offline es bcrypt de coste 10');
+  select pin_salt, pin_verifier into v_salt, v_verifier
+  from kiosk_offline_verifiers(v_device)
+  where employee_opaque_id = encode(extensions.digest(
+    '55555555-5555-4555-8555-555555555551', 'sha256'), 'hex');
+
+  select pin_offline_hash into v_hash from employee_pin_credentials
+    where employee_id = '55555555-5555-4555-8555-555555555551';
+
+  -- LO MAS IMPORTANTE DE ESTE ARCHIVO: el hash bcrypt NO sale de la base. Si
+  -- saliera, robar el SQLite del iPad permitiria probar los 10^6 PIN posibles sin
+  -- limite y sin la clave del dispositivo.
   perform test_assert(
-    v_hash <> (select pin_hash from employee_pin_credentials
-               where employee_id = '55555555-5555-4555-8555-555555555551'),
-    'El hash offline no es el mismo que el del servidor');
+    not exists (
+      select 1 from kiosk_offline_verifiers(v_device) v
+      where v.pin_salt = v_hash or v.pin_verifier = v_hash
+    ),
+    'El hash bcrypt completo NUNCA se entrega al dispositivo');
+
+  -- El salt son los 29 primeros caracteres del hash: prefijo + 22 de salt. Por si
+  -- solo no permite comprobar ningun intento.
+  perform test_assert(v_salt like '$2a$10$%' or v_salt like '$2b$10$%',
+    'El salt entregado es de bcrypt coste 10');
+  perform test_assert(length(v_salt) = 29,
+    'El salt son exactamente 29 caracteres, sin un solo byte del digest');
+  perform test_assert(v_hash like v_salt || '%',
+    'El salt es el prefijo del hash real, asi que bcrypt(PIN, salt) reproduce el hash');
+
+  -- El verificador es sha256(clave_del_dispositivo || ':' || hash), en hexadecimal.
+  select offline_key into v_key from kiosk_devices where id = v_device;
+  perform test_assert(v_key is not null and length(v_key) = 64,
+    'El dispositivo tiene una clave de derivacion de 32 bytes');
+  perform test_assert(
+    v_verifier = encode(extensions.digest(v_key || ':' || v_hash, 'sha256'), 'hex'),
+    'El verificador es exactamente sha256(clave || ":" || hash): las dos puntas coinciden');
+  perform test_assert(length(v_verifier) = 64,
+    'El verificador es un sha256 en hexadecimal');
+
+  -- Y la parte que hace que separar la clave valga la pena: la clave de derivacion
+  -- no es la credencial que viaja en cada peticion, asi que rotar una no expone la
+  -- otra. Se comprueba de la unica forma posible sin conocer la credencial en
+  -- claro: el hash de la credencial no contiene la clave.
+  perform test_assert(
+    (select credential_hash from kiosk_devices where id = v_device) not like '%' || v_key || '%',
+    'La clave offline es independiente de la credencial de peticion');
+
+  -- Dos dispositivos distintos reciben verificadores distintos para el MISMO PIN:
+  -- un verificador copiado de un iPad a otro no sirve.
+  perform test_assert(
+    v_verifier <> encode(extensions.digest(
+      encode(extensions.gen_random_bytes(32), 'hex') || ':' || v_hash, 'sha256'), 'hex'),
+    'El verificador esta ligado al dispositivo: con otra clave no coincide');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_device uuid := '66666666-6666-4666-8666-666666666661';
+begin
+  -- Un dispositivo sin clave de derivacion no recibe verificadores a medias: falla
+  -- claro y el iPad sigue validando online, que es el comportamiento seguro.
+  update kiosk_devices set offline_key = null where id = v_device;
+  begin
+    perform kiosk_offline_verifiers(v_device);
+    raise exception 'FALLO: un dispositivo sin clave recibio verificadores'
+      using errcode = 'assert_failure';
+  exception
+    when invalid_authorization_specification then
+      raise notice '  ok — un dispositivo sin clave de derivacion no recibe verificadores';
+  end;
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_res record;
+begin
+  -- La activacion entrega credencial y clave offline, y son valores DISTINTOS.
+  -- Antes la funcion reutilizaba la credencial como clave; si volviera a hacerlo,
+  -- esta prueba lo detecta.
+  insert into kiosk_activation_codes
+    (organization_id, location_id, code_hash, expires_at, max_uses, created_by)
+  values
+    ('11111111-1111-4111-8111-111111111111', '22222222-2222-4222-8222-222222222221',
+     extensions.crypt('999111', extensions.gen_salt('bf', 10)),
+     now() + interval '10 minutes', 1, null);
+
+  select * into v_res from activate_kiosk_device('999111', 'inst-prueba', 'iPad de prueba', '1.0.0');
+
+  perform test_assert(v_res.credential is not null and length(v_res.credential) = 64,
+    'La activacion entrega una credencial de 32 bytes');
+  perform test_assert(v_res.offline_key is not null and length(v_res.offline_key) = 64,
+    'La activacion entrega una clave offline de 32 bytes');
+  perform test_assert(v_res.credential <> v_res.offline_key,
+    'La credencial y la clave offline son secretos separados');
+  perform test_assert(
+    (select offline_key from kiosk_devices where id = v_res.device_id) = v_res.offline_key,
+    'La clave offline guardada es la misma que se entrego al dispositivo');
 end
 $$;
 rollback;

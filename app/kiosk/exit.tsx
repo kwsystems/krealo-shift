@@ -19,9 +19,18 @@ import { formatClockTime } from '@/utils/time';
  * Salida y opciones del kiosco (§6.4, §31).
  *
  * Se llega aquí solo con una pulsación larga de 3 segundos sobre el logotipo, y
- * hace falta el PIN de un gerente para continuar. El menú aparece únicamente
- * después de esa autorización: un empleado no debe poder revocar el dispositivo
- * ni cambiar la ubicación.
+ * hace falta el PIN de un GERENTE de esta tienda para continuar. El menú aparece
+ * únicamente después de esa autorización: un empleado no debe poder revocar el
+ * dispositivo ni cambiar la ubicación.
+ *
+ * QUIÉN DECIDE SI ALGUIEN ES GERENTE
+ * Lo decide el servidor, en `canManageLocation`. El kiosco no lo deduce: no tiene
+ * con qué, y una comprobación local sería adivinar. Un PIN correcto de una
+ * empleada normal identifica bien a esa persona pero NO abre este menú.
+ *
+ * Por eso este menú no funciona sin conexión: la sesión offline pone
+ * `canManageLocation: false` a propósito, porque el iPad no puede confirmar
+ * permisos por su cuenta. Se dice claramente en pantalla en vez de dejar pasar.
  *
  * El diagnóstico se puede copiar sin datos personales (§31).
  */
@@ -48,11 +57,26 @@ export default function KioskExitScreen() {
     setPin('');
 
     if (result.ok) {
+      // EL PIN CORRECTO NO ALCANZA. Antes esta pantalla se abría con cualquier PIN
+      // válido, así que la PIN de una empleada llegaba al botón que desactiva el
+      // kiosco. §6.4 pide PIN de gerente, y quien lo determina es el servidor.
+      if (!result.data.employee.canManageLocation) {
+        setError(t('kiosk.exitNotManager'));
+        return;
+      }
       setAuthorized(true);
       setError(null);
       return;
     }
-    setError(result.error.kind === 'offline' ? t('errors.network') : t('kiosk.pinIncorrect'));
+
+    if (result.error.kind === 'offline') {
+      // Sin red no hay forma de confirmar que quien teclea es gerente, y esta
+      // pantalla puede desactivar el reloj. Se dice por qué, no un error genérico.
+      setError(t('kiosk.exitNeedsConnection'));
+      return;
+    }
+
+    setError(t('kiosk.pinIncorrect'));
   };
 
   const appendDigit = (digit: string) => {

@@ -180,12 +180,17 @@ begin
   -- -------------------------------------------------------------------------
   -- La credencial es un valor de demo conocido para poder probar el flujo; en
   -- producción la emite `activate_kiosk_device` y nunca se escribe a mano.
+  -- `offline_key` se pone explicitamente: un dispositivo sin ella no recibe
+  -- verificadores offline, y el seed tiene que dejar el kiosco demo en el mismo
+  -- estado en que lo dejaria `activate_kiosk_device`. La clave es fija y publica
+  -- porque estos son datos de demostracion, no de produccion.
   insert into kiosk_devices
     (id, organization_id, location_id, display_name, device_public_id,
-     credential_hash, app_version, last_seen_at, created_by)
+     credential_hash, offline_key, app_version, last_seen_at, created_by)
   values
     (v_device_main, v_org_id, v_loc_main, 'iPad Sede Principal', 'demo-kiosk-main',
      extensions.crypt('demo-credential-sede-principal', extensions.gen_salt('bf', 10)),
+     encode(extensions.digest('demo-offline-key-sede-principal', 'sha256'), 'hex'),
      '1.0.0', now(), v_user_owner)
   on conflict (id) do nothing;
 

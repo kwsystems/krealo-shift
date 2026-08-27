@@ -107,6 +107,8 @@
     "exitTitle": "Salir del modo kiosco",
     "exitHint": "Mantén presionado el logotipo 3 segundos.",
     "exitEnterManagerPin": "Ingresa el PIN de gerente",
+    "exitNotManager": "Ese PIN es válido, pero no es de un gerente de esta tienda.",
+    "exitNeedsConnection": "Para salir del modo reloj hace falta conexión: el permiso lo confirma el servidor.",
     "menuSync": "Sincronizar ahora",
     "menuChangeLocation": "Cambiar ubicación",
     "menuRefreshRoster": "Actualizar equipo",
@@ -122,6 +124,7 @@
     "revokedBody": "Pide a un administrador que vuelva a activarlo.",
     "offlineStateUnknown": "No podemos confirmar tu estado sin conexión. Espera a que vuelva la red.",
     "offlineNotReady": "Este iPad todavía no puede validar PIN sin conexión. Pide que se sincronice.",
+    "offlineNeedsReactivation": "Este iPad necesita reactivarse para validar PIN sin conexión. Con red funciona normal.",
     "savedOfflinePending": "Guardado en este iPad. Se enviará solo cuando vuelva la conexión."
   },
   "attendance": {

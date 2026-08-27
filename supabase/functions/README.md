@@ -41,13 +41,13 @@ supabase functions deploy activate-kiosk refresh-kiosk-roster verify-pin \
 supabase secrets set KIOSK_TOKEN_SECRET="$(openssl rand -hex 32)"
 ```
 
-## Pendiente decidir: validación offline del PIN
+## Validación offline del PIN (decidido)
 
 La especificación §8 pide validar el PIN sin conexión con un verificador ligado
 al dispositivo. El servidor guarda el PIN con bcrypt, o sea de forma
 irreversible, así que **no puede derivar `HMAC(clave_dispositivo, PIN)`** sin
-conocer el PIN en claro. Hay tres salidas, y la elección es de seguridad, no
-técnica:
+conocer el PIN en claro. Se consideraron cuatro salidas, y la elección fue de
+seguridad, no técnica:
 
 1. **Guardar el PIN de forma reversible** (cifrado con una clave del servidor)
    solo para derivar verificadores por dispositivo. Funciona siempre, pero
@@ -55,9 +55,25 @@ técnica:
 2. **Derivar el verificador al fijar el PIN**, para cada dispositivo activo, en
    una tabla aparte. No hay PIN reversible, pero un iPad activado después queda
    sin verificadores hasta la siguiente rotación de PIN de cada empleado.
-3. **Enviar al dispositivo el hash bcrypt con su salt**, cifrado con la clave del
-   dispositivo. No hay PIN reversible y funciona para cualquier iPad, pero quien
-   extraiga el blob puede probar los 10⁶ PIN posibles sin límite de intentos
-   (bcrypt coste 12 lo hace lento, no imposible).
+3. **Enviar al dispositivo el hash bcrypt con su salt.** No hay PIN reversible y
+   funciona para cualquier iPad, pero quien se lleve el archivo local puede probar
+   los 10⁶ PIN posibles sin límite de intentos.
+4. **Enviar el salt y un verificador derivado con una clave propia del
+   dispositivo**, sin el hash.
 
-Se decide en la tarea de offline (P0-4). Hasta entonces el PIN se valida online.
+**Elegida: la 4.** `activate-kiosk` entrega al iPad una clave aleatoria de 32
+bytes (`deviceKey`), separada de la credencial de peticiones, que el dispositivo
+guarda en el Keychain. `refresh-kiosk-roster` devuelve por empleado:
+
+```
+{ employeeOpaqueId, pinSalt, pinVerifier, pinLength, pinVersion }
+```
+
+donde `pinSalt` son los 29 caracteres del salt de bcrypt y `pinVerifier` es
+`sha256(deviceKey || ':' || hash_bcrypt)` en hexadecimal. El hash completo **no
+sale de la base**.
+
+El razonamiento completo, con su costo, está en `SECURITY.md`. La construcción
+está fijada en `supabase/tests/20_functions.sql` y en
+`src/lib/offline/__tests__/pin-derivation.test.ts`: si una de las dos puntas
+cambia, las pruebas fallan.

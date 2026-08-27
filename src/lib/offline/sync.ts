@@ -154,7 +154,8 @@ export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
   await storeOfflineVerifiers(
     result.data.verifiers.map((verifier) => ({
       employeeOpaqueId: verifier.employeeOpaqueId,
-      pinOfflineHash: verifier.pinOfflineHash,
+      pinSalt: verifier.pinSalt,
+      pinVerifier: verifier.pinVerifier,
       pinLength: verifier.pinLength,
       pinVersion: verifier.pinVersion,
     })),

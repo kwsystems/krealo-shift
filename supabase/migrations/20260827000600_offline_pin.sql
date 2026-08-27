@@ -1,5 +1,14 @@
 -- Krealo Shift — validación del PIN sin conexión (especificación §8, §9.7)
 --
+-- ATENCIÓN: LA DECISIÓN QUE DESCRIBE ESTE ARCHIVO QUEDÓ SUPERADA.
+-- La migración 20260827000700_offline_verifier_device_key.sql cambia
+-- `kiosk_offline_verifiers` para que entregue el SALT y un VERIFICADOR ligado a
+-- la clave del dispositivo, en vez del hash bcrypt. El motivo: el hash acababa en
+-- el archivo SQLite del iPad, que se exfiltra mucho más fácil que el Keychain.
+-- Este archivo se conserva porque las migraciones no se reescriben —crea la
+-- columna `pin_offline_hash` y la tabla, que se siguen usando— pero el
+-- razonamiento vigente está en la 700 y en SECURITY.md.
+--
 -- EL PROBLEMA
 -- El kiosco debe poder validar un PIN sin red (§9.7), pero el servidor guarda el
 -- PIN con bcrypt, o sea de forma irreversible: no puede derivar

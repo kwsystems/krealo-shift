@@ -108,40 +108,71 @@ fijo. Ver `supabase/functions/README.md`.
 
 El kiosco debe seguir funcionando sin red (§9.7), pero el servidor guarda el PIN
 con bcrypt, o sea de forma irreversible: **no puede derivar un verificador por
-dispositivo sin conocer el PIN en claro**. Las tres salidas posibles, con su
-costo, están en `supabase/functions/README.md`:
+dispositivo sin conocer el PIN en claro**. Las salidas que se consideraron:
 
 1. guardar el PIN de forma reversible para derivar verificadores por dispositivo
    — funciona siempre, pero introduce almacenamiento reversible de PIN;
 2. derivar el verificador al fijar el PIN, para cada dispositivo activo — sin PIN
    reversible, pero un iPad activado después queda sin offline hasta que cada
    empleado rote su PIN;
-3. enviar al dispositivo un hash bcrypt con su salt — sin PIN reversible y sirve
-   para cualquier iPad, pero quien extraiga el blob puede probar sin límite los
-   10⁶ PIN posibles contra ese hash.
+3. enviar al dispositivo el hash bcrypt con su salt — sin PIN reversible y sirve
+   para cualquier iPad, pero quien se lleve el archivo local puede probar sin
+   límite los 10⁶ PIN posibles contra ese hash;
+4. enviar el **salt** y un **verificador derivado con una clave propia del
+   dispositivo**, sin el hash.
 
-**Decisión tomada: la opción 3**, implementada en
-`supabase/migrations/20260827000600_offline_pin.sql` y `src/lib/offline/pin.ts`.
+**Decisión tomada: la opción 4**, implementada en
+`supabase/migrations/20260827000700_offline_verifier_device_key.sql`,
+`src/lib/offline/pin.ts` y `supabase/functions/refresh-kiosk-roster/`.
+
+Cómo funciona: al activarse, el iPad recibe una clave aleatoria de 32 bytes que
+guarda en el Keychain, separada de la credencial con la que hace peticiones. En
+cada refresco el servidor le manda, por empleado de su tienda, el salt de bcrypt y
+`sha256(clave || ':' || hash_bcrypt)`. Para comprobar un PIN el iPad calcula
+`bcrypt(PIN, salt)`, lo re-deriva con su clave y compara.
+
 Razones y costo, sin adornos:
 
+- **por qué no la 3, que estuvo implementada primero**: guardaba el hash bcrypt en
+  el SQLite del iPad. Un archivo SQLite se exfiltra mucho más fácil que el
+  Keychain —un backup sin cifrar, un bug de compartición de archivos— y con el
+  hash en mano se prueban los 10⁶ PIN posibles sin volver a tocar el dispositivo.
+  Con la opción 4 ese archivo por sí solo no sirve para nada;
 - descartar la opción 1 pesa más que cualquier otra consideración: un PIN
-  reversible es el peor de los tres finales;
+  reversible es el peor de los finales;
 - la opción 2 dejaba sin offline a los iPad activados después de que el equipo ya
-  tenía PIN, lo que en una tienda real significa "nunca";
-- **el costo aceptado**: con acceso físico al iPad y jailbreak se puede extraer el
-  blob y probar los 10⁶ PIN sin límite. El hash offline usa **coste 10** —no 12—
-  porque lo compara `bcryptjs` en JavaScript sobre el dispositivo y coste 12
+  tenía PIN, lo que en una tienda real significa "nunca". La 4 no tiene ese
+  problema: cualquier iPad activado en cualquier momento recibe verificadores;
+- **el costo aceptado**: quien extraiga **también** la clave del Keychain —lo que
+  exige acceso físico y jailbreak, no solo un backup— vuelve al escenario de la
+  opción 3: fuerza bruta de 10⁶ PIN contra bcrypt **coste 10**. Se usa coste 10 y
+  no 12 porque lo calcula `bcryptjs` en JavaScript sobre el dispositivo y coste 12
   tardaría segundos por intento con gente esperando para fichar. Coste 10 son
-  horas de cómputo por empleado, no minutos, y la revocación del dispositivo lo
-  corta de inmediato;
+  horas de cómputo por empleado, no minutos, y revocar el dispositivo lo corta de
+  inmediato;
+- **es un digest con clave, no un HMAC formal**: `expo-crypto` solo expone digest
+  sobre cadenas UTF-8, así que un HMAC real no se puede calcular igual en Postgres
+  y en Hermes sin agregar otra dependencia de criptografía. La debilidad conocida
+  de un digest con clave frente a HMAC es la extensión de longitud, que aquí no
+  aplica: el mensaje es un hash bcrypt de formato fijo y la comparación es de
+  igualdad;
 - **offline no relaja nada más**: se aplican el mismo límite de 5 intentos y el
   mismo bloqueo de 15 minutos, contados en el propio dispositivo. Si el bloqueo
   existiera solo en el servidor, quedarse sin red sería la forma de saltárselo.
 
-El hash offline es distinto del hash del servidor y de un solo propósito. Los
-verificadores se reparten por dispositivo y se reemplazan por completo en cada
-actualización del equipo: un empleado que sale de la tienda deja de poder fichar
-en ese iPad.
+Los verificadores están ligados al dispositivo: copiar la base de un iPad a otro
+no sirve. Se reemplazan por completo en cada actualización del equipo, así que un
+empleado que sale de la tienda deja de poder fichar en ese iPad, y un dispositivo
+revocado no recibe ninguno.
+
+Que las dos puntas calculan exactamente lo mismo está fijado con un vector de
+prueba real en `src/lib/offline/__tests__/pin-derivation.test.ts` y con
+aserciones en `supabase/tests/20_functions.sql`, entre ellas que el hash bcrypt
+completo **nunca** sale de la base.
+
+**Un iPad activado antes de este cambio** no tiene clave de derivación. Sigue
+fichando con normalidad online; para volver a validar PIN sin red hay que
+reactivarlo. La app lo dice en pantalla en vez de responder "PIN incorrecto".
 
 ## RLS como barrera principal
 

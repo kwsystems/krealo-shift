@@ -334,12 +334,19 @@ const rosterSchema = z.object({
       changedSinceLastPublication: z.boolean(),
     }),
   ),
-  // Verificadores para validar el PIN sin conexion. Ver la migracion
-  // 20260827000600_offline_pin.sql para la decision de seguridad y su costo.
+  // Verificadores para validar el PIN sin conexion. El servidor manda el salt de
+  // bcrypt y un verificador derivado con la clave de ESTE dispositivo, nunca el
+  // hash: ver 20260827000700_offline_verifier_device_key.sql.
+  //
+  // Los minimos de longitud no son decorativos. Un salt de bcrypt son exactamente
+  // 29 caracteres y un sha256 en hexadecimal exactamente 64; si el servidor
+  // mandara otra cosa —el hash completo, por ejemplo— la validacion falla aqui en
+  // vez de guardarse en el iPad.
   verifiers: z.array(
     z.object({
       employeeOpaqueId: z.string().min(1),
-      pinOfflineHash: z.string().min(20),
+      pinSalt: z.string().length(29),
+      pinVerifier: z.string().length(64),
       pinLength: z.number().int().min(4).max(6),
       pinVersion: z.number().int().min(1),
     }),

@@ -85,13 +85,22 @@ Deno.serve(async (request) => {
 
   const settings = (location.data.settings ?? {}) as Record<string, unknown>;
 
-  // La clave del dispositivo se deriva de la credencial: es lo que firma los
-  // eventos offline y el verificador local del PIN, y nunca viaja después.
-  const deviceKey = row.credential;
+  // La clave del dispositivo es un secreto SEPARADO de la credencial, emitido por
+  // `activate_kiosk_device` en la misma llamada. Antes se reutilizaba la
+  // credencial como clave, y eso ataba dos cosas que deben poder rotarse por
+  // separado: la credencial viaja en cada petición, la clave nunca vuelve a
+  // salir del Keychain del iPad.
+  //
+  // Con esta clave el dispositivo re-deriva los verificadores del PIN que le
+  // manda `refresh-kiosk-roster`. Sin ella, los verificadores guardados en su
+  // SQLite no sirven para comprobar ni un intento.
+  if (typeof row.offline_key !== 'string' || row.offline_key.length === 0) {
+    return errorResponse('server_error', 'La activación quedó incompleta.', 500);
+  }
 
   return jsonResponse({
     credential: row.credential,
-    deviceKey,
+    deviceKey: row.offline_key,
     device: {
       id: row.device_id,
       publicId: row.device_public_id,

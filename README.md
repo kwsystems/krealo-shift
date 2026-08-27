@@ -414,7 +414,11 @@ fijo.
 | `production` | App Store / TestFlight | distribución `store`, `autoIncrement: true` |
 
 `cli.appVersionSource: "remote"` deja el número de build en manos de EAS: el
-`version` (`1.0.0`) vive en `app.config.ts` y el build number lo lleva EAS.
+`version` (`1.0.0`) vive en `app.config.ts` y el build number lo lleva EAS. Cada
+perfil declara además su `environment`, que es de dónde toma EAS las variables de
+entorno; eso y `appVersionSource` necesitan un **EAS CLI reciente**
+(`npm i -g eas-cli@latest`). Si el CLI se queja de un campo desconocido, es
+versión vieja, no un error del archivo.
 
 ```bash
 eas login
@@ -482,9 +486,11 @@ Esto no está terminado y no se disfraza:
   (`src/lib/offline/`) y con pruebas, pero el flujo completo —cortar la red,
   fichar, recuperarla y comprobar que sincroniza **una sola vez**— solo se puede
   confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
-- **panel administrativo con datos reales**: las cinco pestañas existen con
-  estados vacíos honestos; el editor de horarios, las hojas de tiempo, las
-  correcciones y la exportación CSV están pendientes;
+- **pantallas del panel administrativo**: las cinco pestañas existen con estados
+  vacíos honestos y la capa de datos vive ya en `src/features/` (equipo,
+  horarios, hojas de tiempo, solicitudes, configuración, exportación CSV). Lo que
+  falta es la interfaz que las use: editor de horarios semanal, hojas de tiempo,
+  correcciones y aprobaciones;
 - **notificaciones**: `expo-notifications` está configurado como plugin, pero no
   hay registro de token ni envío;
 - **almacenamiento de fotos**: falta el bucket privado de Supabase Storage y las

@@ -129,15 +129,24 @@ Deno.serve(async (request) => {
     },
     roster,
     shifts: shiftsByOpaqueId,
+    // El servidor manda el SALT de bcrypt y un VERIFICADOR derivado con la clave
+    // de este dispositivo, nunca el hash. El iPad calcula bcrypt(PIN, salt) y lo
+    // re-deriva con su clave del Keychain para comparar.
+    //
+    // La diferencia práctica: si alguien se lleva el archivo SQLite del iPad —un
+    // backup sin cifrar, un bug de compartición— no puede probar ni un PIN, porque
+    // le falta la clave. Ver 20260827000700_offline_verifier_device_key.sql.
     verifiers: (Array.isArray(verifiers.data) ? verifiers.data : []).map(
       (row: {
         employee_opaque_id: string;
-        pin_offline_hash: string;
+        pin_salt: string;
+        pin_verifier: string;
         pin_length: number;
         pin_version: number;
       }) => ({
         employeeOpaqueId: row.employee_opaque_id,
-        pinOfflineHash: row.pin_offline_hash,
+        pinSalt: row.pin_salt,
+        pinVerifier: row.pin_verifier,
         pinLength: row.pin_length,
         pinVersion: row.pin_version,
       }),

@@ -18,7 +18,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DATABASE_NAME = 'krealo-shift-offline.db';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 let handle: SQLite.SQLiteDatabase | null = null;
 
@@ -50,12 +50,17 @@ create table if not exists cached_roster (
   updated_at text not null
 );
 
--- Verificador para validar el PIN sin conexión. Es un hash bcrypt con su salt:
--- el dispositivo compara, nunca descifra. Ver supabase/migrations/..._offline_pin.sql
--- para la decisión de seguridad y su costo.
+-- Verificador para validar el PIN sin conexión.
+--
+-- NO guarda el hash bcrypt. Guarda el salt y un verificador que el servidor
+-- derivó con la clave de ESTE dispositivo, que vive en el Keychain y no en este
+-- archivo. Quien se lleve este archivo no puede comprobar ni un intento.
+--
+-- Ver supabase/migrations/20260827000700_offline_verifier_device_key.sql.
 create table if not exists cached_pin_verifiers (
   employee_opaque_id text primary key,
-  pin_offline_hash text not null,
+  pin_salt text not null,
+  pin_verifier text not null,
   pin_length integer not null,
   pin_version integer not null,
   updated_at text not null
@@ -159,6 +164,28 @@ create table if not exists sync_metadata (
 `;
 
 /**
+ * Migraciones de una versión del esquema a la siguiente.
+ *
+ * REGLA QUE NO SE ROMPE: nunca se borra `outbox_time_events` ni `pending_media`.
+ * Ahí viven fichajes que el servidor todavía no confirmó, y perder uno es perder
+ * horas trabajadas de una persona. Las tablas `cached_*` sí se pueden vaciar: son
+ * caché, se vuelven a bajar en el siguiente refresco, y mientras no estén el
+ * dispositivo valida contra el servidor, que es el camino seguro.
+ */
+async function applyMigrations(
+  database: SQLite.SQLiteDatabase,
+  previous: number,
+): Promise<void> {
+  // v1 → v2: los verificadores del PIN dejan de ser el hash bcrypt y pasan a ser
+  // salt + verificador ligado al dispositivo. La tabla se recrea en vez de
+  // agregarle columnas: las filas viejas contienen justo el dato que ya no
+  // queremos en el disco del iPad, así que se van.
+  if (previous >= 1 && previous < 2) {
+    await database.execAsync('drop table if exists cached_pin_verifiers');
+  }
+}
+
+/**
  * Abre la base y aplica el esquema. Es idempotente y segura de llamar varias
  * veces: devuelve siempre la misma conexión.
  */
@@ -166,12 +193,23 @@ export async function openOfflineDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (handle !== null) return handle;
 
   const database = await SQLite.openDatabaseAsync(DATABASE_NAME);
+
+  // El orden importa: primero se migra lo que ya existe, y solo después se corre
+  // el esquema. `create table if not exists` no cambia una tabla que ya está, así
+  // que sin este paso un iPad actualizado se quedaría con las columnas viejas y
+  // cada inserción fallaría.
+  const versionRow = await database.getFirstAsync<{ user_version: number }>(
+    'pragma user_version',
+  );
+  const previous = versionRow?.user_version ?? 0;
+
+  await applyMigrations(database, previous);
   await database.execAsync(SCHEMA);
 
   const row = await database.getFirstAsync<{ user_version: number }>('pragma user_version');
   const current = row?.user_version ?? 0;
 
-  if (current === 0) {
+  if (current === 0 || current < SCHEMA_VERSION) {
     await database.execAsync(`pragma user_version = ${SCHEMA_VERSION}`);
   } else if (current > SCHEMA_VERSION) {
     // Una base más nueva que la app significa que alguien instaló una versión

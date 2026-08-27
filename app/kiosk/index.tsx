@@ -134,6 +134,12 @@ export default function KioskIdleScreen() {
             setError(t('kiosk.pinLocked', { minutes: minutesUntil(offline.lockedUntil) }));
           } else if (offline.reason === 'no_verifiers') {
             setError(t('kiosk.offlineNotReady'));
+          } else if (offline.reason === 'no_device_key') {
+            // Falta la clave del Keychain con la que se comprueban los
+            // verificadores. Pasa en un iPad activado antes de este cambio: valida
+            // online sin problema y hay que reactivarlo para volver a fichar sin
+            // red. Se dice eso y no "PIN incorrecto", que seria mentira.
+            setError(t('kiosk.offlineNeedsReactivation'));
           } else {
             setError(t('kiosk.pinIncorrect'));
           }

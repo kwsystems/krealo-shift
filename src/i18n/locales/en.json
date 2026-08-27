@@ -107,6 +107,8 @@
     "exitTitle": "Exit kiosk mode",
     "exitHint": "Press and hold the logo for 3 seconds.",
     "exitEnterManagerPin": "Enter the manager PIN",
+    "exitNotManager": "That PIN is valid, but it doesn't belong to a manager of this location.",
+    "exitNeedsConnection": "Leaving clock mode needs a connection: the server confirms the permission.",
     "menuSync": "Sync now",
     "menuChangeLocation": "Change location",
     "menuRefreshRoster": "Refresh team",
@@ -122,6 +124,7 @@
     "revokedBody": "Ask an admin to activate it again.",
     "offlineStateUnknown": "We can't confirm your status without a connection. Wait for the network to come back.",
     "offlineNotReady": "This iPad can't validate PINs offline yet. Ask for it to be synced.",
+    "offlineNeedsReactivation": "This iPad needs to be reactivated to validate PINs offline. It works normally with a connection.",
     "savedOfflinePending": "Saved on this iPad. It will be sent on its own when the connection is back."
   },
   "attendance": {
