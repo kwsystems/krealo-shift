@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import * as SQLite from 'expo-sqlite';
 
 /**
@@ -21,6 +22,27 @@ const DATABASE_NAME = 'krealo-shift-offline.db';
 const SCHEMA_VERSION = 3;
 
 let handle: SQLite.SQLiteDatabase | null = null;
+
+/**
+ * Apertura EN CURSO, memoizada.
+ *
+ * ESTO ARREGLA UNA CARRERA REAL, no es una optimización. `openOfflineDatabase`
+ * comprobaba `handle !== null` y después hacía varios `await` antes de asignarlo:
+ * dos llamadas concurrentes pasaban las dos la comprobación y abrían la base DOS
+ * VECES. Y concurrentes lo son a diario: el layout del kiosco dispara la
+ * sincronización mientras la pantalla hidrata su store, y las dos piden la base.
+ *
+ * En web el sintoma era ruidoso —`NoModificationAllowedError: Access Handles cannot
+ * be created if there is another open Access Handle`, porque OPFS solo admite un
+ * manejador por archivo— y por eso se encontró abriendo la app en un navegador. En
+ * nativo era silencioso: dos conexiones al mismo archivo, que con WAL casi siempre
+ * funciona, hasta que dos escrituras coinciden y una espera o falla. Un fichaje que
+ * falla por eso sería carísimo de diagnosticar.
+ *
+ * Memoizar la PROMESA y no el resultado es lo que lo cierra: quien llegue segundo
+ * espera la misma apertura en vez de empezar otra.
+ */
+let opening: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /** Sentencias de creación. Idempotentes: se pueden correr en cada arranque. */
 const SCHEMA = `
@@ -172,6 +194,60 @@ create table if not exists sync_metadata (
 `;
 
 /**
+ * Nombre de la base según la plataforma.
+ *
+ * EN WEB LA BASE ES EN MEMORIA, y eso hace falta decirlo con precisión porque
+ * suena a atajo y no lo es.
+ *
+ * `expo-sqlite` en web corre SQLite compilado a WebAssembly y persiste con OPFS
+ * (Origin Private File System). OPFS exige cabeceras COOP/COEP en el servidor y
+ * **un solo manejador de acceso por archivo**; sin eso falla con
+ * `NoModificationAllowedError: Access Handles cannot be created if there is another
+ * open Access Handle`, seguido de `sqlite3_open_v2` y de un
+ * `Cannot read properties of undefined (reading 'xFileControl')`.
+ *
+ * Eso es exactamente lo que pasaba: la previsualización web pintaba todas las
+ * pantallas pero escupía tres errores por pantalla del kiosco, y cualquier lectura
+ * de la cola local fallaba. Se descubrió abriendo la app en un navegador de verdad;
+ * ni `tsc` ni las pruebas lo veían, porque el módulo nativo está simulado en Jest.
+ *
+ * Con `:memory:` no hay OPFS, así que no hay nada que pueda fallar: la app se
+ * recorre entera y la lógica de la cola se puede ejercitar.
+ *
+ * LO QUE SE PIERDE, DICHO CLARO: en web la cola NO sobrevive a un recargado. Es
+ * aceptable porque web es una herramienta de desarrollo para trabajar desde Windows
+ * (§29, §33) y NO la superficie donde se ficha: el kiosco es un iPad nativo, donde
+ * la base es un archivo real. Perder un fichaje de verdad sería inaceptable; perder
+ * uno de una previsualización no lo es.
+ *
+ * Y como en `secure-storage.ts`, se niega a correr en un build de producción web:
+ * si alguien despliega la web como si fuera la app, mejor que falle al arrancar que
+ * en silencio con una cola que se borra sola.
+ */
+function databaseNameForPlatform(): string {
+  if (Platform.OS !== 'web') return DATABASE_NAME;
+
+  if (process.env.NODE_ENV === 'production' && process.env.EXPO_PUBLIC_APP_ENV === 'production') {
+    throw new Error(
+      'La base local no persiste en web. La previsualización web es solo para desarrollo: ' +
+        'el fichaje ocurre en el iPad, no en el navegador.',
+    );
+  }
+
+  if (!warnedAboutWebDatabase) {
+    warnedAboutWebDatabase = true;
+    console.warn(
+      '[krealo-shift] Web usa una base SQLite EN MEMORIA: la cola de fichajes no ' +
+        'sobrevive a un recargado. Solo para desarrollo.',
+    );
+  }
+
+  return ':memory:';
+}
+
+let warnedAboutWebDatabase = false;
+
+/**
  * Migraciones de una versión del esquema a la siguiente.
  *
  * REGLA QUE NO SE ROMPE: nunca se borra `outbox_time_events` ni `pending_media`.
@@ -213,8 +289,20 @@ async function applyMigrations(
  */
 export async function openOfflineDatabase(): Promise<SQLite.SQLiteDatabase> {
   if (handle !== null) return handle;
+  if (opening !== null) return opening;
 
-  const database = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  opening = openAndMigrate();
+  try {
+    return await opening;
+  } finally {
+    // Se limpia siempre, tambien si fallo: un fallo transitorio no debe dejar la
+    // base imposible de abrir para el resto de la vida del proceso.
+    opening = null;
+  }
+}
+
+async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
+  const database = await SQLite.openDatabaseAsync(databaseNameForPlatform());
 
   // El orden importa: primero se migra lo que ya existe, y solo después se corre
   // el esquema. `create table if not exists` no cambia una tabla que ya está, así
