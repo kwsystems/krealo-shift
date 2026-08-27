@@ -17,6 +17,15 @@
 \pset tuples_only on
 \pset format unaligned
 
+-- Cada archivo de pruebas corre en su propia invocacion de psql, asi que los \set
+-- de 10_rls.sql NO llegan hasta aqui. Se repiten los que hacen falta.
+--
+-- Y ojo: psql NO sustituye variables dentro de bloques dollar-quoted ($$ ... $$).
+-- Dentro de un `do $$` hay que escribir el uuid literal. Costo un error de sintaxis
+-- averiguarlo.
+\set u_manager  '''33333333-3333-4333-8333-333333333332'''
+\set loc_main   '''22222222-2222-4222-8222-222222222221'''
+
 -- ===========================================================================
 -- El shim tiene que parecerse a produccion, o esta prueba no prueba nada
 -- ===========================================================================
@@ -306,6 +315,156 @@ begin
     'No se puede desactivar el token de push de otra persona');
 
   raise notice '  --- pruebas de permisos de funciones completas ---';
+end
+$$;
+rollback;
+
+
+-- ===========================================================================
+-- Tablas: RLS en todas, y anon sin acceso a ninguna
+-- ===========================================================================
+--
+-- La contraparte de las pruebas de funciones. Con RLS apagada en una tabla, el
+-- `grant` a `authenticated` la deja legible por cualquier sesion de cualquier
+-- empresa: no hay nada que filtre filas.
+
+begin;
+do $$
+declare
+  v_sin_rls text;
+  v_anon text;
+  v_total integer;
+begin
+  select string_agg(c.relname, ', ' order by c.relname) into v_sin_rls
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity;
+
+  perform test_assert(v_sin_rls is null,
+    'Todas las tablas de public tienen RLS activada' ||
+    coalesce(' — SIN RLS: ' || v_sin_rls, ''));
+
+  -- `anon` es una sesion sin usuario. No hay una sola politica `to anon` en el
+  -- proyecto, asi que no hay nada que deba poder tocar.
+  select string_agg(c.relname, ', ' order by c.relname) into v_anon
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r'
+    and (has_table_privilege('anon', c.oid, 'select')
+      or has_table_privilege('anon', c.oid, 'insert')
+      or has_table_privilege('anon', c.oid, 'update')
+      or has_table_privilege('anon', c.oid, 'delete'));
+
+  perform test_assert(v_anon is null,
+    'anon no tiene ningun privilegio sobre ninguna tabla' ||
+    coalesce(' — EXPUESTAS: ' || v_anon, ''));
+
+  select count(*) into v_total
+  from pg_class c join pg_namespace n on n.oid = c.relnamespace
+  where n.nspname = 'public' and c.relkind = 'r';
+  raise notice '  (revisadas % tablas de public)', v_total;
+end
+$$;
+rollback;
+
+-- ===========================================================================
+-- Las horas no se cambian sin dejar rastro
+-- ===========================================================================
+--
+-- work_sessions tenia una politica de UPDATE que permitia a cualquier gerente
+-- cambiar las horas con un `update` normal, SALTANDOSE manager_adjust_time, que es
+-- lo unico que escribe el valor anterior, el nuevo, el autor, la fecha, el motivo y
+-- el canal que exige la seccion 11.4.
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_manager, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+do $$
+declare
+  v_sesion uuid;
+  v_antes integer;
+begin
+  select id, net_minutes into v_sesion, v_antes from work_sessions
+    where location_id = '22222222-2222-4222-8222-222222222221'
+      and net_minutes is not null
+    order by starts_at limit 1;
+
+  if v_sesion is null then
+    raise notice '  (sin sesiones con minutos en el seed, se omite)';
+    return;
+  end if;
+
+  -- Con RLS y sin politica de UPDATE, el update no afecta ninguna fila. No lanza:
+  -- simplemente no cambia nada, que es el comportamiento de PostgreSQL. Lo que se
+  -- comprueba es el efecto, no la excepcion.
+  update work_sessions set net_minutes = 999 where id = v_sesion;
+
+  perform test_assert(
+    (select net_minutes from work_sessions where id = v_sesion) = v_antes,
+    'Un gerente NO puede cambiar las horas con un update directo');
+
+  -- Y fabricar un ajuste tampoco: un registro de auditoria que el auditado puede
+  -- escribir a mano no es auditoria.
+  begin
+    insert into time_adjustments
+      (organization_id, work_session_id, target_type, target_id,
+       before_value, after_value, reason, created_by)
+    values
+      ('11111111-1111-4111-8111-111111111111', v_sesion, 'work_session', v_sesion,
+       '{}'::jsonb, '{}'::jsonb, 'Motivo inventado', auth.uid());
+    raise exception 'FALLO: se fabrico una fila de auditoria a mano'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — no se puede fabricar una fila de auditoria a mano';
+  end;
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_sesion uuid;
+  v_antes integer;
+  v_despues integer;
+begin
+  select id, net_minutes into v_sesion, v_antes from work_sessions
+    where location_id = '22222222-2222-4222-8222-222222222221'
+      and net_minutes is not null and ends_at is not null
+    order by starts_at limit 1;
+
+  if v_sesion is null then
+    raise notice '  (sin sesiones cerradas en el seed, se omite)';
+    return;
+  end if;
+
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', '33333333-3333-4333-8333-333333333332',
+                      'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- Y LA OTRA MITAD: el camino legitimo SIGUE FUNCIONANDO. Cerrar la puerta
+  -- equivocada habria dejado el panel sin poder corregir nada, y una prueba que
+  -- solo comprueba que no se puede escribir pasaria igual con todo roto.
+  perform manager_adjust_time(
+    p_work_session_id => v_sesion,
+    p_expected_updated_at => (select updated_at from work_sessions where id = v_sesion),
+    p_new_starts_at => (select starts_at from work_sessions where id = v_sesion),
+    p_new_ends_at => (select ends_at from work_sessions where id = v_sesion) - interval '15 minutes',
+    p_reason => 'Salio 15 minutos antes, confirmado con la encargada');
+
+  select net_minutes into v_despues from work_sessions where id = v_sesion;
+
+  perform test_assert(v_despues <> v_antes,
+    'manager_adjust_time SI puede corregir las horas: el camino legitimo funciona');
+
+  perform test_assert(
+    exists (select 1 from time_adjustments
+            where work_session_id = v_sesion and reason like 'Salio 15 minutos%'),
+    'Y deja el rastro auditable con el motivo, que es la diferencia entera');
+
+  raise notice '  --- pruebas de escritura directa completas ---';
 end
 $$;
 rollback;

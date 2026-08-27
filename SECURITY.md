@@ -394,6 +394,47 @@ El shim de pruebas ahora incluye los privilegios por defecto de Supabase, así q
 esta clase de fallo ya no puede esconderse detrás de un entorno de pruebas más
 permisivo que producción.
 
+## Escrituras directas que saltaban la auditoría
+
+**Encontrado y cerrado el 2026-08-27**, auditando las políticas tabla por tabla — la
+contraparte de lo que se hizo con las funciones. Dos políticas permitían escribir
+directamente donde solo debe escribir el servidor:
+
+**1. `work_sessions_manager_write` (UPDATE).** Cualquier gerente podía hacer
+`update work_sessions set net_minutes = …` con una petición normal de la app,
+saltándose `manager_adjust_time`. Y esa función es lo único que escribe el rastro que
+exige §11.4: valor anterior, valor nuevo, autor, fecha del servidor, motivo, canal y
+referencia a la solicitud.
+
+Dicho sin rodeos: **se podían cambiar las horas pagadas de una persona sin dejar una
+sola fila de auditoría.** En una revisión laboral, la diferencia entre "corregido con
+motivo" y "cambiado sin rastro" es toda la diferencia.
+
+**2. `time_adjustments_insert` (INSERT).** Permitía fabricar filas de ajuste: afirmar
+un cambio que no ocurrió, o ponerle un motivo falso a uno que sí. Un registro de
+auditoría que el auditado puede escribir a mano no es auditoría.
+
+### Por qué se pudieron quitar sin romper nada
+
+Se comprobó en todo el código: ninguna parte del cliente escribe esas dos tablas. Las
+escriben `manager_adjust_time` y `manager_add_time_event`, que son `security definer`
+y por tanto corren con los permisos del dueño sin evaluar políticas. El camino
+legítimo sigue igual — hay una prueba que lo verifica, porque cerrar la puerta
+equivocada habría dejado el panel sin poder corregir nada y una prueba que solo
+comprueba que no se puede escribir pasaría igual con todo roto.
+
+**`shift_publications_insert` se queda.** Ahí el panel inserta de verdad al publicar
+un horario, y el disparador `stamp_shift_publication` sella la versión. No se trata de
+cerrar todo: se trata de cerrar lo que nadie usa y permite mentir.
+
+### Estado de las tablas
+
+Las 27 tablas de `public` tienen RLS activada y **`anon` no tiene ningún privilegio
+sobre ninguna**. Se comprueba en `supabase/tests/40_privilegios.sql`, que falla si
+una tabla nueva aparece sin RLS: con RLS apagada, el `grant` a `authenticated` deja la
+tabla legible por cualquier sesión de cualquier empresa, porque no hay nada que filtre
+filas.
+
 ## Qué NO se registra
 
 Ni en logs, ni en auditoría, ni en telemetría, ni en mensajes de error:
