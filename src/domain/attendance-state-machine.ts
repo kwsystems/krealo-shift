@@ -95,12 +95,20 @@ export function closesOpenBreak(state: AttendanceState, event: TimeEventType): b
  * independiente, se deriva. Una secuencia imposible no se "corrige" en silencio:
  * se ignora el evento que no aplica y se devuelve en `rejected` para que el
  * gerente lo revise (§17).
+ *
+ * `initialState` existe para el kiosco sin conexion (§9.7): ahi se parte del
+ * ultimo estado que confirmo el servidor y se le aplican encima los eventos que
+ * quedaron en la cola local. Partir siempre de OFF_SHIFT diria que alguien que
+ * fico entrada con red esta fuera de turno, y le ofreceria marcar entrada otra vez.
  */
-export function reduceEvents(events: readonly TimeEventType[]): {
+export function reduceEvents(
+  events: readonly TimeEventType[],
+  initialState: AttendanceState = 'OFF_SHIFT',
+): {
   state: AttendanceState;
   rejected: number[];
 } {
-  let state: AttendanceState = 'OFF_SHIFT';
+  let state: AttendanceState = initialState;
   const rejected: number[] = [];
 
   events.forEach((event, index) => {

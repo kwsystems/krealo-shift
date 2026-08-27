@@ -10,14 +10,14 @@
  * físicamente accesible: lo que no está ahí no se puede filtrar.
  *
  * SOBRE LA VALIDACIÓN OFFLINE DEL PIN
- * La especificación (§8) pide que el kiosco pueda validar un PIN sin conexión con
- * "un verificador HMAC derivado y ligado al dispositivo, emitido por servidor".
- * Ese verificador NO se emite aquí todavía, y es a propósito: el servidor guarda
- * el PIN con bcrypt, o sea de forma irreversible, así que no puede derivar
- * HMAC(clave_del_dispositivo, PIN) sin conocer el PIN en claro. Salir de eso
- * obliga a elegir entre tres opciones con consecuencias distintas de seguridad,
- * y esa decisión se toma y se documenta en la tarea de offline (P0-4), no se
- * resuelve a escondidas aquí. Mientras tanto el PIN se valida solo online.
+ * Aquí se emiten también los verificadores que permiten validar un PIN sin red.
+ * Son hashes bcrypt de coste 10 con su salt, no PIN recuperables: el dispositivo
+ * compara, nunca descifra. La decisión de seguridad, sus alternativas y su costo
+ * están explicados en `supabase/migrations/20260827000600_offline_pin.sql`.
+ *
+ * Solo llegan los verificadores de los empleados asignados a la ubicación de ESTE
+ * kiosco, y un dispositivo revocado no recibe ninguno: eso es lo que hace que
+ * revocar sirva también sin conexión.
  */
 
 import { errorResponse, jsonResponse, mapPostgresError, preflight } from '../_shared/http.ts';
@@ -37,7 +37,7 @@ Deno.serve(async (request) => {
   }
   if (kiosk === null) return errorResponse('revoked', 'Este reloj fue desactivado.', 401);
 
-  const [location, assignments, shifts] = await Promise.all([
+  const [location, assignments, shifts, verifiers] = await Promise.all([
     supabase
       .from('locations')
       .select('id, name, timezone, settings')
@@ -56,11 +56,13 @@ Deno.serve(async (request) => {
       .eq('status', 'published')
       .gte('starts_at', new Date(Date.now() - 24 * 3600_000).toISOString())
       .lte('starts_at', new Date(Date.now() + 48 * 3600_000).toISOString()),
+    supabase.rpc('kiosk_offline_verifiers', { p_device_id: kiosk.deviceId }),
   ]);
 
   if (location.error) return mapPostgresError(location.error);
   if (assignments.error) return mapPostgresError(assignments.error);
   if (shifts.error) return mapPostgresError(shifts.error);
+  if (verifiers.error) return mapPostgresError(verifiers.error);
   if (!location.data) return errorResponse('server_error', 'Ubicación no encontrada.', 500);
 
   const settings = (location.data.settings ?? {}) as Record<string, unknown>;
@@ -127,6 +129,19 @@ Deno.serve(async (request) => {
     },
     roster,
     shifts: shiftsByOpaqueId,
+    verifiers: (Array.isArray(verifiers.data) ? verifiers.data : []).map(
+      (row: {
+        employee_opaque_id: string;
+        pin_offline_hash: string;
+        pin_length: number;
+        pin_version: number;
+      }) => ({
+        employeeOpaqueId: row.employee_opaque_id,
+        pinOfflineHash: row.pin_offline_hash,
+        pinLength: row.pin_length,
+        pinVersion: row.pin_version,
+      }),
+    ),
     refreshedAt: new Date().toISOString(),
   });
 });

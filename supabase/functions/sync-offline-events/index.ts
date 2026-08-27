@@ -12,6 +12,14 @@
  *     cliente con su motivo, y el iPad lo conserva hasta que un gerente lo
  *     resuelva;
  *   - un evento rechazado no aborta el lote: los demás sí se aplican.
+ *
+ * SOBRE LA AUTORIZACIÓN DE ESTOS EVENTOS
+ * Un evento offline NO trae token de acción: el token vive 90 segundos y el iPad
+ * pudo pasar horas sin red. Lo que trae es el identificador opaco del empleado y
+ * la versión del PIN con la que el propio dispositivo lo validó, usando el
+ * verificador que el servidor le entregó al activarse. El servidor lo registra
+ * marcado como offline, para que el gerente sepa que la autorización la hizo el
+ * dispositivo y no el servidor. Descartarlos sería perder jornadas reales.
  */
 
 import {
@@ -22,19 +30,21 @@ import {
   preflight,
   readJson,
 } from '../_shared/http.ts';
-import { authenticateKiosk, serviceClient, verifyActionToken } from '../_shared/kiosk-auth.ts';
+import { authenticateKiosk, serviceClient } from '../_shared/kiosk-auth.ts';
 
 const MAX_BATCH = 50;
 const EVENT_TYPES = ['clock_in', 'break_start', 'break_end', 'clock_out'] as const;
+const BREAK_TYPES = ['paid', 'unpaid', 'meal', 'other'] as const;
 
 type OfflineEvent = {
   idempotencyKey: string;
-  actionToken: string;
+  employeeOpaqueId: string;
   eventType: (typeof EVENT_TYPES)[number];
-  breakType?: string;
+  breakType?: (typeof BREAK_TYPES)[number];
   shiftId: string | null;
   occurredAtDevice: string;
   deviceSequence: number;
+  pinVersion: number;
   photoPath?: string | null;
 };
 
@@ -43,23 +53,32 @@ type Body = { events: OfflineEvent[] };
 function validateEvent(value: unknown): OfflineEvent | null {
   if (typeof value !== 'object' || value === null) return null;
   const v = value as Record<string, unknown>;
+
   if (!isUuid(v.idempotencyKey)) return null;
-  if (typeof v.actionToken !== 'string' || v.actionToken.length < 20) return null;
+  // El identificador opaco es un sha256 en hexadecimal: 64 caracteres.
+  if (typeof v.employeeOpaqueId !== 'string' || !/^[0-9a-f]{64}$/.test(v.employeeOpaqueId)) {
+    return null;
+  }
   if (typeof v.eventType !== 'string') return null;
   if (!EVENT_TYPES.includes(v.eventType as OfflineEvent['eventType'])) return null;
+  if (v.breakType !== undefined && !BREAK_TYPES.includes(v.breakType as OfflineEvent['breakType'])) {
+    return null;
+  }
   if (typeof v.occurredAtDevice !== 'string' || Number.isNaN(Date.parse(v.occurredAtDevice))) {
     return null;
   }
-  if (typeof v.deviceSequence !== 'number') return null;
+  if (typeof v.deviceSequence !== 'number' || !Number.isFinite(v.deviceSequence)) return null;
+  if (typeof v.pinVersion !== 'number' || !Number.isInteger(v.pinVersion)) return null;
 
   return {
     idempotencyKey: v.idempotencyKey,
-    actionToken: v.actionToken,
+    employeeOpaqueId: v.employeeOpaqueId,
     eventType: v.eventType as OfflineEvent['eventType'],
-    breakType: typeof v.breakType === 'string' ? v.breakType : undefined,
+    breakType: v.breakType as OfflineEvent['breakType'] | undefined,
     shiftId: isUuid(v.shiftId) ? v.shiftId : null,
     occurredAtDevice: v.occurredAtDevice,
     deviceSequence: v.deviceSequence,
+    pinVersion: v.pinVersion,
     photoPath: typeof v.photoPath === 'string' ? v.photoPath : null,
   };
 }
@@ -72,11 +91,20 @@ function validate(value: unknown): Body | null {
   const parsed: OfflineEvent[] = [];
   for (const item of events) {
     const event = validateEvent(item);
+    // Un solo evento mal formado invalida el lote entero: aceptar la mitad y
+    // callar la otra mitad es justo lo que la especificación prohíbe.
     if (event === null) return null;
     parsed.push(event);
   }
   return { events: parsed };
 }
+
+type Resolution = {
+  idempotencyKey: string;
+  status: 'accepted' | 'duplicate' | 'needs_review' | 'rejected';
+  reason?: string;
+  attendanceState?: string;
+};
 
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return preflight();
@@ -92,59 +120,38 @@ Deno.serve(async (request) => {
   }
   if (kiosk === null) {
     // Un kiosco revocado no sincroniza. El iPad debe mostrar la pantalla de
-    // revocado y conservar sus eventos, no borrarlos (§32.4).
+    // revocado y CONSERVAR sus eventos, no borrarlos (§32.4).
     return errorResponse('revoked', 'Este reloj fue desactivado.', 401);
   }
 
   const body = await readJson(request, validate);
   if (!body.ok) return body.response;
 
-  // Orden por secuencia del dispositivo: es la única fuente de orden fiable
-  // cuando los eventos se generaron sin conexión.
+  // Orden por secuencia del dispositivo: la única fuente de orden fiable cuando
+  // los eventos se generaron sin conexión.
   const ordered = [...body.data.events].sort((a, b) => a.deviceSequence - b.deviceSequence);
 
-  const results: Array<{
-    idempotencyKey: string;
-    status: 'accepted' | 'duplicate' | 'needs_review' | 'rejected';
-    reason?: string;
-    attendanceState?: string;
-  }> = [];
+  const results: Resolution[] = [];
 
   for (const event of ordered) {
-    const claim = await verifyActionToken(event.actionToken, kiosk);
-    if (claim === null) {
-      // El token caducó mientras el iPad estaba sin red. El evento NO se
-      // descarta: se devuelve para que un gerente lo revise, porque el fichaje
-      // sí ocurrió aunque su autorización ya no sea verificable.
-      results.push({
-        idempotencyKey: event.idempotencyKey,
-        status: 'needs_review',
-        reason: 'action_token_expired',
-      });
-      continue;
-    }
-
-    const { data, error } = await supabase.rpc('submit_time_event', {
+    const { data, error } = await supabase.rpc('submit_offline_time_event', {
       p_device_id: kiosk.deviceId,
-      p_employee_id: claim.employeeId,
+      p_employee_opaque_id: event.employeeOpaqueId,
       p_event_type: event.eventType,
       p_idempotency_key: event.idempotencyKey,
-      p_shift_id: event.shiftId,
-      p_break_type: event.breakType ?? null,
       p_occurred_at_device: event.occurredAtDevice,
       p_device_sequence: event.deviceSequence,
-      p_is_offline: true,
+      p_pin_version: event.pinVersion,
+      p_shift_id: event.shiftId,
+      p_break_type: event.breakType ?? null,
       p_photo_path: event.photoPath,
-      p_source: 'kiosk',
     });
 
     if (error) {
-      // Un error permanente (transición imposible, tienda equivocada) se marca
-      // como rechazado con motivo. No se reintenta indefinidamente (§17).
       results.push({
         idempotencyKey: event.idempotencyKey,
-        status: 'rejected',
-        reason: error.code === '23514' ? 'invalid_transition' : (error.code ?? 'unknown'),
+        status: classifyError(error.code),
+        reason: reasonFor(error.code),
       });
       continue;
     }
@@ -152,11 +159,15 @@ Deno.serve(async (request) => {
     const row = Array.isArray(data) ? data[0] : data;
     const flags: string[] = row?.flags ?? [];
 
+    // Un desvío de reloj grande no invalida el fichaje, pero el gerente tiene que
+    // verlo: la hora oficial de ese evento es la de un dispositivo desajustado.
+    const needsReview = flags.includes('clock_drift');
+
     results.push({
       idempotencyKey: event.idempotencyKey,
-      status: flags.includes('clock_drift') ? 'needs_review' : (row?.status ?? 'accepted'),
+      status: needsReview ? 'needs_review' : (row?.status ?? 'accepted'),
+      reason: needsReview ? 'clock_drift' : undefined,
       attendanceState: row?.attendance_state,
-      reason: flags.includes('clock_drift') ? 'clock_drift' : undefined,
     });
   }
 
@@ -165,10 +176,43 @@ Deno.serve(async (request) => {
     .update({ last_sync_at: new Date().toISOString() })
     .eq('id', kiosk.deviceId);
 
-  const accepted = results.filter((r) => r.status === 'accepted').length;
-  const pending = results.filter(
-    (r) => r.status === 'needs_review' || r.status === 'rejected',
+  const accepted = results.filter(
+    (r) => r.status === 'accepted' || r.status === 'duplicate',
   ).length;
+  const pending = results.length - accepted;
 
   return jsonResponse({ results, accepted, pending });
 });
+
+/**
+ * Un error permanente se marca `rejected` y deja de reintentarse. Uno que puede
+ * resolverse con intervención humana queda `needs_review`, en la cola y visible.
+ */
+function classifyError(code: string | undefined): Resolution['status'] {
+  switch (code) {
+    // Transición imposible: el estado del servidor no coincide con lo que el iPad
+    // creía. Necesita a una persona, no otro reintento.
+    case '23514':
+      return 'needs_review';
+    // Empleado que ya no está en esta tienda, o identificador desconocido.
+    case '42501':
+      return 'rejected';
+    case '28000':
+      return 'rejected';
+    default:
+      return 'needs_review';
+  }
+}
+
+function reasonFor(code: string | undefined): string {
+  switch (code) {
+    case '23514':
+      return 'transicion_invalida';
+    case '42501':
+      return 'empleado_no_asignado_a_esta_tienda';
+    case '28000':
+      return 'dispositivo_revocado';
+    default:
+      return code ?? 'desconocido';
+  }
+}

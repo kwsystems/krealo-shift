@@ -267,3 +267,89 @@ export async function submitTimeEvent(params: {
 }): Promise<KioskApiResult<SubmitEventResponse>> {
   return invoke('submit-time-event', params, submitEventResponseSchema);
 }
+
+// ---------------------------------------------------------------------------
+// Sincronizacion offline y paquete del kiosco
+// ---------------------------------------------------------------------------
+
+const syncResultSchema = z.object({
+  results: z.array(
+    z.object({
+      idempotencyKey: z.string().uuid(),
+      status: z.enum(['accepted', 'duplicate', 'needs_review', 'rejected']),
+      reason: z.string().optional(),
+      attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']).optional(),
+    }),
+  ),
+  accepted: z.number().int().min(0),
+  pending: z.number().int().min(0),
+});
+
+export type SyncOfflineResult = z.infer<typeof syncResultSchema>;
+
+/**
+ * §16 `sync-offline-events`: envia un lote pequeno y ordenado de eventos que el
+ * iPad guardo sin conexion. El servidor responde por evento y nunca descarta nada
+ * en silencio (§17).
+ */
+export async function syncOfflineEvents(params: {
+  events: readonly {
+    idempotencyKey: string;
+    employeeOpaqueId: string;
+    eventType: TimeEventType;
+    breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
+    shiftId: string | null;
+    occurredAtDevice: string;
+    deviceSequence: number;
+    pinVersion: number;
+    offlineVerified: true;
+  }[];
+}): Promise<KioskApiResult<SyncOfflineResult>> {
+  return invoke('sync-offline-events', { events: params.events }, syncResultSchema);
+}
+
+const rosterSchema = z.object({
+  location: z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    timezone: z.string(),
+  }),
+  policies: policiesSchema,
+  roster: z.array(
+    z.object({
+      opaqueId: z.string().min(1),
+      displayName: z.string().min(1),
+      jobRoleName: z.string().nullable().default(null),
+    }),
+  ),
+  shifts: z.array(
+    z.object({
+      id: z.string().uuid(),
+      employeeOpaqueId: z.string().min(1),
+      startsAt: z.string(),
+      endsAt: z.string(),
+      jobRoleName: z.string().nullable(),
+      employeeNote: z.string().nullable(),
+      plannedUnpaidBreakMinutes: z.number().int().min(0),
+      changedSinceLastPublication: z.boolean(),
+    }),
+  ),
+  // Verificadores para validar el PIN sin conexion. Ver la migracion
+  // 20260827000600_offline_pin.sql para la decision de seguridad y su costo.
+  verifiers: z.array(
+    z.object({
+      employeeOpaqueId: z.string().min(1),
+      pinOfflineHash: z.string().min(20),
+      pinLength: z.number().int().min(4).max(6),
+      pinVersion: z.number().int().min(1),
+    }),
+  ),
+  refreshedAt: z.string(),
+});
+
+export type KioskRoster = z.infer<typeof rosterSchema>;
+
+/** §16 `refresh-kiosk-roster`: el paquete minimo para operar, incluido offline. */
+export async function refreshKioskRoster(): Promise<KioskApiResult<KioskRoster>> {
+  return invoke('refresh-kiosk-roster', {}, rosterSchema);
+}

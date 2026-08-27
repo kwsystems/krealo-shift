@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { resetOfflineDatabase } from '@/lib/offline/database';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 
 /**
@@ -95,6 +96,20 @@ export const useKioskStore = create<KioskState>((set, get) => ({
     await secureStorage.remove(`${SECURE_KEYS.kioskCredential}.secret`);
     await secureStorage.remove(SECURE_KEYS.kioskDeviceKey);
     await secureStorage.remove(SECURE_KEYS.kioskCredential);
+
+    // Se borra tambien la base local. Dejar en un iPad que ya no es kiosco los
+    // verificadores de PIN del personal, su nombre y sus turnos seria una fuga:
+    // el dispositivo pasa a ser un iPad cualquiera (§22).
+    //
+    // Si quedaban eventos sin sincronizar se pierden, y eso es a proposito: salir
+    // del modo kiosco es una accion deliberada de un gerente, que primero deberia
+    // sincronizar. El menu de salida ofrece "Sincronizar ahora" justo antes.
+    try {
+      await resetOfflineDatabase();
+    } catch {
+      // Si la base local no se puede abrir, no hay nada que borrar.
+    }
+
     set({ binding: null, revoked: false });
   },
 }));

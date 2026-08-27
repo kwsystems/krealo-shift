@@ -36,6 +36,15 @@ export default function KioskForgotScreen() {
 
   const submit = async () => {
     if (verification === null || kind === null) return;
+
+    // Sin token del servidor no se puede crear la solicitud: una sesion validada
+    // offline no tiene autorizacion verificable. Se le pide esperar conexion en
+    // lugar de dejar la solicitud a medias (§9.7).
+    if (verification.actionToken === null) {
+      setError(t('kiosk.offlineStateUnknown'));
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 

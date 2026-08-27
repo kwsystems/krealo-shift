@@ -119,7 +119,10 @@
     "setupActivate": "Activate time clock",
     "setupActivated": "This iPad is now linked to {{location}}.",
     "revokedTitle": "This time clock was deactivated",
-    "revokedBody": "Ask an admin to activate it again."
+    "revokedBody": "Ask an admin to activate it again.",
+    "offlineStateUnknown": "We can't confirm your status without a connection. Wait for the network to come back.",
+    "offlineNotReady": "This iPad can't validate PINs offline yet. Ask for it to be synced.",
+    "savedOfflinePending": "Saved on this iPad. It will be sent on its own when the connection is back."
   },
   "attendance": {
     "statusOffShift": "Off shift",

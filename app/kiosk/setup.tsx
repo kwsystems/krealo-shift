@@ -9,7 +9,9 @@ import { FormField } from '@app/(auth)/sign-in';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
-import { activateKiosk } from '@/features/kiosk/api';
+import { activateKiosk, refreshKioskRoster } from '@/features/kiosk/api';
+import { cacheRosterAndShifts } from '@/features/kiosk/offline-session';
+import { storeOfflineVerifiers } from '@/lib/offline/pin';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { spacing } from '@/theme/tokens';
@@ -56,6 +58,19 @@ export default function KioskSetupScreen() {
 
     const { credential, deviceKey, ...binding } = result.data;
     await activate(binding, credential, deviceKey);
+
+    // Se baja el paquete offline ANTES de entrar al reloj: si el iPad se queda sin
+    // red justo despues de activarse, sin esto no podria validar ningun PIN (§9.7).
+    const roster = await refreshKioskRoster();
+    if (roster.ok) {
+      await cacheRosterAndShifts({
+        roster: roster.data.roster,
+        shifts: roster.data.shifts,
+        policies: roster.data.policies,
+      });
+      await storeOfflineVerifiers(roster.data.verifiers);
+    }
+
     router.replace('/kiosk');
   };
 

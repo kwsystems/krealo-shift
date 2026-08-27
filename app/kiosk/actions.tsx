@@ -21,6 +21,8 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
+import { enqueueEvent } from '@/lib/offline/outbox';
+import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import {
@@ -209,9 +211,58 @@ export default function KioskActionsScreen() {
     setStep({ name: 'confirm', event: 'clock_out' });
   };
 
+  /**
+   * Guarda el evento en la cola local y muestra el resultado.
+   *
+   * Primero guarda en SQLite dentro de una transaccion y SOLO despues dice
+   * "listo": si la escritura local falla, el empleado tiene que verlo, porque su
+   * fichaje no existe en ninguna parte (§17).
+   */
+  const commitOffline = async (event: TimeEventType) => {
+    if (binding === null) return;
+
+    try {
+      const queued = await enqueueEvent({
+        employeeOpaqueId: verification.employee.opaqueId,
+        eventType: event,
+        breakType: step.name === 'confirm' ? step.breakType : undefined,
+        shiftId: selectedShift?.id ?? null,
+        locationId: binding.locationId,
+        pinVersion: verification.pinVersion,
+        photoLocalUri: photo?.status === 'captured' ? photo.uri : null,
+      });
+
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await refreshQueueIndicators();
+      // Se intenta enviar de inmediato, sin bloquear la pantalla: si hay red,
+      // sale ya; si no, queda en la cola con su backoff.
+      void runSync();
+
+      setStep({
+        name: 'result',
+        event,
+        occurredAt: queued.occurredAtDevice,
+        offline: true,
+        shiftEndsAt: selectedShift?.endsAt ?? null,
+      });
+    } catch {
+      // No se pudo guardar ni localmente. Decirle que fichó seria mentirle.
+      setError(t('errors.generic'));
+      setStep({ name: 'identify' });
+    }
+  };
+
   const commitAction = async (event: TimeEventType) => {
     setSubmitting(true);
     setError(null);
+
+    // Sesion validada sin conexion: no hay token del servidor que consumir, asi
+    // que el evento va directo a la cola local (§9.7).
+    if (verification.mode === 'offline' || verification.actionToken === null) {
+      await commitOffline(event);
+      setSubmitting(false);
+      return;
+    }
 
     // La clave de idempotencia se genera antes de enviar, para que un reintento o
     // un doble toque produzcan el mismo evento y no dos (§12, §17).
@@ -231,6 +282,9 @@ export default function KioskActionsScreen() {
       photoPath: photo?.status === 'captured' ? photo.uri : null,
     });
 
+    // El token de accion ya se consumio: se anula para que un segundo toque no
+    // pueda reutilizarlo.
+
     setSubmitting(false);
 
     if (result.ok) {
@@ -246,10 +300,9 @@ export default function KioskActionsScreen() {
     }
 
     if (result.error.kind === 'offline') {
-      // Sin conexión el evento se encola; la cola offline es P0-4. Hasta que exista
-      // no afirmamos que quedó guardado: decirlo sin haberlo guardado sería mentir
-      // al empleado sobre su jornada (§17).
-      setError(t('errors.network'));
+      // La red se cayo entre validar el PIN y enviar el fichaje: el evento va a la
+      // cola local en lugar de perderse (§17).
+      await commitOffline(event);
       return;
     }
 
@@ -492,7 +545,7 @@ export default function KioskActionsScreen() {
                 ) : null}
                 {step.offline ? (
                   <AppText variant="help" tone="warning" style={styles.centerText}>
-                    {t('kiosk.savedOffline')}
+                    {t('kiosk.savedOfflinePending')}
                   </AppText>
                 ) : null}
                 <PrimaryButton label={t('common.done')} onPress={returnToIdle} testID="kiosk-result-done" />

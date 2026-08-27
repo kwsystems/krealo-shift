@@ -1,42 +1,147 @@
 import { create } from 'zustand';
 
-import type { VerifyPinResponse } from './api';
+import type { EligibleShift, VerifyPinResponse } from './api';
+import type { OfflineSessionResult } from './offline-session';
+import type { AttendanceState, TimeEventType } from '@/domain/attendance-state-machine';
 
 /**
- * Estado temporal tras validar un PIN en el kiosco (§9.2, §9.5).
+ * Estado temporal tras validar un PIN en el kiosco (§9.2, §9.5, §9.7).
  *
  * Vive el mínimo tiempo necesario. Al volver a reposo se limpia inmediatamente
- * nombre, selección y token de acción: el iPad es compartido y el siguiente
- * empleado no debe ver ni un rastro del anterior.
+ * nombre, selección y token: el iPad es compartido y el siguiente empleado no
+ * debe ver ni un rastro del anterior.
  *
- * Nunca se guarda el PIN: solo el token de acción de corta duración que devuelve
- * el servidor, y tampoco se persiste en disco.
+ * Nunca se guarda el PIN, y nada de esto se persiste en disco.
+ *
+ * `mode` distingue los dos caminos de validación, y no es un detalle cosmético:
+ * una sesión offline NO tiene token de acción del servidor —el token vive 90
+ * segundos y el iPad pudo estar horas sin red— así que su fichaje va a la cola
+ * local y se marca como validado por el dispositivo.
  */
 
+export type KioskSession = {
+  mode: 'online' | 'offline';
+  /** `null` en modo offline: no hay token del servidor que consumir. */
+  actionToken: string | null;
+  /** Versión del PIN con la que se validó. Viaja con el evento offline. */
+  pinVersion: number;
+  employee: {
+    opaqueId: string;
+    displayName: string;
+    initials: string;
+    jobRoleName: string | null;
+    canManageLocation: boolean;
+  };
+  attendanceState: AttendanceState;
+  allowedActions: TimeEventType[];
+  eligibleShifts: EligibleShift[];
+  openSession: {
+    startedAt: string;
+    shiftEndsAt: string | null;
+    takenBreakMinutes: number;
+    requiredBreakMinutes: number;
+    openBreak: { startedAt: string; breakType: string } | null;
+  } | null;
+  earliestClockInAt: string | null;
+};
+
 type VerificationState = {
-  verification: VerifyPinResponse | null;
+  verification: KioskSession | null;
   /** Turno elegido cuando hay más de uno elegible (§9.3). */
   selectedShiftId: string | null;
 
-  set: (verification: VerifyPinResponse) => void;
+  setFromOnline: (response: VerifyPinResponse, pinVersion?: number) => void;
+  setFromOffline: (params: {
+    employeeOpaqueId: string;
+    pinVersion: number;
+    session: Extract<OfflineSessionResult, { status: 'ready' }>;
+  }) => void;
   selectShift: (shiftId: string | null) => void;
   clear: () => void;
 };
+
+/** Iniciales a partir del nombre para mostrar, cuando el servidor no las manda. */
+function initialsFrom(displayName: string): string {
+  const parts = displayName.trim().split(/\s+/);
+  const first = parts[0]?.charAt(0) ?? '';
+  const second = parts[1]?.charAt(0) ?? '';
+  return (first + second).toUpperCase() || '?';
+}
+
+function firstShiftId(shifts: readonly EligibleShift[]): string | null {
+  // Con un solo turno elegible queda seleccionado sin que el empleado elija (§9.3).
+  return shifts.length === 1 ? (shifts[0]?.id ?? null) : null;
+}
 
 export const useKioskVerificationStore = create<VerificationState>((set) => ({
   verification: null,
   selectedShiftId: null,
 
-  set: (verification) =>
+  setFromOnline: (response, pinVersion = 1) =>
     set({
-      verification,
-      // Si hay un solo turno elegible, queda seleccionado sin que el empleado
-      // tenga que elegir (§9.3).
-      selectedShiftId:
-        verification.eligibleShifts.length === 1
-          ? (verification.eligibleShifts[0]?.id ?? null)
-          : null,
+      verification: {
+        mode: 'online',
+        actionToken: response.actionToken,
+        pinVersion,
+        employee: response.employee,
+        attendanceState: response.attendanceState,
+        allowedActions: response.allowedActions,
+        eligibleShifts: response.eligibleShifts,
+        openSession: response.openSession,
+        earliestClockInAt: response.earliestClockInAt,
+      },
+      selectedShiftId: firstShiftId(response.eligibleShifts),
     }),
+
+  setFromOffline: ({ employeeOpaqueId, pinVersion, session }) => {
+    const shifts: EligibleShift[] =
+      session.shift === null
+        ? []
+        : [
+            {
+              id: session.shift.id,
+              startsAt: session.shift.startsAt,
+              endsAt: session.shift.endsAt,
+              jobRoleName: session.shift.jobRoleName,
+              employeeNote: session.shift.employeeNote,
+              plannedUnpaidBreakMinutes: session.shift.plannedUnpaidBreakMinutes,
+              changedSinceLastPublication: session.shift.changedSinceLastPublication,
+            },
+          ];
+
+    set({
+      verification: {
+        mode: 'offline',
+        actionToken: null,
+        pinVersion,
+        employee: {
+          opaqueId: employeeOpaqueId,
+          displayName: session.displayName,
+          initials: initialsFrom(session.displayName),
+          jobRoleName: session.jobRoleName,
+          // Sin conexión no se puede comprobar quién es gerente contra el
+          // servidor, así que NO se concede: una autorización que no se puede
+          // verificar no es una autorización.
+          canManageLocation: false,
+        },
+        attendanceState: session.attendanceState,
+        allowedActions: session.allowedActions,
+        eligibleShifts: shifts,
+        openSession:
+          session.sessionStartedAt === null
+            ? null
+            : {
+                startedAt: session.sessionStartedAt,
+                shiftEndsAt: session.shift?.endsAt ?? null,
+                takenBreakMinutes: session.takenBreakMinutes,
+                requiredBreakMinutes: session.requiredBreakMinutes,
+                openBreak: null,
+              },
+        earliestClockInAt: null,
+      },
+      selectedShiftId: firstShiftId(shifts),
+    });
+  },
 
   selectShift: (selectedShiftId) => set({ selectedShiftId }),
 

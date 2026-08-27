@@ -9,6 +9,7 @@ import { AppText } from '@/components/ui/app-text';
 import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { verifyPin } from '@/features/kiosk/api';
+import { refreshOfflinePackage, runSync } from '@/lib/offline/sync';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { spacing } from '@/theme/tokens';
@@ -120,7 +121,20 @@ export default function KioskExitScreen() {
           </Card>
 
           <Stack gap={spacing.md}>
-            <SecondaryButton label={t('kiosk.menuSync')} onPress={() => router.back()} />
+            <SecondaryButton
+              label={t('kiosk.menuSync')}
+              onPress={() => {
+                void runSync();
+              }}
+              testID="kiosk-sync-now"
+            />
+            <SecondaryButton
+              label={t('kiosk.menuRefreshRoster')}
+              onPress={() => {
+                void refreshOfflinePackage();
+              }}
+              testID="kiosk-refresh-roster"
+            />
             <SecondaryButton label={t('common.back')} onPress={() => router.back()} />
             <DangerButton
               label={t('kiosk.menuExit')}

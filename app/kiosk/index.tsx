@@ -10,7 +10,9 @@ import { GhostButton } from '@/components/ui/buttons';
 import { AppScreen, Row, Stack } from '@/components/ui/layout';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
+import { buildOfflineSession, cacheAttendanceState } from '@/features/kiosk/offline-session';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
+import { verifyPinOffline } from '@/lib/offline/pin';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useResponsive } from '@/hooks/use-responsive';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
@@ -43,7 +45,8 @@ export default function KioskIdleScreen() {
   const language = usePreferencesStore((s) => s.language);
   const toggleLanguage = usePreferencesStore((s) => s.toggleLanguage);
   const { online, syncing, pendingCount } = useNetworkStore();
-  const setVerification = useKioskVerificationStore((s) => s.set);
+  const setFromOnline = useKioskVerificationStore((s) => s.setFromOnline);
+  const setFromOffline = useKioskVerificationStore((s) => s.setFromOffline);
 
   const [pin, setPin] = useState('');
   const [checking, setChecking] = useState(false);
@@ -70,7 +73,16 @@ export default function KioskIdleScreen() {
 
       if (result.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setVerification(result.data);
+        setFromOnline(result.data);
+        // Se cachea el estado que confirmo el servidor: es de donde parte la
+        // reconstruccion si despues se cae la red (§9.7).
+        void cacheAttendanceState({
+          employeeOpaqueId: result.data.employee.opaqueId,
+          attendanceState: result.data.attendanceState,
+          shiftId: result.data.eligibleShifts[0]?.id ?? null,
+          sessionStartedAt: result.data.openSession?.startedAt ?? null,
+          takenBreakMinutes: result.data.openSession?.takenBreakMinutes ?? 0,
+        });
         router.push('/kiosk/actions');
         return;
       }
@@ -93,16 +105,45 @@ export default function KioskIdleScreen() {
         case 'wrong_location':
           setError(t('errors.kioskWrongLocation'));
           break;
-        case 'offline':
-          // Offline el PIN se valida contra el verificador local del dispositivo;
-          // eso lo resuelve la cola offline (P0-4). Hasta entonces lo decimos claro.
-          setError(t('errors.network'));
+        case 'offline': {
+          // Sin red se valida el PIN contra el verificador local del dispositivo,
+          // que el servidor entrego al activar el kiosco (§9.7).
+          const offline = await verifyPinOffline(candidate);
+
+          if (offline.ok) {
+            const session = await buildOfflineSession(offline.employeeOpaqueId);
+
+            if (session.status === 'ready') {
+              void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setFromOffline({
+                employeeOpaqueId: offline.employeeOpaqueId,
+                pinVersion: offline.pinVersion,
+                session,
+              });
+              router.push('/kiosk/actions');
+              return;
+            }
+
+            // No se conoce su estado: no se adivina. Ofrecerle una accion que el
+            // servidor va a rechazar es peor que decirle la verdad.
+            setError(t('kiosk.offlineStateUnknown'));
+            break;
+          }
+
+          if (offline.reason === 'locked') {
+            setError(t('kiosk.pinLocked', { minutes: minutesUntil(offline.lockedUntil) }));
+          } else if (offline.reason === 'no_verifiers') {
+            setError(t('kiosk.offlineNotReady'));
+          } else {
+            setError(t('kiosk.pinIncorrect'));
+          }
           break;
+        }
         default:
           setError(t('errors.generic'));
       }
     },
-    [binding, setVerification, t],
+    [binding, setFromOnline, setFromOffline, t],
   );
 
   // Validación automática al completar el PIN, sin botón "Aceptar" (§9.1).

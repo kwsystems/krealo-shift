@@ -97,6 +97,31 @@ describe('reconstrucción del estado desde los eventos crudos', () => {
   it('una secuencia vacía deja al empleado fuera de turno', () => {
     expect(reduceEvents([])).toEqual({ state: 'OFF_SHIFT', rejected: [] });
   });
+
+  it('parte del estado inicial que se le pase, para el kiosco sin conexión', () => {
+    // Alguien fichó entrada con red y después se cayó la conexión. Partir de
+    // OFF_SHIFT diría que está fuera de turno y le ofrecería marcar entrada otra
+    // vez; partiendo del estado confirmado por el servidor, la cola local se
+    // aplica encima y el estado es el correcto (§9.7).
+    expect(reduceEvents(['break_start'], 'WORKING')).toEqual({
+      state: 'ON_BREAK',
+      rejected: [],
+    });
+
+    expect(reduceEvents([], 'ON_BREAK')).toEqual({ state: 'ON_BREAK', rejected: [] });
+
+    // Y una transición imposible sobre el estado inicial sigue rechazándose.
+    expect(reduceEvents(['clock_in'], 'WORKING')).toEqual({
+      state: 'WORKING',
+      rejected: [0],
+    });
+  });
+
+  it('una jornada completa encolada sobre un estado confirmado cuadra', () => {
+    expect(reduceEvents(['break_start', 'break_end', 'clock_out'], 'WORKING').state).toBe(
+      'OFF_SHIFT',
+    );
+  });
 });
 
 describe('política de entrada temprana', () => {

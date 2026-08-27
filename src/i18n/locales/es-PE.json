@@ -119,7 +119,10 @@
     "setupActivate": "Activar reloj",
     "setupActivated": "Este iPad quedó vinculado a {{location}}.",
     "revokedTitle": "Este reloj fue desactivado",
-    "revokedBody": "Pide a un administrador que vuelva a activarlo."
+    "revokedBody": "Pide a un administrador que vuelva a activarlo.",
+    "offlineStateUnknown": "No podemos confirmar tu estado sin conexión. Espera a que vuelva la red.",
+    "offlineNotReady": "Este iPad todavía no puede validar PIN sin conexión. Pide que se sincronice.",
+    "savedOfflinePending": "Guardado en este iPad. Se enviará solo cuando vuelva la conexión."
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

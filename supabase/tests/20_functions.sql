@@ -420,3 +420,110 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Verificadores offline del PIN
+-- ===========================================================================
+
+begin;
+do $$
+declare
+  v_device uuid := '66666666-6666-4666-8666-666666666661';
+  v_rows integer;
+  v_hash text;
+begin
+  select count(*) into v_rows from kiosk_offline_verifiers(v_device);
+  perform test_assert(v_rows >= 3,
+    'El dispositivo recibe verificadores de los empleados de SU tienda');
+
+  -- Ni un solo verificador de la otra tienda: Diego solo esta en Sucursal Demo.
+  perform test_assert(
+    not exists (
+      select 1 from kiosk_offline_verifiers(v_device) v
+      where v.employee_opaque_id = encode(extensions.digest(
+        '55555555-5555-4555-8555-555555555554', 'sha256'), 'hex')
+    ),
+    'No recibe verificadores de empleados de otra tienda');
+
+  -- El hash offline es bcrypt de coste 10, distinto del de coste 12 del servidor.
+  select pin_offline_hash into v_hash from kiosk_offline_verifiers(v_device) limit 1;
+  perform test_assert(v_hash like '$2a$10$%' or v_hash like '$2b$10$%',
+    'El verificador offline es bcrypt de coste 10');
+  perform test_assert(
+    v_hash <> (select pin_hash from employee_pin_credentials
+               where employee_id = '55555555-5555-4555-8555-555555555551'),
+    'El hash offline no es el mismo que el del servidor');
+end
+$$;
+rollback;
+
+begin;
+do $$
+begin
+  -- Un dispositivo revocado no recibe verificadores: es lo que hace que revocar
+  -- sirva de algo tambien sin conexion.
+  update kiosk_devices set status = 'revoked', revoked_at = now()
+    where id = '66666666-6666-4666-8666-666666666661';
+  begin
+    perform kiosk_offline_verifiers('66666666-6666-4666-8666-666666666661');
+    raise exception 'FALLO: un kiosco revocado recibio verificadores offline'
+      using errcode = 'assert_failure';
+  exception
+    when invalid_authorization_specification then
+      raise notice '  ok — un kiosco revocado no recibe verificadores offline';
+  end;
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_device uuid := '66666666-6666-4666-8666-666666666661';
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_opaque text;
+  v_res record;
+begin
+  -- Un evento validado offline por el dispositivo se acepta y queda marcado.
+  insert into employee_location_assignments (employee_id, location_id)
+    values ('55555555-5555-4555-8555-555555555554', v_loc) on conflict do nothing;
+
+  v_opaque := encode(extensions.digest('55555555-5555-4555-8555-555555555554', 'sha256'), 'hex');
+
+  select * into v_res from submit_offline_time_event(
+    p_device_id => v_device,
+    p_employee_opaque_id => v_opaque,
+    p_event_type => 'clock_in',
+    p_idempotency_key => gen_random_uuid(),
+    p_occurred_at_device => now() - interval '2 hours',
+    p_device_sequence => 1,
+    p_pin_version => 1);
+
+  perform test_assert(v_res.status = 'accepted',
+    'Un evento validado offline se acepta aunque el token de accion ya caducara');
+  perform test_assert(
+    (select is_offline from time_events where id = v_res.event_id),
+    'El evento queda marcado como offline y no se presenta como validado por el servidor');
+  perform test_assert(
+    (select occurred_at from time_events where id = v_res.event_id) < now() - interval '1 hour',
+    'Se conserva la hora real del dispositivo, no la de la sincronizacion');
+
+  -- Un identificador opaco que no corresponde a nadie de esta tienda se rechaza.
+  begin
+    perform submit_offline_time_event(
+      p_device_id => v_device,
+      p_employee_opaque_id => 'no-corresponde-a-nadie',
+      p_event_type => 'clock_in',
+      p_idempotency_key => gen_random_uuid(),
+      p_occurred_at_device => now(),
+      p_device_sequence => 2,
+      p_pin_version => 1);
+    raise exception 'FALLO: se acepto un identificador opaco desconocido'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — un identificador opaco desconocido se rechaza';
+  end;
+end
+$$;
+rollback;

@@ -1,0 +1,236 @@
+import * as SQLite from 'expo-sqlite';
+
+/**
+ * Base local del kiosco (especificación §17).
+ *
+ * Guarda lo necesario para que el iPad siga fichando sin red: el equipo, los
+ * turnos, las políticas de la tienda y —lo más importante— la cola de eventos
+ * pendientes de enviar.
+ *
+ * Reglas que impone este archivo:
+ *   - el esquema está VERSIONADO con `user_version`: una app vieja no puede
+ *     encontrarse una base nueva y adivinar;
+ *   - la cola es append-only en la práctica: un evento nunca se borra hasta que el
+ *     servidor confirmó qué hacer con él. Perder un fichaje es perder horas
+ *     trabajadas de una persona;
+ *   - nada de esto es la fuente de verdad: es caché y cola. La verdad está en el
+ *     servidor.
+ */
+
+const DATABASE_NAME = 'krealo-shift-offline.db';
+const SCHEMA_VERSION = 1;
+
+let handle: SQLite.SQLiteDatabase | null = null;
+
+/** Sentencias de creación. Idempotentes: se pueden correr en cada arranque. */
+const SCHEMA = `
+pragma journal_mode = WAL;
+pragma foreign_keys = ON;
+
+-- Sesión del kiosco cacheada tras la activación, para poder arrancar sin red.
+create table if not exists cached_session (
+  id integer primary key check (id = 1),
+  device_id text not null,
+  device_public_id text not null,
+  organization_id text not null,
+  organization_name text not null,
+  location_id text not null,
+  location_name text not null,
+  timezone text not null,
+  activated_at text not null,
+  updated_at text not null
+);
+
+-- Equipo mínimo de la tienda. employee_opaque_id es lo único que identifica a
+-- una persona aquí: el uuid interno del empleado no baja al dispositivo.
+create table if not exists cached_roster (
+  employee_opaque_id text primary key,
+  display_name text not null,
+  job_role_name text,
+  updated_at text not null
+);
+
+-- Verificador para validar el PIN sin conexión. Es un hash bcrypt con su salt:
+-- el dispositivo compara, nunca descifra. Ver supabase/migrations/..._offline_pin.sql
+-- para la decisión de seguridad y su costo.
+create table if not exists cached_pin_verifiers (
+  employee_opaque_id text primary key,
+  pin_offline_hash text not null,
+  pin_length integer not null,
+  pin_version integer not null,
+  updated_at text not null
+);
+
+create table if not exists cached_shifts (
+  id text primary key,
+  employee_opaque_id text not null,
+  starts_at text not null,
+  ends_at text not null,
+  job_role_name text,
+  employee_note text,
+  planned_unpaid_break_minutes integer not null default 0,
+  changed_since_last_publication integer not null default 0,
+  updated_at text not null
+);
+
+create table if not exists cached_policies (
+  id integer primary key check (id = 1),
+  pin_length integer not null,
+  photo_enabled integer not null,
+  early_clock_in_minutes integer not null,
+  late_grace_minutes integer not null,
+  allow_unscheduled_shifts integer not null,
+  time_format text not null,
+  required_break_minutes integer not null,
+  updated_at text not null
+);
+
+-- LA COLA. Un evento entra aquí ANTES de que la interfaz diga "listo".
+create table if not exists outbox_time_events (
+  -- La clave de idempotencia se genera en el cliente antes de guardar, y es la
+  -- misma que verá el servidor: es lo que hace que un reintento no duplique.
+  idempotency_key text primary key,
+  -- Secuencia monótona por instalación: el único orden fiable de eventos
+  -- generados sin red.
+  device_sequence integer not null,
+  employee_opaque_id text not null,
+  event_type text not null check (
+    event_type in ('clock_in', 'break_start', 'break_end', 'clock_out')
+  ),
+  break_type text,
+  shift_id text,
+  location_id text not null,
+  occurred_at_device text not null,
+  device_timezone text not null,
+  device_offset_minutes integer not null,
+  pin_version integer not null,
+  photo_local_uri text,
+  -- HMAC del dispositivo sobre el contenido del evento: detecta manipulación del
+  -- archivo de la base entre que se guardó y se envió.
+  signature text not null,
+  status text not null default 'pending' check (
+    status in ('pending', 'sending', 'accepted', 'duplicate', 'needs_review', 'rejected')
+  ),
+  attempts integer not null default 0,
+  last_attempt_at text,
+  next_attempt_at text,
+  server_reason text,
+  created_at text not null
+);
+
+create index if not exists outbox_pending_idx
+  on outbox_time_events (status, device_sequence);
+
+-- Fotos pendientes de subir, separadas de los eventos: una foto que no sube no
+-- puede impedir que el fichaje llegue.
+create table if not exists pending_media (
+  local_uri text primary key,
+  idempotency_key text not null,
+  status text not null default 'pending' check (
+    status in ('pending', 'uploading', 'uploaded', 'failed')
+  ),
+  attempts integer not null default 0,
+  created_at text not null
+);
+
+-- Ultimo estado de asistencia conocido POR EL SERVIDOR para cada empleado.
+--
+-- Sin esto el kiosco no puede validar transiciones sin red: si alguien fico
+-- entrada estando online y despues se cae la red, derivar su estado solo desde la
+-- cola local diria "fuera de turno" y le ofreceria marcar entrada otra vez.
+-- Se actualiza en cada verificacion online, y offline se le aplican encima los
+-- eventos que hay en la cola.
+create table if not exists cached_attendance_state (
+  employee_opaque_id text primary key,
+  attendance_state text not null check (
+    attendance_state in ('OFF_SHIFT', 'WORKING', 'ON_BREAK')
+  ),
+  shift_id text,
+  session_started_at text,
+  taken_break_minutes integer not null default 0,
+  known_at text not null
+);
+
+create table if not exists sync_metadata (
+  key text primary key,
+  value text not null,
+  updated_at text not null
+);
+`;
+
+/**
+ * Abre la base y aplica el esquema. Es idempotente y segura de llamar varias
+ * veces: devuelve siempre la misma conexión.
+ */
+export async function openOfflineDatabase(): Promise<SQLite.SQLiteDatabase> {
+  if (handle !== null) return handle;
+
+  const database = await SQLite.openDatabaseAsync(DATABASE_NAME);
+  await database.execAsync(SCHEMA);
+
+  const row = await database.getFirstAsync<{ user_version: number }>('pragma user_version');
+  const current = row?.user_version ?? 0;
+
+  if (current === 0) {
+    await database.execAsync(`pragma user_version = ${SCHEMA_VERSION}`);
+  } else if (current > SCHEMA_VERSION) {
+    // Una base más nueva que la app significa que alguien instaló una versión
+    // anterior encima. No se adivina: se avisa y se sigue en modo solo-lectura
+    // conceptual, porque escribir con un esquema que no conocemos corrompería la
+    // cola de fichajes.
+    throw new Error(
+      `La base local es de una versión más nueva (${current}) que esta app (${SCHEMA_VERSION}).`,
+    );
+  }
+
+  handle = database;
+  return database;
+}
+
+/** Cierra la base. Solo se usa en pruebas y al desactivar el kiosco. */
+export async function closeOfflineDatabase(): Promise<void> {
+  if (handle === null) return;
+  await handle.closeAsync();
+  handle = null;
+}
+
+/** Borra todo lo local. Se usa al salir del modo kiosco (§6.4). */
+export async function resetOfflineDatabase(): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.execAsync(`
+    delete from outbox_time_events;
+    delete from pending_media;
+    delete from cached_pin_verifiers;
+    delete from cached_roster;
+    delete from cached_shifts;
+    delete from cached_policies;
+    delete from cached_session;
+    delete from sync_metadata;
+  `);
+}
+
+export async function setSyncMetadata(key: string, value: string): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.runAsync(
+    `insert into sync_metadata (key, value, updated_at) values (?, ?, ?)
+     on conflict (key) do update set value = excluded.value, updated_at = excluded.updated_at`,
+    key,
+    value,
+    new Date().toISOString(),
+  );
+}
+
+export async function getSyncMetadata(key: string): Promise<string | null> {
+  const database = await openOfflineDatabase();
+  const row = await database.getFirstAsync<{ value: string }>(
+    'select value from sync_metadata where key = ?',
+    key,
+  );
+  return row?.value ?? null;
+}
+
+export const SYNC_KEYS = {
+  lastSyncAt: 'last_sync_at',
+  lastRosterRefreshAt: 'last_roster_refresh_at',
+  deviceSequence: 'device_sequence',
+} as const;
