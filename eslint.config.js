@@ -16,6 +16,8 @@ module.exports = defineConfig([
       'supabase/.branches/*',
       // Biblioteca de skills de Claude Code: no es codigo de la app.
       '.claude/**',
+      // Codigo Deno: se formatea y comprueba con el toolchain de Deno.
+      'supabase/functions/**',
     ],
   },
   {

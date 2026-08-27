@@ -19,5 +19,13 @@
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
   ],
-  "exclude": ["node_modules", "dist", ".expo", "e2e/artifacts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    ".expo",
+    "e2e/artifacts",
+    // Las Edge Functions corren en Deno con su propio deno.json: usan globals
+    // de Deno e imports jsr: que este tsconfig no puede resolver.
+    "supabase/functions"
+  ]
 }

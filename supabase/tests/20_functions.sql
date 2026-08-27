@@ -327,3 +327,53 @@ $$;
 rollback;
 
 \echo '  --- pruebas de funciones completas ---'
+
+-- ===========================================================================
+-- Contexto del kiosco tras validar el PIN
+-- ===========================================================================
+
+begin;
+do $$
+declare
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_sofia uuid := '55555555-5555-4555-8555-555555555551';  -- WORKING
+  v_lucia uuid := '55555555-5555-4555-8555-555555555553';  -- OFF_SHIFT
+  v_ctx jsonb;
+begin
+  v_ctx := kiosk_employee_context(v_sofia, v_loc);
+
+  perform test_assert(v_ctx is not null, 'El contexto del kiosco devuelve datos');
+  perform test_assert(v_ctx -> 'employee' ->> 'displayName' = 'Sofía',
+    'Devuelve el nombre preferido, no el nombre completo');
+  perform test_assert(v_ctx ->> 'attendanceState' = 'WORKING',
+    'Devuelve el estado actual de la empleada');
+  perform test_assert(v_ctx -> 'openSession' ->> 'startedAt' is not null,
+    'Devuelve desde cuando esta trabajando');
+
+  -- Trabajando, las acciones posibles son iniciar descanso y marcar salida.
+  perform test_assert(v_ctx -> 'allowedActions' @> '["break_start"]'::jsonb,
+    'Trabajando puede iniciar descanso');
+  perform test_assert(v_ctx -> 'allowedActions' @> '["clock_out"]'::jsonb,
+    'Trabajando puede marcar salida');
+  perform test_assert(not (v_ctx -> 'allowedActions' @> '["clock_in"]'::jsonb),
+    'Trabajando NO puede marcar entrada otra vez');
+
+  -- Nada sensible: ni email, ni telefono, ni el uuid interno del empleado.
+  perform test_assert(v_ctx::text not like '%@%',
+    'El contexto no expone ningun correo');
+  perform test_assert(v_ctx::text not like '%' || v_sofia::text || '%',
+    'El contexto no expone el uuid interno del empleado');
+
+  v_ctx := kiosk_employee_context(v_lucia, v_loc);
+  perform test_assert(v_ctx ->> 'attendanceState' = 'OFF_SHIFT',
+    'Lucia aparece fuera de turno');
+  perform test_assert(v_ctx -> 'allowedActions' @> '["clock_in"]'::jsonb,
+    'Fuera de turno solo puede marcar entrada');
+  perform test_assert(v_ctx -> 'openSession' = 'null'::jsonb
+                      or v_ctx -> 'openSession' is null,
+    'Fuera de turno no hay sesion abierta');
+end
+$$;
+rollback;
+
+\echo '  --- pruebas de contexto del kiosco completas ---'

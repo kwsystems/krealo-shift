@@ -113,12 +113,24 @@ async function invoke<T>(
   const supabase = getSupabase();
   if (supabase === null) return { ok: false, error: { kind: 'not_configured' } };
 
+  // Las Edge Functions exigen DOS cabeceras: el secreto y el identificador
+  // publico del dispositivo. Con una sola, `authenticate_kiosk` no puede saber
+  // contra que hash comparar y rechaza la llamada.
   const credential = await secureStorage.get(`${SECURE_KEYS.kioskCredential}.secret`);
+  const binding = await secureStorage.getJson<{ devicePublicId?: string }>(
+    SECURE_KEYS.kioskCredential,
+  );
+  const publicId = binding?.devicePublicId ?? null;
+
+  const kioskHeaders =
+    credential !== null && publicId !== null
+      ? { 'x-kiosk-credential': credential, 'x-kiosk-device': publicId }
+      : undefined;
 
   try {
     const { data, error } = await supabase.functions.invoke(functionName, {
       body,
-      headers: credential === null ? undefined : { 'x-kiosk-credential': credential },
+      headers: kioskHeaders,
     });
 
     if (error !== null) {
