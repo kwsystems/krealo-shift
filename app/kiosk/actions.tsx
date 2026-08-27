@@ -441,7 +441,7 @@ export default function KioskActionsScreen() {
           ) : null}
 
           {error !== null ? (
-            <Card>
+            <Card testID="kiosk-error">
               <Row gap={spacing.sm} align="center">
                 <Ionicons name="alert-circle" size={sizes.iconMobile} color={colors.danger600} />
                 <AppText variant="body" tone="danger" accessibilityRole="alert" style={styles.flexOne}>

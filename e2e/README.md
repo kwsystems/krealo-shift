@@ -137,18 +137,21 @@ inventaron aquí:
 | `sync-indicator` | `SyncIndicator` en `src/components/ui/states.tsx` | flujo 02: afirmar "estamos sin conexión" sin mirar la pantalla |
 | `offline-banner` | `OfflineBanner`, mismo archivo | flujo 02: aviso de trabajo sin red |
 | `kiosk-revoked` | pantalla de revocado en `app/kiosk/index.tsx` | flujo 04 |
+| `kiosk-pending-count` | pie de `app/kiosk/index.tsx` | flujo 02: contar pendientes sin depender del texto en plural |
+| `kiosk-error` | tarjeta de error de `app/kiosk/actions.tsx` | flujos 03 y 04 |
+| `kiosk-exit-gate` | pantalla de PIN de gerente en `app/kiosk/exit.tsx` | flujo 08 |
 
 `EmptyState`, `ErrorState` y `LoadingState` también aceptan ya `testID`, sin valor
 por defecto: lo pone quien los usa. `OfflineBanner` y `SyncIndicator` traen uno por
 defecto porque solo hay uno de cada en pantalla.
 
+Con eso, los flujos del kiosco (01 a 04, 07 y la primera mitad del 08) ya se pueden
+afirmar por id, sin depender de textos traducidos.
+
 ### Todavía faltan
 
 | testID pedido | Dónde | Para qué |
 |---|---|---|
-| `kiosk-pending-count` | pie de `app/kiosk/index.tsx` | flujo 02: contar pendientes sin depender del texto en plural |
-| `kiosk-error` | tarjeta de error de `app/kiosk/actions.tsx` | flujos 03 y 04: distinguir el error del kiosco de cualquier otro texto |
-| `kiosk-exit-gate` | pantalla de PIN de gerente en `app/kiosk/exit.tsx` | flujo 08 |
 | `manager-home`, `manager-team`, `manager-schedule`, `manager-hours`, `manager-more` | pantallas de `app/(manager)/` | flujos 05, 06 y 08: afirmar que se llegó (o que NO se llegó) al panel sin usar las etiquetas de las pestañas |
 | `sign-in-language-toggle` | `app/(auth)/sign-in.tsx` | flujo 07 en el lado administrativo |
 | `timesheet-correct-entry`, `timesheet-reason`, `timesheet-save`, `timesheet-history`, `timesheet-previous-value` | hojas de tiempo (por implementar) | flujo 05 completo |

@@ -88,7 +88,7 @@ export default function KioskExitScreen() {
 
   if (!authorized) {
     return (
-      <AppScreen tone="kiosk" scroll>
+      <AppScreen tone="kiosk" scroll testID="kiosk-exit-gate">
         <ResponsiveContainer width="form">
           <Stack gap={spacing.lg} style={styles.centered}>
             <AppText variant="title">{t('kiosk.exitTitle')}</AppText>

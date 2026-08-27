@@ -264,7 +264,12 @@ export default function KioskIdleScreen() {
         {/* Pie: idioma, ayuda y pendientes de sincronizar */}
         <Stack gap={spacing.sm}>
           {pendingCount > 0 ? (
-            <AppText variant="help" tone="warning" style={styles.centerText}>
+            <AppText
+              variant="help"
+              tone="warning"
+              style={styles.centerText}
+              testID="kiosk-pending-count"
+            >
               {t('common.pendingRecords', { count: pendingCount })}
             </AppText>
           ) : null}

@@ -265,9 +265,17 @@ en el mismo update. La comparación se hace sobre las filas convertidas a jsonb,
 que una columna nueva queda protegida sin que nadie tenga que acordarse de añadirla
 a una lista.
 
-**Pendiente:** programar `purge_expired_attendance_photos()` como trabajo recurrente
-(pg_cron o un trabajo programado que llame a la función con `service_role`). La
-función está escrita y probada; nada la llama todavía de forma automática.
+**Programada** a diario a las 03:15 UTC (22:15 en Lima, fuera del horario de
+cualquier tienda) por `20260827000900_scheduled_jobs.sql`, con `pg_cron`.
+
+Si el plan de Supabase no trae `pg_cron`, la migración **no falla**: avisa por
+`notice` y deja escrito que hay que llamar a la función a diario desde fuera (un
+Scheduled Function de Supabase, o cron propio con la `service_role`). **Conviene
+comprobarlo en el despliegue:** lo que se olvida aquí son fotos de las caras de las
+personas guardadas indefinidamente.
+
+El trabajo es idempotente y tolera fallos: la función busca por fecha y no lleva
+marcador de progreso, así que si un día no corre, al siguiente recoge lo que quedó.
 
 ## Qué NO se registra
 
