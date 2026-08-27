@@ -13,6 +13,7 @@ las reglas a las funciones SQL `security definer`.
 | `sync-offline-events` | credencial + token por evento | Procesa un lote offline en orden, sin descartar nada |
 | `submit-time-edit-request` | credencial + token de acción | Crea la solicitud "Olvidé marcar" |
 | `attach-photo` | credencial del dispositivo | Sube la foto de un fichaje ya aceptado y apunta `photo_path` |
+| `send-manager-alerts` | **secreto propio** (`x-alerts-token`) | Envía las notificaciones pendientes al gerente por Expo Push |
 
 ## Dos credenciales distintas, a propósito
 
@@ -23,6 +24,20 @@ las reglas a las funciones SQL `security definer`.
 
 Sin el token, conocer la credencial del iPad permitiría fichar por cualquiera.
 
+## Tres credenciales, no dos: `send-manager-alerts` no es del kiosco
+
+`send-manager-alerts` no la llama ningún iPad ni ninguna persona: la llama un
+programador cada 15 minutos. Por eso no usa ninguno de los dos mecanismos de
+arriba, sino un **secreto propio** en la cabecera `x-alerts-token`, comparado en
+tiempo constante.
+
+No usa la `service_role` como credencial a propósito. Esa clave abre la base
+entera, y el programador acabaría teniéndola pegada en su configuración; con un
+token dedicado, lo peor que consigue quien lo robe es hacernos enviar nuestras
+propias alertas pendientes antes de tiempo. Sin el secreto configurado la función
+devuelve 500 y no atiende: una función de envío que se queda abierta porque falta
+una variable de entorno es peor que una que no funciona, porque nadie lo nota.
+
 ## Secretos del entorno
 
 Se configuran en Supabase, nunca en el repositorio ni con prefijo `EXPO_PUBLIC_`:
@@ -31,6 +46,8 @@ Se configuran en Supabase, nunca en el repositorio ni con prefijo `EXPO_PUBLIC_`
 SUPABASE_URL
 SUPABASE_SERVICE_ROLE_KEY
 KIOSK_TOKEN_SECRET      # 32+ caracteres aleatorios; firma los tokens de acción
+MANAGER_ALERTS_TOKEN    # 32+ caracteres aleatorios; autoriza send-manager-alerts
+EXPO_ACCESS_TOKEN       # opcional; solo si la cuenta de Expo tiene seguridad reforzada
 ```
 
 ## Despliegue
@@ -39,8 +56,92 @@ KIOSK_TOKEN_SECRET      # 32+ caracteres aleatorios; firma los tokens de acción
 supabase functions deploy activate-kiosk refresh-kiosk-roster verify-pin \
   submit-time-event sync-offline-events submit-time-edit-request attach-photo
 
+# --no-verify-jwt porque su `Authorization` no lleva un JWT de Supabase: se
+# autentica con su propio secreto en `x-alerts-token`.
+supabase functions deploy send-manager-alerts --no-verify-jwt
+
 supabase secrets set KIOSK_TOKEN_SECRET="$(openssl rand -hex 32)"
+supabase secrets set MANAGER_ALERTS_TOKEN="$(openssl rand -hex 32)"
 ```
+
+## El disparador de las alertas hay que configurarlo aparte
+
+`20260827001100_manager_alerts.sql` programa con `pg_cron` lo que `pg_cron` puede
+hacer: la purga diaria del historial de deduplicación. El **envío** no, porque
+`pg_cron` ejecuta SQL y enviar exige hablar HTTP con Expo. Para que lo hiciera
+habría que instalar `pg_net` y guardar un token de servicio en un ajuste de la
+base de datos, o sea mover un secreto desde el entorno de las Edge Functions
+—donde está— a la propia base. No se hace.
+
+El disparador es externo, cada 15 minutos:
+
+```bash
+curl -X POST "$SUPABASE_URL/functions/v1/send-manager-alerts" \
+  -H "x-alerts-token: $MANAGER_ALERTS_TOKEN"
+```
+
+**Si nadie lo configura, las alertas se calculan y no se envían.** No se pierden
+—`pending_manager_alerts` las vuelve a devolver mientras el hecho siga vigente—
+pero nadie se entera de nada.
+
+## Cómo no repetir la misma alerta cada 15 minutos
+
+La deduplicación está entera en la base, en `manager_alert_deliveries`, y la Edge
+Function no decide nada sobre ella: `claim_manager_alerts()` reserva y devuelve en
+UNA sentencia solo lo que no se avisó todavía. Dos pases solapados del trabajo no
+pueden enviar lo mismo dos veces.
+
+La clave es `(destinatario, tipo, sujeto, ocurrencia)`. El razonamiento completo
+—incluido por qué el destinatario forma parte de la clave y por qué unos avisos
+llevan cubo de tiempo y otros no— está en el comentario de esa tabla en la
+migración.
+
+Reglas de marcado que importan:
+
+- **Fallo de red o respuesta ilegible de Expo:** no se marca nada. Las filas
+  quedan `queued` y el pase siguiente las recoge pasados 10 minutos, hasta tres
+  intentos. Marcarlas fallidas perdería la alerta.
+- **Expo rechaza el mensaje:** se marca `failed`. Reintentar da el mismo rechazo.
+- **`DeviceNotRegistered`:** el token se desactiva (`push_tokens.is_active =
+  false`). Seguir enviando a un dispositivo borrado gasta cuota para siempre.
+
+## El texto de la notificación no lleva datos de personas
+
+Ni el nombre, ni el número de empleado, ni el correo, ni el teléfono, ni la foto
+(§9.6, §19). Solo el tipo de alerta, la cantidad de hechos y el nombre de la
+tienda: "2 personas no han fichado su entrada en Sede Principal".
+
+Un nombre propio en la pantalla de bloqueo de un teléfono es información laboral
+de un tercero, legible por cualquiera que pase cerca sin desbloquear nada. El
+gerente ve el nombre un toque después, dentro de la app. El costo es real: la
+notificación no dice quién, así que hay que abrir la app para actuar.
+
+La garantía es mecánica y no de disciplina: en `_shared/alert-messages.ts` los
+únicos marcadores que existen son `{{count}}` y `{{location}}`, y `composeAlert`
+no sabe sustituir nada más. Lo fija
+`src/features/notifications/__tests__/alert-messages.test.ts`, y desde el otro
+lado `supabase/tests/20_functions.sql` comprueba que `pending_manager_alerts` no
+devuelve ninguna columna de personas.
+
+## Los intentos de fichaje rechazados se anotan desde aquí, no desde SQL
+
+§19 pide avisar de un "intento de fichaje desde un kiosco revocado o incorrecto".
+`authenticate_kiosk` y `submit_time_event` rechazan levantando una excepción, y
+una excepción aborta la transacción: un `insert` dentro de la misma función se
+desharía con ella, y Postgres no tiene transacciones autónomas.
+
+Así que lo anota la Edge Function, en una petición nueva, con
+`record_kiosk_rejection`:
+
+- `_shared/kiosk-auth.ts` cubre el dispositivo revocado o desconocido. Está en el
+  punto por el que pasan todas las peticiones del kiosco, así que cubre las siete
+  funciones de una vez.
+- `submit-time-event` cubre el empleado que no pertenece a la tienda de ese iPad.
+
+Un `device_public_id` que no existe en la base no se anota: no hay organización a
+la que atribuirlo, así que no hay gerente a quien avisar. Un escaneo con
+identificadores inventados no deja rastro ahí; eso corresponde a un límite de
+peticiones en el borde, no a esta tabla.
 
 
 ## Fotos de fichaje
