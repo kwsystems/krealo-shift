@@ -310,6 +310,90 @@ Ruta: `{organization_id}/logo.{ext}`, sin fecha ni identificador aleatorio, porq
 hay UN logotipo por organización y sustituirlo debe sustituirlo, no acumular
 versiones que nadie va a limpiar.
 
+## Permisos de ejecución de las funciones: el agujero que las pruebas no veían
+
+**Encontrado y cerrado el 2026-08-27.** Vale contarlo entero porque el motivo por el
+que no se veía es más instructivo que el arreglo.
+
+Todas las migraciones protegían sus funciones con `revoke all on function … from
+public`. Eso **no alcanza en Supabase**:
+
+- en PostgreSQL a secas, una función nueva nace con `execute` concedido al pseudo-rol
+  `PUBLIC`, y revocar de `PUBLIC` la cierra — eso es lo que pasaba en el Postgres
+  local de pruebas, y por eso todo daba verde;
+- Supabase, además, deja configurado `alter default privileges in schema public grant
+  all on functions to postgres, anon, authenticated, service_role`. Con eso cada
+  función nace con `execute` concedido **explícitamente** a esos cuatro roles, y
+  revocar de `PUBLIC` no toca esas concesiones: son otra cosa.
+
+Se confirmó añadiendo esos privilegios por defecto al shim de pruebas. Resultado: **34
+funciones quedaban invocables por `anon`, o sea sin ninguna sesión.** Entre ellas:
+
+| Función | Lo que permitía |
+|---|---|
+| `set_employee_pin` | Fijar el PIN de cualquier empleado y fichar en su nombre. La peor. |
+| `kiosk_offline_verifiers` | Obtener salt y verificadores de PIN de cualquier kiosco por su uuid. |
+| `submit_time_event`, `submit_offline_time_event` | Fichajes forjados. |
+| `verify_employee_pin` | Fuerza bruta de PIN sin la credencial del kiosco. |
+| `authenticate_kiosk`, `activate_kiosk_device` | Probar credenciales y códigos. |
+| `kiosk_employee_context` | Leer el estado de cualquier empleado. |
+
+### El arreglo: negar por defecto, conceder por lista
+
+`20260827001400_function_privileges.sql` revoca `execute` de `public`, `anon` y
+`authenticated` en **todas** las funciones de `public`, y después concede solo a las
+que la app necesita. La inversión es el punto: una función nueva que nadie recuerde
+cerrar queda **cerrada**, no abierta.
+
+`public` va en el revoke y no es redundante: todo rol hereda lo concedido a `PUBLIC`,
+así que revocar solo de `anon` y `authenticated` dejaba abiertas las funciones de
+disparador, que ninguna migración había tocado.
+
+### Conceder `execute` no es conceder permiso
+
+La segunda mitad, que casi se pasa por alto. Al auditar la lista blanca una por una,
+**cuatro funciones no comprobaban el rol por dentro**, y `execute` sin comprobación
+interna es el agujero:
+
+- `set_employee_pin` validaba el formato del PIN y que el empleado existiera, y nada
+  más. Cualquier usuario con sesión —de cualquier empresa— podía fijar el PIN de
+  cualquier empleado. Ni RLS lo tapaba: `security definer` corre con permisos del
+  dueño. Ahora exige administrar la organización de esa persona o una de sus tiendas,
+  y rotar un PIN queda en `audit_logs`.
+- `current_attendance_state` y `attendance_state_at` decían si una persona concreta
+  está trabajando. Es información laboral suya, no un dato del directorio.
+- `rebuild_work_session` recalculaba sesiones de cualquier organización. Se partió en
+  dos: la comprobación delante, y `rebuild_work_session_unchecked` sin `grant` para
+  las llamadas internas del servidor.
+- `deactivate_push_token` dejaba sin notificaciones a quien conociera su token.
+
+### El detalle que casi rompe todo
+
+El camino del kiosco llama a `current_attendance_state` y `rebuild_work_session`
+desde dentro de otras funciones `security definer`, con la `service_role`, donde
+**no hay `auth.uid()`**. Una comprobación ingenua contra `auth.uid()` habría hecho
+fallar todos los fichajes del iPad.
+
+Se resuelve dejando pasar cuando `auth.uid() is null`, y eso es seguro por una razón
+concreta: tras el cierre de permisos, `anon` no puede ejecutar ninguna de estas
+funciones, así que "sin `auth.uid()`" solo puede ser `service_role` o una llamada
+interna. **Esa suposición depende de que nadie vuelva a conceder `execute` a `anon`**,
+y lo que lo impide es la prueba, no la buena voluntad.
+
+### Lo que lo sostiene
+
+`supabase/tests/40_privilegios.sql` enumera todas las funciones de `public` y falla
+si alguna fuera de la lista blanca es ejecutable, y comprueba también lo contrario
+—que las que la app necesita sí lo son—, porque una prueba que solo verifica que
+nada es ejecutable pasaría con la base cerrada y la app rota. Más las de
+autorización: no se puede fijar el PIN de otra empresa, ni de una tienda ajena, ni
+leer el estado de personal que no administras, ni desactivar el token de otra
+persona.
+
+El shim de pruebas ahora incluye los privilegios por defecto de Supabase, así que
+esta clase de fallo ya no puede esconderse detrás de un entorno de pruebas más
+permisivo que producción.
+
 ## Qué NO se registra
 
 Ni en logs, ni en auditoría, ni en telemetría, ni en mensajes de error:

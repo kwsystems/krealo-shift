@@ -16,13 +16,20 @@ create table if not exists auth.users (
   created_at timestamptz not null default now()
 );
 
+-- El `nullif(..., '')` ANTES del cast a jsonb no es adorno: cuando la variable no
+-- esta puesta, `current_setting(..., true)` devuelve cadena vacia en vez de null, y
+-- ''::jsonb lanza "invalid input syntax for type json". La version real de Supabase
+-- tolera ese caso y devuelve null, asi que el shim tambien tiene que hacerlo.
+--
+-- Se descubrio al añadir comprobaciones de `auth.uid()` a funciones que se llaman
+-- desde el camino del kiosco, donde no hay ningun JWT puesto.
 create or replace function auth.uid()
 returns uuid
 language sql
 stable
 as $$
   select nullif(
-    current_setting('request.jwt.claims', true)::jsonb ->> 'sub',
+    nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'sub',
     ''
   )::uuid;
 $$;
@@ -33,7 +40,7 @@ language sql
 stable
 as $$
   select coalesce(
-    nullif(current_setting('request.jwt.claims', true)::jsonb ->> 'role', ''),
+    nullif(nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role', ''),
     'anon'
   );
 $$;
@@ -55,3 +62,29 @@ $$;
 
 grant usage on schema auth to anon, authenticated, service_role;
 grant select on auth.users to authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Privilegios por defecto de Supabase — EL DETALLE QUE HACIA FALSAS LAS PRUEBAS
+-- ---------------------------------------------------------------------------
+--
+-- Supabase deja configurado esto en el esquema `public` al crear el proyecto. Sin
+-- ello, este Postgres local NO se parece a produccion en algo que importa mucho.
+--
+-- Por que importa: en PostgreSQL una funcion nueva nace con `execute` concedido a
+-- `PUBLIC`, y `revoke all on function ... from public` lo quita. Pero con estos
+-- privilegios por defecto, cada funcion nueva nace ADEMAS con `execute` concedido
+-- EXPLICITAMENTE a `anon`, `authenticated` y `service_role`. Y revocar de `PUBLIC`
+-- no toca esas concesiones: son otra cosa.
+--
+-- Resultado: una funcion `security definer` pensada solo para la `service_role`
+-- —`submit_time_event`, por ejemplo— queda invocable por RPC desde cualquier sesion
+-- con sesion de usuario, aunque su migracion diga `revoke all ... from public`.
+--
+-- Aqui faltaba, asi que las pruebas daban verde sobre un modelo de permisos que en
+-- produccion no existe. Ahora estan, y las pruebas de mas abajo lo comprueban.
+alter default privileges in schema public
+  grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on functions to postgres, anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to postgres, anon, authenticated, service_role;
