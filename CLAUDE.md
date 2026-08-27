@@ -38,9 +38,30 @@ quitar el prefijo del título y recrear allí las tareas que sigan abiertas.
 Sincronizado con el trabajo real: se crea en `not_started` → al empezar a
 trabajarla pasa a `in_progress` → al terminarla y verificarla pasa a `done`.
 
-**Regla de oro:** si una tarea no se puede cerrar porque falta algo o hay dudas,
-NO se cierra. Se deja un comentario explicando qué falta y se mantiene en
-`in_progress`.
+**Regla de oro — CORTA EN LAS DOS DIRECCIONES. Fallar cualquiera de las dos es
+fallar la regla:**
+
+1. **Si falta algo o hay dudas, NO se cierra.** Se deja un comentario explicando
+   qué falta exactamente y se mantiene en `in_progress`. Cerrar una tarea a medias
+   es mentir sobre el estado del proyecto.
+2. **Si está terminada y verificada, SE CIERRA. Ya.** Dejar en `in_progress` un
+   trabajo que ya está hecho también es mentir: Andree mira el tablero y ve trabajo
+   en curso donde no hay ninguno, así que no sabe qué falta de verdad ni qué puede
+   revisar. Y hace que el tablero deje de servir para lo único que sirve.
+
+La segunda mitad se falló el 2026-08-27 y de ahí viene este texto: había tareas
+acabadas en `in_progress` porque quedaba **un bloqueo ajeno**, no trabajo propio. De
+ahí la regla que lo desambigua:
+
+> **Un bloqueo que depende de Andree no es trabajo pendiente mío.**
+> Si todo lo que yo podía hacer está hecho y verificado, la tarea se cierra con el
+> bloqueo escrito y, si hace falta, se crea una tarea aparte para lo que él tiene
+> que decidir o entregar. Lo que NO se hace es dejar la tarea abierta para siempre
+> esperándolo: eso esconde el pedido en un comentario donde nadie lo va a leer.
+
+**Y antes de bloquear una tarea entera, partirla:** si de diez cosas ocho se pueden
+entregar y dos no, se entregan las ocho y se dice cuáles dos faltan y por qué.
+Bloquear el todo por una parte es la forma más fácil de no entregar nada.
 
 Estados: `not_started`, `in_progress`, `done`. Prioridades: `high`, `normal`, `low`.
 
@@ -82,6 +103,18 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
 > **Estado:** los 219 están en disco y funcionando, pero **no commiteados todavía**.
 > 34 de ellos contienen material interno de clientes y este repositorio es público.
 > Quedan excluidos de git (`.git/info/exclude`) hasta que el repo pase a privado.
+>
+> **Revisado el 2026-08-27:** los confidenciales son **21, no 34**. La cuenta
+> anterior venía de una búsqueda sin límites de palabra que casaba `gobac` dentro de
+> `navigation.goBack`. Con límites: 21 llevan nombres de clientes reales de la
+> agencia y 198 son publicables. También se buscaron credenciales reales sobre los
+> 1443 archivos —tokens, JWT, claves de AWS y Google, bloques de clave privada— y
+> **no hay ninguna**.
+>
+> Aun así **siguen sin commitear los 198**, a la espera de que Andree decida: subir
+> material interno de la agencia a un repositorio PÚBLICO es su decisión, no mía, y
+> él ya había decidido esperar a que el repo pasara a privado. Ver la pregunta
+> abierta en la tarea de skills del Publisher.
 
 Traídos de `kwsystems/krealo-publisher` (16, commit `fff45b1`) y de
 `kwsystems/claw`, el workspace de OpenClaw (203, commit `0175864`), desde
