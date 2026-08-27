@@ -18,7 +18,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DATABASE_NAME = 'krealo-shift-offline.db';
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 let handle: SQLite.SQLiteDatabase | null = null;
 
@@ -128,9 +128,17 @@ create index if not exists outbox_pending_idx
 
 -- Fotos pendientes de subir, separadas de los eventos: una foto que no sube no
 -- puede impedir que el fichaje llegue.
+--
+-- event_id se rellena cuando el servidor acepta el fichaje: la foto se sube
+-- DESPUES, apuntando a un evento que ya existe. Mientras sea null, la foto espera
+-- a que su evento se sincronice. Es lo que permite fichar con foto sin red.
+--
+-- (Sin acentos graves en este comentario: todo el esquema vive dentro de una
+-- plantilla de JavaScript y un acento grave la cortaria por la mitad.)
 create table if not exists pending_media (
   local_uri text primary key,
   idempotency_key text not null,
+  event_id text,
   status text not null default 'pending' check (
     status in ('pending', 'uploading', 'uploaded', 'failed')
   ),
@@ -182,6 +190,20 @@ async function applyMigrations(
   // queremos en el disco del iPad, así que se van.
   if (previous >= 1 && previous < 2) {
     await database.execAsync('drop table if exists cached_pin_verifiers');
+  }
+
+  // v2 → v3: `pending_media` gana `event_id`. Se agrega la columna en vez de
+  // recrear la tabla porque ahi hay fotos de fichajes que aun no llegaron al
+  // servidor, y borrarlas seria perder la evidencia de una jornada.
+  if (previous >= 1 && previous < 3) {
+    const columns = await database.getAllAsync<{ name: string }>(
+      "pragma table_info('pending_media')",
+    );
+    const hasTable = columns.length > 0;
+    const hasEventId = columns.some((column) => column.name === 'event_id');
+    if (hasTable && !hasEventId) {
+      await database.execAsync('alter table pending_media add column event_id text');
+    }
   }
 }
 

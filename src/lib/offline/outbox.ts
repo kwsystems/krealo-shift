@@ -260,6 +260,7 @@ export async function applyServerResult(
   idempotencyKey: string,
   status: ServerEventStatus,
   reason: string | null = null,
+  serverEventId: string | null = null,
 ): Promise<void> {
   const database = await openOfflineDatabase();
   const resolution = resolutionFor(status);
@@ -270,10 +271,21 @@ export async function applyServerResult(
         'delete from outbox_time_events where idempotency_key = ?',
         idempotencyKey,
       );
-      await database.runAsync(
-        `update pending_media set status = 'uploaded' where idempotency_key = ?`,
-        idempotencyKey,
-      );
+      // AQUI HABIA UNA MENTIRA: se marcaba la foto como 'uploaded' cuando el
+      // fichaje se aceptaba, pero nadie habia subido nada. La foto se quedaba en
+      // el iPad para siempre y la cola decia que estaba en el servidor.
+      //
+      // Lo correcto: la foto sigue PENDIENTE y ahora se sabe a que evento
+      // pertenece, asi que la sincronizacion puede subirla. Si el servidor no
+      // devolvio identificador, se deja en null y se reintenta en el siguiente
+      // pase; no se descarta.
+      if (serverEventId !== null) {
+        await database.runAsync(
+          `update pending_media set event_id = ? where idempotency_key = ? and status <> 'uploaded'`,
+          serverEventId,
+          idempotencyKey,
+        );
+      }
     });
     return;
   }
@@ -337,4 +349,82 @@ export async function eventsNeedingAttention(): Promise<OutboxEvent[]> {
       order by device_sequence asc`,
   );
   return rows.map(toEvent);
+}
+
+/**
+ * Fotos listas para subir: su fichaje ya fue aceptado por el servidor, así que hay
+ * un evento al que adjuntarlas.
+ *
+ * Las que todavía no tienen `event_id` no aparecen: su fichaje sigue en la cola y
+ * subir la imagen antes no tendría dónde engancharla.
+ */
+export async function pendingPhotos(): Promise<
+  { localUri: string; eventId: string; attempts: number }[]
+> {
+  const database = await openOfflineDatabase();
+  const rows = await database.getAllAsync<{
+    local_uri: string;
+    event_id: string;
+    attempts: number;
+  }>(
+    `select local_uri, event_id, attempts from pending_media
+      where event_id is not null
+        and status in ('pending', 'failed')
+      order by created_at`,
+  );
+  return rows.map((row) => ({
+    localUri: row.local_uri,
+    eventId: row.event_id,
+    attempts: row.attempts,
+  }));
+}
+
+/** La foto llegó al servidor. Se marca y deja de reintentarse. */
+export async function markPhotoUploaded(localUri: string): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.runAsync(
+    `update pending_media set status = 'uploaded' where local_uri = ?`,
+    localUri,
+  );
+}
+
+/**
+ * La subida falló. Se cuenta el intento y se deja para el próximo pase.
+ *
+ * No se descarta nunca por número de intentos, a diferencia de la cola de
+ * fichajes: una foto que no sube no impide contar las horas, así que no hay prisa
+ * y perderla no tiene ninguna ventaja. La purga por retención del servidor acabará
+ * con ella cuando corresponda; en el iPad la borra `resetOfflineDatabase` al salir
+ * del modo kiosco.
+ */
+export async function markPhotoFailed(localUri: string): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.runAsync(
+    `update pending_media set status = 'failed', attempts = attempts + 1 where local_uri = ?`,
+    localUri,
+  );
+}
+
+/**
+ * Registra una foto cuyo fichaje se envió online y el servidor ya aceptó.
+ *
+ * Se guarda en la cola aunque la subida vaya a intentarse de inmediato: si falla
+ * —y con la red de una tienda falla— la foto no se pierde y el siguiente pase de
+ * sincronización la recoge.
+ */
+export async function enqueuePhotoForEvent(params: {
+  localUri: string;
+  idempotencyKey: string;
+  eventId: string;
+}): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.runAsync(
+    `insert into pending_media (local_uri, idempotency_key, event_id, status, attempts, created_at)
+     values (?, ?, ?, 'pending', 0, ?)
+     on conflict (local_uri) do update set event_id = excluded.event_id`,
+    params.localUri,
+    params.idempotencyKey,
+    params.eventId,
+    new Date().toISOString(),
+  );
 }

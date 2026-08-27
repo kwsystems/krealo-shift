@@ -12,6 +12,7 @@ las reglas a las funciones SQL `security definer`.
 | `submit-time-event` | credencial + token de acción | Registra un fichaje con idempotencia |
 | `sync-offline-events` | credencial + token por evento | Procesa un lote offline en orden, sin descartar nada |
 | `submit-time-edit-request` | credencial + token de acción | Crea la solicitud "Olvidé marcar" |
+| `attach-photo` | credencial del dispositivo | Sube la foto de un fichaje ya aceptado y apunta `photo_path` |
 
 ## Dos credenciales distintas, a propósito
 
@@ -36,10 +37,40 @@ KIOSK_TOKEN_SECRET      # 32+ caracteres aleatorios; firma los tokens de acción
 
 ```bash
 supabase functions deploy activate-kiosk refresh-kiosk-roster verify-pin \
-  submit-time-event sync-offline-events submit-time-edit-request
+  submit-time-event sync-offline-events submit-time-edit-request attach-photo
 
 supabase secrets set KIOSK_TOKEN_SECRET="$(openssl rand -hex 32)"
 ```
+
+
+## Fotos de fichaje
+
+`attach-photo` recibe la imagen en base64 y la sube con `service_role` a un bucket
+privado. Dos cosas que no son negociables y el motivo de cada una:
+
+1. **La ruta la deriva el servidor** con `attendance_photo_path(event_id)`. Si el
+   cliente pudiera proponerla, podría apuntar la foto de un fichaje al archivo de
+   otro, o escribir fuera de su organización.
+2. **`photo_path` se escribe después de subir**, no antes. Al revés, cada subida
+   fallida dejaría la columna apuntando a un objeto inexistente, indistinguible de
+   una foto purgada por retención.
+
+Por eso NO se usa una URL firmada de subida, que sería lo habitual: obligaría a
+apuntar la columna antes de que el archivo exista, y daría al iPad una capacidad de
+escritura sobre Storage que no necesita. El costo es el ancho de banda de la
+función, y con un bucket limitado a 2 MB es asumible.
+
+Es idempotente: reintentar con la misma imagen sobrescribe el mismo objeto
+(`upsert`) y vuelve a dejar el mismo puntero. Con red mala el reintento es la norma.
+
+El fichaje **no espera** por la foto: la persona ve su confirmación y se va, y la
+imagen se sube en el siguiente pase de sincronización, de a una por pase para no
+competir con los fichajes. Si no sube, se reintenta indefinidamente y nunca se
+descarta por número de intentos: una foto pendiente no impide contar las horas, así
+que perderla no tiene ninguna ventaja.
+
+El modelo completo —bucket, políticas, retención y la excepción a append-only— está
+en `SECURITY.md`.
 
 ## Validación offline del PIN (decidido)
 

@@ -104,6 +104,9 @@ type Resolution = {
   status: 'accepted' | 'duplicate' | 'needs_review' | 'rejected';
   reason?: string;
   attendanceState?: string;
+  // El identificador del evento en el servidor. El iPad lo necesita para adjuntar
+  // despues la foto: sin el, una foto capturada sin red no tiene a que engancharse.
+  eventId?: string;
 };
 
 Deno.serve(async (request) => {
@@ -168,6 +171,7 @@ Deno.serve(async (request) => {
       status: needsReview ? 'needs_review' : (row?.status ?? 'accepted'),
       reason: needsReview ? 'clock_drift' : undefined,
       attendanceState: row?.attendance_state,
+      eventId: row?.event_id ?? undefined,
     });
   }
 

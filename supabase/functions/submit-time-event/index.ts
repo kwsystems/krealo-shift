@@ -32,7 +32,6 @@ type Body = {
   occurredAtDevice?: string;
   deviceSequence?: number;
   isOffline: boolean;
-  photoPath?: string | null;
 };
 
 function validate(value: unknown): Body | null {
@@ -57,7 +56,6 @@ function validate(value: unknown): Body | null {
     occurredAtDevice: typeof v.occurredAtDevice === 'string' ? v.occurredAtDevice : undefined,
     deviceSequence: typeof v.deviceSequence === 'number' ? v.deviceSequence : undefined,
     isOffline: v.isOffline === true,
-    photoPath: typeof v.photoPath === 'string' ? v.photoPath : null,
   };
 }
 
@@ -96,7 +94,10 @@ Deno.serve(async (request) => {
     p_occurred_at_device: body.data.occurredAtDevice ?? null,
     p_device_sequence: body.data.deviceSequence ?? null,
     p_is_offline: body.data.isOffline,
-    p_photo_path: body.data.photoPath,
+    // La ruta de la foto NO la propone el cliente. Antes llegaba aqui el URI
+    // local del archivo en el iPad, que en la base no significa nada. La foto se
+    // adjunta despues con `attach-photo`, que deriva la ruta en el servidor.
+    p_photo_path: null,
     p_source: 'kiosk',
   });
 
@@ -122,6 +123,10 @@ Deno.serve(async (request) => {
 
   return jsonResponse({
     status: row.status,
+    // Necesario para adjuntar la foto despues: `attach-photo` solo escribe sobre
+    // un evento que ya existe, para que `photo_path` nunca apunte a un objeto
+    // inexistente.
+    eventId: row.event_id,
     attendanceState: row.attendance_state,
     occurredAt: row.occurred_at,
     serverReceivedAt: new Date().toISOString(),

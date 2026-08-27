@@ -1,4 +1,6 @@
 import { SYNC_KEYS, setSyncMetadata } from './database';
+import * as FileSystem from 'expo-file-system';
+
 import {
   applyServerResult,
   markAttemptFailed,
@@ -7,9 +9,12 @@ import {
   pendingCount,
   pendingEvents,
   type OutboxEvent,
+  markPhotoFailed,
+  markPhotoUploaded,
+  pendingPhotos,
 } from './outbox';
 import { storeOfflineVerifiers } from './pin';
-import { syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
+import { attachPhoto, syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
 import { useNetworkStore } from '@/stores/network-store';
 
 /**
@@ -66,6 +71,9 @@ export async function runSync(): Promise<SyncOutcome> {
     const batch = await pendingEvents(BATCH_SIZE);
 
     if (batch.length === 0) {
+      // Cola de fichajes vacia no significa nada pendiente: puede haber fotos de
+      // eventos ya aceptados que todavia no subieron.
+      await uploadPendingPhotos();
       await refreshQueueIndicators();
       store.markSynced();
       await setSyncMetadata(SYNC_KEYS.lastSyncAt, new Date().toISOString());
@@ -99,7 +107,12 @@ export async function runSync(): Promise<SyncOutcome> {
     let attention = 0;
 
     for (const item of result.data.results) {
-      await applyServerResult(item.idempotencyKey, item.status, item.reason ?? null);
+      await applyServerResult(
+        item.idempotencyKey,
+        item.status,
+        item.reason ?? null,
+        item.eventId ?? null,
+      );
       if (item.status === 'accepted' || item.status === 'duplicate') accepted += 1;
       else attention += 1;
     }
@@ -112,6 +125,10 @@ export async function runSync(): Promise<SyncOutcome> {
         await markAttemptFailed(event.idempotencyKey, 'sin_respuesta_del_servidor');
       }
     }
+
+    // Las fotos se suben DESPUES de aplicar los resultados: hasta ahora no se
+    // sabia a que evento del servidor pertenecen.
+    await uploadPendingPhotos();
 
     await refreshQueueIndicators();
     await setSyncMetadata(SYNC_KEYS.lastSyncAt, new Date().toISOString());
@@ -163,4 +180,62 @@ export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
 
   await setSyncMetadata(SYNC_KEYS.lastRosterRefreshAt, new Date().toISOString());
   return { ok: true };
+}
+
+/**
+ * Sube las fotos cuyo fichaje ya está en el servidor.
+ *
+ * POR QUÉ ES UN PASO APARTE Y POSTERIOR
+ * La foto se adjunta a un evento que ya existe, así que no se puede subir hasta
+ * que su fichaje haya sido aceptado. Mientras eso no ocurre, la imagen espera en
+ * el iPad con `event_id` en null.
+ *
+ * UNA POR PASE, LAS DEMÁS ESPERAN. Son hasta 2 MB cada una y la red de una tienda
+ * es lo que es: subir cinco a la vez alarga el pase de sincronización y compite
+ * con los fichajes, que es lo que de verdad importa. Se avanza de a una y el
+ * siguiente pase sigue.
+ *
+ * UN FALLO AQUÍ NO ES UN FALLO DE LA SINCRONIZACIÓN. Las horas trabajadas ya están
+ * registradas; la foto es un complemento. Por eso esta función no lanza nunca y no
+ * cambia el resultado del pase.
+ */
+const PHOTOS_PER_PASS = 1;
+
+async function uploadPendingPhotos(): Promise<void> {
+  let photos: Awaited<ReturnType<typeof pendingPhotos>>;
+  try {
+    photos = await pendingPhotos();
+  } catch {
+    return;
+  }
+
+  for (const photo of photos.slice(0, PHOTOS_PER_PASS)) {
+    try {
+      const info = await FileSystem.getInfoAsync(photo.localUri);
+      if (!info.exists) {
+        // El archivo ya no está: iOS limpia el directorio de caché cuando le hace
+        // falta espacio. Reintentar para siempre algo que no existe no lleva a
+        // ninguna parte, así que se cierra.
+        await markPhotoUploaded(photo.localUri);
+        continue;
+      }
+
+      const imageBase64 = await FileSystem.readAsStringAsync(photo.localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+
+      const result = await attachPhoto({ eventId: photo.eventId, imageBase64 });
+
+      if (result.ok) {
+        await markPhotoUploaded(photo.localUri);
+        // Se borra la copia local: ya está en el servidor y es la cara de una
+        // persona. Dejarla en el iPad sería guardarla dos veces sin motivo (§22).
+        await FileSystem.deleteAsync(photo.localUri, { idempotent: true });
+      } else {
+        await markPhotoFailed(photo.localUri);
+      }
+    } catch {
+      await markPhotoFailed(photo.localUri);
+    }
+  }
 }

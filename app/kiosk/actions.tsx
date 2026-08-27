@@ -21,7 +21,7 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
-import { enqueueEvent } from '@/lib/offline/outbox';
+import { enqueueEvent, enqueuePhotoForEvent } from '@/lib/offline/outbox';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { useLiveClock } from '@/hooks/use-live-clock';
@@ -278,9 +278,6 @@ export default function KioskActionsScreen() {
       occurredAtDevice: new Date().toISOString(),
       deviceSequence: Date.now(),
       isOffline: false,
-      // Solo se envia la ruta si de verdad hay foto. Un fichaje sin foto es
-      // valido: la funcion del servidor no la exige.
-      photoPath: photo?.status === 'captured' ? photo.uri : null,
     });
 
     // El token de accion ya se consumio: se anula para que un segundo toque no
@@ -290,6 +287,23 @@ export default function KioskActionsScreen() {
 
     if (result.ok) {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // La foto se adjunta DESPUES del fichaje y a un evento que ya existe, para
+      // que `photo_path` nunca apunte a un archivo que no se subio. Se encola
+      // primero: si la subida falla —y con la red de una tienda falla— la foto no
+      // se pierde y el siguiente pase de sincronizacion la recoge.
+      //
+      // El fichaje NO espera por la foto: la persona ve su confirmacion y se va.
+      // Bloquear una entrada al trabajo por una imagen seria el orden equivocado.
+      if (photo?.status === 'captured' && result.data.eventId) {
+        const eventId = result.data.eventId;
+        void enqueuePhotoForEvent({
+          localUri: photo.uri,
+          idempotencyKey,
+          eventId,
+        }).then(() => runSync());
+      }
+
       setStep({
         name: 'result',
         event,

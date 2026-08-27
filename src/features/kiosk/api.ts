@@ -100,6 +100,9 @@ export type TimeEventType = VerifyPinResponse['allowedActions'][number];
 
 const submitEventResponseSchema = z.object({
   status: z.enum(['accepted', 'duplicate', 'needs_review', 'rejected']),
+  // Identificador del evento en el servidor: hace falta para adjuntarle la foto
+  // despues. Opcional porque un `duplicate` puede volver sin el.
+  eventId: z.string().uuid().nullable().optional(),
   attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']),
   occurredAt: z.string(),
   serverReceivedAt: z.string(),
@@ -263,9 +266,32 @@ export async function submitTimeEvent(params: {
   occurredAtDevice: string;
   deviceSequence: number;
   isOffline: boolean;
-  photoPath?: string | null;
 }): Promise<KioskApiResult<SubmitEventResponse>> {
+  // Sin `photoPath`: la ruta la deriva el servidor y la foto se adjunta despues
+  // con `attachPhoto`, cuando el archivo ya esta arriba. Antes se enviaba aqui el
+  // URI local del archivo en el iPad, que en la base de datos no significa nada.
   return invoke('submit-time-event', params, submitEventResponseSchema);
+}
+
+const attachPhotoResponseSchema = z.object({
+  ok: z.literal(true),
+  photoPath: z.string().min(1),
+});
+
+/**
+ * §16 `attach-photo`: sube la foto de un fichaje que el servidor ya acepto.
+ *
+ * La imagen viaja en base64 dentro del cuerpo. Es deliberado: el bucket limita a
+ * 2 MB y a cambio de ese ancho de banda, `photo_path` se escribe DESPUES de que el
+ * archivo este arriba, y el iPad nunca recibe permiso de escritura sobre Storage.
+ * Ver supabase/functions/attach-photo/index.ts.
+ */
+export async function attachPhoto(params: {
+  eventId: string;
+  imageBase64: string;
+  contentType?: 'image/jpeg' | 'image/webp';
+}): Promise<KioskApiResult<z.infer<typeof attachPhotoResponseSchema>>> {
+  return invoke('attach-photo', params, attachPhotoResponseSchema);
 }
 
 // ---------------------------------------------------------------------------
@@ -279,6 +305,7 @@ const syncResultSchema = z.object({
       status: z.enum(['accepted', 'duplicate', 'needs_review', 'rejected']),
       reason: z.string().optional(),
       attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']).optional(),
+      eventId: z.string().uuid().optional(),
     }),
   ),
   accepted: z.number().int().min(0),

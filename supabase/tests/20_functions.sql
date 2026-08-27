@@ -623,3 +623,172 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Fotos de fichaje: retencion y excepcion append-only
+-- ===========================================================================
+
+begin;
+do $$
+declare
+  v_event uuid;
+  v_path text;
+begin
+  select id into v_event from time_events
+    where employee_id = '55555555-5555-4555-8555-555555555551'
+    order by occurred_at limit 1;
+
+  v_path := attendance_photo_path(v_event);
+
+  -- La ruta empieza por la organizacion y sigue por la ubicacion: de eso dependen
+  -- las politicas de storage.objects, que solo saben mirar segmentos del nombre.
+  perform test_assert(
+    v_path like '11111111-1111-4111-8111-111111111111/22222222-2222-4222-8222-222222222221/%',
+    'La ruta de la foto empieza por organizacion y ubicacion');
+  perform test_assert(v_path like '%.jpg',
+    'La ruta de la foto termina en .jpg');
+  perform test_assert(v_path like '%' || v_event::text || '.jpg',
+    'La ruta lleva el id del evento, asi que dos eventos nunca colisionan');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_event uuid;
+begin
+  select id into v_event from time_events
+    where employee_id = '55555555-5555-4555-8555-555555555551'
+    order by occurred_at limit 1;
+
+  -- Se simula que ese evento tiene foto. Hace falta saltarse el disparador para
+  -- ponerla, porque poner una foto donde no habia esta prohibido: en produccion la
+  -- foto se escribe al crear el evento, no despues.
+  -- Poner la foto ya esta permitido: es lo que hace la Edge Function despues de
+  -- subir el archivo, para que la columna no apunte a un objeto inexistente.
+  update time_events set photo_path = attendance_photo_path(v_event) where id = v_event;
+  perform test_assert(
+    (select photo_path from time_events where id = v_event) is not null,
+    'Se puede poner la ruta de la foto despues de subir el archivo');
+
+  -- LO QUE LA EXCEPCION PERMITE TAMBIEN: borrarla, que es lo que necesita la purga.
+  update time_events set photo_path = null where id = v_event;
+  perform test_assert(
+    (select photo_path from time_events where id = v_event) is null,
+    'Se puede borrar la foto de un evento, que es lo que necesita la purga');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_event uuid;
+begin
+  select id into v_event from time_events
+    where employee_id = '55555555-5555-4555-8555-555555555551'
+    order by occurred_at limit 1;
+
+  -- LO QUE LA EXCEPCION SIGUE PROHIBIENDO. Esto es la mitad importante: si la
+  -- excepcion fuera mas ancha de lo necesario, se podrian reescribir horas
+  -- trabajadas sin dejar rastro.
+  begin
+    update time_events set occurred_at = now() where id = v_event;
+    raise exception 'FALLO: se pudo cambiar la hora de un evento'
+      using errcode = 'assert_failure';
+  exception
+    when restrict_violation then
+      raise notice '  ok — no se puede cambiar la hora de un evento';
+  end;
+
+  begin
+    update time_events set event_type = 'clock_out' where id = v_event;
+    raise exception 'FALLO: se pudo cambiar el tipo de un evento'
+      using errcode = 'assert_failure';
+  exception
+    when restrict_violation then
+      raise notice '  ok — no se puede cambiar el tipo de un evento';
+  end;
+
+  begin
+    update time_events set employee_id = '55555555-5555-4555-8555-555555555552'
+      where id = v_event;
+    raise exception 'FALLO: se pudo cambiar el empleado de un evento'
+      using errcode = 'assert_failure';
+  exception
+    when restrict_violation then
+      raise notice '  ok — no se puede cambiar el empleado de un evento';
+  end;
+
+  -- Cambiar la foto Y otra columna en el mismo update tambien se rechaza: la
+  -- excepcion es por columna, no "si toca la foto pasa todo lo demas".
+  begin
+    update time_events set photo_path = 'x.jpg', occurred_at = now()
+      where id = v_event;
+    raise exception 'FALLO: se colo un cambio de hora junto con la foto'
+      using errcode = 'assert_failure';
+  exception
+    when restrict_violation then
+      raise notice '  ok — no se puede colar otro cambio junto con la foto';
+  end;
+
+  begin
+    delete from time_events where id = v_event;
+    raise exception 'FALLO: se pudo borrar un evento'
+      using errcode = 'assert_failure';
+  exception
+    when restrict_violation then
+      raise notice '  ok — no se puede borrar un evento';
+  end;
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_old uuid;
+  v_recent uuid;
+  v_purged integer;
+begin
+  -- La purga respeta el plazo de CADA ubicacion, no una constante global.
+  -- Sede Principal guarda 30 dias.
+  select id into v_recent from time_events
+    where location_id = '22222222-2222-4222-8222-222222222221'
+    order by occurred_at desc limit 1;
+
+  -- Un evento antiguo, creado a mano para tener algo que caduque.
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, source,
+     occurred_at, idempotency_key, photo_path)
+  values
+    ('11111111-1111-4111-8111-111111111111',
+     '55555555-5555-4555-8555-555555555551',
+     '22222222-2222-4222-8222-222222222221',
+     'clock_in', 'kiosk', now() - interval '90 days', gen_random_uuid(),
+     'ruta/antigua.jpg')
+  returning id into v_old;
+
+  update time_events set photo_path = 'ruta/reciente.jpg' where id = v_recent;
+
+  v_purged := purge_expired_attendance_photos();
+
+  perform test_assert(v_purged >= 1,
+    'La purga informa cuantas fotos borro, para poder vigilar que corre');
+  perform test_assert(
+    (select photo_path from time_events where id = v_old) is null,
+    'La purga borra la foto de un evento de hace 90 dias');
+  perform test_assert(
+    (select photo_path from time_events where id = v_recent) is not null,
+    'La purga NO toca la foto de un evento reciente');
+
+  -- Y lo que no debe pasar nunca: la purga borra la imagen, no el fichaje.
+  perform test_assert(
+    (select count(*) from time_events where id = v_old) = 1,
+    'La purga borra la foto pero NO el evento: las horas trabajadas no caducan');
+
+  raise notice '  --- pruebas de fotos de fichaje completas ---';
+end
+$$;
+rollback;

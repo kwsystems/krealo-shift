@@ -212,21 +212,62 @@ La autorización no vive en la interfaz. Vive en la base:
 - Rotar un PIN: `set_employee_pin`, que además reinicia el contador de intentos y
   el bloqueo, e invalida el verificador offline anterior.
 
-## Retención de fotos
+## Fotos de fichaje: almacenamiento y retención
 
 - La foto del fichaje está **desactivada por defecto** (`photoEnabled: false`) y
   se activa por ubicación.
 - Nunca bloquea el fichaje: si falta el permiso o la cámara falla, el evento se
-  registra igual y se avisa.
-- Cada ubicación define `photoRetentionDays` (30 por defecto). Al vencer, la foto
-  se borra **sin borrar el evento de tiempo**: la hora trabajada es el dato
-  laboral, la foto es solo verificación. Esa es la regla; el purgado automático
-  todavía no está implementado (ver abajo).
-- Las fotos no son públicas. Deben vivir en un bucket **privado** de Supabase
-  Storage y servirse con URLs firmadas de vida breve.
-- Estado real: `time_events.photo_path` existe y el kiosco captura la foto, pero
-  **el bucket privado, las URLs firmadas y el purgado por retención están
-  pendientes**. Hasta que existan, no activar `photoEnabled` en una tienda real.
+  registra igual y se avisa. Tampoco lo retrasa: la persona ve su confirmación y
+  se va; la imagen se sube después, en segundo plano.
+- **Bucket privado, sin excepción** (`attendance-photos`, `public => false`, 2 MB,
+  solo JPEG y WebP). Es la cara de una persona trabajando: un bucket público
+  serviría esas imágenes a cualquiera con la URL, y las de Storage son adivinables
+  si se conoce el patrón. Se leen con URL firmada de vida corta.
+- **La ruta la deriva el servidor**, nunca el cliente:
+  `{organization_id}/{location_id}/{yyyy}/{mm}/{event_id}.jpg`. La organización va
+  primera porque las políticas de `storage.objects` solo saben mirar segmentos del
+  nombre; así el aislamiento entre empresas se comprueba por prefijo. Si el cliente
+  pudiera proponer la ruta, podría apuntar la foto de un fichaje al archivo de otro
+  o escribir fuera de su organización.
+- **El iPad no tiene permiso de escritura sobre Storage.** Sube a través de la Edge
+  Function `attach-photo`, que lo autentica, comprueba que el evento es de SU
+  ubicación y escribe con `service_role`. No hay política de insert para `anon` ni
+  `authenticated`.
+- **`photo_path` se escribe DESPUÉS de que el archivo esté arriba.** Al revés, cada
+  subida fallida dejaría la columna apuntando a un objeto inexistente, indistinguible
+  de una foto ya purgada.
+- **Lectura:** solo quien administra la ubicación de la ruta
+  (`app_manages_location`). Nadie actualiza ni borra a mano: el borrado lo hace solo
+  la purga por retención.
+- Cada ubicación define `photoRetentionDays` (30 por defecto).
+  `purge_expired_attendance_photos()` borra primero el archivo y después limpia la
+  columna —en ese orden, porque al revés quedarían archivos huérfanos que nada
+  volvería a mirar, o sea fotos de personas guardadas para siempre sin que nadie
+  sepa que están ahí—. Devuelve cuántas borró, para poder vigilar que corre: un
+  trabajo que siempre devuelve 0 es indistinguible de uno que no se ejecuta.
+- **El evento nunca se borra con la foto.** La hora trabajada es el dato laboral;
+  la foto es solo verificación. Hay una prueba que lo fija.
+- La copia local en el iPad se borra en cuanto la imagen llega al servidor:
+  guardarla dos veces no aporta nada.
+
+### La excepción a append-only, y por qué es del tamaño que es
+
+`time_events` rechaza todo update excepto uno: que la única columna que cambie sea
+`photo_path`. Es un conflicto real entre dos reglas correctas —append-only y
+retención— y se resuelve con la excepción más estrecha que funciona.
+
+`photo_path` no es un dato del fichaje: es un puntero a un archivo cuyo ciclo de
+vida es inherentemente mutable (se sube después, se borra antes). Se permite en las
+dos direcciones porque solo hacia null obligaría a escribir el puntero antes de que
+el archivo exista. Cualquier otra diferencia en la fila —una hora, un tipo de
+evento, un empleado— se sigue rechazando, y también se rechaza colar otro cambio
+en el mismo update. La comparación se hace sobre las filas convertidas a jsonb, así
+que una columna nueva queda protegida sin que nadie tenga que acordarse de añadirla
+a una lista.
+
+**Pendiente:** programar `purge_expired_attendance_photos()` como trabajo recurrente
+(pg_cron o un trabajo programado que llame a la función con `service_role`). La
+función está escrita y probada; nada la llama todavía de forma automática.
 
 ## Qué NO se registra
 

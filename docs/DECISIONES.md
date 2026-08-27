@@ -130,6 +130,49 @@ compara.
 - **Dónde:** `supabase/migrations/20260827000700_offline_verifier_device_key.sql`,
   `src/lib/offline/pin.ts`, `supabase/functions/refresh-kiosk-roster/`.
 
+### La foto se sube después del fichaje, no con él
+
+`attach-photo` recibe la imagen aparte, cuando el evento ya existe, y solo entonces
+escribe `photo_path`.
+
+- **Por qué no con el fichaje:** obligaría a apuntar la columna antes de que el
+  archivo exista, y cada subida fallida dejaría `photo_path` señalando a un objeto
+  inexistente, indistinguible de una foto ya purgada. Además haría esperar a la
+  persona por una imagen de hasta 2 MB con la red de una tienda.
+- **Por qué no con URL firmada de subida, que es lo habitual:** mismo problema de
+  orden, y le daría al iPad una capacidad de escritura sobre Storage que no
+  necesita. El costo de pasar la imagen por la función es ancho de banda, y con el
+  bucket limitado a 2 MB es asumible.
+- **Lo que arregló por el camino:** el cliente enviaba como `photo_path` el URI
+  local del archivo en el iPad, que en la base de datos no significa nada; y la
+  cola local marcaba la foto como subida en cuanto el fichaje se aceptaba, sin que
+  nadie hubiera subido nada. Las fotos se quedaban en el iPad para siempre mientras
+  la cola decía que estaban en el servidor.
+- **Costo aceptado:** una foto puede tardar en llegar, o no llegar. Se reintenta
+  indefinidamente y no se descarta por número de intentos, porque una foto
+  pendiente no impide contar las horas.
+- **Dónde:** `supabase/functions/attach-photo/`,
+  `supabase/migrations/20260827000800_attendance_photos.sql`, `src/lib/offline/sync.ts`.
+
+### Una sola excepción a append-only, del tamaño exacto de la retención
+
+`time_events` acepta un update solo si la única columna que cambia es `photo_path`.
+
+- **Por qué hacía falta:** el disparador rechazaba TODO update, así que la purga por
+  retención no podía borrar la foto. Sin excepción, la app guardaba fotos de
+  personas para siempre. Es un conflicto real entre dos reglas correctas.
+- **Por qué esa columna y no otra:** no es un dato del fichaje, es un puntero a un
+  archivo cuyo ciclo de vida es mutable por naturaleza —se sube después, se borra
+  antes—. Las horas trabajadas, que es lo que append-only protege, no se tocan.
+- **Por qué en las dos direcciones:** solo hacia null bastaría para la purga, pero
+  obligaría a escribir el puntero antes de que el archivo exista.
+- **Cómo se comprueba que la excepción no se ensanchó:** la comparación es sobre las
+  filas en jsonb con `photo_path` anulado, así que una columna nueva queda protegida
+  sin que nadie tenga que acordarse. Hay pruebas de que no se puede cambiar hora,
+  tipo ni empleado, ni colar otro cambio junto con la foto.
+- **Dónde:** `supabase/migrations/20260827000800_attendance_photos.sql`,
+  `supabase/tests/20_functions.sql`.
+
 ### Quién es gerente lo decide el servidor
 
 `kiosk_employee_context` devuelve `canManageLocation`, y la autorización de
