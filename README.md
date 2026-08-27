@@ -99,6 +99,58 @@ workflow administrado y todo lo nativo se configura desde `app.config.ts`
 hay que documentarlo aquí; los directorios `/ios` y `/android` están en
 `.gitignore` justamente para que el repositorio siga siendo reproducible con EAS.
 
+## Primera vez en Windows
+
+Los cuatro pasos, desde cero, en PowerShell. No hace falta nada más que
+[Node.js LTS](https://nodejs.org) y [Git](https://git-scm.com/download/win).
+
+```powershell
+# 1. Descargar el proyecto (crea la carpeta krealo-shift en tu usuario)
+cd $HOME
+git clone https://github.com/kwsystems/krealo-shift.git
+cd krealo-shift
+
+# 2. Instalar dependencias (tarda unos minutos la primera vez)
+npm install
+
+# 3. Crear la configuración mínima para que la app arranque
+Copy-Item .env.example .env
+notepad .env    # pega la URL y la anon key de Supabase, o déjalo así para solo mirar
+
+# 4. Arrancar
+npx expo start --web
+```
+
+Cuando abra, añade `/kiosk` a la URL: `http://localhost:8081/kiosk`.
+
+**Si te equivocas de carpeta**, el síntoma es
+`fatal: not a git repository`: significa que no estás dentro de `krealo-shift`.
+`cd $HOME\krealo-shift` y vuelve a intentarlo.
+
+### El script que hace los pasos 2 a 4 de una
+
+```powershell
+.\scripts\windows-empezar.ps1
+```
+
+Si PowerShell responde *"no se puede cargar porque la ejecución de scripts está
+deshabilitada"*, es la política de ejecución de Windows, no un problema del proyecto.
+Para permitirlo solo en esta ventana:
+
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+Los cuatro comandos de arriba funcionan siempre y no dependen de esa política.
+
+### Qué se ve y qué no, sin credenciales de Supabase
+
+| Funciona | No funciona |
+|---|---|
+| Recorrer el kiosco: reloj, teclado, ayuda, activación | Validar un PIN |
+| Cambiar de idioma y ver todo traducido | El panel administrativo (se queda en "Preparando tu sesión") |
+| Redimensionar la ventana: diseño de iPad y de teléfono | Cualquier dato real |
+
 ## Trabajar desde Windows
 
 El desarrollo diario se puede hacer entero en Windows con la previsualización
