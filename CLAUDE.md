@@ -9,9 +9,30 @@ Toda tarea creada o actualizada por un agente debe llevar:
 
 | Campo | Valor |
 |---|---|
-| `companyName` | **"Krealo Shift"** — SIEMPRE. Nunca "Krealo Media", nunca "Krealo Publisher", nunca otro cliente. |
+| `companyName` | **"Universo Tutu"** — TEMPORAL, ver la nota de abajo. El destino definitivo es "Krealo Shift". |
 | `assignees` | `["andree@krealomedia.com"]` |
 | `tags` | `["Claude"]` — etiqueta nativa ya existente. Usar el nombre exacto: un nombre nuevo CREA una etiqueta y no se puede borrar. |
+
+### Excepción temporal de empresa (2026-08-27)
+
+Las tareas creadas con `companyName: "Krealo Shift"` **no se renderizan en la UI de
+Publisher**, aunque la API las devuelve correctamente: campos y tipos son idénticos a
+los de una tarea que sí se ve. Verificado creando una tarea de prueba en otra empresa,
+que apareció sin problema.
+
+Por indicación de Andree, mientras eso no se arregle:
+
+- las tareas del proyecto van a `companyName: "Universo Tutu"`;
+- el título lleva el prefijo **`Krealo Shift · `**, porque Universo Tutu es un cliente
+  real y su tablero no debe confundirse con trabajo del proyecto;
+- la descripción deja constancia de que el trabajo es de Krealo Shift.
+
+Las 10 tareas originales quedaron cerradas en `done` con una nota de migración que
+apunta a su reemplazo. No fue posible moverlas: `companyName` no es editable en
+`/tasks/update` y la API no tiene endpoint de borrado.
+
+**Cuando se arregle la empresa Krealo Shift**, volver a `companyName: "Krealo Shift"`,
+quitar el prefijo del título y recrear allí las tareas que sigan abiertas.
 
 ### Ciclo de vida
 Sincronizado con el trabajo real: se crea en `not_started` → al empezar a
