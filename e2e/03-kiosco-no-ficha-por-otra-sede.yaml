@@ -1,0 +1,50 @@
+appId: com.krealomedia.krealoshift
+name: 03 · El iPad de Sede Principal no ficha por Sucursal Demo
+tags:
+  - kiosco
+  - seguridad
+  - critico
+---
+# Flujo E2E 3 de la especificación §28.
+#
+# El iPad está vinculado a Sede Principal. No puede registrar eventos como si
+# fuera el kiosco de Sucursal Demo, y tampoco identificar a un empleado que solo
+# trabaja allí. La ubicación la manda la credencial del dispositivo, no el cuerpo
+# de la petición: por eso no hay forma de "pedirle" a este kiosco que fiche en la
+# otra tienda desde la interfaz.
+#
+# Lo que sí se puede comprobar desde la interfaz: el PIN de Diego Demo, empleado
+# exclusivo de Sucursal Demo, no identifica a nadie en este iPad.
+#
+# Requisitos: kiosco activado en Sede Principal y datos demo aplicados.
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+# El reposo muestra la ubicación a la que está vinculado este iPad.
+- assertVisible: "Sede Principal"
+
+- runFlow: subflows/pin-empleada-otra-sede.yaml
+
+# El PIN se rechaza y el kiosco NO revela que esa persona existe en otra tienda.
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-pin-error"
+    timeout: 20000
+- assertNotVisible: "Hola, Diego"
+- assertNotVisible:
+    id: "kiosk-actions"
+- assertNotVisible: "Sucursal Demo"
+
+# Y seguimos en el reposo del kiosco correcto.
+- assertVisible:
+    id: "kiosk-idle"
+- assertVisible: "Sede Principal"
+
+# La otra mitad de este flujo —enviar un evento con la credencial de este iPad
+# pero el `locationId` de Sucursal Demo— no se puede provocar desde la interfaz.
+# Se cubre en las pruebas SQL (`supabase/tests/20_functions.sql`) y con la llamada
+# directa a la Edge Function documentada en e2e/README.md.

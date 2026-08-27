@@ -1,0 +1,18 @@
+# Espera la cuenta regresiva de confirmación (3 s por defecto), comprueba el
+# resultado y vuelve a la pantalla de reposo.
+#
+# `extendedWaitUntil` en lugar de un sleep fijo: la latencia de red del fichaje
+# es variable y un sleep corto haría fallar la prueba por motivos que no son el
+# comportamiento de la app.
+- assertVisible:
+    id: "kiosk-confirm-countdown"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-result"
+    timeout: 20000
+- tapOn:
+    id: "kiosk-result-done"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 10000

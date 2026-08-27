@@ -1,0 +1,16 @@
+# Ingresa el PIN de Gerenta Demo (administra Sede Principal, PIN de 6 dígitos).
+#
+# Se usa para autorizar entradas tempranas y para salir del modo kiosco. El valor
+# es el PIN de demostración de `supabase/seed.sql`.
+- tapOn:
+    id: "keypad-2"
+- tapOn:
+    id: "keypad-4"
+- tapOn:
+    id: "keypad-6"
+- tapOn:
+    id: "keypad-8"
+- tapOn:
+    id: "keypad-1"
+- tapOn:
+    id: "keypad-0"

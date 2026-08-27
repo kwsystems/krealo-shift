@@ -1,1 +1,539 @@
-# krealo-shift
+# Krealo Shift
+
+Control de asistencia y horarios para tiendas pequeñas. Un iPad fijo en el local
+funciona como **reloj compartido (kiosco)**: el personal marca entrada, descanso,
+regreso y salida con un PIN personal. Gerentes y administradores usan la misma
+app —o su previsualización web— para ver el equipo, armar el horario semanal y
+revisar horas.
+
+Aplicación única para iPhone y iPad, hecha con Expo (React Native) y Supabase.
+
+## Alcance real de P0/P1
+
+Lo que **sí** hace en esta etapa:
+
+- kiosco iPad con PIN por empleado, vinculado a **una** ubicación;
+- entrada, inicio y fin de descanso, y salida, con máquina de estados en el
+  servidor e idempotencia;
+- funcionamiento sin conexión: el fichaje se guarda en el iPad y se sincroniza al
+  volver la red, sin duplicar ni descartar nada en silencio;
+- panel administrativo para propietario, administrador y gerente;
+- español (es-PE) e inglés completos, conmutables en caliente;
+- previsualización web para desarrollar y revisar desde Windows.
+
+Lo que **no** hace, a propósito:
+
+- **no hay fichaje desde el celular del empleado.** El reloj es el iPad de la
+  tienda. Un empleado no necesita cuenta ni instalar nada;
+- no hay geolocalización ni mapas: el iPad ya está vinculado de forma segura a
+  una tienda concreta;
+- no hay integración con Shopify, nómina ni chat (eso es P2);
+- la web es una herramienta de desarrollo, **no** un producto que se despliegue
+  ni un WebView metido dentro de iOS.
+
+Ver `docs/DECISIONES.md` para el registro de decisiones técnicas y desviaciones,
+y `SECURITY.md` para el modelo de seguridad.
+
+## Requisitos
+
+| Herramienta | Versión | Notas |
+|---|---|---|
+| Node.js | 20 LTS o superior | `node --version` |
+| npm | 10 o superior | viene con Node |
+| Git | cualquiera reciente | |
+| Cuenta Supabase | plan gratuito sirve para desarrollo | |
+| Supabase CLI | 2.x | solo para migraciones y Edge Functions |
+| Cuenta Expo (EAS) | gratuita para empezar | solo para generar builds |
+| Cuenta Apple Developer | del propietario | solo para TestFlight |
+| iPad con iPadOS 16.4+ | | el mínimo lo fija Expo SDK 57 |
+
+No hace falta macOS: los builds de iOS se generan en la nube con EAS Build. Sí
+hace falta un iPhone o iPad real para verificar cámara, notificaciones,
+SecureStore y Acceso guiado.
+
+## Instalación
+
+```bash
+git clone https://github.com/kwsystems/krealo-shift.git
+cd krealo-shift
+npm install
+cp .env.example .env      # en PowerShell: Copy-Item .env.example .env
+```
+
+Después rellena `.env` (ver [Variables de entorno](#variables-de-entorno)) y
+arranca:
+
+```bash
+npx expo start            # abre el servidor de desarrollo (QR, iOS, web)
+npx expo start --web      # abre directamente la previsualización web
+```
+
+Si `.env` está incompleto, la app **no** revienta: la pantalla de arranque
+enumera qué claves faltan (`src/lib/env.ts`).
+
+## Comandos
+
+```bash
+npm install                                             # dependencias
+npx expo start                                          # servidor de desarrollo
+npx expo start --web                                    # previsualización web (Windows)
+npx expo-doctor                                         # revisa el proyecto Expo
+npx tsc --noEmit                                        # typecheck (TypeScript strict)
+npm test                                                # pruebas Jest
+npx eslint .                                            # lint
+./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
+
+eas login                                               # autenticarse en EAS
+eas build:configure                                     # crea/asocia el projectId de EAS
+eas build --platform ios --profile preview              # build interno instalable
+eas build --platform ios --profile production           # build para App Store/TestFlight
+eas submit --platform ios --profile production          # subir el build a App Store Connect
+```
+
+Atajos equivalentes definidos en `package.json`: `npm start`, `npm run web`,
+`npm run typecheck`, `npm run lint`, `npm run doctor`, `npm test`.
+
+Ninguna dependencia actual requiere `expo prebuild`: el proyecto sigue en
+workflow administrado y todo lo nativo se configura desde `app.config.ts`
+(plugins de Expo). Si en el futuro se agrega una dependencia que sí lo exija,
+hay que documentarlo aquí; los directorios `/ios` y `/android` están en
+`.gitignore` justamente para que el repositorio siga siendo reproducible con EAS.
+
+## Trabajar desde Windows
+
+El desarrollo diario se puede hacer entero en Windows con la previsualización
+web:
+
+```bash
+npx expo start --web
+```
+
+Se abre en Chrome o Edge. Para revisar el diseño responsive, usa las
+herramientas de desarrollo del navegador (F12 → *Toggle device toolbar*) con
+viewports equivalentes a:
+
+| Objetivo | Viewport aproximado |
+|---|---|
+| iPhone SE / ancho pequeño | 375 × 667 |
+| iPhone moderno | 393 × 852 |
+| iPad 10–11" vertical | 834 × 1194 |
+| iPad 10–11" horizontal | 1194 × 834 |
+
+En la web se puede recorrer el flujo del kiosco (reposo, PIN, acciones,
+confirmación, resultado), el acceso administrativo, el cambio ES/EN y los
+tamaños de texto.
+
+### Lo que NO se puede verificar en la web
+
+Estas cuatro cosas tienen adaptadores seguros para que la web no se rompa, pero
+**su comportamiento real solo se puede comprobar en un iPhone o iPad**:
+
+| Función | En web | Dónde verificarla de verdad |
+|---|---|---|
+| **Cámara** (foto opcional del fichaje) | `expo-camera` en web usa `getUserMedia`: pide permiso del navegador y puede no haber cámara. La foto nunca bloquea el fichaje. | iPad real, con la política `photoEnabled` activada en la ubicación |
+| **Notificaciones** | `expo-notifications` no tiene equivalente completo en web y requiere claves push; no hay notificaciones reales. | dispositivo real con build de development o preview |
+| **SecureStore** | no existe en web. `src/lib/security/secure-storage.ts` cae a `localStorage`, avisa por consola que **no es almacenamiento seguro** y se niega a funcionar si el build web fuera de producción. | dispositivo real: la credencial del kiosco solo está protegida en el Keychain de iOS |
+| **Acceso guiado de iPadOS** | es una función del sistema operativo; no existe en navegador. | iPad real (ver [Modo kiosco de verdad](#modo-kiosco-de-verdad-acceso-guiado-de-ipados)) |
+
+Además, en web el `keep-awake` del kiosco no aplica y los gestos como la
+pulsación larga de 3 segundos sobre el logotipo dependen del ratón, no del dedo.
+
+Para probar en un dispositivo real desde Windows, la vía es un build de
+development con EAS (`eas build --profile development`) instalado en el iPad, y
+`npx expo start --dev-client` en la máquina.
+
+## Variables de entorno
+
+Copia la plantilla y rellena:
+
+```bash
+cp .env.example .env
+```
+
+```dotenv
+EXPO_PUBLIC_APP_ENV=development
+EXPO_PUBLIC_SUPABASE_URL=
+EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_SENTRY_DSN=
+EXPO_PUBLIC_SUPPORT_EMAIL=
+EXPO_PUBLIC_PRIVACY_URL=
+```
+
+Reglas, no sugerencias:
+
+- **solo las variables con prefijo `EXPO_PUBLIC_` llegan al cliente**, y cualquiera
+  que descargue el `.ipa` puede leerlas. Por eso ahí solo van datos públicos: la
+  URL del proyecto y la `anon key`, que sin RLS no sirve de nada y con RLS no
+  puede saltarse las políticas;
+- **la `service_role` NUNCA va en la app**, ni con prefijo, ni sin prefijo, ni
+  "solo para probar". Vive en dos sitios: los secretos de las Edge Functions en
+  Supabase, y tu terminal cuando corres `scripts/seed-demo-users.mjs`;
+- `.env` está en `.gitignore`. `.env.example` es la única versión que se commitea,
+  y va vacía;
+- las variables se validan con Zod al arrancar (`src/lib/env.ts`). En desarrollo
+  se muestra qué falta; en producción no se revelan valores.
+
+Para los builds de EAS, las variables **no** se leen de tu `.env` local: se
+configuran en el proyecto de EAS y `eas.json` selecciona el entorno
+(`development`, `preview`, `production`) en cada perfil.
+
+```bash
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value "https://<ref>.supabase.co"
+eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "<anon key>"
+```
+
+Repetir para `production`. También se pueden gestionar desde el panel de
+expo.dev. Aun siendo públicas, no se commitean.
+
+## Configurar Supabase paso a paso
+
+### 1. Crear el proyecto
+
+En [supabase.com](https://supabase.com) crea un proyecto. Anota:
+
+- **Project URL** → `EXPO_PUBLIC_SUPABASE_URL`;
+- **anon public key** → `EXPO_PUBLIC_SUPABASE_ANON_KEY`;
+- **service_role key** → NO va en la app. Solo la usarás en tu terminal.
+
+Fija la zona horaria mental del negocio en las ubicaciones, no en el proyecto:
+cada `location` guarda su propio `timezone`.
+
+### 2. Instalar y vincular el CLI
+
+```bash
+npm install -g supabase          # o: npx supabase@latest <comando>
+supabase login
+supabase link --project-ref <ref-del-proyecto>
+```
+
+El `<ref>` es el subdominio de la Project URL.
+
+### 3. Aplicar las migraciones
+
+```bash
+supabase db push
+```
+
+Aplica, en orden, los archivos de `supabase/migrations/`:
+
+| Migración | Qué crea |
+|---|---|
+| `…000100_initial_schema.sql` | 23 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son *append-only* |
+| `…000200_rls.sql` | Row Level Security en todas las tablas expuestas |
+| `…000300_functions.sql` | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación |
+| `…000400_guards.sql` | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada) |
+| `…000500_kiosk_context.sql` | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN |
+| `…000600_offline_pin.sql` | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline |
+
+La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
+aplica lo que falte en orden de nombre.
+
+Alternativa sin CLI: pegar cada archivo, en orden, en el SQL Editor del panel.
+
+### 4. Crear los usuarios demo
+
+`supabase/seed.sql` no puede crear usuarios con contraseña —eso pasa por la Auth
+API— así que va antes este script. **La contraseña se lee del entorno, nunca del
+repositorio.**
+
+```bash
+SUPABASE_URL="https://<ref>.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="<service_role>" \
+DEMO_PASSWORD="<una contraseña larga que elijas tú>" \
+node scripts/seed-demo-users.mjs
+```
+
+En PowerShell:
+
+```powershell
+$env:SUPABASE_URL="https://<ref>.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="<service_role>"
+$env:DEMO_PASSWORD="<una contraseña larga que elijas tú>"
+node scripts/seed-demo-users.mjs
+```
+
+`DEMO_PASSWORD` exige 12 caracteres como mínimo. El script es idempotente: si un
+usuario ya existe, lo informa y sigue. Crea tres cuentas con correos en el TLD
+reservado `.invalid` (propietaria, gerenta y una empleada con cuenta), para que
+un demo no pueda escribirle a una persona real.
+
+### 5. Aplicar los datos demo
+
+```bash
+psql "<cadena de conexión de Supabase>" -f supabase/seed.sql
+```
+
+La cadena de conexión está en el panel: *Project Settings → Database → Connection
+string*. También se puede pegar el archivo en el SQL Editor.
+
+El seed es idempotente y crea la organización Krealo Media Demo, dos ubicaciones
+con políticas distintas (largo de PIN, formato de hora, tolerancias), cinco
+empleados ficticios —uno trabajando, uno en descanso, uno atrasado y uno sin
+turno—, dos semanas de turnos, un kiosco de demostración y una segunda
+organización que existe solo para probar el aislamiento.
+
+Los PIN y la credencial del kiosco demo son valores obvios definidos dentro de
+`supabase/seed.sql`, marcados ahí como de demostración. **No sirven para
+producción y no deben copiarse a un proyecto real.**
+
+### 6. Desplegar las Edge Functions
+
+```bash
+supabase functions deploy activate-kiosk refresh-kiosk-roster verify-pin \
+  submit-time-event sync-offline-events submit-time-edit-request
+```
+
+Son la única puerta entre la app y la base: la app nunca inserta en
+`time_events`. El detalle de cada una está en `supabase/functions/README.md`.
+
+### 7. Fijar el secreto `KIOSK_TOKEN_SECRET`
+
+Firma los tokens de acción de 90 segundos que autorizan cada fichaje. Sin él las
+funciones que escriben no arrancan.
+
+```bash
+supabase secrets set KIOSK_TOKEN_SECRET="$(openssl rand -hex 32)"
+```
+
+En PowerShell, sin `openssl`:
+
+```powershell
+$bytes = New-Object byte[] 32
+[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
+$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
+supabase secrets set KIOSK_TOKEN_SECRET="$secret"
+```
+
+`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` ya existen en el entorno de las
+Edge Functions; no hay que configurarlas. Ninguno de estos secretos lleva prefijo
+`EXPO_PUBLIC_` ni entra en el repositorio.
+
+### 8. Comprobar que quedó bien
+
+- en la app, el acceso administrativo con la cuenta `demo-owner@…` y la
+  `DEMO_PASSWORD` que elegiste debe entrar al panel;
+- *Table Editor → `employee_pin_credentials`* debe mostrar hashes bcrypt, nunca
+  PIN legibles;
+- *Authentication → Policies* debe mostrar RLS activo en todas las tablas;
+- para activar el iPad como kiosco hace falta un código de activación emitido
+  desde el panel administrativo (pantalla pendiente, ver
+  [Qué falta](#qué-falta)); mientras tanto se puede emitir llamando a la función
+  de activación desde el SQL Editor.
+
+## Pruebas
+
+### Pruebas de la app (Jest)
+
+```bash
+npm test              # o: npx jest --ci
+npm run test:watch
+```
+
+Cubren la máquina de estados de asistencia, las utilidades de tiempo (turnos que
+cruzan medianoche, zonas horarias), la paridad de claves entre es-PE e inglés y
+los componentes del teclado de PIN y la cuenta regresiva.
+
+### Pruebas de base de datos (SQL)
+
+```bash
+./scripts/db-test.sh              # esquema + datos demo + comprobaciones
+./scripts/db-test.sh --schema     # solo aplicar las migraciones
+```
+
+El script levanta las migraciones sobre un **Postgres local**, sin nube y sin
+Supabase CLI. Para lograrlo aplica primero `supabase/tests/00_supabase_shim.sql`,
+un *shim* que reproduce lo mínimo del esquema `auth` de Supabase que usan las
+migraciones: la tabla `auth.users`, las funciones `auth.uid()` y `auth.role()`
+—que leen la misma variable de sesión `request.jwt.claims` que usa Supabase— y
+los roles `anon`, `authenticated` y `service_role`. Eso permite impersonar
+usuarios reales y probar de verdad las políticas RLS. El shim **no** se aplica en
+producción: en Supabase todo eso ya existe.
+
+Después recrea la base `krealo_test`, aplica todas las migraciones en orden, aplica
+`supabase/seed.sql` y corre `supabase/tests/10_rls.sql` y
+`supabase/tests/20_functions.sql`.
+
+Requisitos, porque el script **no** crea ni arranca el servidor:
+
+- Linux (o WSL en Windows) con `su postgres` disponible, es decir se corre como
+  root;
+- PostgreSQL 16 instalado, con un clúster ya inicializado y **escuchando**;
+- por defecto espera los binarios en `/usr/lib/postgresql/16/bin`, el directorio
+  de datos en `/var/lib/postgresql/ks-test` y el socket en
+  `/var/lib/postgresql/ks-test/run`, puerto `55432`.
+
+Se puede reapuntar con variables de entorno: `KS_PGBIN`, `KS_PGDIR`, `KS_PGPORT`.
+
+### Pruebas de flujo (Maestro)
+
+Los ocho flujos críticos están en `e2e/` como especificaciones YAML de Maestro.
+Cómo instalarlo, cómo correrlos y qué requisitos tienen: `e2e/README.md`.
+
+## Modo kiosco de verdad: Acceso guiado de iPadOS
+
+La app protege su propio flujo: el kiosco no muestra barra de navegación
+personal, y para salir hay que mantener presionado el logotipo 3 segundos y
+autorizar con un PIN de gerente. Eso evita salidas accidentales, pero **no puede
+impedir** que alguien pulse el botón de inicio y abra Safari.
+
+Eso lo impide el sistema operativo, y **Krealo Shift no intenta reemplazarlo con
+trucos inseguros**. En el iPad de la tienda hay que activar Acceso guiado:
+
+1. **Ajustes → Accesibilidad → Acceso guiado** → activar.
+2. Entrar en **Ajustes de código** y fijar un código que el personal no conozca.
+   Si el iPad tiene Face ID o Touch ID, se puede permitir como salida rápida para
+   el gerente.
+3. Opcional pero recomendado en un iPad de pedestal:
+   - **Ajustes → Pantalla y brillo → Bloqueo automático → Nunca**;
+   - **Ajustes → Accesibilidad → Toque → Toque asistido** desactivado;
+   - desactivar el Centro de control en la pantalla bloqueada.
+4. Abrir **Krealo Shift**.
+5. Pulsar **tres veces el botón superior** (o el botón de inicio en los iPad que
+   lo tienen).
+6. En el panel de Acceso guiado, desactivar lo que no debe usarse —normalmente
+   *Teclados* no, *Toque* sí, *Botones de volumen* a criterio— y pulsar
+   **Iniciar**.
+7. Para salir: tres pulsaciones otra vez e ingresar el código.
+
+Si se reinicia el iPad, Acceso guiado no se reactiva solo: hay que repetir los
+pasos 4 a 6. Para varias tiendas conviene el **Modo de app individual** vía MDM
+(Apple Business Manager), que sí sobrevive reinicios y no depende de que alguien
+se acuerde.
+
+Complemento físico, no software: un soporte con cerradura y el cable de carga
+fijo.
+
+## Builds con EAS y TestFlight
+
+`eas.json` define tres perfiles, sin ningún secreto dentro:
+
+| Perfil | Para qué | Detalles |
+|---|---|---|
+| `development` | development client, para probar en un iPad real desde Windows | `developmentClient: true`, distribución interna |
+| `preview` | build instalable de revisión, sin App Store | distribución interna, `Release` |
+| `production` | App Store / TestFlight | distribución `store`, `autoIncrement: true` |
+
+`cli.appVersionSource: "remote"` deja el número de build en manos de EAS: el
+`version` (`1.0.0`) vive en `app.config.ts` y el build number lo lleva EAS.
+
+```bash
+eas login
+eas build:configure                                   # escribe el projectId en EAS
+eas build --platform ios --profile preview
+eas build --platform ios --profile production
+eas submit --platform ios --profile production
+```
+
+`app.config.ts` lee el `projectId` de la variable `EAS_PROJECT_ID`; si prefieres
+fijarlo en el archivo, ese es el único lugar donde vive.
+
+### Cambiar el bundle identifier
+
+**Aviso: `com.krealomedia.krealoshift` es una sugerencia y NO está verificado
+como disponible** en App Store Connect. Antes de registrar la app hay que
+comprobarlo, y si está tomado, cambiarlo.
+
+Está centralizado en `app.config.ts`:
+
+```ts
+const IOS_BUNDLE_IDENTIFIER = 'com.krealomedia.krealoshift';
+const ANDROID_PACKAGE = 'com.krealomedia.krealoshift';
+```
+
+Se cambian esas dos constantes y nada más. Después:
+
+1. registrar el identificador nuevo en el portal de Apple Developer;
+2. volver a correr `eas build:configure` si el proyecto de EAS ya existía;
+3. hacer un build nuevo — un cambio de bundle id no se puede publicar como
+   actualización de la app anterior.
+
+El slug (`krealo-shift`) y el esquema URL (`krealoshift`) están en el mismo
+archivo. Cambiar el esquema rompe los enlaces profundos existentes.
+
+### Checklist antes de subir
+
+- [ ] cambiar IDs y URLs temporales: bundle identifier verificado,
+      `EXPO_PUBLIC_PRIVACY_URL` y `EXPO_PUBLIC_SUPPORT_EMAIL` reales;
+- [ ] cargar los secretos y variables en EAS (`eas env:create` por entorno);
+- [ ] vincular el Supabase **productivo**, distinto del de desarrollo;
+- [ ] aplicar las migraciones en ese proyecto (`supabase db push`);
+- [ ] probar RLS: que un gerente no vea otra ubicación y que una organización no
+      vea a la otra;
+- [ ] verificar en dispositivo real la **cámara opcional** y las
+      **notificaciones**;
+- [ ] revisar las traducciones es-PE / en de punta a punta, incluidos errores y
+      estados vacíos;
+- [ ] revisar la política de privacidad y el Privacy Manifest frente a lo que la
+      app realmente recoge (no declarar "no recopila datos" si Supabase procesa
+      identificadores y fotos);
+- [ ] generar capturas de pantalla originales —nunca de otra app— e icono
+      1024×1024 propio;
+- [ ] `npx tsc --noEmit`, `npx eslint .` y `npm test` en verde;
+- [ ] `eas build --platform ios --profile production`;
+- [ ] distribuir primero al **grupo interno de TestFlight**, no a testers
+      externos.
+
+## Qué falta
+
+Esto no está terminado y no se disfraza:
+
+- **verificación en dispositivo del circuito offline**: la cola local, la
+  sincronización y la validación del PIN sin conexión están implementadas
+  (`src/lib/offline/`) y con pruebas, pero el flujo completo —cortar la red,
+  fichar, recuperarla y comprobar que sincroniza **una sola vez**— solo se puede
+  confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
+- **panel administrativo con datos reales**: las cinco pestañas existen con
+  estados vacíos honestos; el editor de horarios, las hojas de tiempo, las
+  correcciones y la exportación CSV están pendientes;
+- **notificaciones**: `expo-notifications` está configurado como plugin, pero no
+  hay registro de token ni envío;
+- **almacenamiento de fotos**: falta el bucket privado de Supabase Storage y las
+  URLs firmadas breves;
+- **icono y splash definitivos**, y capturas para la App Store.
+
+### Lo que necesita la cuenta Apple del propietario
+
+Nada de esto se puede hacer sin las credenciales de Andree:
+
+1. **Apple Developer Program** activo (99 USD/año) en la cuenta que será dueña de
+   la app.
+2. **Verificar y registrar el bundle identifier** en App Store Connect.
+3. **Crear el registro de la app** en App Store Connect: nombre, SKU, idioma
+   principal, categoría.
+4. **`eas login` y credenciales de firma**: lo más simple es dejar que EAS
+   gestione certificados y perfiles; requiere iniciar sesión con el Apple ID
+   (con 2FA) una vez.
+5. **`ascAppId`, `appleId` y `appleTeamId`** para `eas submit` — se pueden pasar
+   de forma interactiva o añadir al perfil `submit.production` de `eas.json`. No
+   los pongas en el repositorio si preferís mantenerlos fuera.
+6. **Ficha de privacidad de App Store Connect**: declarar identificador de
+   dispositivo, datos de uso y fotos, coherente con lo que hace la app.
+7. **URL pública de política de privacidad**: obligatoria para publicar.
+8. **Grupo interno de TestFlight** con los correos de quienes van a probar.
+9. **iPad físico** de la tienda para verificar cámara, notificaciones y Acceso
+   guiado.
+
+## Estructura del repositorio
+
+```text
+app/            rutas de Expo Router: kiosco, acceso y panel administrativo
+src/            componentes, dominio, i18n, stores, tema y utilidades
+supabase/       migraciones, Edge Functions, seed y pruebas SQL
+scripts/        db-test.sh (pruebas SQL) y seed-demo-users.mjs (usuarios demo)
+e2e/            flujos críticos como especificaciones de Maestro
+docs/           DECISIONES.md y referencias de diseño de solo lectura
+assets/         iconos, splash y fuentes
+app.config.ts   única fuente de configuración: nombre, bundle id, permisos, plugins
+eas.json        perfiles development, preview y production
+```
+
+## Documentos relacionados
+
+| Archivo | Qué contiene |
+|---|---|
+| `SECURITY.md` | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
+| `docs/DECISIONES.md` | decisiones técnicas y desviaciones, con su motivo |
+| `supabase/functions/README.md` | contrato de las Edge Functions y la decisión offline pendiente |
+| `e2e/README.md` | cómo correr los flujos de Maestro y qué falta para que pasen |
+| `docs/reference/` | referencias de diseño traídas del Publisher, de solo lectura |
+| `CLAUDE.md` | reglas del proyecto y de gestión de tareas para agentes |

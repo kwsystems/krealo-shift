@@ -1,0 +1,20 @@
+# Intenta el PIN de Diego Demo, que trabaja SOLO en Sucursal Demo.
+#
+# Detalle que importa: Sucursal Demo usa PIN de 4 dígitos y Sede Principal de 6,
+# así que en este kiosco el PIN de Diego ni siquiera se puede completar tal cual.
+# Se teclean sus 4 dígitos y dos más para llegar a los 6 que este kiosco exige y
+# forzar la validación. El resultado esperado es un error, no una identificación.
+#
+# Valores de demostración de `supabase/seed.sql`.
+- tapOn:
+    id: "keypad-7"
+- tapOn:
+    id: "keypad-7"
+- tapOn:
+    id: "keypad-8"
+- tapOn:
+    id: "keypad-8"
+- tapOn:
+    id: "keypad-0"
+- tapOn:
+    id: "keypad-0"

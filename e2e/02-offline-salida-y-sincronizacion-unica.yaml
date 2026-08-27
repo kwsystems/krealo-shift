@@ -1,0 +1,91 @@
+appId: com.krealomedia.krealoshift
+name: 02 · Sin red se registra la salida y al volver sincroniza una sola vez
+tags:
+  - kiosco
+  - offline
+  - critico
+  - manual
+---
+# Flujo E2E 2 de la especificación §28.
+#
+# Se pierde la red, la empleada marca salida, vuelve la red y el evento se
+# sincroniza UNA sola vez. Lo que se prueba de verdad es que no se pierda un
+# fichaje y que no se duplique.
+#
+# ATENCIÓN — ESTE FLUJO NO ES 100 % AUTOMÁTICO.
+# Maestro solo puede conmutar la red en Android (`setAirplaneMode`). En iOS hay
+# que cortarla a mano y este flujo se detiene a esperarlo:
+#   * simulador: desconectar el Wi-Fi del Mac anfitrión, o usar Network Link
+#     Conditioner con perfil "100% Loss";
+#   * iPad real: activar Modo Avión desde el Centro de control.
+# Los pasos `extendedWaitUntil` con timeout largo son el punto donde el operador
+# corta y restablece la red.
+#
+# Requisitos: kiosco activado en Sede Principal, datos demo aplicados y Sofía
+# Demo trabajando (con entrada ya marcada).
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+
+# ---------------------------------------------------------------------------
+# PASO MANUAL 1: cortar la red ahora.
+# Falta un testID en el indicador de sincronización para poder afirmar aquí
+# "estamos sin conexión". Ver e2e/README.md → "testID que faltan".
+# Mientras no exista, el corte se hace y se confirma a ojo.
+# ---------------------------------------------------------------------------
+- assertVisible:
+    id: "kiosk-idle"
+
+# --- Salida sin red ----------------------------------------------------------
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 30000
+- tapOn:
+    id: "kiosk-action-clock_out"
+- assertVisible:
+    id: "kiosk-confirm-countdown"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-result"
+    timeout: 30000
+# Sin red el resultado debe decir que quedó guardado en este iPad, no que se
+# registró en el servidor. Si en su lugar aparece un error de red, el fichaje NO
+# se encoló: eso es un fallo del flujo, no una variante aceptable.
+- assertVisible: "Guardado en este iPad. Se enviará solo cuando vuelva la conexión."
+- tapOn:
+    id: "kiosk-result-done"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 10000
+# El pie del reposo avisa cuántos registros quedan pendientes.
+- assertVisible: "1 registro pendiente de sincronizar"
+
+# ---------------------------------------------------------------------------
+# PASO MANUAL 2: restablecer la red ahora.
+# ---------------------------------------------------------------------------
+# Al volver la conexión la cola sincroniza y el aviso de pendientes desaparece.
+- extendedWaitUntil:
+    notVisible: "1 registro pendiente de sincronizar"
+    timeout: 120000
+
+# --- Que no se duplique ------------------------------------------------------
+# Segunda vuelta: la empleada ya no está trabajando, así que la acción principal
+# vuelve a ser "Marcar entrada". Si la salida se hubiera aplicado dos veces, o no
+# se hubiera aplicado, este estado sería otro.
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-action-clock_in"
+    timeout: 20000
+- assertNotVisible:
+    id: "kiosk-action-break_start"
+# La verificación definitiva de "una sola vez" es en la base: debe haber UN solo
+# `time_events` de tipo `clock_out` para esa sesión. La consulta está en
+# e2e/README.md.

@@ -1,0 +1,64 @@
+appId: com.krealomedia.krealoshift
+name: 04 · Un kiosco revocado no puede enviar ni sincronizar
+tags:
+  - kiosco
+  - seguridad
+  - critico
+  - manual
+---
+# Flujo E2E 4 de la especificación §28.
+#
+# Revocar un iPad debe cortarle todo: ni fichajes nuevos ni sincronización de la
+# cola pendiente. No se acepta un lote "por ser de antes".
+#
+# PASO MANUAL PREVIO — revocar el dispositivo antes de correr este flujo. La
+# pantalla de administración de kioscos todavía no existe, así que se hace por
+# SQL (la consulta está en e2e/README.md).
+#
+# OJO CON EL ESTADO ESPERADO. La app tiene una pantalla dedicada ("Este reloj fue
+# desactivado") pero hoy no se puede llegar a ella: nada llama a `markRevoked()`
+# en el store del kiosco. Ver e2e/README.md → "Lo que hace falta en el código".
+# Mientras siga así, lo verificable es que el intento de fichar se rechaza con el
+# mensaje de reloj desactivado, que es lo que de verdad protege la jornada.
+#
+# Requisitos: kiosco activado en Sede Principal, datos demo aplicados, el
+# dispositivo YA revocado y CON red (la revocación la comprueba el servidor).
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+
+- runFlow: subflows/pin-empleada.yaml
+
+# El servidor rechaza la credencial revocada y la app lo explica sin tecnicismos.
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-pin-error"
+    timeout: 30000
+- assertVisible: "Este reloj fue desactivado"
+
+# No se llega a las acciones: no hay forma de registrar nada.
+- assertNotVisible:
+    id: "kiosk-actions"
+- assertNotVisible:
+    id: "kiosk-action-clock_in"
+
+# Reiniciar la app no devuelve el kiosco a la vida.
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-pin-error"
+    timeout: 30000
+
+# La mitad de "no sincroniza" se comprueba en el servidor: un lote enviado con la
+# credencial revocada debe responder 401 `revoked` y no crear ningún
+# `time_events`. La llamada y la consulta están en e2e/README.md.

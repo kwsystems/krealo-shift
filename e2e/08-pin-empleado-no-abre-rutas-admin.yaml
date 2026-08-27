@@ -1,0 +1,77 @@
+appId: com.krealomedia.krealoshift
+name: 08 · El PIN de empleado no abre rutas administrativas
+tags:
+  - kiosco
+  - seguridad
+  - critico
+---
+# Flujo E2E 8 de la especificación §28.
+#
+# El PIN de una empleada sirve para fichar y nada más. No abre el panel
+# administrativo, no abre la salida del modo kiosco, y un enlace directo a una
+# ruta administrativa no debe saltarse esa regla.
+#
+# Requisitos: kiosco activado en Sede Principal y datos demo aplicados.
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+
+# --- El PIN correcto lleva a fichar, no a administrar ------------------------
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+- assertVisible:
+    id: "kiosk-action-clock_in"
+# Nada del panel administrativo: ni pestañas ni títulos de gestión.
+- assertNotVisible: "Trabajando ahora"
+- assertNotVisible: "Organización"
+- assertNotVisible: "Programadas frente a registradas"
+- tapOn: "Cancelar"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 10000
+
+# --- El menú de salida exige PIN de gerente ---------------------------------
+- longPressOn:
+    id: "kiosk-logo"
+- extendedWaitUntil:
+    visible: "Ingresa el PIN de gerente"
+    timeout: 10000
+# Con el PIN de la empleada NO se debe autorizar: nada de diagnóstico, nada de
+# desactivar el kiosco. No se afirma cuál es el mensaje de rechazo —eso está por
+# decidir— sino que el menú no aparece.
+#
+# ESTE BLOQUE FALLA HOY, y por un motivo real: `app/kiosk/exit.tsx` da por
+# autorizado cualquier PIN válido, sin comprobar que la persona administre la
+# ubicación. Reportado en e2e/README.md.
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible: "Ingresa el PIN de gerente"
+    timeout: 30000
+- assertNotVisible:
+    id: "kiosk-exit-confirm"
+- assertNotVisible: "Diagnósticos"
+- assertNotVisible: "Eventos pendientes"
+
+# --- Un enlace directo tampoco abre el panel --------------------------------
+# `(manager)` es un grupo de Expo Router, así que sus rutas viven en la raíz:
+# /hours, /team, /schedule, /more.
+- openLink: "krealoshift:///hours"
+# El dispositivo es un kiosco: debe seguir en el kiosco, no en el panel.
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+- assertNotVisible: "Programadas frente a registradas"
+
+# NOTA: este último bloque es el que hoy tiene más probabilidad de FALLAR, y por
+# un motivo real, no por la prueba: `app/(manager)/_layout.tsx` no tiene guarda de
+# sesión ni de rol, así que un enlace profundo puede renderizar el panel sin
+# sesión. Está reportado en e2e/README.md → "Lo que hace falta en el código".

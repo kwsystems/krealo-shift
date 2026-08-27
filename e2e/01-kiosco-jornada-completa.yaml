@@ -1,0 +1,76 @@
+appId: com.krealomedia.krealoshift
+name: 01 · Jornada completa en el kiosco
+tags:
+  - kiosco
+  - critico
+---
+# Flujo E2E 1 de la especificación §28.
+#
+# Una empleada entra con su PIN, inicia un descanso, lo termina y marca salida.
+# Es el camino que más veces se recorre en la vida real de la app: si esto se
+# rompe, la tienda no puede fichar.
+#
+# Requisitos: iPad (o simulador) ya activado como kiosco de Sede Principal y
+# datos demo aplicados. Sofía Demo debe empezar SIN turno abierto — ver
+# e2e/README.md, sección "Poner el demo en el estado inicial".
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+
+# --- Entrada -----------------------------------------------------------------
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+# La pantalla saluda a la persona identificada y no muestra a nadie más (§9.2).
+- assertVisible: "Hola, Sofía"
+- tapOn:
+    id: "kiosk-action-clock_in"
+- runFlow: subflows/confirmar-y-cerrar.yaml
+
+# --- Inicio de descanso ------------------------------------------------------
+# El kiosco pregunta QUÉ descanso es, en vez de asumirlo: de eso depende si esos
+# minutos cuentan como trabajados.
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+- tapOn:
+    id: "kiosk-action-break_start"
+- assertVisible:
+    id: "break-type-sheet"
+- tapOn:
+    id: "break-type-meal"
+- runFlow: subflows/confirmar-y-cerrar.yaml
+
+# --- Fin de descanso ---------------------------------------------------------
+# En descanso, la acción principal es terminar el descanso y NUNCA marcar salida.
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+- assertVisible:
+    id: "kiosk-action-break_end"
+- tapOn:
+    id: "kiosk-action-break_end"
+- runFlow: subflows/confirmar-y-cerrar.yaml
+
+# --- Salida ------------------------------------------------------------------
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+- tapOn:
+    id: "kiosk-action-clock_out"
+- runFlow: subflows/confirmar-y-cerrar.yaml
+
+# Al volver al reposo no debe quedar ningún rastro de la persona anterior (§9.5).
+- assertNotVisible: "Hola, Sofía"

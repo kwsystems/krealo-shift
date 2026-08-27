@@ -1,0 +1,62 @@
+appId: com.krealomedia.krealoshift
+name: 07 · El cambio ES/EN actualiza todo el flujo
+tags:
+  - kiosco
+  - i18n
+  - critico
+---
+# Flujo E2E 7 de la especificación §28.
+#
+# Cambiar de español a inglés debe actualizar la interfaz en el momento, sin
+# reiniciar, y sin dejar textos a medias. Se recorre el kiosco en inglés hasta la
+# pantalla de acciones para que el cambio se vea en más de una pantalla.
+#
+# Requisitos: kiosco activado en Sede Principal y datos demo aplicados. Se asume
+# que la app arranca en español (es-PE), el idioma por defecto del demo.
+
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 20000
+- assertVisible: "Marca tu entrada o salida"
+- assertVisible: "Ingresa tu PIN personal"
+
+# --- Español → inglés --------------------------------------------------------
+- tapOn:
+    id: "kiosk-language-toggle"
+- extendedWaitUntil:
+    visible: "Clock in or out"
+    timeout: 10000
+- assertVisible: "Enter your personal PIN"
+- assertNotVisible: "Marca tu entrada o salida"
+
+# El cambio alcanza a las pantallas siguientes, no solo al reposo.
+- runFlow: subflows/pin-empleada.yaml
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-actions"
+    timeout: 20000
+- assertVisible: "Hi, Sofía"
+- assertNotVisible: "Hola, Sofía"
+
+# --- Inglés → español --------------------------------------------------------
+- tapOn: "Cancel"
+- extendedWaitUntil:
+    visible:
+      id: "kiosk-idle"
+    timeout: 10000
+- tapOn:
+    id: "kiosk-language-toggle"
+- extendedWaitUntil:
+    visible: "Marca tu entrada o salida"
+    timeout: 10000
+- assertNotVisible: "Clock in or out"
+
+# La preferencia debe sobrevivir a un reinicio de la app.
+- launchApp:
+    clearState: false
+- extendedWaitUntil:
+    visible: "Marca tu entrada o salida"
+    timeout: 20000

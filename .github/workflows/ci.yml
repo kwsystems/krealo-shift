@@ -1,0 +1,99 @@
+# Verificación continua de Krealo Shift (especificación §4).
+#
+# Regla de diseño: NO requiere ningún secreto. Ni credenciales de Supabase, ni
+# token de Expo, ni claves de Apple. Se puede ejecutar en un fork y en un
+# repositorio recién clonado, y una persona nueva ve exactamente lo mismo que
+# corriendo los comandos en su máquina.
+#
+# Por eso aquí no hay build de EAS ni pruebas contra la base: eso necesita
+# credenciales y vive en las tareas locales documentadas en el README
+# (`scripts/db-test.sh` y `eas build`).
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  workflow_dispatch:
+
+# Un push nuevo cancela la corrida anterior de la misma rama: no tiene sentido
+# gastar minutos verificando un commit que ya quedó atrás.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    name: Lint, typecheck y pruebas
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Sin variables EXPO_PUBLIC_* a propósito: la app debe poder construirse y
+      # probarse sin configuración, mostrando qué falta en vez de reventar (§30).
+      - name: Lint
+        run: npx eslint .
+
+      - name: Typecheck
+        run: npx tsc --noEmit
+
+      - name: Pruebas
+        run: npx jest --ci
+
+  flujos-e2e:
+    name: Sintaxis de los flujos de Maestro
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      # No se ejecutan los flujos —eso necesita un simulador de iOS y un build—
+      # pero un YAML roto se detecta aquí y no cuando alguien intenta correrlos.
+      # Los flujos son dos documentos YAML (cabecera + comandos), así que se leen
+      # con `safe_load_all`; los subflujos son un solo documento.
+      - name: Validar el YAML
+        run: |
+          python3 - <<'PY'
+          import glob
+          import sys
+          import yaml
+
+          errores = []
+          archivos = sorted(glob.glob('e2e/**/*.yaml', recursive=True))
+          if not archivos:
+              sys.exit('No se encontró ningún flujo en e2e/')
+
+          for ruta in archivos:
+              try:
+                  documentos = list(yaml.safe_load_all(open(ruta, encoding='utf-8')))
+              except yaml.YAMLError as error:
+                  errores.append(f'{ruta}: {error}')
+                  continue
+              if not documentos:
+                  errores.append(f'{ruta}: archivo vacío')
+                  continue
+              print(f'ok  {ruta}  ({len(documentos)} documento(s))')
+
+          if errores:
+              print('\nFallos:')
+              for error in errores:
+                  print(f'  {error}')
+              sys.exit(1)
+          PY

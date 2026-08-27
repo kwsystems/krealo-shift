@@ -1,0 +1,19 @@
+# Ingresa el PIN de Sofía Demo (empleada de Sede Principal, PIN de 6 dígitos).
+#
+# El PIN se teclea dígito a dígito porque el kiosco usa un teclado numérico de
+# botones, no un campo de texto: `inputText` no serviría.
+#
+# El valor es el PIN de demostración que fija `supabase/seed.sql`. No es un
+# secreto y no sirve en producción.
+- tapOn:
+    id: "keypad-1"
+- tapOn:
+    id: "keypad-3"
+- tapOn:
+    id: "keypad-5"
+- tapOn:
+    id: "keypad-7"
+- tapOn:
+    id: "keypad-9"
+- tapOn:
+    id: "keypad-1"

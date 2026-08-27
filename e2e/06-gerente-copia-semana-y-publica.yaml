@@ -1,0 +1,54 @@
+appId: com.krealomedia.krealoshift
+name: 06 · El gerente copia la semana anterior, cambia turnos y publica
+tags:
+  - admin
+  - horarios
+  - critico
+  - incompleto
+---
+# Flujo E2E 6 de la especificación §28.
+#
+# ESTADO: INCOMPLETO A PROPÓSITO. El editor de horarios semanales todavía no
+# existe: la pestaña Horario muestra un estado vacío honesto. Aquí queda el
+# camino que sí se puede recorrer y, escrito en claro, lo que falta.
+#
+# Requisitos: los mismos del flujo 05.
+
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "sign-in-email"
+    timeout: 30000
+
+- tapOn:
+    id: "sign-in-email"
+- inputText: "demo-manager@krealoshift.invalid"
+- tapOn:
+    id: "sign-in-password"
+- inputText: "${DEMO_PASSWORD}"
+- hideKeyboard
+- tapOn:
+    id: "sign-in-submit"
+
+- extendedWaitUntil:
+    visible: "Horario"
+    timeout: 30000
+- tapOn: "Horario"
+- assertVisible: "Horario"
+
+# ---------------------------------------------------------------------------
+# PENDIENTE DE IMPLEMENTACIÓN. Continuación cuando exista el editor:
+#
+#   1. ir a la semana siguiente;
+#   2. tocar "Copiar semana anterior" y confirmar;
+#   3. editar un turno (cambiar la hora de fin) y guardar el borrador;
+#   4. tocar "Publicar horario";
+#   5. comprobar que el estado pasa de "Borrador" a "Publicado" y que la versión
+#      de publicación sube;
+#   6. comprobar que los turnos cambiados quedan marcados como "Cambiado".
+#
+# Reglas del backend que este flujo debe respetar y que ya están verificadas en
+# `supabase/tests/20_functions.sql`: un turno publicado no se puede solapar ni
+# borrar, y publicar sella versión y fecha.
+# ---------------------------------------------------------------------------
