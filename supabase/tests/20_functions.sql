@@ -792,3 +792,330 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Alertas del gerente (§19)
+-- ===========================================================================
+-- Lo que se fija aquí, en orden de importancia:
+--   1. la DEDUPLICACIÓN funciona de verdad. Sin ella el trabajo de cada 15
+--      minutos repite la misma tardanza hasta que el gerente apaga las
+--      notificaciones, y entonces la función entera deja de servir;
+--   2. el TEXTO no lleva datos sensibles: ni la función devuelve nombres ni hay
+--      ninguna columna por la que pudieran entrar;
+--   3. las PREFERENCIAS se respetan;
+--   4. un gerente no recibe nada de una ubicación que no administra.
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_primera integer;
+  v_segunda integer;
+  v_tercera integer;
+begin
+  -- Sin dispositivo registrado no se encola nada: una alerta escrita para alguien
+  -- que no tiene a dónde recibirla se perderia para siempre en cuanto registrara
+  -- el primero, porque la fila de deduplicacion ya estaria puesta.
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)) = 0,
+    'Sin ningun dispositivo registrado no hay ninguna alerta pendiente');
+
+  insert into push_tokens (user_id, expo_token, platform, device_name)
+    values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios', 'iPhone de prueba');
+
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)) > 0,
+    'Con un dispositivo registrado la gerenta si tiene alertas pendientes');
+
+  -- LA PRUEBA CENTRAL. Dos llamadas seguidas: la primera reserva, la segunda no
+  -- devuelve nada. Es lo que evita repetir la misma tardanza cada 15 minutos.
+  select count(*) into v_primera from claim_manager_alerts(v_org);
+  select count(*) into v_segunda from claim_manager_alerts(v_org);
+
+  perform test_assert(v_primera > 0, 'La primera llamada reserva las alertas pendientes');
+  perform test_assert(v_segunda = 0,
+    'La SEGUNDA llamada no devuelve nada: la deduplicacion evita repetir el mismo aviso');
+
+  perform test_assert(
+    (select count(*) from manager_alert_deliveries) = v_primera,
+    'Queda una fila de deduplicacion por alerta reservada, y ni una mas');
+
+  -- Marcar enviado no reabre nada: una alerta avisada esta avisada.
+  perform mark_manager_alerts_sent(array(select id from manager_alert_deliveries));
+  select count(*) into v_tercera from claim_manager_alerts(v_org);
+  perform test_assert(v_tercera = 0,
+    'Despues de marcar enviado tampoco se vuelve a avisar');
+  perform test_assert(
+    (select count(*) from manager_alert_deliveries where status = 'sent') = v_primera,
+    'Todas las filas quedan marcadas como enviadas');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_reservada integer;
+  v_antes integer;
+  v_despues integer;
+begin
+  insert into push_tokens (user_id, expo_token, platform)
+    values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios');
+
+  -- REINTENTO: si el envio murio a medias, la fila se queda en `queued` y hay que
+  -- poder volver a entregarla. Se simula envejeciendo `queued_at`.
+  select count(*) into v_reservada from claim_manager_alerts(v_org);
+  perform test_assert(v_reservada > 0, 'Hay alertas reservadas para probar el reintento');
+
+  perform test_assert(
+    (select count(*) from claim_manager_alerts(v_org)) = 0,
+    'Recien reservada, la alerta no se vuelve a entregar');
+
+  update manager_alert_deliveries set queued_at = now() - interval '30 minutes';
+  perform test_assert(
+    (select count(*) from claim_manager_alerts(v_org)) = v_reservada,
+    'Pasado el plazo, una alerta que quedo sin enviar se vuelve a entregar');
+
+  -- Y el reintento no es infinito: tras el tope se abandona, porque reenviar una
+  -- notificacion de hace horas no ayuda a nadie.
+  update manager_alert_deliveries set queued_at = now() - interval '30 minutes', attempts = 3;
+  perform test_assert(
+    (select count(*) from claim_manager_alerts(v_org)) = 0,
+    'Superado el tope de intentos, la alerta se abandona en lugar de reintentar sin fin');
+
+  -- La purga NO borra la fila de una solicitud que sigue pendiente: borrarla
+  -- equivale a decir "esto no se ha avisado", y el gerente recibiria otra vez el
+  -- aviso de una solicitud que ya conoce.
+  update manager_alert_deliveries set queued_at = now() - interval '400 days';
+  select count(*) into v_antes from manager_alert_deliveries where alert_type = 'newRequest';
+  perform test_assert(v_antes > 0, 'Hay una alerta de solicitud pendiente para probar la purga');
+  perform purge_manager_alert_deliveries(180);
+  select count(*) into v_despues from manager_alert_deliveries where alert_type = 'newRequest';
+  perform test_assert(v_despues = v_antes,
+    'La purga conserva la fila de una solicitud que sigue pendiente');
+  perform test_assert(
+    (select count(*) from manager_alert_deliveries where alert_type <> 'newRequest') = 0,
+    'La purga si borra el resto del historial antiguo');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_con_noshow integer;
+  v_sin_noshow integer;
+begin
+  insert into push_tokens (user_id, expo_token, platform)
+    values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios');
+
+  select count(*) into v_con_noshow from pending_manager_alerts(v_org)
+    where alert_type = 'noShow';
+  perform test_assert(v_con_noshow > 0,
+    'Con las preferencias por defecto la gerenta recibe los avisos de ausencia');
+
+  update notification_preferences
+    set preferences = preferences || '{"noShow": false}'::jsonb
+    where user_id = v_manager and organization_id = v_org;
+
+  select count(*) into v_sin_noshow from pending_manager_alerts(v_org)
+    where alert_type = 'noShow';
+  perform test_assert(v_sin_noshow = 0,
+    'Apagar noShow en las preferencias apaga de verdad ese aviso');
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+       where alert_type = 'newRequest') > 0,
+    'Apagar un aviso NO apaga los demas');
+
+  -- Una fila ausente en `notification_preferences` significa "los valores por
+  -- defecto", no "no quiere nada": el panel solo escribe cuando alguien toca algo.
+  delete from notification_preferences where user_id = v_manager;
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org) where alert_type = 'noShow') > 0,
+    'Sin fila de preferencias se usan los valores por defecto, no el silencio');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_ajena   uuid := '33333333-3333-4333-8333-333333333339';
+  v_loc_main   uuid := '22222222-2222-4222-8222-222222222221';
+  v_loc_branch uuid := '22222222-2222-4222-8222-222222222222';
+begin
+  insert into push_tokens (user_id, expo_token, platform) values
+    (v_manager, 'ExponentPushToken[gerenta]', 'ios'),
+    (v_ajena,   'ExponentPushToken[ajena]',   'ios');
+
+  -- La gerenta administra Sede Principal y NO Sucursal Demo. Es la misma regla
+  -- que fija la RLS, aqui aplicada sin sesion: la alerta se calcula con
+  -- `service_role` desde un cron, donde `auth.uid()` no existe.
+  perform test_assert(
+    (select count(*) from pending_manager_alerts()
+       where recipient_user_id = v_manager and location_id = v_loc_branch) = 0,
+    'La gerenta NO recibe alertas de una ubicacion que no administra');
+  perform test_assert(
+    (select count(*) from pending_manager_alerts()
+       where recipient_user_id = v_manager and location_id = v_loc_main) > 0,
+    'La gerenta si recibe las de la ubicacion que administra');
+
+  -- Y la dueña de otra empresa no recibe nada de esta, ni con dispositivo
+  -- registrado.
+  perform test_assert(
+    (select count(*) from pending_manager_alerts()
+       where recipient_user_id = v_ajena
+         and location_id in (v_loc_main, v_loc_branch)) = 0,
+    'La dueña de otra empresa no recibe ninguna alerta de esta organizacion');
+
+  -- La propietaria si ve las dos tiendas: owner y admin administran la
+  -- organizacion completa.
+  insert into push_tokens (user_id, expo_token, platform)
+    values ('33333333-3333-4333-8333-333333333331', 'ExponentPushToken[dueña]', 'ios');
+  perform test_assert(
+    (select count(distinct location_id) from pending_manager_alerts()
+       where recipient_user_id = '33333333-3333-4333-8333-333333333331') >= 1,
+    'La propietaria recibe alertas de su organizacion');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_nombres text[];
+  v_columnas text[];
+  v_texto text;
+begin
+  insert into push_tokens (user_id, expo_token, platform)
+    values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios');
+
+  -- EL TEXTO NO LLEVA DATOS SENSIBLES.
+  --
+  -- La comprobacion es doble a proposito. Primero el CONJUNTO DE COLUMNAS: si
+  -- alguien anade una columna con el nombre del empleado "para que el texto sea
+  -- mas util", esta lista deja de cuadrar y la prueba falla antes de que ese
+  -- nombre llegue a la pantalla de bloqueo de un telefono.
+  select array_agg(a.attname::text order by a.attname) into v_columnas
+  from pg_proc p
+  join unnest(p.proallargtypes, p.proargnames) as a(atttype, attname) on true
+  where p.proname = 'pending_manager_alerts'
+    and p.pronamespace = 'public'::regnamespace
+    and a.attname not like 'p\_%';
+
+  perform test_assert(
+    v_columnas = array[
+      'alert_type', 'location_id', 'occurrence_key', 'organization_id',
+      'payload', 'recipient_locale', 'recipient_user_id', 'subject_id'
+    ],
+    'pending_manager_alerts devuelve exactamente las columnas previstas y ninguna de personas');
+
+  -- Y despues el CONTENIDO: ni un nombre del personal aparece en lo que se
+  -- devuelve, payload incluido. Los nombres se leen del propio seed, asi que la
+  -- prueba sigue valiendo si el seed cambia.
+  select array_agg(distinct x) into v_nombres from (
+    select e.full_name as x from employees e where e.organization_id = v_org
+    union all
+    select e.preferred_name from employees e
+      where e.organization_id = v_org and e.preferred_name is not null
+    union all
+    select pr.full_name from profiles pr
+      join organization_memberships m on m.user_id = pr.id
+      where m.organization_id = v_org
+  ) nombres where x is not null and btrim(x) <> '';
+
+  select string_agg(t::text, ' ') into v_texto from pending_manager_alerts(v_org) t;
+  perform test_assert(v_texto is not null, 'Hay alertas que inspeccionar');
+
+  perform test_assert(
+    not exists (
+      select 1 from unnest(v_nombres) as n where v_texto ilike '%' || n || '%'
+    ),
+    'Ningun nombre del personal aparece en lo que devuelve pending_manager_alerts');
+
+  -- El payload lleva solo el nombre de la tienda: el gerente de dos locales
+  -- necesita saber a cual ir, y un rotulo comercial no es un dato de una persona.
+  perform test_assert(
+    (select bool_and(payload - 'locationName' = '{}'::jsonb)
+       from pending_manager_alerts(v_org)),
+    'El payload no lleva nada mas que el nombre de la ubicacion');
+end
+$$;
+rollback;
+
+begin;
+do $$
+declare
+  v_manager uuid := '33333333-3333-4333-8333-333333333332';
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_device  uuid := '66666666-6666-4666-8666-666666666661';
+  v_id1 uuid;
+  v_id2 uuid;
+begin
+  insert into push_tokens (user_id, expo_token, platform)
+    values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios');
+
+  -- RELOJ SIN SINCRONIZAR: el umbral sale de `locations.settings`, no de una
+  -- constante, y el aviso vuelve cada dia mientras el problema siga.
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+       where alert_type = 'kioskNotSyncing') = 0,
+    'Un reloj recien activado no cuenta como sin sincronizar');
+
+  update kiosk_devices set last_sync_at = now() - interval '5 hours' where id = v_device;
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+       where alert_type = 'kioskNotSyncing') = 1,
+    'Cinco horas sin sincronizar pasan el umbral por defecto de 120 minutos');
+
+  update locations set settings = settings || '{"kioskSyncStaleMinutes": 600}'::jsonb
+    where id = '22222222-2222-4222-8222-222222222221';
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+       where alert_type = 'kioskNotSyncing') = 0,
+    'Subir el umbral de la ubicacion calla el aviso: el periodo es configurable (§19)');
+
+  -- INTENTO DE FICHAJE RECHAZADO. El hecho no existia en ninguna tabla porque la
+  -- funcion SQL rechaza levantando una excepcion, que deshace su propia
+  -- transaccion; lo anota la Edge Function despues, con esta funcion.
+  v_id1 := record_kiosk_rejection('demo-kiosk-main', 'revoked');
+  perform test_assert(v_id1 is not null, 'Se anota el intento desde un reloj revocado');
+
+  v_id2 := record_kiosk_rejection('demo-kiosk-main', 'revoked');
+  perform test_assert(v_id2 is null,
+    'Un segundo intento igual en el mismo minuto se colapsa: un iPad revocado reintenta en bucle');
+
+  perform test_assert(
+    record_kiosk_rejection('identificador-inventado', 'revoked') is null,
+    'Un identificador desconocido no se anota: no hay empresa a la que atribuirlo');
+
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org) where alert_type = 'wrongKiosk') = 1,
+    'El intento rechazado produce un aviso para quien administra esa tienda');
+
+  -- No tiene interruptor a proposito: es el aviso de que un iPad perdido sigue
+  -- intentando fichar, y quien se lo llevo no debe poder silenciarlo.
+  update notification_preferences
+    set preferences = preferences || '{"late": false, "noShow": false, "nearOvertime": false,
+                                       "incompleteEntry": false, "newRequest": false,
+                                       "kioskNotSyncing": false}'::jsonb
+    where user_id = v_manager;
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org) where alert_type = 'wrongKiosk') = 1,
+    'El aviso de fichaje rechazado no se puede apagar desde las preferencias');
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org) where alert_type <> 'wrongKiosk') = 0,
+    'Y todo lo demas si se apago');
+
+  raise notice '  --- pruebas de alertas del gerente completas ---';
+end
+$$;
+rollback;
