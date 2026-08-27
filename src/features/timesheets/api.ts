@@ -1,3 +1,4 @@
+import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
@@ -289,16 +290,23 @@ export async function fetchExportRows(params: {
   }
 }
 
+const manualEventRowSchema = z.object({
+  event_id: z.string().uuid(),
+  // Un descanso no abre ni cierra sesion, asi que puede volver sin sesion asociada.
+  work_session_id: z.string().uuid().nullable(),
+});
+
 export const manualEntryKinds = ['forgot_clock_in', 'forgot_clock_out', 'correction'] as const;
 export type ManualEntryKind = (typeof manualEntryKinds)[number];
 
 /**
- * Fichaje manual del gerente (§11.4).
+ * Solicitud de corrección creada por el gerente.
  *
- * No inserta en `time_events`: los eventos crudos solo los crea el servidor tras
- * validar credencial, estado e idempotencia, y la app no tiene permiso para
- * escribirlos. Lo que sí queda es una solicitud auditable con motivo obligatorio,
- * que aparece en la bandeja de Solicitudes con el resto de las correcciones.
+ * SIGUE EXISTIENDO, y no es lo mismo que `addManualTimeEvent`. Se usa cuando el
+ * gerente no sabe la hora exacta, o cuando el caso necesita que alguien más lo
+ * revise: la solicitud aparece en la bandeja con el resto de las correcciones y
+ * alguien la aprueba. `addManualTimeEvent` registra el fichaje directamente,
+ * cuando el gerente ya sabe qué pasó y actúa él.
  */
 export async function createManualEntryRequest(params: {
   organizationId: string;
@@ -331,4 +339,59 @@ export async function createManualEntryRequest(params: {
       reason,
     }),
   );
+}
+
+/**
+ * Fichaje manual DIRECTO del gerente (§11.4 "agregar fichaje manual con motivo").
+ *
+ * Pasa por el RPC `manager_add_time_event`, no por un insert: la app no tiene
+ * —ni debe tener— permiso de escritura sobre `time_events`. El servidor comprueba
+ * que quien llama administre la ubicación, que el empleado sea de esa ubicación y
+ * de esa empresa, que el motivo no esté vacío, que la hora no esté en el futuro y
+ * que la transición encaje con el estado del empleado EN ESE INSTANTE, no en el
+ * actual.
+ *
+ * Crea un evento nuevo marcado `source = 'manager'`; no edita ninguno existente,
+ * porque `time_events` es append-only. El motivo queda en `time_adjustments` y en
+ * `audit_logs`.
+ *
+ * La clave de idempotencia se genera aquí, antes de enviar, para que un doble toque
+ * del botón no produzca dos fichajes. Es la misma razón que en el kiosco.
+ */
+export async function addManualTimeEvent(params: {
+  employeeId: string;
+  locationId: string;
+  eventType: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+  occurredAt: string;
+  reason: string;
+  breakType?: 'paid' | 'unpaid' | 'meal' | 'other' | null;
+  shiftId?: string | null;
+}): Promise<{ eventId: string; workSessionId: string | null }> {
+  const reason = params.reason.trim();
+  if (reason.length === 0) throw toAdminError({ code: '23514', message: 'REASON_REQUIRED' });
+
+  const db = requireClient();
+  try {
+    const { data, error } = await db.rpc(RPC.managerAddTimeEvent, {
+      p_employee_id: params.employeeId,
+      p_location_id: params.locationId,
+      p_event_type: params.eventType,
+      p_occurred_at: params.occurredAt,
+      p_reason: reason,
+      p_break_type: params.breakType ?? null,
+      p_shift_id: params.shiftId ?? null,
+      p_idempotency_key: Crypto.randomUUID(),
+    });
+    if (error !== null) throw toAdminError(error);
+
+    const parsed = z.array(manualEventRowSchema).safeParse(data);
+    const row = parsed.success ? parsed.data[0] : undefined;
+    if (row === undefined) {
+      // El servidor respondió con otra forma: no se inventa un resultado (§20).
+      throw toAdminError({ code: 'shape', message: 'UNEXPECTED_SHAPE' });
+    }
+    return { eventId: row.event_id, workSessionId: row.work_session_id };
+  } catch (error) {
+    throw toAdminError(error);
+  }
 }

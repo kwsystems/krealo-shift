@@ -456,24 +456,58 @@ export function TimesheetsScreen() {
         <ManualEntrySheet
           employees={employeeOptions}
           dateKey={dateKeyOf(nowISO, scope.timezone)}
-          saving={mutations.manualEntry.isPending}
+          saving={mutations.manualEntry.isPending || mutations.addEvent.isPending}
           onSubmit={({ employeeId, kind, time, reason }) => {
             const targetDate = dateKeyOf(nowISO, scope.timezone);
-            mutations.manualEntry.mutate(
+            const occurredAt = localDateTimeToInstant(targetDate, time, scope.timezone);
+
+            const closeWith = (message: string) => () => {
+              setManualOpen(false);
+              setFeedback(message);
+            };
+
+            // DOS CAMINOS DISTINTOS, Y LA DIFERENCIA IMPORTA.
+            //
+            // "Olvidó marcar entrada" y "olvidó marcar salida" son fichajes que
+            // faltan: el gerente sabe qué pasó y los registra él, con motivo, a
+            // través de `manager_add_time_event`. Eso es lo que pide §11.4
+            // ("agregar fichaje manual con motivo") y queda auditado al instante.
+            //
+            // "Corrección" es otra cosa: cambia un evento que YA existe, y los
+            // eventos crudos son append-only. Sigue creando una solicitud para que
+            // se revise, y la corrección real se aplica con `manager_adjust_time`
+            // desde el detalle de la sesión.
+            if (kind === 'correction') {
+              mutations.manualEntry.mutate(
+                {
+                  employeeId,
+                  kind,
+                  targetDate,
+                  proposedAt: occurredAt,
+                  proposedEndAt: null,
+                  reason,
+                },
+                { onSuccess: closeWith(t('timesheet.manualEntrySent')) },
+              );
+              return;
+            }
+
+            // Un fichaje SIN hora no se puede registrar: la hora es el dato. La
+            // solicitud si admite hora nula —ahi alguien la va a proponer— pero el
+            // registro directo no puede inventarla.
+            if (occurredAt === null) {
+              setFeedback(t('schedule.invalidTime'));
+              return;
+            }
+
+            mutations.addEvent.mutate(
               {
                 employeeId,
-                kind,
-                targetDate,
-                proposedAt: localDateTimeToInstant(targetDate, time, scope.timezone),
-                proposedEndAt: null,
+                eventType: kind === 'forgot_clock_in' ? 'clock_in' : 'clock_out',
+                occurredAt,
                 reason,
               },
-              {
-                onSuccess: () => {
-                  setManualOpen(false);
-                  setFeedback(t('timesheet.manualEntrySent'));
-                },
-              },
+              { onSuccess: closeWith(t('timesheet.manualEntryRegistered')) },
             );
           }}
           onClose={() => setManualOpen(false)}

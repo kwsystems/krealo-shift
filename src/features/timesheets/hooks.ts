@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  addManualTimeEvent,
   adjustWorkSession,
   approvePeriod,
   createManualEntryRequest,
@@ -211,6 +212,29 @@ export function useTimesheetMutations(params: {
     onSuccess: invalidate,
   });
 
+  /**
+   * Fichaje manual DIRECTO (§11.4). Distinto de `manualEntry`, que crea una
+   * solicitud para que alguien la revise.
+   *
+   * Se usa cuando el gerente sabe qué pasó y actúa él: "se le olvidó marcar la
+   * salida, se fue a casa, y hay que dejar la jornada cuadrada hoy". El servidor
+   * valida permiso, empresa, ubicación, motivo, que la hora no esté en el futuro y
+   * que la transición encaje con el estado del empleado en ESE instante.
+   */
+  const addEvent = useMutation({
+    mutationFn: (variables: {
+      employeeId: string;
+      eventType: 'clock_in' | 'clock_out' | 'break_start' | 'break_end';
+      occurredAt: string;
+      reason: string;
+    }) =>
+      addManualTimeEvent({
+        locationId: params.locationId ?? '',
+        ...variables,
+      }),
+    onSuccess: invalidate,
+  });
+
   const approve = useMutation({
     mutationFn: async () => {
       const period = await ensurePeriod({
@@ -229,5 +253,5 @@ export function useTimesheetMutations(params: {
     onSuccess: invalidate,
   });
 
-  return { adjust, manualEntry, approve, reopen };
+  return { adjust, manualEntry, addEvent, approve, reopen };
 }
