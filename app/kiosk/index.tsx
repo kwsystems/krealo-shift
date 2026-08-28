@@ -72,23 +72,41 @@ export default function KioskIdleScreen() {
       if (binding === null) return;
       setChecking(true);
 
-      const result = await verifyPin({ pin: candidate, locationId: binding.locationId });
-
-      setChecking(false);
-      setPin('');
+      // `finally` PARA LIMPIAR EL ESTADO SIEMPRE. Si `verifyPin` lanzara,
+      // `setChecking(false)` no correria y el teclado se quedaria en "comprobando"
+      // para siempre: el empleado de pie frente al iPad, sin mensaje y sin poder
+      // fichar. Eso pasaba de verdad, porque `invoke` leia el Keychain fuera de su
+      // try. Ya no lanza, y esto es la segunda linea de defensa: la interfaz no debe
+      // poder colgarse porque una capa de abajo se equivoque otra vez.
+      let result: Awaited<ReturnType<typeof verifyPin>>;
+      try {
+        result = await verifyPin({ pin: candidate, locationId: binding.locationId });
+      } catch {
+        setError(t('errors.generic'));
+        return;
+      } finally {
+        setChecking(false);
+        setPin('');
+      }
 
       if (result.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setFromOnline(result.data);
         // Se cachea el estado que confirmo el servidor: es de donde parte la
         // reconstruccion si despues se cae la red (§9.7).
+        //
+        // CON `catch`: es una escritura en SQLite y puede fallar. Un fallo aqui NO
+        // debe impedir el fichaje —el servidor ya valido el PIN, la persona esta
+        // dentro— pero sin el `catch` era un rechazo sin capturar. Se pierde la
+        // capacidad de fichar sin red hasta el siguiente PIN, y eso es aceptable;
+        // bloquear la entrada al trabajo por una cache no lo es.
         void cacheAttendanceState({
           employeeOpaqueId: result.data.employee.opaqueId,
           attendanceState: result.data.attendanceState,
           shiftId: result.data.eligibleShifts[0]?.id ?? null,
           sessionStartedAt: result.data.openSession?.startedAt ?? null,
           takenBreakMinutes: result.data.openSession?.takenBreakMinutes ?? 0,
-        });
+        }).catch(() => undefined);
         router.push('/kiosk/actions');
         return;
       }
@@ -156,6 +174,12 @@ export default function KioskIdleScreen() {
           }
           break;
         }
+        case 'device_credential':
+          // NO se cae al camino offline. El PIN sin conexión se valida con la clave
+          // del Keychain, que es justo lo que no se pudo leer: intentarlo daría un
+          // "PIN incorrecto" que sería mentira. Se dice qué pasa y qué hacer.
+          setError(t('errors.deviceCredential'));
+          break;
         default:
           setError(t('errors.generic'));
       }

@@ -298,11 +298,23 @@ export default function KioskActionsScreen() {
       // Bloquear una entrada al trabajo por una imagen seria el orden equivocado.
       if (photo?.status === 'captured' && result.data.eventId) {
         const eventId = result.data.eventId;
+        // Escritura en SQLite mas un pase de sincronizacion: los dos pueden fallar.
+        // Sin `catch` era un rechazo sin capturar, y la foto se perdia en silencio
+        // ademas. Con el, la foto se pierde igual —no hay a donde reintentar si no
+        // se pudo encolar— pero queda dicho en la consola y no revienta el fichaje,
+        // que ya esta registrado.
         void enqueuePhotoForEvent({
           localUri: photo.uri,
           idempotencyKey,
           eventId,
-        }).then(() => runSync());
+        })
+          .then(() => runSync())
+          .catch(() => {
+            console.warn(
+              '[krealo-shift] No se pudo encolar la foto del fichaje. El fichaje SI se ' +
+                'registro; la foto no se va a subir.',
+            );
+          });
       }
 
       setStep({

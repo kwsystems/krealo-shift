@@ -45,7 +45,10 @@ export function PhotoCapture({
   useEffect(() => {
     if (permission === null) return;
     if (!permission.granted && permission.canAskAgain) {
-      void requestPermission();
+      // Pedir el permiso puede rechazar. Sin `catch` era un rechazo sin capturar;
+      // con el, `permission` se queda como estaba y la pantalla muestra su estado de
+      // "sin permiso", que es lo correcto: no se concedio.
+      void requestPermission().catch(() => undefined);
     }
   }, [permission, requestPermission]);
 

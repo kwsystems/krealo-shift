@@ -77,9 +77,15 @@ async function pickWeb(): Promise<PickResult> {
         terminar({ status: 'unsupportedType', contentType: file.type });
         return;
       }
-      void file.arrayBuffer().then((body) => {
-        terminar({ status: 'picked', image: { body, contentType, bytes: file.size } });
-      });
+      // Con `catch`: si leer el archivo falla, sin el la promesa de fuera NUNCA se
+      // resolvia y el boton se quedaba girando para siempre. Se trata como si se
+      // hubiera cancelado, que es lo que la persona puede hacer al respecto.
+      void file
+        .arrayBuffer()
+        .then((body) => {
+          terminar({ status: 'picked', image: { body, contentType, bytes: file.size } });
+        })
+        .catch(() => terminar({ status: 'cancelled' }));
     });
 
     input.click();

@@ -18,6 +18,16 @@ import type { KioskBinding } from '@/stores/kiosk-store';
 export type KioskApiError =
   | { kind: 'not_configured' }
   | { kind: 'offline' }
+  /**
+   * El DISPOSITIVO falló, no la red ni el servidor: no se pudo leer la credencial
+   * del Keychain.
+   *
+   * Existe aparte de `offline` porque el consejo es opuesto. "Sin conexión" manda a
+   * alguien a revisar el wifi de la tienda durante una hora; esto se arregla
+   * reiniciando el iPad o volviéndolo a activar. Y es lo que devolvía antes: el
+   * catch de `invoke` trataba cualquier excepción como falta de red.
+   */
+  | { kind: 'device_credential' }
   | { kind: 'revoked' }
   | { kind: 'invalid_pin'; remainingAttempts: number | null }
   | { kind: 'locked'; lockedUntil: string }
@@ -161,21 +171,44 @@ async function invoke<T>(
   const supabase = getSupabase();
   if (supabase === null) return { ok: false, error: { kind: 'not_configured' } };
 
-  // Las Edge Functions exigen DOS cabeceras: el secreto y el identificador
-  // publico del dispositivo. Con una sola, `authenticate_kiosk` no puede saber
-  // contra que hash comparar y rechaza la llamada.
-  const credential = await secureStorage.get(`${SECURE_KEYS.kioskCredential}.secret`);
-  const binding = await secureStorage.getJson<{ devicePublicId?: string }>(
-    SECURE_KEYS.kioskCredential,
-  );
-  const publicId = binding?.devicePublicId ?? null;
-
-  const kioskHeaders =
-    credential !== null && publicId !== null
-      ? { 'x-kiosk-credential': credential, 'x-kiosk-device': publicId }
-      : undefined;
-
+  // EL TRY EMPIEZA AQUI Y NO DESPUES DE LEER EL KEYCHAIN, y eso era un fallo grave.
+  //
+  // `secureStorage.get` es `SecureStore.getItemAsync` sin catch, y puede rechazar:
+  // Keychain no disponible antes del primer desbloqueo del dispositivo, item
+  // corrupto, grupo de acceso todavia no listo. Con las dos lecturas fuera del try,
+  // `invoke` LANZABA en vez de devolver un resultado.
+  //
+  // Y quien llama no lo espera. En la pantalla del kiosco:
+  //
+  //     const result = await verifyPin(...);   // <- lanzaba aqui
+  //     setChecking(false);                    // <- nunca se ejecutaba
+  //
+  // O sea que el teclado del PIN se quedaba en "comprobando" PARA SIEMPRE: el
+  // empleado de pie frente al iPad, sin mensaje, sin poder fichar, y la unica salida
+  // era cerrar la app. Lo mismo en la pantalla de salir del modo kiosco.
   try {
+    // Las Edge Functions exigen DOS cabeceras: el secreto y el identificador
+    // publico del dispositivo. Con una sola, `authenticate_kiosk` no puede saber
+    // contra que hash comparar y rechaza la llamada.
+    //
+    // EN SU PROPIO TRY para no confundirse con un fallo de red: los dos casos
+    // necesitan consejos opuestos, y el catch de abajo devuelve `offline`.
+    let kioskHeaders: { 'x-kiosk-credential': string; 'x-kiosk-device': string } | undefined;
+    try {
+      const credential = await secureStorage.get(`${SECURE_KEYS.kioskCredential}.secret`);
+      const binding = await secureStorage.getJson<{ devicePublicId?: string }>(
+        SECURE_KEYS.kioskCredential,
+      );
+      const publicId = binding?.devicePublicId ?? null;
+
+      kioskHeaders =
+        credential !== null && publicId !== null
+          ? { 'x-kiosk-credential': credential, 'x-kiosk-device': publicId }
+          : undefined;
+    } catch {
+      return { ok: false, error: { kind: 'device_credential' } };
+    }
+
     const { data, error } = await supabase.functions.invoke(functionName, {
       body,
       headers: kioskHeaders,

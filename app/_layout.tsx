@@ -25,7 +25,10 @@ import { colors } from '@/theme/tokens';
 // blanco durante el arranque.
 initI18n();
 
-void SplashScreen.preventAutoHideAsync();
+// `catch` porque puede rechazar si el splash ya se oculto —recarga rapida en
+// desarrollo, o una segunda llamada— y eso seria un rechazo sin capturar en el
+// arranque. Que no se pueda retener el splash no impide arrancar.
+void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 /**
  * TanStack Query gobierna el estado remoto (§4). Los tiempos de obsolescencia son

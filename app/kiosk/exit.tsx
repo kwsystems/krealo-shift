@@ -66,9 +66,22 @@ export default function KioskExitScreen() {
   const tryAuthorize = async (candidate: string) => {
     if (binding === null) return;
     setChecking(true);
-    const result = await verifyPin({ pin: candidate, locationId: binding.locationId });
-    setChecking(false);
-    setPin('');
+
+    // `finally` PARA LIMPIAR EL ESTADO SIEMPRE, y no es formalismo: si `verifyPin`
+    // lanzara, `setChecking(false)` no correria y esta pantalla se quedaria en
+    // "comprobando" para siempre, sin poder salir del modo kiosco. `invoke` ya no
+    // lanza —se arreglo—, pero la interfaz no debe poder colgarse porque una capa
+    // de abajo se equivoque otra vez.
+    let result: Awaited<ReturnType<typeof verifyPin>>;
+    try {
+      result = await verifyPin({ pin: candidate, locationId: binding.locationId });
+    } catch {
+      setError(t('errors.generic'));
+      return;
+    } finally {
+      setChecking(false);
+      setPin('');
+    }
 
     if (result.ok) {
       // EL PIN CORRECTO NO ALCANZA. Antes esta pantalla se abría con cualquier PIN
@@ -87,6 +100,13 @@ export default function KioskExitScreen() {
       // Sin red no hay forma de confirmar que quien teclea es gerente, y esta
       // pantalla puede desactivar el reloj. Se dice por qué, no un error genérico.
       setError(t('kiosk.exitNeedsConnection'));
+      return;
+    }
+
+    if (result.error.kind === 'device_credential') {
+      // No es "PIN incorrecto": el iPad no pudo leer su credencial. Decir lo otro
+      // haria que alguien probara PIN distintos durante diez minutos.
+      setError(t('errors.deviceCredential'));
       return;
     }
 
@@ -198,7 +218,12 @@ export default function KioskExitScreen() {
             <DangerButton
               label={t('kiosk.menuExit')}
               onPress={() => {
-                void deactivate().then(() => router.replace('/'));
+                // Si `deactivate` falla —borrar del Keychain puede fallar— antes no
+                // navegaba y no decia nada: el boton parecia no hacer nada. Ahora se
+                // dice, porque la alternativa es que alguien lo pulse diez veces.
+                void deactivate()
+                  .then(() => router.replace('/'))
+                  .catch(() => setError(t('errors.generic')));
               }}
               testID="kiosk-exit-confirm"
             />

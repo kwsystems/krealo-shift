@@ -544,7 +544,8 @@
     "kioskWrongLocation": "This iPad belongs to a different store.",
     "kioskRevoked": "This time clock was deactivated.",
     "configMissing": "Environment configuration is missing: {{keys}}",
-    "concurrentEdit": "Someone else changed this. Reload it."
+    "concurrentEdit": "Someone else changed this. Reload it.",
+    "deviceCredential": "This iPad couldn't read its credential. Restart it; if it keeps happening, an administrator needs to set it up as a clock again."
   },
   "a11y": {
     "keypadDigit": "Digit {{digit}}",

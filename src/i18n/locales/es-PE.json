@@ -544,7 +544,8 @@
     "kioskWrongLocation": "Este iPad pertenece a otra tienda.",
     "kioskRevoked": "Este reloj fue desactivado.",
     "configMissing": "Falta configuración del entorno: {{keys}}",
-    "concurrentEdit": "Alguien más cambió este dato. Vuelve a cargarlo."
+    "concurrentEdit": "Alguien más cambió este dato. Vuelve a cargarlo.",
+    "deviceCredential": "Este iPad no pudo leer su credencial. Reinícialo; si sigue pasando, un administrador tiene que volver a activarlo como reloj."
   },
   "a11y": {
     "keypadDigit": "Dígito {{digit}}",
