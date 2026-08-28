@@ -89,6 +89,20 @@ export const TABLES = {
 /** Vistas de consulta que expone la base (§14). */
 export const VIEWS = {
   employeesWorkingNow: 'employees_working_now',
+  /**
+   * Correcciones con el nombre del autor resuelto (§11.4).
+   *
+   * Se lee la VISTA y no `time_adjustments` porque el autor es un `uuid` que apunta a
+   * `auth.users`, y el cliente no puede leer esa tabla —ni debe—. La vista lo traduce
+   * con `app_actor_display_name`, que se cierra por quién pregunta y por quién se
+   * pregunta; el razonamiento largo está en la migración
+   * `20260827002200_autor_de_correcciones.sql`.
+   *
+   * `time_adjustments` SIGUE en `TABLES` porque las pruebas SQL la usan y porque leerla
+   * directamente no es un fallo de seguridad, solo se queda sin el autor.
+   */
+  timeAdjustmentsWithAuthor: 'time_adjustments_with_author',
+
   dailyTimeSummary: 'daily_time_summary',
   /**
    * Inventario de kioscos. Se lee la VISTA y nunca la tabla: `kiosk_devices` está

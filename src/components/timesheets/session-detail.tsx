@@ -193,6 +193,13 @@ export function SessionDetailSheet({
                   language,
                 })}
               />
+              {/*
+                QUIÉN lo cambió. §11.4 exige conservar el autor y la columna existía en la
+                base desde la primera migración; lo que no había era forma de mostrarla,
+                porque `created_by` apunta a `auth.users` y el cliente no puede leer esa
+                tabla. Lo resuelve la vista `time_adjustments_with_author`.
+              */}
+              <KeyValueRow label={t('timesheet.changedBy')} value={adjustment.author_name ?? '—'} />
               <KeyValueRow
                 label={t('timesheet.newValue')}
                 value={describeSide(readAdjustmentSide(adjustment.after_value), {

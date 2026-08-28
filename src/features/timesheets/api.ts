@@ -74,6 +74,14 @@ const adjustmentSchema = z.object({
   reason: z.string(),
   created_at: z.string(),
   channel: z.string(),
+  /**
+   * Nombre para mostrar de quien hizo la corrección (§11.4).
+   *
+   * `null` cuando no se puede resolver: la hizo alguien que ya no está en la
+   * organización, o la fila la escribió una función del sistema sin `auth.uid()`. La
+   * pantalla lo dice como "—" y no inventa un nombre.
+   */
+  author_name: z.string().nullable().default(null),
 });
 
 export type TimeAdjustment = z.infer<typeof adjustmentSchema>;
@@ -148,9 +156,11 @@ export async function fetchAdjustments(sessionIds: string[]): Promise<TimeAdjust
   if (sessionIds.length === 0) return [];
   return selectRows(z.array(adjustmentSchema), (db) =>
     db
-      .from(TABLES.timeAdjustments)
+      // LA VISTA y no la tabla: el autor es un uuid de `auth.users`, que el cliente no
+      // puede leer. El motivo largo está en `VIEWS.timeAdjustmentsWithAuthor`.
+      .from(VIEWS.timeAdjustmentsWithAuthor)
       .select(
-        'id, work_session_id, target_type, before_value, after_value, reason, created_at, channel',
+        'id, work_session_id, target_type, before_value, after_value, reason, created_at, channel, author_name',
       )
       .in('work_session_id', sessionIds)
       .order('created_at', { ascending: false }),

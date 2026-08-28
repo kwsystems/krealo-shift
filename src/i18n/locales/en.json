@@ -373,7 +373,8 @@
     "statusFilter": "Status",
     "stillOpen": "Still open",
     "valueDidNotExist": "Didn't exist",
-    "valueUnknownShape": "Unrecognized format"
+    "valueUnknownShape": "Unrecognized format",
+    "changedBy": "Changed by"
   },
   "requests": {
     "title": "Requests",

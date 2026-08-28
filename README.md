@@ -261,7 +261,7 @@ momento: todo pasa dentro del propio panel de Supabase.
    para esto no la vas a usar.
 
 2. **Crear el esquema.** Menú lateral → **SQL Editor** → _New query_ → pega TODO
-   `supabase/instalar-todo.sql` → **Run**. Son las 21 migraciones y los datos de
+   `supabase/instalar-todo.sql` → **Run**. Son las 22 migraciones y los datos de
    demostración en un solo archivo. Al terminar dice _Success. No rows returned_.
 
 3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → _Add user_ →
@@ -349,29 +349,30 @@ supabase db push
 
 Aplica, en orden, los archivos de `supabase/migrations/`:
 
-| Migración                                   | Qué crea                                                                                                                                       |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `…000100_initial_schema.sql`                | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son _append-only_                                                       |
-| `…000200_rls.sql`                           | Row Level Security en todas las tablas expuestas                                                                                               |
-| `…000300_functions.sql`                     | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación                                                     |
-| `…000400_guards.sql`                        | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada)                       |
-| `…000500_kiosk_context.sql`                 | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN                                                                       |
-| `…000600_offline_pin.sql`                   | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline                                          |
-| `…000700_offline_verifier_device_key.sql`   | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió                                                     |
-| `…000800_attendance_photos.sql`             | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad                                                                         |
-| `…000900_scheduled_jobs.sql`                | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada                                                              |
-| `…001000_kiosk_devices_admin.sql`           | vista de inventario de kioscos para el panel, sin exponer las credenciales                                                                     |
-| `…001100_manager_alerts.sql`                | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes                                                        |
-| `…001200_organization_logo.sql`             | bucket de logo de la organización, de lectura pública y escritura solo del administrador                                                       |
-| `…001300_manager_add_time_event.sql`        | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado                                                                     |
-| `…001400_function_privileges.sql`           | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca                                     |
-| `…001500_authorize_rpc.sql`                 | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso                                                            |
-| `…001600_close_direct_writes.sql`           | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable                                            |
-| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada                             |
-| `…001800_kiosk_request_updates.sql`         | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó          |
-| `…001900_alertas_1106.sql`                  | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores                 |
-| `…002000_aviso_ultimo_contacto.sql`         | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos |
-| `…002100_truncar_minutos.sql`               | los segundos sueltos se truncan igual que en TypeScript: SQL redondeaba y había hasta un minuto de diferencia en lo que se paga                |
+| Migración                                   | Qué crea                                                                                                                                          |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…000100_initial_schema.sql`                | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son _append-only_                                                          |
+| `…000200_rls.sql`                           | Row Level Security en todas las tablas expuestas                                                                                                  |
+| `…000300_functions.sql`                     | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación                                                        |
+| `…000400_guards.sql`                        | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada)                          |
+| `…000500_kiosk_context.sql`                 | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN                                                                          |
+| `…000600_offline_pin.sql`                   | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline                                             |
+| `…000700_offline_verifier_device_key.sql`   | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió                                                        |
+| `…000800_attendance_photos.sql`             | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad                                                                            |
+| `…000900_scheduled_jobs.sql`                | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada                                                                 |
+| `…001000_kiosk_devices_admin.sql`           | vista de inventario de kioscos para el panel, sin exponer las credenciales                                                                        |
+| `…001100_manager_alerts.sql`                | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes                                                           |
+| `…001200_organization_logo.sql`             | bucket de logo de la organización, de lectura pública y escritura solo del administrador                                                          |
+| `…001300_manager_add_time_event.sql`        | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado                                                                        |
+| `…001400_function_privileges.sql`           | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca                                        |
+| `…001500_authorize_rpc.sql`                 | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso                                                               |
+| `…001600_close_direct_writes.sql`           | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable                                               |
+| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada                                |
+| `…001800_kiosk_request_updates.sql`         | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó             |
+| `…001900_alertas_1106.sql`                  | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores                    |
+| `…002000_aviso_ultimo_contacto.sql`         | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos    |
+| `…002100_truncar_minutos.sql`               | los segundos sueltos se truncan igual que en TypeScript: SQL redondeaba y había hasta un minuto de diferencia en lo que se paga                   |
+| `…002200_autor_de_correcciones.sql`         | §11.4 exige conservar el AUTOR de cada corrección y no había forma de mostrarlo: `created_by` apunta a `auth.users`, que el cliente no puede leer |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.
@@ -671,7 +672,7 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   habría que replicar en el iPad decisiones de un encargado.
 
 **Lo que NO falta, por si la lista anterior confundió a alguien:** el esquema y las
-21 migraciones, RLS con 243 aserciones, las 8 Edge Functions, el modo kiosco completo,
+22 migraciones, RLS con 255 aserciones, las 8 Edge Functions, el modo kiosco completo,
 el editor de horarios semanal, hojas de tiempo con exportación CSV, correcciones y
 aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
 envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés

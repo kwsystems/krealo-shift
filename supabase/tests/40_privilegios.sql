@@ -64,7 +64,16 @@ declare
     -- se evalua con los permisos de quien inserta. Sin `execute`, un insert que no
     -- envie las preferencias falla con "permiso denegado para la funcion", que no
     -- se parece en nada al problema real.
-    'default_notification_preferences'
+    'default_notification_preferences',
+    -- `app_actor_display_name` traduce el `created_by` de una correccion a un nombre
+    -- para mostrar (§11.4). Es `security definer` y PUEDE devolver correos de
+    -- `auth.users`, asi que entra en la lista con su razon escrita y con cuatro
+    -- pruebas propias mas abajo: se cierra por quien pregunta —solo quien administra
+    -- esa organizacion— y por quien se pregunta —solo usuarios con membresia en ESA
+    -- organizacion, tambien en el respaldo del correo—. Sin la segunda barrera seria
+    -- un directorio de correos del proyecto entero: se llama en bucle con uuids y se
+    -- cosecha.
+    'app_actor_display_name'
   ];
   v_fugas text;
   v_total integer;
@@ -472,6 +481,147 @@ begin
     'Y deja el rastro auditable con el motivo, que es la diferencia entera');
 
   raise notice '  --- pruebas de escritura directa completas ---';
+end
+$$;
+rollback;
+
+-- ===========================================================================
+-- El autor de una correccion (§11.4) sin convertirse en un directorio de correos
+-- ===========================================================================
+--
+-- `app_actor_display_name` es `security definer` y puede devolver correos de
+-- `auth.users`. Una funcion asi, si acepta cualquier uuid, es un ORACULO: se llama en
+-- bucle y se cosecha el directorio de usuarios del proyecto. Se cierra por los dos
+-- lados y aqui se comprueban los dos, mas que el camino legitimo siga funcionando:
+-- cerrar la puerta equivocada dejaria el historial sin autor y una prueba que solo
+-- comprueba las negaciones pasaria igual con todo roto.
+begin;
+do $$
+declare
+  v_org        uuid := '11111111-1111-4111-8111-111111111111';
+  v_otra_org   uuid := '99999999-9999-4999-8999-999999999999';
+  v_gerenta    uuid := '33333333-3333-4333-8333-333333333332';
+  v_propietaria uuid := '33333333-3333-4333-8333-333333333331';
+  v_ajeno      uuid := '33333333-3333-4333-8333-333333333339';
+  v_nombre     text;
+begin
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_gerenta, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- Camino del NOMBRE: quien corrigio tiene ficha de empleado en esta organizacion.
+  select app_actor_display_name(v_gerenta, v_org) into v_nombre;
+  perform test_assert(v_nombre = 'Gerenta Demo',
+    'El autor con ficha de empleado se resuelve por su nombre');
+
+  -- Camino del RESPALDO: la propietaria NO tiene ficha de empleado, y sin el respaldo
+  -- la columna diria un guion justo para quien mas corrige. Ese es el caso por el que
+  -- la funcion existe.
+  select app_actor_display_name(v_propietaria, v_org) into v_nombre;
+  perform test_assert(v_nombre = 'demo-owner@krealoshift.invalid',
+    'Un autor sin ficha de empleado se resuelve por su correo, no como un guion');
+
+  -- BARRERA 2, por quien se pregunta. El usuario existe y es propietario de OTRA
+  -- organizacion. Sin esta barrera, quien administra una tienda podria resolver el
+  -- correo de cualquier usuario del proyecto pasando su uuid: el oraculo otra vez.
+  select app_actor_display_name(v_ajeno, v_org) into v_nombre;
+  perform test_assert(v_nombre is null,
+    'No se resuelve un usuario que no pertenece a la organizacion preguntada');
+
+  -- BARRERA 1, quien pregunta. La organizacion existe y el usuario tambien; lo que no
+  -- existe es el derecho de esta gerenta a preguntar por ella.
+  select app_actor_display_name(v_ajeno, v_otra_org) into v_nombre;
+  perform test_assert(v_nombre is null,
+    'No se resuelve nada de una organizacion que quien pregunta no administra');
+
+  -- Un nulo no revienta ni devuelve basura: `created_by` puede ser null si la fila la
+  -- escribio una funcion del sistema sin `auth.uid()`.
+  select app_actor_display_name(null, v_org) into v_nombre;
+  perform test_assert(v_nombre is null, 'Un autor nulo devuelve nulo y no revienta');
+
+  raise notice '  --- pruebas del autor de correcciones completas ---';
+end
+$$;
+rollback;
+
+-- La vista: mismas filas que la RLS ya autoriza, con el autor traducido.
+begin;
+do $$
+declare
+  v_gerenta  uuid := '33333333-3333-4333-8333-333333333332';
+  v_ajeno    uuid := '33333333-3333-4333-8333-333333333339';
+  v_sesion   uuid;
+  v_filas    integer;
+  v_con_autor integer;
+begin
+  -- Se crea una correccion por el camino legitimo para tener algo que mirar.
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_gerenta, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  select id into v_sesion from work_sessions
+    where location_id = '22222222-2222-4222-8222-222222222221'
+      and net_minutes is not null and ends_at is not null
+    order by starts_at limit 1;
+
+  if v_sesion is null then
+    raise notice '  (sin sesiones cerradas en el seed, se omite)';
+    return;
+  end if;
+
+  perform manager_adjust_time(
+    p_work_session_id => v_sesion,
+    p_expected_updated_at => (select updated_at from work_sessions where id = v_sesion),
+    p_new_starts_at => (select starts_at from work_sessions where id = v_sesion),
+    p_new_ends_at => (select ends_at from work_sessions where id = v_sesion) - interval '10 minutes',
+    p_reason => 'Prueba del autor en la vista');
+
+  select count(*), count(author_name)
+    into v_filas, v_con_autor
+    from time_adjustments_with_author
+    where work_session_id = v_sesion;
+
+  perform test_assert(v_filas > 0, 'La vista devuelve las correcciones de la sesion');
+  perform test_assert(v_con_autor = v_filas,
+    'Y TODAS traen autor: una columna que casi siempre esta vacia hace dudar del historial');
+
+  perform test_assert(
+    exists (select 1 from time_adjustments_with_author
+            where work_session_id = v_sesion and author_name = 'Gerenta Demo'),
+    'El autor de la vista es quien hizo la correccion, no otro');
+
+  -- La vista NO es un agujero: lleva `security_invoker`, asi que filtra con la RLS de
+  -- quien pregunta. Alguien de otra organizacion no ve nada de esta.
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_ajeno, 'role', 'authenticated')::text, true);
+
+  select count(*) into v_filas from time_adjustments_with_author
+    where organization_id = '11111111-1111-4111-8111-111111111111';
+
+  perform test_assert(v_filas = 0,
+    'Otra organizacion no ve ni una correccion a traves de la vista');
+
+  raise notice '  --- pruebas de la vista con autor completas ---';
+end
+$$;
+rollback;
+
+-- Y anon no toca nada de esto.
+begin;
+do $$
+begin
+  perform test_assert(
+    not has_function_privilege('anon',
+      'public.app_actor_display_name(uuid, uuid)', 'execute'),
+    'anon no puede ejecutar app_actor_display_name');
+
+  perform test_assert(
+    not has_table_privilege('anon', 'public.time_adjustments_with_author', 'select'),
+    'anon no puede leer la vista de correcciones con autor');
+
+  perform test_assert(
+    has_table_privilege('authenticated', 'public.time_adjustments_with_author', 'select'),
+    'authenticated SI puede leerla: es la que usa el panel');
 end
 $$;
 rollback;
