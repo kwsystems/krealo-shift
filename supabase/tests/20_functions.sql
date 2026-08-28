@@ -1279,3 +1279,90 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Los minutos de una sesion se TRUNCAN, igual que en TypeScript (§13)
+-- ===========================================================================
+--
+-- ESTA PRUEBA EXISTE POR UN FALLO CONCRETO. El calculo de duracion vive dos veces,
+-- en SQL y en TypeScript, y trataban los segundos sueltos distinto: el cast a int de
+-- Postgres REDONDEA (480.67 -> 481) y `differenceInMinutes` de date-fns TRUNCA
+-- (8 h 40 s -> 480).
+--
+-- Para el mismo fichaje, el kiosco mostraba 480 y la hoja de tiempo —y el CSV que va
+-- a nomina— decia 481. Hasta un minuto por sesion, en el numero por el que se paga.
+--
+-- Los casos de abajo son exactamente los que distinguen truncar de redondear: 40
+-- segundos sobrantes (redondear daria +1) y 20 segundos (redondear daria +0). Con la
+-- version anterior el primero fallaba.
+begin;
+do $$
+declare
+  v_org uuid := '11111111-1111-4111-8111-111111111111';
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_emp uuid := '55555555-5555-4555-8555-555555555554';  -- la que el seed deja sin turno
+  v_entrada timestamptz := date_trunc('hour', now()) - interval '9 hours';
+  v_sesion uuid;
+  v_entrada_id uuid;
+  v_bruto integer;
+  v_neto integer;
+begin
+  -- La sesion necesita su evento de entrada: `clock_in_event_id` es not null, y con
+  -- razon —una sesion sin el fichaje que la abrio no se puede reconstruir—.
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, occurred_at, source,
+     idempotency_key)
+  values (v_org, v_emp, v_loc, 'clock_in', v_entrada, 'kiosk', gen_random_uuid())
+  returning id into v_entrada_id;
+
+  -- 8 horas y 40 SEGUNDOS. Truncado son 480 minutos; redondeado serian 481.
+  insert into work_sessions
+    (organization_id, location_id, employee_id, clock_in_event_id, starts_at, ends_at,
+     status, gross_minutes, net_minutes, unpaid_break_minutes)
+  values (v_org, v_loc, v_emp, v_entrada_id, v_entrada,
+          v_entrada + interval '8 hours 40 seconds', 'complete', 0, 0, 0)
+  returning id into v_sesion;
+
+  perform rebuild_work_session_unchecked(v_sesion);
+
+  select gross_minutes, net_minutes into v_bruto, v_neto
+  from work_sessions where id = v_sesion;
+
+  perform test_assert(v_bruto = 480,
+    'Ocho horas y 40 segundos son 480 minutos brutos, no 481 — dio: ' || v_bruto);
+  perform test_assert(v_neto = 480,
+    'Y 480 netos sin descansos no pagados — dio: ' || v_neto);
+
+  -- 20 segundos sobrantes: aqui redondear y truncar coinciden, asi que sirve para
+  -- comprobar que no se rompio el caso normal.
+  update work_sessions
+    set ends_at = v_entrada + interval '8 hours 20 seconds'
+  where id = v_sesion;
+  perform rebuild_work_session_unchecked(v_sesion);
+  select gross_minutes into v_bruto from work_sessions where id = v_sesion;
+  perform test_assert(v_bruto = 480,
+    'Ocho horas y 20 segundos siguen siendo 480 minutos — dio: ' || v_bruto);
+
+  -- 59 segundos: el peor caso para redondear, que daria un minuto entero de regalo.
+  update work_sessions
+    set ends_at = v_entrada + interval '8 hours 59 seconds'
+  where id = v_sesion;
+  perform rebuild_work_session_unchecked(v_sesion);
+  select gross_minutes into v_bruto from work_sessions where id = v_sesion;
+  perform test_assert(v_bruto = 480,
+    'Ocho horas y 59 segundos son 480 minutos: no se regala un minuto — dio: ' || v_bruto);
+
+  -- Y un minuto completo si se cuenta, para que la prueba no pase por truncar a lo
+  -- bruto todo lo que le echen.
+  update work_sessions
+    set ends_at = v_entrada + interval '8 hours 1 minute'
+  where id = v_sesion;
+  perform rebuild_work_session_unchecked(v_sesion);
+  select gross_minutes into v_bruto from work_sessions where id = v_sesion;
+  perform test_assert(v_bruto = 481,
+    'Ocho horas y un minuto SI son 481 minutos — dio: ' || v_bruto);
+
+  raise notice '  --- pruebas de truncado de minutos completas ---';
+end
+$$;
+rollback;
