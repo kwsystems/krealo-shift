@@ -1,13 +1,10 @@
-import { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
-
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useManagerMembership } from '@/hooks/use-manager-scope';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
-
 /**
  * Resolución de arranque (especificación §6.1).
  *
@@ -18,20 +15,12 @@ import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
  */
 export default function BootRoute() {
   const { t } = useTranslation();
-
   const kioskHydrated = useKioskStore((s) => s.hydrated);
   const binding = useKioskStore((s) => s.binding);
-
   const phase = useSessionStore((s) => s.phase);
   const role = useSessionStore((s) => s.role);
-  const hydrateSession = useSessionStore((s) => s.hydrate);
-  const subscribeSession = useSessionStore((s) => s.subscribe);
-
-  useEffect(() => {
-    void hydrateSession();
-    return subscribeSession();
-  }, [hydrateSession, subscribeSession]);
-
+  // El arranque de la sesión vive en `app/_layout.tsx`, que cubre TODAS las rutas.
+  // Estaba aquí, y entrar directamente a otra ruta no lo arrancaba nunca.
   /**
    * AQUÍ SE RESUELVE EL ROL, Y HACE FALTA QUE SEA AQUÍ.
    *
@@ -51,7 +40,6 @@ export default function BootRoute() {
   const membership = useManagerMembership(
     phase === 'signedIn' && kioskHydrated && binding === null,
   );
-
   // Falta configuración de entorno: se explica qué falta en vez de reventar (§30).
   if (!kioskHydrated || phase === 'unknown') {
     return (
@@ -60,25 +48,21 @@ export default function BootRoute() {
       </AppScreen>
     );
   }
-
   // 2 y 3: si el dispositivo es kiosco, el reloj compartido manda, incluso sin
   // conexión. Un iPad de tienda no debe pedir sesión personal para fichar.
   if (binding !== null) {
     return <Redirect href="/kiosk" />;
   }
-
   // 4: sesión personal válida → navegación por rol.
   if (phase === 'signedIn' && canUseAdminPanel(role)) {
     return <Redirect href="/(manager)" />;
   }
-
   // La membresía no se pudo leer: es una sesión válida sin pertenencia a ninguna
   // empresa, o RLS la negó. No se espera para siempre ni se manda al panel: se
   // devuelve al acceso, que es donde esa persona puede hacer algo (§20).
   if (phase === 'signedIn' && membership.isError) {
     return <Redirect href="/(auth)/sign-in" />;
   }
-
   // Con sesión pero sin rol resuelto todavía, esperamos: mandar a (manager) sin
   // permisos daría una pantalla vacía y confusa.
   if (phase === 'signedIn' && role === null) {
@@ -88,7 +72,6 @@ export default function BootRoute() {
       </AppScreen>
     );
   }
-
   // 5: sin sesión → acceso, con la opción separada de configurar el iPad.
   return <Redirect href="/(auth)/sign-in" />;
 }

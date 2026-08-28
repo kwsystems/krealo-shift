@@ -19,6 +19,7 @@ import { NotificationsGate } from '@/features/notifications/notifications-gate';
 import { isEnvConfigured } from '@/lib/env';
 import { initI18n } from '@/i18n';
 import { useKioskStore } from '@/stores/kiosk-store';
+import { useSessionStore } from '@/stores/session-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { colors } from '@/theme/tokens';
@@ -58,6 +59,8 @@ export default function RootLayout() {
   const [ready, setReady] = useState(false);
   const hydratePreferences = usePreferencesStore((s) => s.hydrate);
   const hydrateKiosk = useKioskStore((s) => s.hydrate);
+  const hydrateSession = useSessionStore((s) => s.hydrate);
+  const subscribeSession = useSessionStore((s) => s.subscribe);
   const startNetwork = useNetworkStore((s) => s.start);
 
   const [fontsLoaded, fontError] = useFonts({
@@ -69,19 +72,43 @@ export default function RootLayout() {
 
   useEffect(() => {
     let stopNetwork: (() => void) | undefined;
+    let stopSession: (() => void) | undefined;
 
     const boot = async () => {
       // Orden de arranque de la especificación §6.1: primero idioma y estado
       // seguro local, después si el dispositivo es kiosco.
       await hydratePreferences();
       await hydrateKiosk();
+
+      // LA SESION SE ARRANCA AQUI Y NO EN `app/index.tsx`, y el cambio arregla un
+      // fallo serio. Estaba en el efecto de la ruta `/`, asi que entrar
+      // DIRECTAMENTE a cualquier otra ruta no la arrancaba nunca: `phase` se quedaba
+      // en `'unknown'`, y eso es lo que bloquea la ruta de arranque y las cuatro
+      // pestañas del panel. Resultado: "Preparando tu sesion" para siempre, sin que
+      // hubiera ningun problema de red.
+      //
+      // Y no es un caso rebuscado: la §19 pide que tocar una notificacion lleve a la
+      // pantalla correcta, y `useNotificationRouter` hace `router.push` a una ruta
+      // del panel CON LA APP ABIERTA DESDE CERRADA. Un encargado que toca un aviso
+      // de tardanza caia justo ahi.
+      //
+      // No se espera a que termine: el kiosco no necesita sesion personal para
+      // funcionar y bloquear el arranque por una lectura de sesion seria volver a
+      // atar el reloj de la tienda a algo que no le hace falta. El limite de tiempo
+      // y el catch viven dentro de `hydrate`.
+      void hydrateSession();
+      stopSession = subscribeSession();
+
       stopNetwork = await startNetwork();
       setReady(true);
     };
 
     void boot();
-    return () => stopNetwork?.();
-  }, [hydratePreferences, hydrateKiosk, startNetwork]);
+    return () => {
+      stopNetwork?.();
+      stopSession?.();
+    };
+  }, [hydratePreferences, hydrateKiosk, hydrateSession, subscribeSession, startNetwork]);
 
   // Una fuente que no carga no debe dejar la app en la pantalla de inicio para
   // siempre: seguimos con la fuente del sistema y lo registramos.

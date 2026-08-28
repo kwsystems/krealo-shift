@@ -36,6 +36,16 @@ type SessionState = {
   subscribe: () => () => void;
 };
 
+/**
+ * Cuánto se espera a que la sesión guardada se resuelva antes de seguir sin ella.
+ *
+ * Seis segundos: bastante para una lectura de Keychain y un refresco de token con
+ * red lenta, y poco para que nadie mire una pantalla de carga preguntándose si el
+ * iPad está roto. Pasado eso se sigue como `signedOut`, que no pierde nada: el kiosco
+ * no necesita sesión personal y quien quiera el panel inicia sesión.
+ */
+const SESSION_TIMEOUT_MS = 6_000;
+
 export const useSessionStore = create<SessionState>((set) => ({
   phase: 'unknown',
   user: null,
@@ -51,8 +61,68 @@ export const useSessionStore = create<SessionState>((set) => ({
       return;
     }
 
-    const { data } = await supabase.auth.getSession();
-    const session = data.session;
+    /**
+     * ESTO PODIA DEJAR LA APP ENTERA COLGADA, y es el fallo de mayor alcance que ha
+     * tenido este proyecto.
+     *
+     * `getSession()` iba sin try/catch y sin límite de tiempo. Si rechazaba —o
+     * simplemente no respondía— `hydrate` moría y `phase` se quedaba en `'unknown'`
+     * para siempre. Y `phase === 'unknown'` es lo que bloquea `app/index.tsx` y
+     * `app/(manager)/_layout.tsx`: los dos muestran "Preparando tu sesión" mientras
+     * no se resuelve.
+     *
+     * Así que la app entera se quedaba en esa pantalla, y reiniciar sin red hacía lo
+     * mismo. LO PEOR: el kiosco también, porque la app arranca en `/`. Un iPad de
+     * tienda que arranca sin wifi nunca pasaba de la pantalla de carga y no podía
+     * fichar a nadie — que es exactamente el escenario para el que existe toda la
+     * arquitectura sin conexión.
+     *
+     * Los dos caminos de `getSession()` pueden fallar de verdad: lee del
+     * almacenamiento, que aquí es `SecureStore` y puede rechazar, y refresca el token
+     * si caducó, que necesita red.
+     *
+     * EL LIMITE DE TIEMPO ES LA MITAD QUE IMPORTA. Un catch no sirve de nada si la
+     * llamada no rechaza sino que se queda esperando, y con red a medias —un portal
+     * cautivo, un router que acepta la conexión y no enruta— eso es lo normal.
+     */
+    let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] = null;
+
+    try {
+      // EL TEMPORIZADOR SE LIMPIA. Sin esto queda uno pendiente por arranque
+      // aunque `getSession()` gane la carrera: inofensivo en la practica, pero es
+      // basura que se acumula y Jest lo reporta como una operacion sin cerrar. Un
+      // `Promise.race` sin limpiar el perdedor es el descuido clasico aqui.
+      let temporizador: ReturnType<typeof setTimeout> | undefined;
+
+      const resultado = await Promise.race([
+        supabase.auth.getSession(),
+        new Promise<'agotado'>((resolve) => {
+          temporizador = setTimeout(() => resolve('agotado'), SESSION_TIMEOUT_MS);
+        }),
+      ]).finally(() => {
+        if (temporizador !== undefined) clearTimeout(temporizador);
+      });
+
+      if (resultado === 'agotado') {
+        console.warn(
+          '[krealo-shift] La sesión no se pudo resolver en ' +
+            SESSION_TIMEOUT_MS / 1000 +
+            ' s. Se sigue sin sesión: el kiosco funciona igual y quien necesite el ' +
+            'panel puede iniciar sesión cuando vuelva la red.',
+        );
+        set({ phase: 'signedOut', user: null, role: null, organizationId: null });
+        return;
+      }
+
+      session = resultado.data.session;
+    } catch (error) {
+      console.warn(
+        '[krealo-shift] No se pudo leer la sesión guardada. Se sigue sin sesión. Motivo: ' +
+          String(error),
+      );
+      set({ phase: 'signedOut', user: null, role: null, organizationId: null });
+      return;
+    }
 
     if (session === null) {
       set({ phase: 'signedOut', user: null, role: null, organizationId: null });
@@ -83,18 +153,35 @@ export const useSessionStore = create<SessionState>((set) => ({
     const supabase = getSupabase();
     if (supabase === null) return () => undefined;
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session === null) {
-        set({ phase: 'signedOut', user: null, role: null, organizationId: null });
-        return;
-      }
-      set({
-        phase: 'signedIn',
-        user: { userId: session.user.id, email: session.user.email ?? null },
-      });
-    });
+    // `onAuthStateChange` puede lanzar al registrarse si el cliente está en mal
+    // estado. Sin este catch, el `return subscribeSession()` del efecto de arranque
+    // reventaría el render de la ruta inicial: pantalla en blanco y nada más.
+    let data: { subscription: { unsubscribe: () => void } };
+    try {
+      ({ data } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session === null) {
+          set({ phase: 'signedOut', user: null, role: null, organizationId: null });
+          return;
+        }
+        set({
+          phase: 'signedIn',
+          user: { userId: session.user.id, email: session.user.email ?? null },
+        });
+      }));
+    } catch (error) {
+      console.warn(
+        '[krealo-shift] No se pudo suscribir a los cambios de sesión. Motivo: ' + String(error),
+      );
+      return () => undefined;
+    }
 
-    return () => data.subscription.unsubscribe();
+    return () => {
+      try {
+        data.subscription.unsubscribe();
+      } catch {
+        // Al desmontar no hay nada que hacer con un fallo aquí.
+      }
+    };
   },
 }));
 

@@ -420,6 +420,59 @@ await conPagina('/kiosk/setup', async (page, errores) => {
   pasar(caso);
 });
 
+// ---------------------------------------------------------------------------
+// 6. El panel NO se queda en "Preparando tu sesion" para siempre
+// ---------------------------------------------------------------------------
+//
+// EL FALLO DE MAYOR ALCANCE QUE HA TENIDO ESTE PROYECTO. `hydrate` de la sesion
+// llamaba a `getSession()` sin try/catch y sin limite de tiempo: si eso fallaba,
+// `phase` se quedaba en `'unknown'` para siempre, y `phase === 'unknown'` es lo que
+// bloquea la ruta de arranque Y las cuatro pestañas del panel. La app entera se
+// quedaba en la pantalla de carga, y reiniciar sin red hacia lo mismo. El kiosco
+// tambien, porque la app arranca en `/`.
+//
+// El chequeo de render no lo veia porque captura al instante: una pantalla de carga
+// recien pintada es indistinguible de una colgada. Lo que distingue las dos es
+// ESPERAR.
+for (const ruta of ['/team', '/more']) {
+  await conPagina(
+    ruta,
+    async (page, errores) => {
+      const caso = `el panel resuelve su sesion (${ruta})`;
+      const CARGANDO = /Preparando tu sesión|Preparing your session/i;
+
+      const inicio = Date.now();
+      let texto = await textoVisible(page);
+      // Margen sobre el limite de 6 s del store, mas el arranque.
+      while (Date.now() - inicio < 15_000 && CARGANDO.test(texto)) {
+        await page.waitForTimeout(500);
+        texto = await textoVisible(page);
+      }
+
+      if (CARGANDO.test(texto)) {
+        fallar(
+          caso,
+          'sigue en "Preparando tu sesion" tras 15 s. Es el sintoma de que el arranque ' +
+            'de la sesion no resuelve, y deja la app entera inutilizable.',
+        );
+        return;
+      }
+
+      // Y termina donde tiene que terminar: sin sesion, en el acceso.
+      if (!/Iniciar sesión|Sign in|Correo|Email/i.test(texto)) {
+        fallar(caso, 'resolvio, pero no acabo en el acceso: ' + texto.slice(0, 200));
+        return;
+      }
+      if (errores.length > 0) {
+        fallar(caso, 'errores de consola: ' + errores.join(' | '));
+        return;
+      }
+      pasar(caso, texto.slice(0, 70));
+    },
+    { comoKiosco: false },
+  );
+}
+
 await browser.close();
 servidor.close();
 
