@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import { NumericKeypad, PinDots } from '@/components/attendance/pin-pad';
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton } from '@/components/ui/buttons';
-import { AppScreen, Row, Stack } from '@/components/ui/layout';
+import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
+import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
@@ -48,6 +48,7 @@ export default function KioskIdleScreen() {
   // proyecto de pruebas a uno de verdad.
   const logoUrl = logoPublicUrl(binding?.organizationLogoPath ?? null);
   const revoked = useKioskStore((s) => s.revoked);
+  const hydrated = useKioskStore((s) => s.hydrated);
   const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
   const { online, syncing, pendingCount } = useNetworkStore();
@@ -174,6 +175,13 @@ export default function KioskIdleScreen() {
           }
           break;
         }
+        case 'not_configured':
+          // Defensa en profundidad: con el guardián en el layout raíz esto ya no
+          // debería alcanzarse. Pero antes caía en el genérico —"Inténtalo otra
+          // vez"— que es un consejo imposible: reintentar no arregla que la app no
+          // tenga servidor.
+          setError(t('errors.notConfigured'));
+          break;
         case 'device_credential':
           // NO se cae al camino offline. El PIN sin conexión se valida con la clave
           // del Keychain, que es justo lo que no se pudo leer: intentarlo daría un
@@ -197,6 +205,48 @@ export default function KioskIdleScreen() {
     setPin(next);
     if (next.length === pinLength) void submit(next);
   };
+
+  // SIN CREDENCIAL DE KIOSCO ESTA PANTALLA ERA UN CALLEJON SIN SALIDA.
+  //
+  // `submit` empieza con `if (binding === null) return;`, así que se podía teclear el
+  // PIN completo —los seis puntos se llenaban— y NO PASABA ABSOLUTAMENTE NADA: ni
+  // validación, ni mensaje, ni cambio de estado. Para siempre. Lo encontró el chequeo
+  // de interacción nuevo, que teclea un PIN de verdad; el de render lo daba por bueno
+  // porque la pantalla se pinta perfecta.
+  //
+  // Se llega aquí de tres formas: abriendo /kiosk directamente —un enlace, o la
+  // previsualización web, que es justo como se revisa la app desde Windows—, con la
+  // credencial perdida del Keychain, o antes de activar el dispositivo.
+  //
+  // Se muestra el ESTADO VACÍO CON SU SIGUIENTE ACCIÓN que pide §20, en vez de
+  // redirigir: una redirección automática desde el reloj de una tienda haría que un
+  // empleado que solo quería fichar acabe en una pantalla de administración sin
+  // entender por qué. Aquí se dice qué pasa y quién lo arregla.
+  //
+  // `hydrated` es imprescindible: antes de leer el Keychain el binding es null y
+  // todavía no se sabe nada. Sin esa condición, esto se mostraría un instante en cada
+  // arranque de un kiosco perfectamente configurado.
+  if (hydrated && binding === null) {
+    return (
+      <AppScreen tone="kiosk" testID="kiosk-not-set-up">
+        <ResponsiveContainer width="form">
+          <Stack gap={spacing.md} style={styles.centered}>
+            <AppText variant="kioskTitle" style={styles.centerText}>
+              {t('kiosk.notSetUpTitle')}
+            </AppText>
+            <AppText variant="body" tone="muted" style={styles.centerText}>
+              {t('kiosk.notSetUpBody')}
+            </AppText>
+            <SecondaryButton
+              label={t('kiosk.notSetUpAction')}
+              onPress={() => router.push('/kiosk/setup')}
+              testID="kiosk-go-to-setup"
+            />
+          </Stack>
+        </ResponsiveContainer>
+      </AppScreen>
+    );
+  }
 
   if (revoked) {
     return (
@@ -319,7 +369,34 @@ export default function KioskIdleScreen() {
 
           <PinDots length={pinLength} entered={pin.length} error={error !== null} />
 
-          {error !== null ? (
+          {/*
+            SEÑAL DE QUE ESTÁ PASANDO ALGO (§20: "para cada pantalla implementar
+            skeleton o carga"). No la había: mientras se validaba el PIN, la única
+            cosa que ocurría era `disabled={checking}` en el teclado, así que la
+            persona tecleaba sus seis dígitos y la pantalla se quedaba EXACTAMENTE
+            IGUAL. Volvía a tocar, los botones no respondían porque estaban
+            deshabilitados, y concluía que el iPad está roto. En una tienda con red
+            lenta una validación tarda varios segundos, y este es el flujo más usado
+            de la app.
+
+            CON TEXTO Y NO SOLO UN INDICADOR GIRANDO: el iPad está sobre un pedestal
+            y se mira a un metro de distancia. Un giro de veinte píxeles no se ve.
+
+            Va en el sitio del error, no además: los dos no pueden coexistir —el
+            error se limpia al teclear— y ocupar la misma línea evita que la pantalla
+            salte de altura al cambiar de uno a otro.
+          */}
+          {checking ? (
+            <AppText
+              variant="body"
+              tone="muted"
+              style={styles.centerText}
+              accessibilityRole="alert"
+              testID="kiosk-pin-checking"
+            >
+              {t('kiosk.pinChecking')}
+            </AppText>
+          ) : error !== null ? (
             <AppText
               variant="body"
               tone="danger"

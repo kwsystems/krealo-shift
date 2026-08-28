@@ -84,6 +84,7 @@ npx eslint .                                            # lint
 ./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
 
 node scripts/generar-iconos.mjs                         # regenera icono, splash y favicon
+node scripts/interaccion-check.mjs <dir-export>          # abre la app y la USA: teclea un PIN, toca botones
 python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
 
 eas login                                               # autenticarse en EAS

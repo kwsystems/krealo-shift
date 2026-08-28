@@ -14,7 +14,9 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 
+import { MissingConfigScreen } from '@/components/ui/missing-config';
 import { NotificationsGate } from '@/features/notifications/notifications-gate';
+import { isEnvConfigured } from '@/lib/env';
 import { initI18n } from '@/i18n';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
@@ -93,6 +95,26 @@ export default function RootLayout() {
     // Pantalla de inicio de marca sobria: nunca una pantalla equivocada mientras
     // se resuelve la sesión (§6.1).
     return <View style={styles.boot} />;
+  }
+
+  // EL GUARDIÁN DE CONFIGURACIÓN VA AQUÍ Y NO EN UNA PANTALLA.
+  //
+  // Estaba solo en `app/index.tsx`, o sea en la ruta `/`, y cualquier otra ruta lo
+  // saltaba entera: abrir `/kiosk` directamente en una app sin credenciales de
+  // Supabase pintaba el kiosco completo y al teclear el PIN respondía "No pudimos
+  // completar la acción. Inténtalo otra vez.", que es un consejo imposible.
+  //
+  // Sin credenciales no funciona NADA —ni fichar, ni el panel, ni el acceso—, así que
+  // es una precondición de la app y no una propiedad de una ruta. Se comprueba después
+  // de `ready` para no tapar la pantalla de arranque, y va fuera de los proveedores
+  // porque no necesita ninguno: `missingEnvKeys` se resuelve al importar.
+  if (!isEnvConfigured) {
+    return (
+      <SafeAreaProvider>
+        <StatusBar style="dark" />
+        <MissingConfigScreen />
+      </SafeAreaProvider>
+    );
   }
 
   return (

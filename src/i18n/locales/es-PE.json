@@ -91,6 +91,7 @@
     "resultBreakEnd": "Descanso terminado a las {{time}}",
     "savedOffline": "Guardado en este iPad. Se sincronizará al recuperar conexión.",
     "pinIncorrect": "Ese PIN no es correcto. Inténtalo nuevamente.",
+    "pinChecking": "Comprobando tu PIN…",
     "pinLocked": "Demasiados intentos. Espera {{minutes}} minutos o pide ayuda a tu gerente.",
     "forgotToClock": "Olvidé marcar",
     "forgotClockIn": "Olvidé marcar entrada",
@@ -122,6 +123,9 @@
     "setupActivated": "Este iPad quedó vinculado a {{location}}.",
     "revokedTitle": "Este reloj fue desactivado",
     "revokedBody": "Pide a un administrador que vuelva a activarlo.",
+    "notSetUpTitle": "Este iPad todavía no es un reloj",
+    "notSetUpBody": "Un administrador tiene que configurarlo con un código de activación antes de que se pueda fichar aquí.",
+    "notSetUpAction": "Configurar este iPad",
     "offlineStateUnknown": "No podemos confirmar tu estado sin conexión. Espera a que vuelva la red.",
     "offlineNotReady": "Este iPad todavía no puede validar PIN sin conexión. Pide que se sincronice.",
     "offlineNeedsReactivation": "Este iPad necesita reactivarse para validar PIN sin conexión. Con red funciona normal.",
@@ -546,7 +550,8 @@
     "kioskRevoked": "Este reloj fue desactivado.",
     "configMissing": "Falta configuración del entorno: {{keys}}",
     "concurrentEdit": "Alguien más cambió este dato. Vuelve a cargarlo.",
-    "deviceCredential": "Este iPad no pudo leer su credencial. Reinícialo; si sigue pasando, un administrador tiene que volver a activarlo como reloj."
+    "deviceCredential": "Este iPad no pudo leer su credencial. Reinícialo; si sigue pasando, un administrador tiene que volver a activarlo como reloj.",
+    "notConfigured": "Esta app todavía no está conectada a su servidor. Un administrador tiene que configurarla; reintentar no va a servir."
   },
   "a11y": {
     "keypadDigit": "Dígito {{digit}}",

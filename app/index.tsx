@@ -2,14 +2,11 @@ import { useEffect } from 'react';
 import { Redirect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { AppText } from '@/components/ui/app-text';
-import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
+import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useManagerMembership } from '@/hooks/use-manager-scope';
-import { isEnvConfigured, missingEnvKeys } from '@/lib/env';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
-import { spacing } from '@/theme/tokens';
 
 /**
  * Resolución de arranque (especificación §6.1).
@@ -56,10 +53,6 @@ export default function BootRoute() {
   );
 
   // Falta configuración de entorno: se explica qué falta en vez de reventar (§30).
-  if (!isEnvConfigured) {
-    return <MissingConfigScreen />;
-  }
-
   if (!kioskHydrated || phase === 'unknown') {
     return (
       <AppScreen tone="kiosk">
@@ -98,25 +91,4 @@ export default function BootRoute() {
 
   // 5: sin sesión → acceso, con la opción separada de configurar el iPad.
   return <Redirect href="/(auth)/sign-in" />;
-}
-
-function MissingConfigScreen() {
-  const { t } = useTranslation();
-  return (
-    <AppScreen tone="canvas" scroll>
-      <ResponsiveContainer width="form">
-        <Stack gap={spacing.base}>
-          <AppText variant="title">{t('common.appName')}</AppText>
-          <Card>
-            <AppText variant="bodyStrong" tone="danger">
-              {t('errors.configMissing', { keys: missingEnvKeys.join(', ') })}
-            </AppText>
-            <AppText variant="help" tone="subtle">
-              .env.example → .env
-            </AppText>
-          </Card>
-        </Stack>
-      </ResponsiveContainer>
-    </AppScreen>
-  );
 }

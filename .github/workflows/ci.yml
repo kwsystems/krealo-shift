@@ -90,6 +90,13 @@ jobs:
       - name: Auditar accesibilidad
         run: node scripts/a11y-check.mjs /tmp/export-web
 
+      # Y USARLA, no solo comprobar que se pinta. Una pantalla se renderiza perfecta
+      # aunque no responda a nada: el peor fallo de este proyecto fue un teclado de
+      # PIN que se quedaba en "comprobando" para siempre, y el chequeo de render lo
+      # daba por bueno. Este teclea un PIN de verdad, cambia de idioma y toca botones.
+      - name: Comprobar que la app responde a la interaccion
+        run: node scripts/interaccion-check.mjs /tmp/export-web
+
       # Los iconos los genera scripts/generar-iconos.mjs a partir de una definicion
       # geometrica y de los tokens de color de la app. Va en este trabajo porque
       # necesita el Chromium que ya se instalo arriba. Sin este chequeo, cambiar un

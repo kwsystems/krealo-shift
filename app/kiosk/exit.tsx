@@ -103,6 +103,11 @@ export default function KioskExitScreen() {
       return;
     }
 
+    if (result.error.kind === 'not_configured') {
+      setError(t('errors.notConfigured'));
+      return;
+    }
+
     if (result.error.kind === 'device_credential') {
       // No es "PIN incorrecto": el iPad no pudo leer su credencial. Decir lo otro
       // haria que alguien probara PIN distintos durante diez minutos.
@@ -130,8 +135,15 @@ export default function KioskExitScreen() {
               {t('kiosk.exitEnterManagerPin')}
             </AppText>
             <PinDots length={policies.pinLength} entered={pin.length} error={error !== null} />
-            {error !== null ? (
-              <AppText variant="help" tone="danger" accessibilityRole="alert">
+            {/* Mismo hueco que tenía la pantalla del kiosco: mientras se validaba, la
+                única cosa que pasaba era que el teclado quedaba deshabilitado. Ver
+                el comentario largo en app/kiosk/index.tsx. */}
+            {checking ? (
+              <AppText variant="help" tone="muted" accessibilityRole="alert" testID="exit-pin-checking">
+                {t('kiosk.pinChecking')}
+              </AppText>
+            ) : error !== null ? (
+              <AppText variant="help" tone="danger" accessibilityRole="alert" testID="exit-pin-error">
                 {error}
               </AppText>
             ) : null}

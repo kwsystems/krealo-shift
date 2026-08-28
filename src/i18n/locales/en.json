@@ -91,6 +91,7 @@
     "resultBreakEnd": "Break ended at {{time}}",
     "savedOffline": "Saved on this iPad. It will sync when the connection is back.",
     "pinIncorrect": "That PIN isn't correct. Try again.",
+    "pinChecking": "Checking your PIN…",
     "pinLocked": "Too many attempts. Wait {{minutes}} minutes or ask your manager for help.",
     "forgotToClock": "I forgot to clock",
     "forgotClockIn": "I forgot to clock in",
@@ -122,6 +123,9 @@
     "setupActivated": "This iPad is now linked to {{location}}.",
     "revokedTitle": "This time clock was deactivated",
     "revokedBody": "Ask an admin to activate it again.",
+    "notSetUpTitle": "This iPad is not a clock yet",
+    "notSetUpBody": "An administrator needs to set it up with an activation code before anyone can clock in here.",
+    "notSetUpAction": "Set up this iPad",
     "offlineStateUnknown": "We can't confirm your status without a connection. Wait for the network to come back.",
     "offlineNotReady": "This iPad can't validate PINs offline yet. Ask for it to be synced.",
     "offlineNeedsReactivation": "This iPad needs to be reactivated to validate PINs offline. It works normally with a connection.",
@@ -546,7 +550,8 @@
     "kioskRevoked": "This time clock was deactivated.",
     "configMissing": "Environment configuration is missing: {{keys}}",
     "concurrentEdit": "Someone else changed this. Reload it.",
-    "deviceCredential": "This iPad couldn't read its credential. Restart it; if it keeps happening, an administrator needs to set it up as a clock again."
+    "deviceCredential": "This iPad couldn't read its credential. Restart it; if it keeps happening, an administrator needs to set it up as a clock again.",
+    "notConfigured": "This app is not connected to its server yet. An administrator needs to configure it; retrying won't help."
   },
   "a11y": {
     "keypadDigit": "Digit {{digit}}",
