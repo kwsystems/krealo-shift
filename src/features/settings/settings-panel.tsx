@@ -524,11 +524,9 @@ function KiosksCard() {
 const NOTIFICATION_LABEL_KEYS: Record<NotificationKey, string> = {
   late: 'settings.notifyLate',
   noShow: 'settings.notifyNoShow',
-  earlyClockIn: 'settings.notifyEarlyClockIn',
   nearOvertime: 'settings.notifyNearOvertime',
   incompleteEntry: 'settings.notifyIncompleteEntry',
   newRequest: 'settings.notifyNewRequest',
-  scheduleChange: 'settings.notifyScheduleChange',
   kioskNotSyncing: 'settings.notifyKioskNotSyncing',
 };
 
@@ -572,6 +570,20 @@ function NotificationsCard() {
                 testID={`notify-${key}`}
               />
             ))}
+            {/*
+              La séptima alerta de §19 no tiene interruptor, y se DICE. Dejarlo
+              implícito significa que llega una notificación que nada en la app
+              menciona, y quien busque cómo apagarla no la va a encontrar: no
+              existe. Va después de los seis interruptores porque es la respuesta a
+              "¿y esto es todo lo que me van a avisar?".
+            */}
+            <InlineNotice
+              tone="info"
+              icon="lock-closed-outline"
+              title={t('settings.notifyAlwaysOnTitle')}
+              body={t('settings.notifyAlwaysOnBody')}
+              testID="notify-always-on"
+            />
             {saved ? (
               <InlineNotice tone="working" icon="checkmark-circle" title={t('settings.saved')} />
             ) : null}

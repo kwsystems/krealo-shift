@@ -126,14 +126,31 @@ export async function revokeKioskDevice(deviceId: string): Promise<void> {
   }
 }
 
+/**
+ * Los interruptores de notificación (§19).
+ *
+ * SON SEIS Y CADA UNO APAGA UNA ALERTA QUE EXISTE. Había ocho, y dos de ellos
+ * —`earlyClockIn` y `scheduleChange`— no controlaban nada: no hay ninguna alerta de
+ * esos tipos ni en la base ni en las Edge Functions. Se podían encender, se
+ * guardaban, y no pasaba nada nunca. Un interruptor que no hace nada es una mentira
+ * que no se descubre: quien lo enciende no recibe el aviso y concluye que no ha
+ * pasado nada que avisar, que es indistinguible de "todo va bien".
+ *
+ * La §19 lista SIETE notificaciones. La séptima, `wrongKiosk` —intento de fichaje
+ * desde un kiosco revocado o de otra tienda— no tiene interruptor a propósito: con
+ * uno, quien se llevó el iPad podría silenciar el aviso de que se lo llevó. La
+ * pantalla lo dice en vez de dejarlo implícito.
+ *
+ * Dos pruebas impiden que esto vuelva a separarse: `30_manager.sql` compara los
+ * interruptores de la base con los tipos de alerta que la base declara, y
+ * `__tests__/notification-keys.test.ts` compara esta lista con la de la base.
+ */
 export const notificationKeys = [
   'late',
   'noShow',
-  'earlyClockIn',
   'nearOvertime',
   'incompleteEntry',
   'newRequest',
-  'scheduleChange',
   'kioskNotSyncing',
 ] as const;
 
@@ -143,25 +160,31 @@ export type NotificationPreferences = Record<NotificationKey, boolean>;
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   late: true,
   noShow: true,
-  earlyClockIn: false,
   nearOvertime: true,
   incompleteEntry: true,
   newRequest: true,
-  scheduleChange: true,
   kioskNotSyncing: true,
 };
 
+/**
+ * Una clave ausente vale su valor por defecto, no `false`.
+ *
+ * Importa cuál de los dos: la base evalúa `(preferences ->> 'late')::boolean` en el
+ * `where`, así que un `null` ahí significa "no avisar". Una preferencia que falta
+ * NO significa que el encargado no quiera saberlo, y equivocarse en esto apaga
+ * avisos en silencio.
+ */
 const preferencesSchema = z
   .object({
     late: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.late),
     noShow: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.noShow),
-    earlyClockIn: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.earlyClockIn),
     nearOvertime: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.nearOvertime),
     incompleteEntry: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.incompleteEntry),
     newRequest: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.newRequest),
-    scheduleChange: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.scheduleChange),
     kioskNotSyncing: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.kioskNotSyncing),
   })
+  // `strip` (el modo por omisión) descarta claves desconocidas, así que una fila
+  // vieja con `earlyClockIn` se lee sin arrastrarla de vuelta al guardar.
   .catch(DEFAULT_NOTIFICATION_PREFERENCES);
 
 const preferencesRowSchema = z.object({ preferences: preferencesSchema });

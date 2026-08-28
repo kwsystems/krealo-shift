@@ -253,7 +253,7 @@ del propio panel de Supabase.
    para esto no la vas a usar.
 
 2. **Crear el esquema.** Menú lateral → **SQL Editor** → *New query* → pega TODO
-   `supabase/instalar-todo.sql` → **Run**. Son las 16 migraciones y los datos de
+   `supabase/instalar-todo.sql` → **Run**. Son las 17 migraciones y los datos de
    demostración en un solo archivo. Al terminar dice *Success. No rows returned*.
 
 3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → *Add user* →
@@ -344,6 +344,7 @@ Aplica, en orden, los archivos de `supabase/migrations/`:
 | `…001400_function_privileges.sql` | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca |
 | `…001500_authorize_rpc.sql` | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso |
 | `…001600_close_direct_writes.sql` | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable |
+| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.

@@ -57,7 +57,14 @@ declare
     'create_kiosk_activation_code', 'revoke_kiosk_device', 'set_employee_pin',
     'manager_adjust_time', 'manager_add_time_event', 'approve_timesheet_period',
     'export_timesheet_rows', 'rebuild_work_session', 'current_attendance_state',
-    'attendance_state_at', 'deactivate_push_token'
+    'attendance_state_at', 'deactivate_push_token',
+    -- `default_notification_preferences` devuelve un jsonb constante y no toca
+    -- ninguna tabla: no hay nada que filtrar. Esta en la lista porque es el
+    -- `default` de `notification_preferences.preferences`, y un default de columna
+    -- se evalua con los permisos de quien inserta. Sin `execute`, un insert que no
+    -- envie las preferencias falla con "permiso denegado para la funcion", que no
+    -- se parece en nada al problema real.
+    'default_notification_preferences'
   ];
   v_fugas text;
   v_total integer;

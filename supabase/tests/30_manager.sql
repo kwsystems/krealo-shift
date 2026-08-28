@@ -298,3 +298,97 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Las preferencias de notificacion y las alertas que existen: mismo conjunto
+-- ===========================================================================
+--
+-- ESTA PRUEBA EXISTE POR UN FALLO CONCRETO. La app ofrecia OCHO interruptores y
+-- dos de ellos, `earlyClockIn` y `scheduleChange`, no controlaban nada: no hay
+-- ninguna alerta de esos tipos. Se podian encender, se guardaban en la base, y no
+-- pasaba nada nunca.
+--
+-- Y no habia forma de detectarlo. Los interruptores escribian bien, la base los
+-- guardaba bien, la funcion de alertas simplemente nunca leia esas dos claves. Un
+-- interruptor que no hace nada es indistinguible de "no ha pasado nada que avisar".
+--
+-- Lo que se fija: el conjunto de claves por defecto tiene que ser EXACTAMENTE los
+-- tipos de alerta que la base declara, menos los que no llevan interruptor a
+-- proposito. Si alguien anade una alerta y se olvida del interruptor, o anade un
+-- interruptor sin alerta, falla aqui.
+do $$
+declare
+  -- Los que NO llevan interruptor, y por que. Cambiar esta lista es una decision,
+  -- no un ajuste para que la prueba pase.
+  v_sin_interruptor text[] := array[
+    -- Aviso de que un iPad perdido o robado sigue intentando fichar. Con
+    -- interruptor, quien se llevo el dispositivo podria silenciar el aviso de que
+    -- se lo llevo.
+    'wrongKiosk'
+  ];
+  v_alertas text[];
+  v_preferencias text[];
+  v_faltan text;
+  v_sobran text;
+begin
+  -- Los tipos de alerta, sacados de la restriccion `check` de la tabla y no de una
+  -- lista escrita a mano aqui: si se copiaran, esta prueba tendria el mismo
+  -- problema que pretende evitar.
+  select array_agg(valor order by valor) into v_alertas
+  from (
+    select unnest(regexp_matches(pg_get_constraintdef(c.oid), '''([a-zA-Z]+)''', 'g')) as valor
+    from pg_constraint c
+    join pg_class t on t.oid = c.conrelid
+    where t.relname = 'manager_alert_deliveries'
+      and c.conname like '%alert_type%'
+  ) x;
+
+  perform test_assert(array_length(v_alertas, 1) = 7,
+    'La base declara 7 tipos de alerta, los 7 de la §19 — encontrados: ' ||
+    coalesce(array_length(v_alertas, 1)::text, '0'));
+
+  select array_agg(k order by k) into v_preferencias
+  from jsonb_object_keys(default_notification_preferences()) as k;
+
+  select string_agg(a, ', ' order by a) into v_faltan
+  from unnest(v_alertas) as a
+  where not (a = any (v_preferencias)) and not (a = any (v_sin_interruptor));
+
+  perform test_assert(v_faltan is null,
+    'Toda alerta que existe tiene interruptor (o esta en la lista de excepciones)' ||
+    coalesce(' — SIN INTERRUPTOR: ' || v_faltan, ''));
+
+  select string_agg(p, ', ' order by p) into v_sobran
+  from unnest(v_preferencias) as p
+  where not (p = any (v_alertas));
+
+  -- LA MITAD QUE FALLABA. Un interruptor sin alerta detras.
+  perform test_assert(v_sobran is null,
+    'Todo interruptor apaga una alerta que existe' ||
+    coalesce(' — NO CONTROLAN NADA: ' || v_sobran, ''));
+
+  raise notice '  ok — % alertas, % interruptores, % sin interruptor a proposito',
+    array_length(v_alertas, 1), array_length(v_preferencias, 1),
+    array_length(v_sin_interruptor, 1);
+end
+$$;
+
+-- Y que no queden filas con las claves muertas ni con claves de menos: una
+-- preferencia ausente vale `null`, y `(null)::boolean` en el `where` de las alertas
+-- significa "no avisar". Ese es el modo de fallo que importa, porque una clave que
+-- falta NO significa que el encargado no quiera saberlo.
+do $$
+declare
+  v_malas integer;
+begin
+  select count(*) into v_malas
+  from notification_preferences
+  where preferences ? 'earlyClockIn'
+     or preferences ? 'scheduleChange'
+     or not (preferences ?& array(select jsonb_object_keys(default_notification_preferences())));
+
+  perform test_assert(v_malas = 0,
+    'Ninguna fila de preferencias tiene claves muertas ni le falta ninguna real — malas: ' ||
+    v_malas);
+end
+$$;
