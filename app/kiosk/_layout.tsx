@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useSegments } from 'expo-router';
 
+import { KioskNotSetUpState, useKioskNotSetUp } from '@/components/kiosk/not-set-up';
 import { keepScreenAwake, releaseScreenAwake } from '@/lib/kiosk/screen-awake';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskStore } from '@/stores/kiosk-store';
@@ -23,9 +24,27 @@ import { useNetworkStore } from '@/stores/network-store';
 
 /** Intervalo del reintento periódico mientras el kiosco está activo. */
 const PERIODIC_SYNC_MS = 60_000;
+
+/**
+ * Rutas del kiosco que SÍ funcionan sin credencial, y por qué.
+ *
+ * `setup` es la que crea la credencial: exigirla ahí sería un círculo cerrado.
+ * `help` es texto explicativo y se lee igual sin credencial.
+ * `exit` se exime por el motivo escrito en `app/kiosk/exit.tsx`: es la pantalla que
+ * BORRA la credencial, así que la guarda del layout se pintaría encima justo al
+ * desactivar. Comprueba lo mismo por su cuenta, con la misma condición compartida.
+ *
+ * Todo lo demás hereda la guarda. Que el valor por defecto sea exigirla es
+ * deliberado: una ruta nueva del kiosco que se olvide de comprobarlo falla de forma
+ * visible —el estado vacío— en lugar de pintar un teclado que no hace nada.
+ */
+const RUTAS_SIN_CREDENCIAL = new Set(['setup', 'help', 'exit']);
+
 export default function KioskLayout() {
   const online = useNetworkStore((s) => s.online);
   const setScreenAwake = useKioskStore((s) => s.setScreenAwake);
+  const notSetUp = useKioskNotSetUp();
+  const segments = useSegments();
 
   useEffect(() => {
     // El detalle de por qué esto no es `void activateKeepAwakeAsync()` está en
@@ -63,6 +82,22 @@ export default function KioskLayout() {
     });
     return () => subscription.remove();
   }, []);
+
+  /*
+   * LA GUARDA DE CREDENCIAL VA AQUÍ, no en cada pantalla.
+   *
+   * Estaba solo en `app/kiosk/index.tsx`. `/kiosk/actions`, `/kiosk/exit` y
+   * `/kiosk/forgot` se alcanzan sin pasar por ahí —enlace directo, restauración de
+   * ruta al reiniciar, recarga en la previsualización web— y pintaban su pantalla
+   * completa con la ubicación en blanco y controles que no hacían nada.
+   *
+   * Una precondición que solo comprueba una pantalla no es una precondición. Este
+   * layout es el único punto por el que pasan todas las rutas del kiosco.
+   */
+  const rutaActual = segments[segments.length - 1] ?? '';
+  if (notSetUp && !RUTAS_SIN_CREDENCIAL.has(rutaActual)) {
+    return <KioskNotSetUpState />;
+  }
 
   return (
     <Stack

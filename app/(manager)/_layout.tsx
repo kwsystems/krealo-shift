@@ -5,10 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
-import { ManagerScopeProvider, useManagerMembership } from '@/hooks/use-manager-scope';
+import { useBootResolution } from '@/features/boot/use-boot-resolution';
+import { ManagerScopeProvider } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
-import { useKioskStore } from '@/stores/kiosk-store';
-import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
 import { borderWidth, colors, fontFamily, fontSize, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -38,66 +37,45 @@ import { borderWidth, colors, fontFamily, fontSize, sizes, spacing } from '@/the
  * datos— pero enseñar el armazón del panel a quien no inició sesión es una fuga de
  * estructura y una pantalla confusa. La guarda va en el layout y no en cada
  * pantalla porque el layout es el único punto por el que pasan todas.
+ *
+ * La guarda NO reimplementa la resolución: usa la misma
+ * `resolveBootDestination` que `app/index.tsx`. La tenía copiada, y las dos copias
+ * se contestaban distinto a partir del tercer paso. Compartiéndola, además, es
+ * imposible que las dos rutas se redirijan la una a la otra en bucle.
  */
 export default function ManagerLayout() {
   const { t } = useTranslation();
   const { useSidebar } = useResponsive();
+  const { destination, retry } = useBootResolution();
 
-  const phase = useSessionStore((s) => s.phase);
-  const storedRole = useSessionStore((s) => s.role);
-  const kioskHydrated = useKioskStore((s) => s.hydrated);
-  const binding = useKioskStore((s) => s.binding);
-
-  // La membresía se resuelve aquí, antes de la guarda de rol: la sesión de
-  // Supabase dice quién eres, no qué puedes hacer. La consulta comparte clave con
-  // el provider, así que no se pregunta dos veces.
-  const membership = useManagerMembership(
-    phase === 'signedIn' && kioskHydrated && binding === null,
-  );
-
-  // Mientras no se sabe, no se muestra nada: ni el panel ni el acceso. Mandar a
-  // iniciar sesión a quien SÍ la tiene sería peor que esperar un instante.
-  if (phase === 'unknown' || !kioskHydrated) {
-    return (
-      <AppScreen tone="kiosk">
-        <LoadingState label={t('boot.resolvingSession')} />
-      </AppScreen>
-    );
-  }
-
-  // Un iPad en modo kiosco no abre el panel: el reloj compartido manda (§6.1).
-  if (binding !== null) {
-    return <Redirect href="/kiosk" />;
-  }
-
-  if (phase !== 'signedIn') {
-    return <Redirect href="/(auth)/sign-in" />;
-  }
-
-  // La membresía no se pudo leer: se explica y se ofrece reintentar, en vez de
-  // dejar el panel cargando para siempre (§20).
-  if (membership.error !== null) {
-    return (
-      <AppScreen tone="canvas">
-        <AdminErrorState error={membership.error} onRetry={() => void membership.refetch()} />
-      </AppScreen>
-    );
-  }
-
-  const role = membership.data?.role ?? storedRole;
-
-  // Rol todavía sin resolver: se espera, igual que en el arranque.
-  if (role === null) {
-    return (
-      <AppScreen tone="kiosk">
-        <LoadingState label={t('boot.resolvingSession')} />
-      </AppScreen>
-    );
-  }
-
-  // Sesión válida pero sin rol administrativo: no es el sitio de esa persona.
-  if (!canUseAdminPanel(role)) {
-    return <Redirect href="/" />;
+  switch (destination.kind) {
+    // Mientras no se sabe, no se muestra nada: ni el panel ni el acceso. Mandar a
+    // iniciar sesión a quien SÍ la tiene sería peor que esperar un instante.
+    case 'resolving':
+      return (
+        <AppScreen tone="kiosk">
+          <LoadingState label={t('boot.resolvingSession')} />
+        </AppScreen>
+      );
+    // Un iPad en modo kiosco no abre el panel: el reloj compartido manda (§6.1).
+    case 'kiosk':
+      return <Redirect href="/kiosk" />;
+    case 'signIn':
+      return <Redirect href="/(auth)/sign-in" />;
+    // La membresía no se pudo leer: se explica y se ofrece reintentar, en vez de
+    // dejar el panel cargando para siempre (§20).
+    case 'membershipError':
+      return (
+        <AppScreen tone="canvas">
+          <AdminErrorState error={destination.error} onRetry={retry} />
+        </AppScreen>
+      );
+    // Sesión válida sin rol administrativo: no es el sitio de esa persona. La
+    // explicación la pinta la ruta raíz, en un solo sitio.
+    case 'noAdminRole':
+      return <Redirect href="/" />;
+    case 'adminPanel':
+      break;
   }
 
   return (

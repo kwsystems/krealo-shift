@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -34,6 +34,31 @@ export default function KioskForgotScreen() {
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
+  /*
+   * SIN SESIÓN VALIDADA ESTA PANTALLA ERA UN CALLEJÓN SIN SALIDA.
+   *
+   * `submit` empieza con `if (verification === null || kind === null) return;`, así
+   * que se podía elegir el tipo, escribir la hora y el motivo, pulsar enviar y NO
+   * PASABA NADA: ni error, ni confirmación. El formulario se pinta perfecto, que es
+   * por lo que el chequeo de render lo daba por bueno.
+   *
+   * Se llega aquí sin verificación al recargar la ruta —la previsualización web es
+   * justo así—, al volver atrás después de que la sesión se limpie, y por enlace
+   * directo. `app/kiosk/actions.tsx` ya lo hacía; esta pantalla se había quedado sin
+   * la misma protección.
+   *
+   * No se muestra un error: se vuelve al reposo, que es donde se empieza. Un
+   * empleado que ve un formulario a medias no sabe que le falta teclear su PIN.
+   */
+  const returnToIdle = useCallback(() => {
+    clearVerification();
+    router.replace('/kiosk');
+  }, [clearVerification]);
+
+  useEffect(() => {
+    if (verification === null) returnToIdle();
+  }, [verification, returnToIdle]);
+
   const submit = async () => {
     if (verification === null || kind === null) return;
 
@@ -64,10 +89,7 @@ export default function KioskForgotScreen() {
     setError(result.error.kind === 'offline' ? t('errors.network') : t('errors.generic'));
   };
 
-  const close = () => {
-    clearVerification();
-    router.replace('/kiosk');
-  };
+  if (verification === null) return null;
 
   if (sent) {
     return (
@@ -78,7 +100,7 @@ export default function KioskForgotScreen() {
             <AppText variant="section" style={styles.centerText}>
               {t('kiosk.forgotSubmitted')}
             </AppText>
-            <PrimaryButton label={t('common.done')} onPress={close} />
+            <PrimaryButton label={t('common.done')} onPress={returnToIdle} />
           </Stack>
         </ResponsiveContainer>
       </AppScreen>

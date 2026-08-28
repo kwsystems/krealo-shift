@@ -30,7 +30,11 @@
   },
   "boot": {
     "starting": "Iniciando Krealo Shift…",
-    "resolvingSession": "Preparando tu sesión"
+    "resolvingSession": "Preparando tu sesión",
+    "noAdminTitle": "Tu cuenta no abre el panel",
+    "noAdminBody": "Iniciaste sesión bien, pero tu cuenta figura como empleado. El panel de administración es para propietarios, administradores y gerentes.",
+    "noAdminClockInTitle": "Para marcar tu entrada",
+    "noAdminClockInBody": "Usa el iPad del local: escribe tu PIN de 6 dígitos y elige la acción. No necesitas cuenta ni contraseña para eso."
   },
   "auth": {
     "signInTitle": "Ingresa a Krealo Shift",
@@ -139,7 +143,8 @@
     "requestUpdateKindForgotClockOut": "Salida que faltaba",
     "requestUpdateKindCorrection": "Corrección de horas",
     "requestUpdateKindUnscheduledShift": "Turno sin programar",
-    "requestUpdateAskManager": "Si no estás de acuerdo, habla con tu encargado."
+    "requestUpdateAskManager": "Si no estás de acuerdo, habla con tu encargado.",
+    "exiting": "Saliendo del modo reloj…"
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

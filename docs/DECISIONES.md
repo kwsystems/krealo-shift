@@ -48,6 +48,42 @@ adaptadores seguros para que la previsualización no se rompa.
   por consola que no es seguro y se niega a funcionar en un build web de
   producción.
 
+### Una precondición no vive en una ruta: vive en su layout
+
+Cuatro veces apareció el mismo fallo, así que quedó como regla. Lo que la app
+necesita para funcionar se comprueba en el layout que cubre todas las rutas
+afectadas, nunca en una pantalla.
+
+Se llega a una ruta interior sin pasar por la de inicio de cuatro formas
+perfectamente normales: un enlace directo, la restauración de ruta al reiniciar la
+app, una recarga en la previsualización web —que es como se revisa esto desde
+Windows— y un `router.push` de otra pantalla.
+
+Los cuatro casos, y qué se veía en cada uno:
+
+| Precondición              | Estaba en                                                  | Se veía                                                                                                    |
+| ------------------------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| configuración del entorno | `app/index.tsx`                                            | el kiosco completo; al teclear el PIN, "inténtalo otra vez", que es imposible sin servidor                 |
+| arranque de la sesión     | `app/index.tsx`                                            | entrar por otra ruta no arrancaba nunca la sesión                                                          |
+| resolución de rol         | duplicada en `app/index.tsx` y `app/(manager)/_layout.tsx` | una cuenta de empleado rebotaba al acceso, iniciaba sesión bien y volvía al acceso: encerrada, sin mensaje |
+| credencial del kiosco     | `app/kiosk/index.tsx`                                      | `/kiosk/actions` y `/kiosk/exit` pintaban su teclado y al completar el PIN no pasaba nada                  |
+
+Las tres primeras subieron a `app/_layout.tsx`; la cuarta, a `app/kiosk/_layout.tsx`.
+La de rol, además, estaba escrita DOS veces y las dos copias divergían a partir del
+tercer paso: ahí nació el callejón sin salida. Vive en
+`src/features/boot/resolve.ts`, es una función pura, y las dos rutas la leen — por
+eso ya no pueden contestar cosas distintas ni rebotarse la una a la otra.
+
+- **Costo:** la guarda del layout del kiosco necesita una lista de rutas exentas
+  (`setup` crea la credencial, `help` es texto, `exit` la borra). Una lista de
+  excepciones se degrada si crece sin que nadie mire, así que hay una prueba que
+  exige que sigan siendo exactamente esas tres.
+- **Cómo se encontraron:** usando la app en un navegador, no renderizándola.
+  `scripts/render-check.mjs` daba las cuatro pantallas por buenas, porque se pintan
+  perfectas; `scripts/interaccion-check.mjs` teclea un PIN de verdad y las cuatro
+  fallaron. Un control que no hace nada es invisible para cualquier chequeo que solo
+  mire píxeles.
+
 ### Build number administrado por EAS
 
 `eas.json` usa `cli.appVersionSource: "remote"` y `autoIncrement: true` en

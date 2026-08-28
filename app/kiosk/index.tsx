@@ -6,8 +6,8 @@ import { useTranslation } from 'react-i18next';
 
 import { NumericKeypad, PinDots } from '@/components/attendance/pin-pad';
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { GhostButton } from '@/components/ui/buttons';
+import { AppScreen, Row, Stack } from '@/components/ui/layout';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
@@ -48,7 +48,6 @@ export default function KioskIdleScreen() {
   // proyecto de pruebas a uno de verdad.
   const logoUrl = logoPublicUrl(binding?.organizationLogoPath ?? null);
   const revoked = useKioskStore((s) => s.revoked);
-  const hydrated = useKioskStore((s) => s.hydrated);
   const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
   const { online, syncing, pendingCount } = useNetworkStore();
@@ -206,47 +205,9 @@ export default function KioskIdleScreen() {
     if (next.length === pinLength) void submit(next);
   };
 
-  // SIN CREDENCIAL DE KIOSCO ESTA PANTALLA ERA UN CALLEJON SIN SALIDA.
-  //
-  // `submit` empieza con `if (binding === null) return;`, así que se podía teclear el
-  // PIN completo —los seis puntos se llenaban— y NO PASABA ABSOLUTAMENTE NADA: ni
-  // validación, ni mensaje, ni cambio de estado. Para siempre. Lo encontró el chequeo
-  // de interacción nuevo, que teclea un PIN de verdad; el de render lo daba por bueno
-  // porque la pantalla se pinta perfecta.
-  //
-  // Se llega aquí de tres formas: abriendo /kiosk directamente —un enlace, o la
-  // previsualización web, que es justo como se revisa la app desde Windows—, con la
-  // credencial perdida del Keychain, o antes de activar el dispositivo.
-  //
-  // Se muestra el ESTADO VACÍO CON SU SIGUIENTE ACCIÓN que pide §20, en vez de
-  // redirigir: una redirección automática desde el reloj de una tienda haría que un
-  // empleado que solo quería fichar acabe en una pantalla de administración sin
-  // entender por qué. Aquí se dice qué pasa y quién lo arregla.
-  //
-  // `hydrated` es imprescindible: antes de leer el Keychain el binding es null y
-  // todavía no se sabe nada. Sin esa condición, esto se mostraría un instante en cada
-  // arranque de un kiosco perfectamente configurado.
-  if (hydrated && binding === null) {
-    return (
-      <AppScreen tone="kiosk" testID="kiosk-not-set-up">
-        <ResponsiveContainer width="form">
-          <Stack gap={spacing.md} style={styles.centered}>
-            <AppText variant="kioskTitle" style={styles.centerText}>
-              {t('kiosk.notSetUpTitle')}
-            </AppText>
-            <AppText variant="body" tone="muted" style={styles.centerText}>
-              {t('kiosk.notSetUpBody')}
-            </AppText>
-            <SecondaryButton
-              label={t('kiosk.notSetUpAction')}
-              onPress={() => router.push('/kiosk/setup')}
-              testID="kiosk-go-to-setup"
-            />
-          </Stack>
-        </ResponsiveContainer>
-      </AppScreen>
-    );
-  }
+  // La guarda de credencial vive en `app/kiosk/_layout.tsx`, que cubre TODAS las
+  // rutas del kiosco. Estaba aquí, y `/kiosk/actions`, `/kiosk/exit` y
+  // `/kiosk/forgot` se alcanzan sin pasar por esta pantalla.
 
   if (revoked) {
     return (

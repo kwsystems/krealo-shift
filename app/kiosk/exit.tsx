@@ -5,9 +5,11 @@ import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 
 import { NumericKeypad, PinDots } from '@/components/attendance/pin-pad';
+import { KioskNotSetUpState, useKioskNotSetUp } from '@/components/kiosk/not-set-up';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { LoadingState } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
 import { lastSyncFailure, refreshOfflinePackage, runSync } from '@/lib/offline/sync';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
@@ -39,7 +41,21 @@ export default function KioskExitScreen() {
 
   const binding = useKioskStore((s) => s.binding);
   const screenAwake = useKioskStore((s) => s.screenAwake);
+  const notSetUp = useKioskNotSetUp();
   const [syncFailure, setSyncFailure] = useState<string | null>(null);
+  /**
+   * Desactivación en curso.
+   *
+   * ESTA PANTALLA ESTÁ EXENTA DE LA GUARDA DEL LAYOUT y este flag es el motivo.
+   * Es la pantalla que BORRA la credencial: en cuanto `deactivate` resuelve, el
+   * binding es null, y una guarda en el layout se pintaría por encima —"este
+   * dispositivo todavía no es un reloj", con un botón para configurarlo— en el
+   * instante entre desactivar y navegar. Justo a quien acaba de desactivarlo a
+   * propósito, y como una carrera, así que a veces sí y a veces no.
+   *
+   * Con el flag, ese instante dice lo que de verdad está pasando.
+   */
+  const [exiting, setExiting] = useState(false);
 
   // Se lee al montar la pantalla y no de forma continua: es un dato de diagnostico
   // que se consulta cuando algo va mal, no un indicador vivo.
@@ -124,6 +140,30 @@ export default function KioskExitScreen() {
     setPin(next);
     if (next.length === policies.pinLength) void tryAuthorize(next);
   };
+
+  // Desactivando: se dice, en vez de dejar un instante en blanco o el estado vacío
+  // del kiosco pintado sobre quien acaba de pulsar "salir" a propósito.
+  if (exiting) {
+    return (
+      <AppScreen tone="kiosk" testID="kiosk-exiting">
+        <LoadingState label={t('kiosk.exiting')} />
+      </AppScreen>
+    );
+  }
+
+  /*
+   * Sin credencial no hay nada de lo que salir, y el PIN no se puede ni comprobar:
+   * `verifyPin` necesita la ubicación del binding. Antes esta pantalla se pintaba
+   * entera —diagnóstico con la ubicación en blanco, teclado incluido— y al
+   * completar el PIN no pasaba nada, porque el manejador empieza con
+   * `if (binding === null) return;`.
+   *
+   * La condición es la misma que aplica el layout a las demás rutas; se comprueba
+   * aquí porque esta pantalla está exenta, por el motivo de `exiting`.
+   */
+  if (notSetUp) {
+    return <KioskNotSetUpState />;
+  }
 
   if (!authorized) {
     return (
@@ -233,9 +273,13 @@ export default function KioskExitScreen() {
                 // Si `deactivate` falla —borrar del Keychain puede fallar— antes no
                 // navegaba y no decia nada: el boton parecia no hacer nada. Ahora se
                 // dice, porque la alternativa es que alguien lo pulse diez veces.
+                setExiting(true);
                 void deactivate()
                   .then(() => router.replace('/'))
-                  .catch(() => setError(t('errors.generic')));
+                  .catch(() => {
+                    setExiting(false);
+                    setError(t('errors.generic'));
+                  });
               }}
               testID="kiosk-exit-confirm"
             />

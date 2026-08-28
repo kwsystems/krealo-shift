@@ -84,7 +84,10 @@ npx eslint .                                            # lint
 ./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
 
 node scripts/generar-iconos.mjs                         # regenera icono, splash y favicon
+node scripts/render-check.mjs <dir-export>               # ¿pinta cada ruta sin errores de consola?
 node scripts/interaccion-check.mjs <dir-export>          # abre la app y la USA: teclea un PIN, toca botones
+node scripts/a11y-check.mjs <dir-export>                # contraste, nombres, objetivos táctiles, texto 150%
+node scripts/e2e-ids-check.mjs                          # testIDs referenciados que ya no existen
 python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
 
 eas login                                               # autenticarse en EAS
@@ -647,7 +650,7 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   habría que replicar en el iPad decisiones de un encargado.
 
 **Lo que NO falta, por si la lista anterior confundió a alguien:** el esquema y las
-18 migraciones, RLS con 230 aserciones, las 8 Edge Functions, el modo kiosco completo,
+21 migraciones, RLS con 243 aserciones, las 8 Edge Functions, el modo kiosco completo,
 el editor de horarios semanal, hojas de tiempo con exportación CSV, correcciones y
 aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
 envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés

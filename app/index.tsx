@@ -1,77 +1,50 @@
 import { Redirect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
+
+import { NoAdminAccessScreen } from '@/components/boot/no-admin-access';
+import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
-import { useManagerMembership } from '@/hooks/use-manager-scope';
-import { useKioskStore } from '@/stores/kiosk-store';
-import { canUseAdminPanel, useSessionStore } from '@/stores/session-store';
+import { useBootResolution } from '@/features/boot/use-boot-resolution';
+
 /**
- * Resolución de arranque (especificación §6.1).
+ * Resolución de arranque (§6.1).
  *
- * El orden importa: el estado seguro local y la vinculación de kiosco ya se
- * hidrataron en el layout raíz, así que aquí solo decidimos destino. No se muestra
- * una pantalla equivocada mientras se resuelve la sesión: mientras `phase` es
- * `unknown` se ve una carga sobria, no el acceso ni el panel.
+ * Aquí no hay lógica: la decisión la toma `resolveBootDestination`, que comparte
+ * con `app/(manager)/_layout.tsx`. Estaba escrita dos veces y las dos copias
+ * divergían —el motivo largo está en `src/features/boot/resolve.ts`—.
+ *
+ * Lo que la app necesita para arrancar tampoco vive aquí: la comprobación de
+ * configuración y el arranque de la sesión están en `app/_layout.tsx`, que sí
+ * cubre todas las rutas.
  */
 export default function BootRoute() {
   const { t } = useTranslation();
-  const kioskHydrated = useKioskStore((s) => s.hydrated);
-  const binding = useKioskStore((s) => s.binding);
-  const phase = useSessionStore((s) => s.phase);
-  const role = useSessionStore((s) => s.role);
-  // El arranque de la sesión vive en `app/_layout.tsx`, que cubre TODAS las rutas.
-  // Estaba aquí, y entrar directamente a otra ruta no lo arrancaba nunca.
-  /**
-   * AQUÍ SE RESUELVE EL ROL, Y HACE FALTA QUE SEA AQUÍ.
-   *
-   * La sesión de Supabase dice quién eres, no qué puedes hacer: el rol vive en
-   * `organization_memberships`. Sin esta consulta el arranque se quedaba
-   * bloqueado para siempre en un caso concreto y nada raro: una persona con
-   * sesión válida en un dispositivo que no es kiosco. Esta pantalla esperaba
-   * `role !== null`, pero lo único que ponía el rol era el layout de `(manager)`,
-   * al que no se llega sin rol. Un ciclo cerrado.
-   *
-   * La consulta comparte `queryKey` con `ManagerScopeProvider`, así que se hace
-   * UNA vez: el layout y el provider leen este mismo resultado de la caché.
-   *
-   * `enabled` la limita a cuando de verdad hace falta. En un iPad de tienda no se
-   * pregunta nada: el kiosco no tiene sesión personal ni la necesita.
-   */
-  const membership = useManagerMembership(
-    phase === 'signedIn' && kioskHydrated && binding === null,
-  );
-  // Falta configuración de entorno: se explica qué falta en vez de reventar (§30).
-  if (!kioskHydrated || phase === 'unknown') {
-    return (
-      <AppScreen tone="kiosk">
-        <LoadingState label={t('boot.resolvingSession')} />
-      </AppScreen>
-    );
+  const { destination, retry } = useBootResolution();
+
+  switch (destination.kind) {
+    case 'resolving':
+      return (
+        <AppScreen tone="kiosk">
+          <LoadingState label={t('boot.resolvingSession')} />
+        </AppScreen>
+      );
+    case 'kiosk':
+      return <Redirect href="/kiosk" />;
+    case 'signIn':
+      return <Redirect href="/(auth)/sign-in" />;
+    case 'membershipError':
+      // Mismo trato que en el panel: se explica y se puede reintentar. Antes esto
+      // redirigía al acceso, que no arregla una consulta que falla y además deja
+      // a quien ya tiene sesión iniciándola otra vez para nada.
+      return (
+        <AppScreen tone="canvas">
+          <AdminErrorState error={destination.error} onRetry={retry} />
+        </AppScreen>
+      );
+    case 'noAdminRole':
+      return <NoAdminAccessScreen />;
+    case 'adminPanel':
+      return <Redirect href="/(manager)" />;
   }
-  // 2 y 3: si el dispositivo es kiosco, el reloj compartido manda, incluso sin
-  // conexión. Un iPad de tienda no debe pedir sesión personal para fichar.
-  if (binding !== null) {
-    return <Redirect href="/kiosk" />;
-  }
-  // 4: sesión personal válida → navegación por rol.
-  if (phase === 'signedIn' && canUseAdminPanel(role)) {
-    return <Redirect href="/(manager)" />;
-  }
-  // La membresía no se pudo leer: es una sesión válida sin pertenencia a ninguna
-  // empresa, o RLS la negó. No se espera para siempre ni se manda al panel: se
-  // devuelve al acceso, que es donde esa persona puede hacer algo (§20).
-  if (phase === 'signedIn' && membership.isError) {
-    return <Redirect href="/(auth)/sign-in" />;
-  }
-  // Con sesión pero sin rol resuelto todavía, esperamos: mandar a (manager) sin
-  // permisos daría una pantalla vacía y confusa.
-  if (phase === 'signedIn' && role === null) {
-    return (
-      <AppScreen tone="kiosk">
-        <LoadingState label={t('boot.resolvingSession')} />
-      </AppScreen>
-    );
-  }
-  // 5: sin sesión → acceso, con la opción separada de configurar el iPad.
-  return <Redirect href="/(auth)/sign-in" />;
 }

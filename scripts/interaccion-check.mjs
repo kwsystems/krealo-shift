@@ -473,6 +473,82 @@ for (const ruta of ['/team', '/more']) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// 9. Sin credencial, NINGUNA ruta del kiosco pinta controles muertos
+// ---------------------------------------------------------------------------
+//
+// El caso 0 probaba solo `/kiosk`, y la guarda vivia solo en esa pantalla. Estas dos
+// rutas se alcanzan sin pasar por ahi —enlace directo, restauracion de ruta al
+// reiniciar, recarga en la previsualizacion web— y pintaban su pantalla completa con
+// la ubicacion en blanco y un teclado que no hacia absolutamente nada.
+for (const ruta of ['/kiosk/exit', '/kiosk/actions']) {
+  await conPagina(
+    ruta,
+    async (page, errores) => {
+      const caso = `sin credencial en ${ruta}`;
+      // La ruta puede redirigir al reposo o pintar el estado vacio: las dos cosas
+      // valen. Lo que no vale es un teclado.
+      await page.waitForTimeout(1200);
+      const texto = await textoVisible(page);
+
+      if (await page.getByTestId('keypad-1').count()) {
+        fallar(caso, 'pinta el teclado del PIN en un dispositivo sin activar');
+        return;
+      }
+      if (!/todav[ií]a no es un reloj|is not a clock yet/i.test(texto)) {
+        fallar(caso, 'no explica que el dispositivo no esta activado: ' + texto.slice(0, 200));
+        return;
+      }
+      if (errores.length > 0) {
+        fallar(caso, 'errores de consola: ' + errores.join(' | '));
+        return;
+      }
+      pasar(caso, texto.slice(0, 70));
+    },
+    { comoKiosco: false },
+  );
+}
+
+// ---------------------------------------------------------------------------
+// 10. "Olvide marcar" sin sesion validada no deja un formulario muerto
+// ---------------------------------------------------------------------------
+//
+// Se podia elegir el tipo, escribir la hora y el motivo, pulsar enviar y no pasaba
+// nada: `submit` empieza con `if (verification === null ...) return;`. Ahora vuelve
+// al reposo, que con credencial es el teclado y sin ella es el estado vacio.
+await conPagina(
+  '/kiosk/forgot',
+  async (page, errores) => {
+    const caso = 'olvide marcar sin sesion validada';
+    await page.waitForTimeout(1500);
+    const texto = await textoVisible(page);
+
+    /*
+     * SE COMPRUEBA QUE VOLVIO AL REPOSO, no que "el formulario no esta".
+     *
+     * La primera version de este caso exigia ver a la vez "Motivo" y "Enviar", y
+     * PASABA con el fallo puesto: esos dos solo aparecen despues de elegir el tipo
+     * de solicitud, asi que el formulario roto —con sus tres botones de tipo bien
+     * visibles— cumplia la condicion. Una asercion que pasa sobre el codigo roto no
+     * acusa nada.
+     */
+    if (/Olvid[eé] marcar|Forgot to clock/i.test(texto)) {
+      fallar(caso, 'sigue en el formulario sin sesion validada: ' + texto.slice(0, 160));
+      return;
+    }
+    if (!/Marca tu entrada|Clock in or out/i.test(texto)) {
+      fallar(caso, 'no volvio al reposo del kiosco: ' + texto.slice(0, 160));
+      return;
+    }
+    if (errores.length > 0) {
+      fallar(caso, 'errores de consola: ' + errores.join(' | '));
+      return;
+    }
+    pasar(caso, texto.slice(0, 70));
+  },
+  { comoKiosco: true },
+);
+
 await browser.close();
 servidor.close();
 
