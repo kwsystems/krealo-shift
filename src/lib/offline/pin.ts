@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import * as Crypto from 'expo-crypto';
 
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
-import { openOfflineDatabase } from './database';
+import { SYNC_KEYS, getSyncMetadata, openOfflineDatabase, setSyncMetadata } from './database';
 
 /**
  * Validación del PIN sin conexión (especificación §8, §9.7).
@@ -43,10 +43,52 @@ import { openOfflineDatabase } from './database';
 const MAX_ATTEMPTS = 5;
 const LOCK_MINUTES = 15;
 
-/** Contador de intentos en memoria: se reinicia si alguien reinicia el iPad, que
- * es aceptable porque reiniciar un iPad de pedestal es visible y lento. */
-let failedAttempts = 0;
-let lockedUntil: Date | null = null;
+/**
+ * Contador de intentos y bloqueo, EN LA BASE LOCAL y no en memoria.
+ *
+ * Estaban en dos variables de este módulo, y el comentario lo justificaba diciendo
+ * que "se reinicia si alguien reinicia el iPad, que es aceptable porque reiniciar un
+ * iPad de pedestal es visible y lento". El razonamiento estaba mal: no hace falta
+ * reiniciar el iPad, basta CERRAR LA APP —dos segundos, y no se nota—. Con eso el
+ * contador volvía a cero y el bloqueo de 15 minutos desaparecía.
+ *
+ * Y el límite existe justamente para que quedarse sin red no sea la forma de
+ * saltarse el bloqueo. Modo avión más cerrar la app cada cuatro intentos dejaba
+ * probar PIN indefinidamente, y el PIN puede ser de cuatro dígitos.
+ *
+ * La protección de sistema contra cerrar la app es el Acceso Guiado de iPadOS, que
+ * es un ajuste MANUAL que un administrador tiene que activar en cada iPad (§24).
+ * Apoyar un límite de seguridad en un ajuste que puede no estar puesto no es un
+ * límite.
+ */
+async function readAttemptState(): Promise<{ failedAttempts: number; lockedUntil: Date | null }> {
+  const [rawAttempts, rawLock] = await Promise.all([
+    getSyncMetadata(SYNC_KEYS.offlinePinFailedAttempts),
+    getSyncMetadata(SYNC_KEYS.offlinePinLockedUntil),
+  ]);
+
+  const parsed = Number.parseInt(rawAttempts ?? '0', 10);
+  const lock = rawLock === null ? null : new Date(rawLock);
+
+  return {
+    // Un valor corrupto cuenta como CERO y no como muchos: si contara como muchos,
+    // corromper esa fila bloquearía el kiosco entero, que es un problema peor.
+    failedAttempts: Number.isFinite(parsed) && parsed > 0 ? parsed : 0,
+    // `''` es el valor que escribe `writeAttemptState` para "sin bloqueo", y
+    // `new Date('')` es una fecha inválida: el guardia de NaN la convierte en null.
+    // Una fecha corrupta también, y ahí sí conviene: un bloqueo ilegible no debe
+    // dejar el kiosco bloqueado para siempre.
+    lockedUntil: lock !== null && !Number.isNaN(lock.getTime()) ? lock : null,
+  };
+}
+
+async function writeAttemptState(failedAttempts: number, lockedUntil: Date | null): Promise<void> {
+  await setSyncMetadata(SYNC_KEYS.offlinePinFailedAttempts, String(failedAttempts));
+  await setSyncMetadata(
+    SYNC_KEYS.offlinePinLockedUntil,
+    lockedUntil === null ? '' : lockedUntil.toISOString(),
+  );
+}
 
 export type OfflineVerification =
   | { ok: true; employeeOpaqueId: string; pinVersion: number }
@@ -153,8 +195,10 @@ function equalsConstantTime(a: string, b: string): boolean {
  * función del servidor.
  */
 export async function verifyPinOffline(pin: string): Promise<OfflineVerification> {
-  if (lockedUntil !== null && lockedUntil > new Date()) {
-    return { ok: false, reason: 'locked', lockedUntil: lockedUntil.toISOString() };
+  const estado = await readAttemptState();
+
+  if (estado.lockedUntil !== null && estado.lockedUntil > new Date()) {
+    return { ok: false, reason: 'locked', lockedUntil: estado.lockedUntil.toISOString() };
   }
 
   const deviceKey = await secureStorage.get(SECURE_KEYS.kioskDeviceKey);
@@ -200,8 +244,7 @@ export async function verifyPinOffline(pin: string): Promise<OfflineVerification
   }
 
   if (match !== null) {
-    failedAttempts = 0;
-    lockedUntil = null;
+    await writeAttemptState(0, null);
     return {
       ok: true,
       employeeOpaqueId: match.employee_opaque_id,
@@ -209,15 +252,18 @@ export async function verifyPinOffline(pin: string): Promise<OfflineVerification
     };
   }
 
-  failedAttempts += 1;
+  const intentos = estado.failedAttempts + 1;
 
-  if (failedAttempts >= MAX_ATTEMPTS) {
-    lockedUntil = new Date(Date.now() + LOCK_MINUTES * 60_000);
-    failedAttempts = 0;
-    return { ok: false, reason: 'locked', lockedUntil: lockedUntil.toISOString() };
+  if (intentos >= MAX_ATTEMPTS) {
+    const hasta = new Date(Date.now() + LOCK_MINUTES * 60_000);
+    // El contador vuelve a cero AL BLOQUEAR: pasado el bloqueo se conceden cinco
+    // intentos nuevos, igual que hace el servidor.
+    await writeAttemptState(0, hasta);
+    return { ok: false, reason: 'locked', lockedUntil: hasta.toISOString() };
   }
 
-  return { ok: false, reason: 'incorrect', remainingAttempts: MAX_ATTEMPTS - failedAttempts };
+  await writeAttemptState(intentos, null);
+  return { ok: false, reason: 'incorrect', remainingAttempts: MAX_ATTEMPTS - intentos };
 }
 
 /** Datos mínimos del empleado para pintar la pantalla sin red. */
@@ -238,7 +284,6 @@ export async function cachedEmployee(employeeOpaqueId: string): Promise<{
 }
 
 /** Solo para pruebas: reinicia el estado de intentos entre casos. */
-export function resetOfflineAttemptState(): void {
-  failedAttempts = 0;
-  lockedUntil = null;
+export async function resetOfflineAttemptState(): Promise<void> {
+  await writeAttemptState(0, null);
 }

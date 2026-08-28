@@ -391,4 +391,24 @@ export const SYNC_KEYS = {
    * rastro, y el diagnóstico del kiosco lo muestra.
    */
   lastSyncError: 'last_sync_error',
+  /**
+   * Intentos fallidos de PIN sin conexión, y hasta cuándo está bloqueado.
+   *
+   * EN LA BASE Y NO EN MEMORIA, y el cambio arregla un agujero. Estaban en dos
+   * variables del módulo, y el comentario lo justificaba diciendo que "se reinicia
+   * si alguien reinicia el iPad, que es aceptable porque reiniciar un iPad de
+   * pedestal es visible y lento". El razonamiento estaba mal: no hace falta
+   * reiniciar el iPad, basta CERRAR LA APP, que son dos segundos y no se nota.
+   *
+   * El límite existe para que quedarse sin red no sea la forma de saltarse el
+   * bloqueo del PIN. Con el contador en memoria, modo avión más cerrar la app cada
+   * cuatro intentos dejaba probar PIN indefinidamente, y el PIN puede ser de cuatro
+   * dígitos: 10.000 combinaciones.
+   *
+   * Lo único que los reinicia ahora es borrar los datos de la app, que además borra
+   * la credencial del kiosco: el iPad deja de poder fichar hasta que un
+   * administrador lo reactive.
+   */
+  offlinePinFailedAttempts: 'offline_pin_failed_attempts',
+  offlinePinLockedUntil: 'offline_pin_locked_until',
 } as const;
