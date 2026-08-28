@@ -59,3 +59,66 @@ describe('generación de PIN', () => {
     expect(generatePin(6, random)).toMatch(/^[0-9]{6}$/);
   });
 });
+
+/**
+ * Muestreo por rechazo y ausencia de respaldos silenciosos.
+ *
+ * Dos detalles del generador, ninguno grave y los dos baratos:
+ *
+ *   - `byte % 10` sobre 0..255 NO reparte parejo: 256 no es múltiplo de 10, así que
+ *     los dígitos 0 a 5 salían 26 veces de 256 y los 6 a 9 salían 25 (10,16% contra
+ *     9,77%). Con bcrypt coste 12 y bloqueo a los cinco intentos eso no hace
+ *     explotable un PIN de seis dígitos, pero es lo primero que marca una revisión.
+ *
+ *   - `bytes[index] ?? 0` rellenaba con CEROS los dígitos que faltaban si la fuente
+ *     de azar devolvía menos bytes de los pedidos. En silencio. "480000" pasa el
+ *     filtro de PIN triviales sin problema, y un respaldo silencioso en un generador
+ *     de credenciales es lo que convierte un fallo ruidoso en una credencial mala.
+ */
+describe('azar del PIN', () => {
+  it('descarta los bytes que producirían sesgo, en vez de usarlos', () => {
+    // 250..255 se descartan; 7 y 12 se usan.
+    expect(pinFromBytes(new Uint8Array([250, 7, 255, 12, 251, 3, 254, 9]), 4)).toBe('7239');
+  });
+
+  it('LANZA si no hay suficiente azar, en vez de rellenar con ceros', () => {
+    expect(() => pinFromBytes(new Uint8Array([4, 8]), 4)).toThrow(/azar/i);
+  });
+
+  it('lanza también si todos los bytes se descartan', () => {
+    expect(() => pinFromBytes(new Uint8Array([250, 251, 252, 253]), 4)).toThrow(/azar/i);
+  });
+
+  it('el mensaje del error dice cuántos bytes llegaron y cuántos se descartaron', () => {
+    // Sin eso, "no hay suficiente azar" no le dice a nadie qué mirar.
+    expect(() => pinFromBytes(new Uint8Array([250, 251]), 4)).toThrow(/llegaron 2 bytes/);
+  });
+
+  it('reparte los diez dígitos de forma plana sobre muchas muestras', () => {
+    // La prueba real del sesgo: se recorren TODOS los bytes posibles y se cuenta cada
+    // dígito. Con el sesgo, 0..5 salían 26 veces y 6..9 salían 25. Sin él, diez.
+    const todos = new Uint8Array(256).map((_, index) => index);
+    const cuenta = new Map<string, number>();
+    for (const byte of todos) {
+      if (byte > 249) continue;
+      const digito = String(byte % 10);
+      cuenta.set(digito, (cuenta.get(digito) ?? 0) + 1);
+    }
+
+    expect([...cuenta.keys()].sort()).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']);
+    expect([...new Set(cuenta.values())]).toEqual([25]);
+  });
+
+  it('generatePin pide más bytes de los que necesita', () => {
+    // Porque `pinFromBytes` descarta: pedir exactamente 6 haría que un byte
+    // descartado dejara el PIN corto y lanzara sin motivo.
+    const pedidos: number[] = [];
+    const random = (length: number) => {
+      pedidos.push(length);
+      return new Uint8Array(length).map((_, index) => (index * 7 + 3) % 250);
+    };
+
+    generatePin(6, random);
+    expect(pedidos[0]).toBeGreaterThan(6);
+  });
+});
