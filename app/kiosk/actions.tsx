@@ -22,6 +22,7 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
+import { track } from '@/lib/analytics';
 import { enqueueEvent, enqueuePhotoForEvent } from '@/lib/offline/outbox';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
@@ -34,6 +35,7 @@ import {
   transition,
 } from '@/domain/attendance-state-machine';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
+import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { colors, durations, sizes, spacing } from '@/theme/tokens';
 import { formatClockTime, formatShiftRange, minutesToHHmm } from '@/utils/time';
@@ -255,6 +257,27 @@ export default function KioskActionsScreen() {
       // sale ya; si no, queda en la cola con su backoff.
       void runSync();
 
+      /*
+       * Los DOS eventos de §31, y no uno: `queued_offline` dice que el fichaje existe en
+       * el iPad, y `completed` dice que la persona ya vio su confirmación y se fue. Son
+       * distintos y los dos importan: un fichaje encolado que nunca llega al servidor es
+       * el peor fallo posible de esta app, y sin los dos números no se distingue de uno
+       * que nunca se intentó.
+       */
+      track({
+        name: 'time_action_queued_offline',
+        action: event,
+        queueSize: useNetworkStore.getState().pendingCount,
+      });
+      track({
+        name: 'time_action_completed',
+        action: event,
+        offline: true,
+        // Sin servidor no se puede saber si es duplicado; la cola lo resuelve luego.
+        duplicate: false,
+        withPhoto: photo?.status === 'captured',
+      });
+
       setStep({
         name: 'result',
         event,
@@ -277,9 +300,25 @@ export default function KioskActionsScreen() {
     setSubmitting(true);
     setError(null);
 
+    /*
+     * §31 `time_action_started`. Va aquí, en el momento de CONFIRMAR, y no en
+     * `startAction`: allí solo se elige una acción, y una hoja de confirmación que se
+     * cancela no es un fichaje empezado. La diferencia entre este evento y
+     * `time_action_completed` es justo lo que se quiere medir —cuántos fichajes se
+     * intentan y no llegan—, y contar cancelaciones de una hoja la haría inútil.
+     */
+    /*
+     * El token se captura en una constante y la condición se escribe UNA vez. Con un
+     * booleano suelto —`const sinConexion = ... || actionToken === null`— TypeScript
+     * pierde el estrechamiento y `actionToken` sigue siendo `string | null` más abajo,
+     * donde se envía; con la condición escrita dos veces, se pueden separar.
+     */
+    const actionToken = verification.mode === 'offline' ? null : verification.actionToken;
+    track({ name: 'time_action_started', action: event, offline: actionToken === null });
+
     // Sesion validada sin conexion: no hay token del servidor que consumir, asi
     // que el evento va directo a la cola local (§9.7).
-    if (verification.mode === 'offline' || verification.actionToken === null) {
+    if (actionToken === null) {
       await commitOffline(event);
       setSubmitting(false);
       return;
@@ -290,7 +329,7 @@ export default function KioskActionsScreen() {
     const idempotencyKey = Crypto.randomUUID();
 
     const result = await submitTimeEvent({
-      actionToken: verification.actionToken,
+      actionToken,
       eventType: event,
       breakType: step.name === 'confirm' ? step.breakType : undefined,
       shiftId: selectedShift?.id ?? null,
@@ -335,6 +374,14 @@ export default function KioskActionsScreen() {
             );
           });
       }
+
+      track({
+        name: 'time_action_completed',
+        action: event,
+        offline: false,
+        duplicate: result.data.status === 'duplicate',
+        withPhoto: photo?.status === 'captured',
+      });
 
       setStep({
         name: 'result',

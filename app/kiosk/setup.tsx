@@ -10,6 +10,7 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { activateKiosk } from '@/features/kiosk/api';
+import { track } from '@/lib/analytics';
 import { refreshOfflinePackage } from '@/lib/offline/sync';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import { useKioskStore } from '@/stores/kiosk-store';
@@ -57,6 +58,9 @@ export default function KioskSetupScreen() {
 
     const { credential, deviceKey, ...binding } = result.data;
     await activate(binding, credential, deviceKey);
+    // §31. Sin propiedades a propósito: cuántos iPads se activan y cuándo es la
+    // pregunta; QUÉ iPad es de cada tienda ya está en la base, y no en analítica.
+    track({ name: 'kiosk_activated' });
 
     // Se baja el paquete offline ANTES de entrar al reloj: si el iPad se queda sin
     // red justo despues de activarse, sin esto no podria validar ningun PIN (§9.7).

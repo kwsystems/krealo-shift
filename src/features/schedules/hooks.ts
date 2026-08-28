@@ -21,6 +21,7 @@ import {
 } from './conflicts';
 import { weekRangeInstants } from './week';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
+import { track } from '@/lib/analytics';
 
 /**
  * Estado del editor de horarios (§11.3).
@@ -181,8 +182,42 @@ export function useScheduleMutations(params: {
         weekStart,
         shiftIds: variables.shiftIds,
       }),
-    onSuccess: invalidate,
+    /*
+     * §31 `schedule_published`, en `onSuccess` y no en `mutationFn`: publicar puede
+     * fallar, y un evento "publicado" que se dispara antes de saberlo cuenta
+     * publicaciones que no ocurrieron.
+     *
+     * `weekOffset` en semanas desde hoy, y no la fecha: la fecha de una semana concreta
+     * junto al recuento de turnos empieza a describir a una tienda concreta, y §31 pide
+     * medir producto, no espiar clientes. El desplazamiento contesta lo que interesa
+     * —si se publica con antelación o a última hora— sin eso.
+     */
+    onSuccess: (_data, variables) => {
+      track({
+        name: 'schedule_published',
+        shiftCount: variables.shiftIds.length,
+        weekOffset: weeksFromToday(weekStart),
+      });
+      invalidate();
+    },
   });
 
   return { create, update, duplicate, remove, copyWeek, publish };
+}
+
+/**
+ * Semanas de distancia entre hoy y el lunes de una semana, con signo.
+ *
+ * Para la analítica de §31: contesta si un horario se publica con antelación o a última
+ * hora, sin enviar la fecha. Una fecha concreta junto al recuento de turnos empieza a
+ * describir a una tienda concreta.
+ */
+function weeksFromToday(weekStart: string): number {
+  const MS_POR_SEMANA = 7 * 24 * 60 * 60 * 1000;
+  const inicio = Date.parse(`${weekStart}T00:00:00Z`);
+  if (Number.isNaN(inicio)) return 0;
+
+  const hoy = new Date();
+  const hoyUtc = Date.UTC(hoy.getUTCFullYear(), hoy.getUTCMonth(), hoy.getUTCDate());
+  return Math.round((inicio - hoyUtc) / MS_POR_SEMANA);
 }

@@ -15,6 +15,7 @@ import {
   useWorkSessions,
 } from './hooks';
 import { shareCsv } from './share-csv';
+import { track } from '@/lib/analytics';
 import { AsyncSection } from '@/components/schedule/data-states';
 import {
   InlineNotice,
@@ -197,7 +198,12 @@ export function TimesheetsScreen() {
       await shareCsv({ fileName: timesheetFileName({ from, to }), content });
       return rows.length;
     },
-    onSuccess: (count) => setFeedback(t('timesheet.exported', { count })),
+    // §31 `timesheet_exported`. Se miden los TAMAÑOS —filas y días— y no qué se exportó:
+    // el contenido son las horas de personas con nombre, y eso no entra en analítica.
+    onSuccess: (count) => {
+      track({ name: 'timesheet_exported', rowCount: count, dayCount: daysBetween(from, to) });
+      setFeedback(t('timesheet.exported', { count }));
+    },
   });
 
   const periodStatus = period.data?.status ?? 'open';
@@ -515,4 +521,13 @@ export function TimesheetsScreen() {
       ) : null}
     </AppScreen>
   );
+}
+
+/** Días entre dos fechas `YYYY-MM-DD`, inclusive. Para el tamaño de la exportación. */
+function daysBetween(from: string, to: string): number {
+  const MS_POR_DIA = 24 * 60 * 60 * 1000;
+  const desde = Date.parse(`${from}T00:00:00Z`);
+  const hasta = Date.parse(`${to}T00:00:00Z`);
+  if (Number.isNaN(desde) || Number.isNaN(hasta)) return 0;
+  return Math.max(0, Math.round((hasta - desde) / MS_POR_DIA) + 1);
 }

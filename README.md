@@ -656,9 +656,14 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   el de la plantilla de Expo. Pero el motivo gráfico es una decisión de marca, y esa
   es suya: si tiene un logotipo de Krealo Shift, sustituirlo es cambiar los PNG o la
   geometría del script, y no toca código;
-- **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, pero
-  nada en la app los lee ni los escribe. No está en las listas P0/P1 de §26, así que
-  no es un incumplimiento, pero sí es una tabla que hoy no sirve para nada;
+- **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, y nada
+  en la app los lee todavía. Eso NO es deuda: §26 manda «preparar arquitectura,
+  implementar solo después de P0/P1 estable», el modelo de datos de §15 pide la tabla y
+  el seed de §29 pide el anuncio de demostración. La tabla está donde debe estar; lo que
+  falta es la pantalla, que ninguna sección de §9 ni §11 especifica. Cuando se
+  especifique, el camino no es RLS directa: el kiosco no tiene sesión personal, así que
+  el anuncio tendría que viajar en el paquete del kiosco, y eso es un cambio de Edge
+  Function;
 - **resultado de solicitudes sin conexión**: el kiosco muestra el resultado de las
   solicitudes solo con red, y es una decisión escrita (ver
   `20260827001800_kiosk_request_updates.sql`), no un olvido. Si se quisiera offline,
@@ -670,6 +675,11 @@ el editor de horarios semanal, hojas de tiempo con exportación CSV, correccione
 aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
 envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés
 completos.
+
+Los nueve eventos de analítica de §31 están instrumentados en sus nueve sitios, con tipo
+cerrado y sin un solo campo de texto libre, pero **no se envían a ningún servicio
+todavía**: elegirlo y dar sus credenciales es de Andree, y conectarlo es una llamada a
+`setAnalyticsSink`. El motivo está en `docs/DECISIONES.md`.
 
 ### Lo que necesita la cuenta Apple del propietario
 

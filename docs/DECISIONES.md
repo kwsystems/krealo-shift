@@ -84,6 +84,54 @@ eso ya no pueden contestar cosas distintas ni rebotarse la una a la otra.
   fallaron. Un control que no hace nada es invisible para cualquier chequeo que solo
   mire píxeles.
 
+### La analítica mide, pero todavía no envía a ningún sitio
+
+Los nueve eventos de §31 están instrumentados en sus nueve sitios, con tipo cerrado y
+pruebas. El destino es un `sink` reemplazable: en desarrollo escribe en consola, en
+producción no hace nada.
+
+- **Por qué así:** elegir el servicio —Amplitude, PostHog, otro— y dar sus credenciales
+  es de Andree, y no se puede inventar. Lo que sí se podía hacer es la parte que se
+  pudre si se deja: SABER CUÁNDO se envía cada evento. Un `time_action_completed` puesto
+  en el sitio equivocado se descubre meses después, cuando los números no cuadran y ya
+  nadie recuerda qué se quiso medir.
+- **Qué falta para conectarlo:** una llamada a `setAnalyticsSink`, no buscar nueve
+  sitios.
+- **Costo aceptado:** hoy no se mide nada en producción. La alternativa era no
+  instrumentar, y entonces conectar el servicio el día que exista seguiría siendo el
+  trabajo entero.
+- **Lo que la analítica NO puede llevar:** §31 prohíbe nombre, PIN, foto y notas. Las
+  propiedades de los nueve eventos son números, booleanos y enumerados cerrados: no hay
+  ni un campo de texto libre, y hay una prueba que lo comprueba leyendo el tipo. Un
+  `sync_failed` manda la CATEGORÍA del fallo y no el mensaje del servidor, porque un
+  mensaje es texto libre y basta con que una restricción de la base incluya un nombre
+  algún día.
+
+### Sin crash reporting, y sin la variable que lo prometía
+
+`EXPO_PUBLIC_SENTRY_DSN` estaba declarada y validada en `src/lib/env.ts`, y no la leía
+nadie: no hay SDK de crash reporting en el proyecto. Se quitó.
+
+- **Por qué quitarla y no dejarla:** una variable de entorno que no se usa es una
+  promesa. Alguien pega un DSN, reinicia, y no se reporta nada —y es peor en esta que en
+  cualquier otra, porque es la que sirve justo para saber que la app se rompió—.
+- **Qué haría falta:** elegir el servicio y dar el DSN es de Andree; añadir el SDK toca
+  la compilación nativa. Cuando exista, la variable vuelve JUNTO al SDK que la use.
+
+### La tabla `announcements` sin pantalla es lo pedido, no un olvido
+
+Existe con RLS y el seed crea un anuncio, y nada en la app los lee. Se revisó por si era
+deuda y no lo es: §26 manda «preparar arquitectura, implementar solo después de P0/P1
+estable», §15 pide la tabla con vigencia, autor y confirmación opcional, y §29 pide el
+anuncio de demostración. Ninguna sección de §9 ni §11 especifica una pantalla.
+
+- **Por qué se anota:** porque una tabla que nadie consulta parece un descuido, y quien
+  la encuentre va a suponer que hay una función detrás y buscarla.
+- **Qué haría falta para mostrarla:** NO se resuelve con RLS directa. El kiosco es la
+  única superficie que ven los empleados y no tiene sesión personal —usa credencial de
+  dispositivo contra Edge Functions—, así que el anuncio vigente tendría que viajar en el
+  paquete del kiosco. Es un cambio de Edge Function y un despliegue, no una pantalla.
+
 ### Build number administrado por EAS
 
 `eas.json` usa `cli.appVersionSource: "remote"` y `autoIncrement: true` en

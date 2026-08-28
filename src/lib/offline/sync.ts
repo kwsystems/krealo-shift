@@ -17,6 +17,7 @@ import { storeOfflineVerifiers } from './pin';
 import { attachPhoto, syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
 import { cacheRosterAndShifts } from '@/features/kiosk/offline-session';
 import { useKioskStore } from '@/stores/kiosk-store';
+import { track, type SyncFailureReason } from '@/lib/analytics';
 import { useNetworkStore } from '@/stores/network-store';
 
 /**
@@ -123,6 +124,28 @@ export async function refreshQueueIndicators(): Promise<void> {
  * de duplicar envíos. Cuatro disparadores a la vez es lo normal cuando vuelve la
  * red justo al abrir la app.
  */
+/**
+ * Traduce el fallo del envío a una de las categorías de `SyncFailureReason`.
+ *
+ * Existe para que la analítica NO reciba el mensaje del servidor. Un `switch`
+ * exhaustivo y no un `String(kind)`: si mañana aparece una clase de error nueva, cae en
+ * `unknown` en vez de mandar a analítica una cadena que nadie revisó.
+ */
+function motivoDeAnalitica(kind: string): SyncFailureReason {
+  switch (kind) {
+    case 'offline':
+      return 'offline';
+    case 'rejected':
+    case 'invalid':
+      return 'rejected';
+    case 'device_credential':
+    case 'not_configured':
+      return 'device_credential';
+    default:
+      return 'unknown';
+  }
+}
+
 export async function runSync(): Promise<SyncOutcome> {
   if (running) return SIN_TRABAJO;
   running = true;
@@ -158,6 +181,13 @@ export async function runSync(): Promise<SyncOutcome> {
       }
       await refreshQueueIndicators();
       store.setSyncing(false);
+      /*
+       * §31 `sync_failed`. Se envía la CATEGORÍA del fallo y no su mensaje: un mensaje
+       * de error es texto libre, y texto libre es por donde se escapa un dato personal
+       * sin que nadie lo decida —basta con que una restricción de la base incluya un
+       * nombre en su mensaje algún día—.
+       */
+      track({ name: 'sync_failed', reason: motivoDeAnalitica(result.error.kind) });
       return {
         attempted: batch.length,
         accepted: 0,
@@ -197,6 +227,16 @@ export async function runSync(): Promise<SyncOutcome> {
     await refreshQueueIndicators();
     await setSyncMetadata(SYNC_KEYS.lastSyncAt, new Date().toISOString());
     store.markSynced();
+
+    // §31 `sync_completed`. `needsReview` va aparte de `accepted` porque son estados
+    // distintos con consecuencias distintas: uno cierra el fichaje y el otro deja
+    // trabajo para un gerente.
+    track({
+      name: 'sync_completed',
+      accepted,
+      pending: Math.max(0, batch.length - accepted - attention),
+      needsReview: attention,
+    });
 
     return {
       attempted: batch.length,

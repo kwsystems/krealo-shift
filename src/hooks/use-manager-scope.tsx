@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { track } from '@/lib/analytics';
 import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
 import { getSupabase } from '@/lib/supabase/client';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
@@ -175,6 +176,15 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
   useSessionStore
     .getState()
     .setMembership({ role: membership.role, organizationId: membership.organization_id });
+
+  /*
+   * `login_succeeded` de §31 se mide AQUÍ y no en la pantalla de acceso, porque el
+   * evento lleva el rol y en la pantalla de acceso el rol todavía no se sabe: la sesión
+   * de Supabase dice quién eres, no qué puedes hacer. Aquí es el primer punto donde se
+   * conoce, y este es también el punto por el que pasa una sesión restaurada del
+   * Keychain, que en la pantalla de acceso no se vería nunca.
+   */
+  track({ name: 'login_succeeded', role: membership.role });
 
   return { organization, role: membership.role, locations };
 }
