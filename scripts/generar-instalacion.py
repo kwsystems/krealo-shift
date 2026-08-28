@@ -22,6 +22,7 @@ crearia una segunda version del esquema, y entonces habria dos verdades.
 """
 
 import pathlib
+import re
 import sys
 
 RAIZ = pathlib.Path(__file__).resolve().parent.parent
@@ -95,22 +96,79 @@ def generar():
     return ''.join(partes)
 
 
+def revisar_readme(total):
+    """Comprueba que el README hable del numero real de migraciones.
+
+    POR QUE VIVE AQUI. La tabla del README es, literalmente, una lista de los
+    archivos de supabase/migrations/, y este script es el unico sitio que ya los
+    enumera. Se quedo vieja DOS VECES en la misma sesion —listaba 6 de 16, y luego
+    17 de 18—, siempre por el mismo motivo: nadie vuelve al README al anadir una
+    migracion, y una tabla incompleta de migraciones no se nota leyendola, solo
+    contandolas.
+
+    Devuelve la lista de problemas; vacia si esta bien.
+    """
+    readme = RAIZ / 'README.md'
+    if not readme.is_file():
+        return ['No encuentro README.md']
+
+    texto = readme.read_text(encoding='utf-8')
+    problemas = []
+
+    # Cada fila de la tabla empieza por "| `…" (con puntos suspensivos de un solo
+    # caracter, que es como estan escritas).
+    filas = texto.count('\n| `\u2026')
+    if filas != total:
+        problemas.append(
+            f'La tabla de migraciones del README tiene {filas} filas y hay {total} '
+            f'migraciones en supabase/migrations/'
+        )
+
+    for mencion in re.findall(r'[Ll]as (\d+) migraciones', texto):
+        if int(mencion) != total:
+            problemas.append(
+                f'El README dice "las {mencion} migraciones" y hay {total}'
+            )
+
+    return problemas
+
+
 if __name__ == '__main__':
     texto = generar()
     verificar = '--verificar' in sys.argv
 
+    total = len(sorted(MIGRACIONES.glob('*.sql')))
+    problemas_readme = revisar_readme(total)
+
     if verificar:
+        fallo = False
+
         actual = SALIDA.read_text(encoding='utf-8') if SALIDA.is_file() else None
         if actual == texto:
             print(f'{SALIDA.name} esta al dia.')
-            sys.exit(0)
-        print(
-            f'{SALIDA.name} NO coincide con supabase/migrations/ ni con seed.sql.\n'
-            'Alguien cambio una migracion sin regenerar el instalador. Corre:\n'
-            '    python3 scripts/generar-instalacion.py',
-            file=sys.stderr,
-        )
-        sys.exit(1)
+        else:
+            fallo = True
+            print(
+                f'{SALIDA.name} NO coincide con supabase/migrations/ ni con seed.sql.\n'
+                'Alguien cambio una migracion sin regenerar el instalador. Corre:\n'
+                '    python3 scripts/generar-instalacion.py',
+                file=sys.stderr,
+            )
+
+        if problemas_readme:
+            fallo = True
+            print('El README no esta al dia:', file=sys.stderr)
+            for p in problemas_readme:
+                print(f'  - {p}', file=sys.stderr)
+        else:
+            print(f'README coherente con las {total} migraciones.')
+
+        sys.exit(1 if fallo else 0)
+
+    # Al generar solo se avisa: regenerar el SQL y arreglar la prosa del README son
+    # dos cosas distintas, y bloquear la primera por la segunda no ayuda a nadie.
+    for p in problemas_readme:
+        print(f'AVISO: {p}', file=sys.stderr)
 
     SALIDA.write_text(texto, encoding='utf-8')
     print(f'escrito {SALIDA.relative_to(RAIZ)} '

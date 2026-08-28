@@ -253,7 +253,7 @@ del propio panel de Supabase.
    para esto no la vas a usar.
 
 2. **Crear el esquema.** Menú lateral → **SQL Editor** → *New query* → pega TODO
-   `supabase/instalar-todo.sql` → **Run**. Son las 17 migraciones y los datos de
+   `supabase/instalar-todo.sql` → **Run**. Son las 18 migraciones y los datos de
    demostración en un solo archivo. Al terminar dice *Success. No rows returned*.
 
 3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → *Add user* →
@@ -345,6 +345,7 @@ Aplica, en orden, los archivos de `supabase/migrations/`:
 | `…001500_authorize_rpc.sql` | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso |
 | `…001600_close_direct_writes.sql` | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable |
 | `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada |
+| `…001800_kiosk_request_updates.sql` | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.
@@ -601,23 +602,49 @@ archivo. Cambiar el esquema rompe los enlaces profundos existentes.
 
 ## Qué falta
 
-Esto no está terminado y no se disfraza:
+Esto no está terminado y no se disfraza. La lista se revisó archivo por archivo el
+2026-08-28: la versión anterior decía que faltaban el panel administrativo, las
+notificaciones y el almacenamiento de fotos, y las tres estaban hechas. Una lista de
+pendientes equivocada es peor que no tenerla, porque se usa para decidir qué hacer.
+
+**Bloqueado por credenciales o hardware que no tengo** (tarea `aP8PPsGC02bbePX5Oo9i`
+y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
 
 - **verificación en dispositivo del circuito offline**: la cola local, la
   sincronización y la validación del PIN sin conexión están implementadas
   (`src/lib/offline/`) y con pruebas, pero el flujo completo —cortar la red,
   fichar, recuperarla y comprobar que sincroniza **una sola vez**— solo se puede
   confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
-- **pantallas del panel administrativo**: las cinco pestañas existen con estados
-  vacíos honestos y la capa de datos vive ya en `src/features/` (equipo,
-  horarios, hojas de tiempo, solicitudes, configuración, exportación CSV). Lo que
-  falta es la interfaz que las use: editor de horarios semanal, hojas de tiempo,
-  correcciones y aprobaciones;
-- **notificaciones**: `expo-notifications` está configurado como plugin, pero no
-  hay registro de token ni envío;
-- **almacenamiento de fotos**: falta el bucket privado de Supabase Storage y las
-  URLs firmadas breves;
-- **icono y splash definitivos**, y capturas para la App Store.
+- **disparador de las alertas**: `send-manager-alerts` está escrita y probada, pero
+  hay que llamarla cada 15 minutos desde fuera (documentado en
+  `supabase/functions/README.md`). Sin eso las alertas se calculan y no se envían:
+  no se pierden, pero nadie se entera;
+- **`EAS_PROJECT_ID`**: sin él la app no puede pedir token de push, y el panel lo
+  dice con un aviso honesto en vez de un botón que fallaría;
+- **secretos de las Edge Functions**: `KIOSK_TOKEN_SECRET` y `MANAGER_ALERTS_TOKEN`.
+
+**Trabajo pendiente de verdad, que sí se puede hacer aquí:**
+
+- **icono y splash definitivos**: `assets/images/icon.png` sigue siendo el de la
+  plantilla de Expo, el fondo azul con la «A». Es un bloqueo para TestFlight, no un
+  detalle estético;
+- **capturas para la App Store**;
+- **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, pero
+  nada en la app los lee ni los escribe. No está en las listas P0/P1 de §26, así que
+  no es un incumplimiento, pero sí es una tabla que hoy no sirve para nada;
+- **logotipo de la organización**: la migración `…001200` crea el bucket de lectura
+  pública y la política de escritura, y no hay interfaz que suba nada;
+- **resultado de solicitudes sin conexión**: el kiosco muestra el resultado de las
+  solicitudes solo con red, y es una decisión escrita (ver
+  `20260827001800_kiosk_request_updates.sql`), no un olvido. Si se quisiera offline,
+  habría que replicar en el iPad decisiones de un encargado.
+
+**Lo que NO falta, por si la lista anterior confundió a alguien:** el esquema y las
+18 migraciones, RLS con 230 aserciones, las 8 Edge Functions, el modo kiosco completo,
+el editor de horarios semanal, hojas de tiempo con exportación CSV, correcciones y
+aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
+envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés
+completos.
 
 ### Lo que necesita la cuenta Apple del propietario
 
