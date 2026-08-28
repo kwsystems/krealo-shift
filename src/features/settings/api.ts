@@ -57,9 +57,22 @@ const kioskDeviceSchema = z.object({
   last_seen_at: z.string().nullable(),
   last_sync_at: z.string().nullable(),
   /**
-   * Minutos desde la última sincronización, `null` si nunca sincronizó. Lo calcula
-   * la vista y no el cliente, para que el panel y el trabajo de notificaciones den
-   * la misma respuesta sobre el mismo kiosco.
+   * Minutos desde el ÚLTIMO CONTACTO con el servidor. Nunca `null`.
+   *
+   * Es lo que mide el aviso de "reloj sin sincronizar" (§19), y sale de
+   * `last_seen_at`, que el servidor actualiza en cada petición autenticada del
+   * kiosco. Lo calcula la vista y no el cliente, para que el panel y el trabajo de
+   * notificaciones den la misma respuesta sobre el mismo iPad.
+   */
+  minutes_since_seen: z.number().int(),
+  /**
+   * Minutos desde la última vez que este iPad VACIÓ SU COLA, `null` si nunca tuvo
+   * nada que sincronizar.
+   *
+   * `null` es el caso NORMAL Y BUENO en una tienda con red estable, y no debe leerse
+   * como un problema: antes esto era lo que medía la alerta, y como solo lo escribe
+   * la función de sincronización offline, un iPad con buen wifi lo dejaba en `null`
+   * para siempre y la alerta disparaba todos los días.
    */
   minutes_since_sync: z.number().int().nullable(),
 });
@@ -88,7 +101,7 @@ export async function fetchKioskDevices(organizationId: string): Promise<KioskDe
       .from(VIEWS.kioskDevicesAdmin)
       .select(
         'id, display_name, location_id, location_name, device_public_id, status, ' +
-          'app_version, last_seen_at, last_sync_at, minutes_since_sync',
+          'app_version, last_seen_at, last_sync_at, minutes_since_seen, minutes_since_sync',
       )
       .eq('organization_id', organizationId)
       .order('location_name', { ascending: true })

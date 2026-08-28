@@ -454,8 +454,9 @@ begin;
       where table_name = 'kiosk_devices_admin'
         and column_name in ('id', 'organization_id', 'location_id', 'location_name',
                             'device_public_id', 'display_name', 'status', 'app_version',
-                            'last_seen_at', 'last_sync_at', 'minutes_since_sync')) = 11,
-    'La vista de kioscos expone las 11 columnas que lee el panel');
+                            'last_seen_at', 'last_sync_at', 'minutes_since_seen',
+                            'minutes_since_sync')) = 12,
+    'La vista de kioscos expone las 12 columnas que lee el panel');
 rollback;
 
 begin;
@@ -463,17 +464,27 @@ begin;
     json_build_object('sub', :u_manager, 'role', 'authenticated')::text, true);
   set local role authenticated;
 
-  -- `minutes_since_sync` es null solo si nunca sincronizo, y nunca negativo. El
-  -- panel trata el null como "atrasado" a proposito —un iPad activado que jamas
-  -- sincronizo es uno que nadie termino de instalar—, asi que ese null tiene que
-  -- significar exactamente eso y no "no pude calcularlo".
+  -- `minutes_since_sync` es null solo si nunca vacio la cola, y nunca negativo.
+  -- Ese null es el caso NORMAL de una tienda con red estable, no un problema: el
+  -- panel lo muestra como "nada pendiente". Antes se trataba como atrasado y eso
+  -- marcaba en ambar todos los kioscos sanos.
   select test_assert(
     not exists (
       select 1 from kiosk_devices_admin
       where (minutes_since_sync is null) <> (last_sync_at is null)
          or minutes_since_sync < 0
     ),
-    'minutes_since_sync es null si y solo si nunca sincronizo, y nunca negativo');
+    'minutes_since_sync es null si y solo si nunca vacio la cola, y nunca negativo');
+
+  -- `minutes_since_seen` NUNCA es null: es lo que mide el aviso del §19, y un null
+  -- ahi obligaria a decidir en el cliente si eso cuenta como atrasado, que es
+  -- exactamente la ambiguedad que produjo el fallo.
+  select test_assert(
+    not exists (
+      select 1 from kiosk_devices_admin
+      where minutes_since_seen is null or minutes_since_seen < 0
+    ),
+    'minutes_since_seen nunca es null ni negativo');
 
   -- El nombre de la tienda viene resuelto en la vista: el panel lo muestra tal
   -- cual y no hace una segunda consulta por cada kiosco.

@@ -175,10 +175,31 @@ Deno.serve(async (request) => {
     });
   }
 
-  await supabase
+  // `last_sync_at` = ultima vez que ESTE dispositivo vacio su cola. Es lo unico que
+  // lo escribe, y por eso queda null en un iPad que nunca se queda sin red: eso es
+  // correcto y significa "nunca tuvo nada que sincronizar".
+  //
+  // El aviso de "reloj sin sincronizar" de §19 NO mide esto: mide `last_seen_at`,
+  // que `authenticate_kiosk` actualiza en cada peticion. Medirlo aqui era un fallo
+  // que hacia disparar la alerta todos los dias en kioscos sanos. Ver
+  // 20260827002000_aviso_ultimo_contacto.sql.
+  //
+  // Se comprueba el error: era una de las dos unicas escrituras del proyecto que no
+  // lo hacia. No se falla la peticion por esto —los fichajes ya se registraron— pero
+  // un fallo silencioso aqui haria que el panel mostrara una cola que no se vacia.
+  const marca = await supabase
     .from('kiosk_devices')
     .update({ last_sync_at: new Date().toISOString() })
     .eq('id', kiosk.deviceId);
+
+  if (marca.error) {
+    console.warn(
+      '[krealo-shift] No se pudo marcar last_sync_at del dispositivo ' +
+        kiosk.deviceId +
+        ': ' +
+        marca.error.message,
+    );
+  }
 
   const accepted = results.filter(
     (r) => r.status === 'accepted' || r.status === 'duplicate',

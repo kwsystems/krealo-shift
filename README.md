@@ -256,7 +256,7 @@ del propio panel de Supabase.
    para esto no la vas a usar.
 
 2. **Crear el esquema.** Menú lateral → **SQL Editor** → *New query* → pega TODO
-   `supabase/instalar-todo.sql` → **Run**. Son las 19 migraciones y los datos de
+   `supabase/instalar-todo.sql` → **Run**. Son las 20 migraciones y los datos de
    demostración en un solo archivo. Al terminar dice *Success. No rows returned*.
 
 3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → *Add user* →
@@ -350,6 +350,7 @@ Aplica, en orden, los archivos de `supabase/migrations/`:
 | `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada |
 | `…001800_kiosk_request_updates.sql` | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó |
 | `…001900_alertas_1106.sql` | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores |
+| `…002000_aviso_ultimo_contacto.sql` | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.

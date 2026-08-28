@@ -444,8 +444,12 @@ function KiosksCard() {
                 }
               />
               <KeyValueRow
+                label={t('settings.kioskLastContact')}
+                value={describeSeen(device.minutes_since_seen, staleAfterMinutes, t)}
+              />
+              <KeyValueRow
                 label={t('settings.kioskLastSync')}
-                value={describeSync(device.minutes_since_sync, staleAfterMinutes, t)}
+                value={describeQueueFlush(device.minutes_since_sync, t)}
               />
               <KeyValueRow
                 label={t('settings.kioskAppVersion')}
@@ -624,38 +628,63 @@ function NotificationsCard() {
 }
 
 /**
- * Un kiosco lleva demasiado sin sincronizar (§19).
+ * Un kiosco lleva demasiado sin dar señales (§19).
  *
- * `null` —nunca sincronizó— TAMBIÉN cuenta como atrasado, y es el caso que importa:
- * un iPad activado que jamás sincronizó es un iPad que nadie terminó de instalar, y
- * es justo el que pasaría desapercibido si `null` se tratara como "sin datos".
- * Solo se avisa de dispositivos activos: uno revocado ya no debe sincronizar.
+ * MIDE EL ÚLTIMO CONTACTO, no la última vez que vació la cola, y el cambio arregla
+ * un fallo mío: la versión anterior usaba `minutes_since_sync` y trataba `null`
+ * —nunca sincronizó— como atrasado, razonando que "un iPad activado que jamás
+ * sincronizó es uno que nadie terminó de instalar".
+ *
+ * El razonamiento era correcto para lo que el campo debería significar, pero ese
+ * campo solo lo escribe la función de sincronización offline: en un iPad con buen
+ * wifi se queda en `null` para siempre. Así que la pantalla marcaba en ámbar TODOS
+ * los kioscos sanos, y la alerta del §19 avisaba todos los días.
+ *
+ * `minutes_since_seen` sale de `last_seen_at`, que el servidor actualiza en cada
+ * petición autenticada del kiosco. Nunca es `null` y significa exactamente lo que
+ * hay que saber: si el reloj sigue hablando con nosotros.
+ *
+ * Solo se avisa de dispositivos activos: uno revocado ya no debe dar señales.
  */
 export function isSyncStale(
-  device: Pick<KioskDevice, 'status' | 'minutes_since_sync'>,
+  device: Pick<KioskDevice, 'status' | 'minutes_since_seen'>,
   staleAfterMinutes: number,
 ): boolean {
   if (device.status !== 'active') return false;
-  if (device.minutes_since_sync === null) return true;
-  return device.minutes_since_sync > staleAfterMinutes;
+  return device.minutes_since_seen > staleAfterMinutes;
 }
 
 /**
- * Cuánto lleva sin sincronizar, en palabras.
+ * Cuánto lleva sin dar señales, en palabras.
  *
  * Minutos por debajo de una hora y horas por encima: "hace 372 min" obliga a
  * dividir mentalmente para saber si eso es mucho. Y cuando pasa del umbral el
  * propio texto lo dice, en vez de dejar el juicio en manos de quien lee un número.
  */
-export function describeSync(
-  minutes: number | null,
+export function describeSeen(
+  minutes: number,
   staleAfterMinutes: number,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
-  if (minutes === null) return t('settings.kioskNeverSynced');
   if (minutes < 60) return t('settings.kioskSyncFresh', { minutes });
   const hours = Math.floor(minutes / 60);
   return minutes > staleAfterMinutes
     ? t('settings.kioskSyncStale', { hours })
     : t('settings.kioskSyncHours', { hours });
+}
+
+/**
+ * Cuánto lleva sin VACIAR SU COLA, que es otra cosa.
+ *
+ * `null` significa "nunca ha tenido nada que sincronizar", que en una tienda con red
+ * estable es lo normal y lo bueno. Por eso el texto NO dice "nunca sincronizó" a
+ * secas, que se lee como un problema: dice que no hubo nada pendiente.
+ */
+export function describeQueueFlush(
+  minutes: number | null,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (minutes === null) return t('settings.kioskNothingToSync');
+  if (minutes < 60) return t('settings.kioskSyncFresh', { minutes });
+  return t('settings.kioskSyncHours', { hours: Math.floor(minutes / 60) });
 }

@@ -115,11 +115,6 @@ Deno.serve(async (request) => {
     })),
   );
 
-  await supabase
-    .from('kiosk_devices')
-    .update({ last_seen_at: new Date().toISOString() })
-    .eq('id', kiosk.deviceId);
-
   return jsonResponse({
     location: {
       id: location.data.id,

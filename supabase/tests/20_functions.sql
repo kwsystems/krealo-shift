@@ -1070,11 +1070,35 @@ begin
        where alert_type = 'kioskNotSyncing') = 0,
     'Un reloj recien activado no cuenta como sin sincronizar');
 
-  update kiosk_devices set last_sync_at = now() - interval '5 hours' where id = v_device;
+  -- EL CASO QUE FALLABA, Y QUE ESTE ARCHIVO NO DETECTABA.
+  --
+  -- La alerta medía `last_sync_at`, y ese campo lo escribe SOLO
+  -- `sync-offline-events`, que la app llama unicamente cuando hay eventos encolados
+  -- sin conexion. En un iPad con buen wifi se queda NULL para siempre, y la
+  -- condicion `coalesce(last_sync_at, created_at) + 120 min` disparaba desde dos
+  -- horas despues de la activacion, todos los dias, por un kiosco sano.
+  --
+  -- Y ESTE ARCHIVO NO LO VEIA porque el seed acaba de insertar el dispositivo: en
+  -- una prueba `created_at` es de hace un segundo, asi que el coalesce daba un valor
+  -- fresco. En produccion `created_at` es la fecha de instalacion. Un seed recien
+  -- creado esconde cualquier fallo que dependa del paso del tiempo.
+  update kiosk_devices
+    set last_sync_at = null,
+        last_seen_at = now(),
+        created_at = now() - interval '30 days'
+  where id = v_device;
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+       where alert_type = 'kioskNotSyncing') = 0,
+    'Un reloj instalado hace un mes que NUNCA vacio la cola pero acaba de hablar con '
+    'el servidor NO cuenta como sin sincronizar');
+
+  -- Y lo que si tiene que avisar: el que dejo de hablar.
+  update kiosk_devices set last_seen_at = now() - interval '5 hours' where id = v_device;
   perform test_assert(
     (select count(*) from pending_manager_alerts(v_org)
        where alert_type = 'kioskNotSyncing') = 1,
-    'Cinco horas sin sincronizar pasan el umbral por defecto de 120 minutos');
+    'Cinco horas sin dar señales pasan el umbral por defecto de 120 minutos');
 
   update locations set settings = settings || '{"kioskSyncStaleMinutes": 600}'::jsonb
     where id = '22222222-2222-4222-8222-222222222221';
