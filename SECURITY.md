@@ -20,14 +20,14 @@ Lo que hay que proteger, en orden de gravedad:
 
 Contra quién:
 
-| Actor | Qué podría intentar | Qué lo detiene |
-|---|---|---|
-| Empleado curioso frente al kiosco | ver la lista del personal, fichar por un compañero, salir de la app | el kiosco nunca muestra el equipo antes de validar un PIN; cada acción exige un token de 90 s ligado al empleado; Acceso guiado de iPadOS impide salir de la app |
-| Empleado con el PIN de otro | fichar en su nombre | el PIN es el único factor en el iPad: eso es una limitación aceptada del modelo kiosco. Se compensa con rotación de PIN, auditoría de cada evento y foto opcional |
-| Alguien con el iPad en la mano | extraer la credencial y fichar desde fuera | la credencial vive en el Keychain (SecureStore); sin el token de acción de 90 s no puede fichar por nadie; revocar el dispositivo la anula al instante |
-| Cliente malicioso con la `anon key` | leer datos de otra organización | RLS: la `anon key` no otorga ningún dato por sí sola |
-| Gerente que quiere más permisos | editar su propio rol o ver otras tiendas | el rol se resuelve en el servidor; las políticas RLS y las guardas de esquema impiden la escalada |
-| Persona con acceso al repositorio | encontrar secretos | no hay secretos en Git: solo `.env.example` vacío |
+| Actor                               | Qué podría intentar                                                 | Qué lo detiene                                                                                                                                                    |
+| ----------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empleado curioso frente al kiosco   | ver la lista del personal, fichar por un compañero, salir de la app | el kiosco nunca muestra el equipo antes de validar un PIN; cada acción exige un token de 90 s ligado al empleado; Acceso guiado de iPadOS impide salir de la app  |
+| Empleado con el PIN de otro         | fichar en su nombre                                                 | el PIN es el único factor en el iPad: eso es una limitación aceptada del modelo kiosco. Se compensa con rotación de PIN, auditoría de cada evento y foto opcional |
+| Alguien con el iPad en la mano      | extraer la credencial y fichar desde fuera                          | la credencial vive en el Keychain (SecureStore); sin el token de acción de 90 s no puede fichar por nadie; revocar el dispositivo la anula al instante            |
+| Cliente malicioso con la `anon key` | leer datos de otra organización                                     | RLS: la `anon key` no otorga ningún dato por sí sola                                                                                                              |
+| Gerente que quiere más permisos     | editar su propio rol o ver otras tiendas                            | el rol se resuelve en el servidor; las políticas RLS y las guardas de esquema impiden la escalada                                                                 |
+| Persona con acceso al repositorio   | encontrar secretos                                                  | no hay secretos en Git: solo `.env.example` vacío                                                                                                                 |
 
 Fuera de alcance en P0/P1: fichaje desde teléfonos personales (no existe),
 geolocalización (no existe) y ataques a la infraestructura de Supabase o Apple.
@@ -322,21 +322,21 @@ public`. Eso **no alcanza en Supabase**:
   `PUBLIC`, y revocar de `PUBLIC` la cierra — eso es lo que pasaba en el Postgres
   local de pruebas, y por eso todo daba verde;
 - Supabase, además, deja configurado `alter default privileges in schema public grant
-  all on functions to postgres, anon, authenticated, service_role`. Con eso cada
+all on functions to postgres, anon, authenticated, service_role`. Con eso cada
   función nace con `execute` concedido **explícitamente** a esos cuatro roles, y
   revocar de `PUBLIC` no toca esas concesiones: son otra cosa.
 
 Se confirmó añadiendo esos privilegios por defecto al shim de pruebas. Resultado: **34
 funciones quedaban invocables por `anon`, o sea sin ninguna sesión.** Entre ellas:
 
-| Función | Lo que permitía |
-|---|---|
-| `set_employee_pin` | Fijar el PIN de cualquier empleado y fichar en su nombre. La peor. |
-| `kiosk_offline_verifiers` | Obtener salt y verificadores de PIN de cualquier kiosco por su uuid. |
-| `submit_time_event`, `submit_offline_time_event` | Fichajes forjados. |
-| `verify_employee_pin` | Fuerza bruta de PIN sin la credencial del kiosco. |
-| `authenticate_kiosk`, `activate_kiosk_device` | Probar credenciales y códigos. |
-| `kiosk_employee_context` | Leer el estado de cualquier empleado. |
+| Función                                          | Lo que permitía                                                      |
+| ------------------------------------------------ | -------------------------------------------------------------------- |
+| `set_employee_pin`                               | Fijar el PIN de cualquier empleado y fichar en su nombre. La peor.   |
+| `kiosk_offline_verifiers`                        | Obtener salt y verificadores de PIN de cualquier kiosco por su uuid. |
+| `submit_time_event`, `submit_offline_time_event` | Fichajes forjados.                                                   |
+| `verify_employee_pin`                            | Fuerza bruta de PIN sin la credencial del kiosco.                    |
+| `authenticate_kiosk`, `activate_kiosk_device`    | Probar credenciales y códigos.                                       |
+| `kiosk_employee_context`                         | Leer el estado de cualquier empleado.                                |
 
 ### El arreglo: negar por defecto, conceder por lista
 
@@ -475,10 +475,10 @@ real, dilo pero **no adjuntes** esos datos.
 
 Compromiso de respuesta:
 
-| Paso | Plazo objetivo |
-|---|---|
-| acuse de recibo | 3 días hábiles |
-| evaluación inicial y severidad | 7 días hábiles |
+| Paso                            | Plazo objetivo                                      |
+| ------------------------------- | --------------------------------------------------- |
+| acuse de recibo                 | 3 días hábiles                                      |
+| evaluación inicial y severidad  | 7 días hábiles                                      |
 | corrección de un problema grave | lo antes posible, con aviso a las tiendas afectadas |
 
 Mientras el proyecto no esté publicado en la App Store no hay programa de
@@ -488,7 +488,7 @@ envía quiere.
 ## Si un secreto se filtra
 
 1. **Rotar primero, investigar después.** `service_role` y `anon key` se
-   regeneran en *Project Settings → API*; `KIOSK_TOKEN_SECRET` con
+   regeneran en _Project Settings → API_; `KIOSK_TOKEN_SECRET` con
    `supabase secrets set`.
 2. Revocar los kioscos activos si la credencial pudo quedar expuesta.
 3. Revisar `audit_logs` y `time_events` del periodo sospechoso: son append-only,

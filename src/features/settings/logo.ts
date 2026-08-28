@@ -51,8 +51,7 @@ export function logoPublicUrl(logoPath: string | null): string | null {
 }
 
 export type LogoUploadRejection =
-  | { reason: 'tooLarge'; bytes: number }
-  | { reason: 'unsupportedType'; contentType: string };
+  { reason: 'tooLarge'; bytes: number } | { reason: 'unsupportedType'; contentType: string };
 
 /**
  * Comprueba tamaño y tipo ANTES de subir.

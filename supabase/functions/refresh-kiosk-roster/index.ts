@@ -59,7 +59,9 @@ Deno.serve(async (request) => {
     // histórico ni el horario de la semana que viene para dejar fichar hoy.
     supabase
       .from('shifts')
-      .select('id, employee_id, starts_at, ends_at, employee_note, planned_unpaid_break_minutes, publication_version, job_roles:job_role_id (name)')
+      .select(
+        'id, employee_id, starts_at, ends_at, employee_note, planned_unpaid_break_minutes, publication_version, job_roles:job_role_id (name)',
+      )
       .eq('location_id', kiosk.locationId)
       .eq('status', 'published')
       .gte('starts_at', new Date(Date.now() - 24 * 3600_000).toISOString())
@@ -85,14 +87,18 @@ Deno.serve(async (request) => {
 
   const roster = await Promise.all(
     (assignments.data ?? [])
-      .map((row) => row.employees as {
-        id: string;
-        full_name: string;
-        preferred_name: string | null;
-        status: string;
-      } | null)
-      .filter((employee): employee is NonNullable<typeof employee> =>
-        employee !== null && employee.status === 'active',
+      .map(
+        (row) =>
+          row.employees as {
+            id: string;
+            full_name: string;
+            preferred_name: string | null;
+            status: string;
+          } | null,
+      )
+      .filter(
+        (employee): employee is NonNullable<typeof employee> =>
+          employee !== null && employee.status === 'active',
       )
       .map(async (employee) => ({
         opaqueId: opaqueIds.get(employee.id) ?? (await sha256Hex(employee.id)),

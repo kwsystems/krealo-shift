@@ -152,9 +152,9 @@ describe('política de entrada temprana', () => {
 
   it('permite trabajar sin turno solo si la ubicación lo autoriza', () => {
     const now = new Date('2026-08-26T14:00:00Z');
-    expect(
-      evaluateClockInEligibility({ ...base, now, shiftStartsAt: null }),
-    ).toEqual({ eligible: true });
+    expect(evaluateClockInEligibility({ ...base, now, shiftStartsAt: null })).toEqual({
+      eligible: true,
+    });
 
     expect(
       evaluateClockInEligibility({

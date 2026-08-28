@@ -23,7 +23,11 @@ const envSchema = z.object({
   EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
   EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
   EXPO_PUBLIC_SUPPORT_EMAIL: z.string().email().optional().default('soporte@krealomedia.com'),
-  EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional().default('https://krealomedia.com/privacidad'),
+  EXPO_PUBLIC_PRIVACY_URL: z
+    .string()
+    .url()
+    .optional()
+    .default('https://krealomedia.com/privacidad'),
 });
 
 export type Env = z.infer<typeof envSchema>;

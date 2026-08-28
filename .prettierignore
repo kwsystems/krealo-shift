@@ -1,0 +1,33 @@
+# Dependencias y salidas de compilacion
+node_modules/
+dist/
+.expo/
+web-build/
+coverage/
+
+# Los 219 skills instalados. NO son codigo del proyecto: vienen tal cual de
+# kwsystems/claw y de krealo-publisher, y reformatearlos ensuciaria cualquier
+# comparacion con su origen. Ademas hoy estan excluidos de git.
+.claude/
+
+# Flujos de Maestro. Los consume Maestro, no nuestra cadena de herramientas, y aqui no
+# se pueden ejecutar: hace falta un simulador de iOS y un build. Prettier los cambiaba
+# de comillas dobles a simples —identico para YAML, pero un cambio cosmetico que nadie
+# puede probar— asi que su formato lo fija la documentacion de Maestro. El YAML se valida
+# igual en CI con safe_load_all.
+e2e/
+
+# Referencias de diseno de solo lectura (73 DESIGN.md de marcas y similares).
+# Son material externo: se leen, no se editan, y su formato es el de su autor.
+docs/reference/
+
+# El instalador generado: lo escribe scripts/generar-instalacion.py concatenando
+# migraciones, y `--verificar` compara byte a byte contra ellas. Formatearlo lo
+# desincronizaria de su propio generador.
+supabase/instalar-todo.sql
+
+# Capturas y binarios
+*.png
+*.jpg
+*.ico
+*.ipa

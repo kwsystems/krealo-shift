@@ -188,9 +188,7 @@ export async function cacheRosterAndShifts(params: {
  * la cola local tiene para esa persona, aplicados en orden con la misma máquina de
  * estados del servidor.
  */
-export async function buildOfflineSession(
-  employeeOpaqueId: string,
-): Promise<OfflineSessionResult> {
+export async function buildOfflineSession(employeeOpaqueId: string): Promise<OfflineSessionResult> {
   const database = await openOfflineDatabase();
 
   const person = await database.getFirstAsync<RosterRow>(

@@ -60,7 +60,8 @@ export function recoveryRedirectUrl(): string {
  * servidor: se mira el estado HTTP, que es contrato.
  */
 function kindFromAuthError(error: unknown): ResetErrorKind {
-  const detalle = typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
+  const detalle =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
   const estado = typeof detalle.status === 'number' ? detalle.status : undefined;
   const nombre = typeof detalle.name === 'string' ? detalle.name : '';
 

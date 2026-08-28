@@ -1,7 +1,12 @@
 import { isProduction } from '@/lib/env';
 import type { AnalyticsEvent } from './events';
 
-export type { AnalyticsEvent, AnalyticsEventName, TimeActionName, SyncFailureReason } from './events';
+export type {
+  AnalyticsEvent,
+  AnalyticsEventName,
+  TimeActionName,
+  SyncFailureReason,
+} from './events';
 export { SPEC_EVENTS } from './events';
 
 /**

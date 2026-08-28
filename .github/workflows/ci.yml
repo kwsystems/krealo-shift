@@ -49,6 +49,14 @@ jobs:
       - name: Lint
         run: npx eslint .
 
+      # El formato tambien es una puerta. Antes NO lo era, y 57 archivos del proyecto
+      # estaban sin formatear: eso hace que `npm run format` —que el README documenta—
+      # produzca un diff enorme de ruido a quien lo ejecute por primera vez.
+      # `.prettierignore` deja fuera lo que no es codigo del proyecto: los 219 skills,
+      # las referencias de diseno, el instalador generado y los flujos de Maestro.
+      - name: Formato
+        run: npx prettier --check .
+
       - name: Typecheck
         run: npx tsc --noEmit
 

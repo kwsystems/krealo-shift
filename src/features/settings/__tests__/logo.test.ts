@@ -1,9 +1,4 @@
-import {
-  LOGO_MAX_BYTES,
-  logoStoragePath,
-  validateLogo,
-  type LogoMimeType,
-} from '../logo';
+import { LOGO_MAX_BYTES, logoStoragePath, validateLogo, type LogoMimeType } from '../logo';
 import { formatMegabytes } from '../logo-field';
 
 /**
@@ -51,9 +46,10 @@ describe('validateLogo', () => {
     // Un archivo grande y de formato equivocado tiene dos problemas; decir primero
     // el del formato es mejor consejo, porque cambiar de formato suele resolver
     // también el tamaño.
-    expect(
-      validateLogo({ bytes: LOGO_MAX_BYTES * 4, contentType: 'application/pdf' }),
-    ).toEqual({ reason: 'unsupportedType', contentType: 'application/pdf' });
+    expect(validateLogo({ bytes: LOGO_MAX_BYTES * 4, contentType: 'application/pdf' })).toEqual({
+      reason: 'unsupportedType',
+      contentType: 'application/pdf',
+    });
   });
 });
 

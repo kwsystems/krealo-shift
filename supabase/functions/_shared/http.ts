@@ -61,7 +61,11 @@ export function mapPostgresError(error: { code?: string; message?: string }): Re
     case '23514': // check_violation
       // Cubre transición imposible y entrada temprana; el detalle lo pone la app
       // con su propio texto localizado.
-      return errorResponse('invalid_transition', 'Esa acción no corresponde al estado actual.', 409);
+      return errorResponse(
+        'invalid_transition',
+        'Esa acción no corresponde al estado actual.',
+        409,
+      );
     case '40001': // serialization_failure
       return errorResponse('bad_request', 'Alguien más cambió este dato. Vuelve a cargarlo.', 409);
     case '02000': // no_data_found

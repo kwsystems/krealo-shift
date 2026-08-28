@@ -235,11 +235,21 @@ export default function KioskExitScreen() {
                 única cosa que pasaba era que el teclado quedaba deshabilitado. Ver
                 el comentario largo en app/kiosk/index.tsx. */}
             {checking ? (
-              <AppText variant="help" tone="muted" accessibilityRole="alert" testID="exit-pin-checking">
+              <AppText
+                variant="help"
+                tone="muted"
+                accessibilityRole="alert"
+                testID="exit-pin-checking"
+              >
                 {t('kiosk.pinChecking')}
               </AppText>
             ) : error !== null ? (
-              <AppText variant="help" tone="danger" accessibilityRole="alert" testID="exit-pin-error">
+              <AppText
+                variant="help"
+                tone="danger"
+                accessibilityRole="alert"
+                testID="exit-pin-error"
+              >
                 {error}
               </AppText>
             ) : null}
@@ -264,7 +274,10 @@ export default function KioskExitScreen() {
           <AppText variant="title">{t('settings.diagnostics')}</AppText>
 
           <Card>
-            <DiagnosticRow label={t('settings.kioskDeviceName')} value={binding?.displayName ?? '—'} />
+            <DiagnosticRow
+              label={t('settings.kioskDeviceName')}
+              value={binding?.displayName ?? '—'}
+            />
             <DiagnosticRow label={t('settings.locations')} value={binding?.locationName ?? '—'} />
             <DiagnosticRow
               label={t('a11y.syncIndicator')}

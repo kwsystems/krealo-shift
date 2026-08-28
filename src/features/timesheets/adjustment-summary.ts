@@ -60,7 +60,9 @@ export function readAdjustmentSide(valor: unknown): AdjustmentSide {
   // defecto, y pintar "— → —" sería peor que decir que no se sabe.
   if (
     sesion.success &&
-    (sesion.data.startsAt !== null || sesion.data.endsAt !== null || sesion.data.netMinutes !== null)
+    (sesion.data.startsAt !== null ||
+      sesion.data.endsAt !== null ||
+      sesion.data.netMinutes !== null)
   ) {
     return {
       kind: 'session',

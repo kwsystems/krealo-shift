@@ -43,7 +43,10 @@ const literales = new Set();
 const patrones = [];
 const escapar = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-for (const f of [...(await archivos('src', ['.ts', '.tsx'])), ...(await archivos('app', ['.ts', '.tsx']))]) {
+for (const f of [
+  ...(await archivos('src', ['.ts', '.tsx'])),
+  ...(await archivos('app', ['.ts', '.tsx'])),
+]) {
   const texto = await readFile(f, 'utf8');
   for (const m of texto.matchAll(/testID="([^"]*)"/g)) literales.add(m[1]);
   for (const m of texto.matchAll(/testID=\{`([^`]*)`\}/g)) {

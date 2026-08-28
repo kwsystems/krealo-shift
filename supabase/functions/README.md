@@ -4,16 +4,16 @@ Contratos tipados entre la app y el backend (especificación §16). La app nunca
 inserta en `time_events`: todo pasa por aquí, y estas funciones a su vez delegan
 las reglas a las funciones SQL `security definer`.
 
-| Función | Autenticación | Qué hace |
-|---|---|---|
-| `activate-kiosk` | ninguna (canjea un código de un solo uso) | Vincula el iPad a UNA ubicación y emite su credencial |
-| `refresh-kiosk-roster` | credencial del dispositivo | Equipo, turnos y políticas mínimos para operar |
-| `verify-pin` | credencial del dispositivo | Valida el PIN y emite un token de acción de 90 s |
-| `submit-time-event` | credencial + token de acción | Registra un fichaje con idempotencia |
-| `sync-offline-events` | credencial + token por evento | Procesa un lote offline en orden, sin descartar nada |
-| `submit-time-edit-request` | credencial + token de acción | Crea la solicitud "Olvidé marcar" |
-| `attach-photo` | credencial del dispositivo | Sube la foto de un fichaje ya aceptado y apunta `photo_path` |
-| `send-manager-alerts` | **secreto propio** (`x-alerts-token`) | Envía las notificaciones pendientes al gerente por Expo Push |
+| Función                    | Autenticación                             | Qué hace                                                     |
+| -------------------------- | ----------------------------------------- | ------------------------------------------------------------ |
+| `activate-kiosk`           | ninguna (canjea un código de un solo uso) | Vincula el iPad a UNA ubicación y emite su credencial        |
+| `refresh-kiosk-roster`     | credencial del dispositivo                | Equipo, turnos y políticas mínimos para operar               |
+| `verify-pin`               | credencial del dispositivo                | Valida el PIN y emite un token de acción de 90 s             |
+| `submit-time-event`        | credencial + token de acción              | Registra un fichaje con idempotencia                         |
+| `sync-offline-events`      | credencial + token por evento             | Procesa un lote offline en orden, sin descartar nada         |
+| `submit-time-edit-request` | credencial + token de acción              | Crea la solicitud "Olvidé marcar"                            |
+| `attach-photo`             | credencial del dispositivo                | Sube la foto de un fichaje ya aceptado y apunta `photo_path` |
+| `send-manager-alerts`      | **secreto propio** (`x-alerts-token`)     | Envía las notificaciones pendientes al gerente por Expo Push |
 
 ## Dos credenciales distintas, a propósito
 
@@ -103,7 +103,7 @@ Reglas de marcado que importan:
   intentos. Marcarlas fallidas perdería la alerta.
 - **Expo rechaza el mensaje:** se marca `failed`. Reintentar da el mismo rechazo.
 - **`DeviceNotRegistered`:** el token se desactiva (`push_tokens.is_active =
-  false`). Seguir enviando a un dispositivo borrado gasta cuota para siempre.
+false`). Seguir enviando a un dispositivo borrado gasta cuota para siempre.
 
 ## El texto de la notificación no lleva datos de personas
 
@@ -142,7 +142,6 @@ Un `device_public_id` que no existe en la base no se anota: no hay organización
 la que atribuirlo, así que no hay gerente a quien avisar. Un escaneo con
 identificadores inventados no deja rastro ahí; eso corresponde a un límite de
 peticiones en el borde, no a esta tabla.
-
 
 ## Fotos de fichaje
 

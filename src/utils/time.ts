@@ -162,7 +162,10 @@ export function shiftCrossesMidnight(
  * Diferencia entre el reloj del dispositivo y el del servidor, en segundos.
  * Se conserva para mostrarle al gerente cualquier desvío significativo (§12).
  */
-export function clockDriftSeconds(deviceInstant: Date | string, serverInstant: Date | string): number {
+export function clockDriftSeconds(
+  deviceInstant: Date | string,
+  serverInstant: Date | string,
+): number {
   const device = typeof deviceInstant === 'string' ? parseISO(deviceInstant) : deviceInstant;
   const server = typeof serverInstant === 'string' ? parseISO(serverInstant) : serverInstant;
   if (!isValid(device) || !isValid(server)) return 0;

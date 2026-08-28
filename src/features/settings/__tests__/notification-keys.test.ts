@@ -1,11 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import {
-  DEFAULT_NOTIFICATION_PREFERENCES,
-  notificationKeys,
-  type NotificationKey,
-} from '../api';
+import { DEFAULT_NOTIFICATION_PREFERENCES, notificationKeys, type NotificationKey } from '../api';
 import { managerAlertTypes } from '@/features/notifications/alerts';
 
 /**

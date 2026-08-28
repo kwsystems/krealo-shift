@@ -74,9 +74,7 @@ const maxWidths = {
 } as const;
 
 export function ResponsiveContainer({ children, width = 'content', style }: ContainerProps) {
-  return (
-    <View style={[styles.container, { maxWidth: maxWidths[width] }, style]}>{children}</View>
-  );
+  return <View style={[styles.container, { maxWidth: maxWidths[width] }, style]}>{children}</View>;
 }
 
 type CardProps = {
@@ -89,10 +87,7 @@ type CardProps = {
 
 export function Card({ children, floating = false, style, testID }: CardProps) {
   return (
-    <View
-      testID={testID}
-      style={[styles.card, floating ? shadows.floating : shadows.card, style]}
-    >
+    <View testID={testID} style={[styles.card, floating ? shadows.floating : shadows.card, style]}>
       {children}
     </View>
   );

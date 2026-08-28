@@ -46,10 +46,18 @@ if (!RAIZ) {
 const PUERTO = 8111;
 
 const TIPOS = {
-  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
-  '.json': 'application/json', '.png': 'image/png', '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.woff': 'font/woff',
-  '.woff2': 'font/woff2', '.wasm': 'application/wasm', '.jpg': 'image/jpeg',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
+  '.jpg': 'image/jpeg',
 };
 
 // Respaldo de SPA: el proyecto usa `web.output: 'single'`, asi que solo existe
@@ -202,7 +210,9 @@ for (const [nombre, ruta] of RUTAS) {
   else {
     console.log('  CONTRASTE INSUFICIENTE (' + contraste.length + '):');
     for (const c of contraste.slice(0, 8)) {
-      console.log(`    "${c.texto}" ${c.ratio}:1 (min ${c.minimo}) ${c.px}px ${c.color} sobre ${c.fondo}`);
+      console.log(
+        `    "${c.texto}" ${c.ratio}:1 (min ${c.minimo}) ${c.px}px ${c.color} sobre ${c.fondo}`,
+      );
     }
   }
 
@@ -220,7 +230,9 @@ for (const [nombre, ruta] of RUTAS) {
   }
 
   // Tamaño dinamico al 150%: la especificacion pide que no se corten acciones criticas.
-  await page.evaluate(() => { document.documentElement.style.fontSize = '150%'; });
+  await page.evaluate(() => {
+    document.documentElement.style.fontSize = '150%';
+  });
   await page.waitForTimeout(600);
   const desborde = await page.evaluate(() => ({
     horizontal: document.documentElement.scrollWidth > window.innerWidth + 2,
@@ -228,7 +240,9 @@ for (const [nombre, ruta] of RUTAS) {
     ventana: window.innerWidth,
   }));
   if (desborde.horizontal) problemas += 1;
-  console.log(`  texto 150%: ${desborde.horizontal ? 'DESBORDA en horizontal (' + desborde.ancho + ' > ' + desborde.ventana + ')' : 'sin desborde horizontal'}`);
+  console.log(
+    `  texto 150%: ${desborde.horizontal ? 'DESBORDA en horizontal (' + desborde.ancho + ' > ' + desborde.ventana + ')' : 'sin desborde horizontal'}`,
+  );
 
   await ctx.close();
 }

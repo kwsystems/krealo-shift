@@ -35,9 +35,8 @@ jest.mock('@/lib/security/secure-storage', () => ({
     setJson: jest.fn(),
     remove: jest.fn(),
   },
-  SECURE_KEYS: (
-    jest.requireActual('@/lib/security/secure-storage') as { SECURE_KEYS: unknown }
-  ).SECURE_KEYS,
+  SECURE_KEYS: (jest.requireActual('@/lib/security/secure-storage') as { SECURE_KEYS: unknown })
+    .SECURE_KEYS,
 }));
 
 jest.mock('@/lib/supabase/client', () => ({

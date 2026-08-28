@@ -80,7 +80,8 @@ Deno.serve(async (request) => {
     .single();
 
   if (error) return mapPostgresError(error);
-  if (!isUuid(data?.id)) return errorResponse('server_error', 'No se pudo crear la solicitud.', 500);
+  if (!isUuid(data?.id))
+    return errorResponse('server_error', 'No se pudo crear la solicitud.', 500);
 
   return jsonResponse({ requestId: data.id, status: 'pending' });
 });

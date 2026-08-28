@@ -48,9 +48,10 @@ export default function ResetPasswordScreen() {
    * código no cambia mientras esta pantalla vive, así que ponerlo con `setState` en
    * un efecto sería una cascada de renders para saber algo que ya se sabía al montar.
    */
-  const [exchange, setExchange] = useState<{ done: boolean; error: ResetErrorKind | null }>(
-    () => ({ done: code === null, error: null }),
-  );
+  const [exchange, setExchange] = useState<{ done: boolean; error: ResetErrorKind | null }>(() => ({
+    done: code === null,
+    error: null,
+  }));
 
   useEffect(() => {
     if (code === null) return;
@@ -66,8 +67,7 @@ export default function ResetPasswordScreen() {
     };
   }, [code]);
 
-  const linkError: ResetErrorKind | 'noCode' | null =
-    code === null ? 'noCode' : exchange.error;
+  const linkError: ResetErrorKind | 'noCode' | null = code === null ? 'noCode' : exchange.error;
 
   const save = useCallback(async () => {
     setFormError(null);

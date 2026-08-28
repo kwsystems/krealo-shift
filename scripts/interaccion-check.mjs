@@ -43,10 +43,18 @@ const CAPTURAS = process.env.INTERACCION_SHOTS ?? '/tmp/ks-interaccion';
 const ESPERA_MAXIMA_MS = 12_000;
 
 const TIPOS = {
-  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
-  '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf',
-  '.woff': 'font/woff', '.woff2': 'font/woff2', '.wasm': 'application/wasm',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
 };
 
 function resolver(url) {

@@ -256,10 +256,7 @@ let warnedAboutWebDatabase = false;
  * caché, se vuelven a bajar en el siguiente refresco, y mientras no estén el
  * dispositivo valida contra el servidor, que es el camino seguro.
  */
-async function applyMigrations(
-  database: SQLite.SQLiteDatabase,
-  previous: number,
-): Promise<void> {
+async function applyMigrations(database: SQLite.SQLiteDatabase, previous: number): Promise<void> {
   // v1 → v2: los verificadores del PIN dejan de ser el hash bcrypt y pasan a ser
   // salt + verificador ligado al dispositivo. La tabla se recrea en vez de
   // agregarle columnas: las filas viejas contienen justo el dato que ya no
@@ -308,9 +305,7 @@ async function openAndMigrate(): Promise<SQLite.SQLiteDatabase> {
   // el esquema. `create table if not exists` no cambia una tabla que ya está, así
   // que sin este paso un iPad actualizado se quedaría con las columnas viejas y
   // cada inserción fallaría.
-  const versionRow = await database.getFirstAsync<{ user_version: number }>(
-    'pragma user_version',
-  );
+  const versionRow = await database.getFirstAsync<{ user_version: number }>('pragma user_version');
   const previous = versionRow?.user_version ?? 0;
 
   await applyMigrations(database, previous);

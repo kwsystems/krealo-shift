@@ -37,8 +37,10 @@ function archivos(dir, extensiones, acumulado = []) {
   return acumulado;
 }
 
-const RUTAS_FUENTE = [...archivos(join(RAIZ, 'src'), ['.ts', '.tsx']), ...archivos(join(RAIZ, 'app'), ['.ts', '.tsx'])]
-  .filter((ruta) => !ruta.includes(`${'i18n'}/locales`));
+const RUTAS_FUENTE = [
+  ...archivos(join(RAIZ, 'src'), ['.ts', '.tsx']),
+  ...archivos(join(RAIZ, 'app'), ['.ts', '.tsx']),
+].filter((ruta) => !ruta.includes(`${'i18n'}/locales`));
 
 const FUENTES = RUTAS_FUENTE.map((ruta) => ({ ruta, texto: readFileSync(ruta, 'utf8') }));
 const TODO = FUENTES.map((f) => f.texto).join('\n');
@@ -89,9 +91,7 @@ const TODO = FUENTES.map((f) => f.texto).join('\n');
     return acumulado;
   };
 
-  const claves = hojas(
-    JSON.parse(readFileSync(join(RAIZ, 'src/i18n/locales/es-PE.json'), 'utf8')),
-  );
+  const claves = hojas(JSON.parse(readFileSync(join(RAIZ, 'src/i18n/locales/es-PE.json'), 'utf8')));
 
   // Literales que parecen una clave, en cualquier posicion: `t('a.b')`, pero tambien
   // `message: 'errors.network'` y las tablas tipo `{clock_in: 'attendance.eventClockIn'}`.

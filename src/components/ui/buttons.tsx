@@ -129,7 +129,9 @@ export const SecondaryButton = (props: Omit<Props, 'variant'>) => (
 export const DangerButton = (props: Omit<Props, 'variant'>) => (
   <AppButton {...props} variant="danger" />
 );
-export const GhostButton = (props: Omit<Props, 'variant'>) => <AppButton {...props} variant="ghost" />;
+export const GhostButton = (props: Omit<Props, 'variant'>) => (
+  <AppButton {...props} variant="ghost" />
+);
 
 const variantStyles = {
   primary: {

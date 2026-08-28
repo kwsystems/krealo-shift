@@ -17,10 +17,7 @@ import { PrimaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { dateKeyOf, localTimeOf, shiftInstants } from '@/features/schedules/week';
-import {
-  readAdjustmentSide,
-  type AdjustmentSide,
-} from '@/features/timesheets/adjustment-summary';
+import { readAdjustmentSide, type AdjustmentSide } from '@/features/timesheets/adjustment-summary';
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { SupportedLanguage } from '@/i18n';
@@ -380,14 +377,12 @@ function describeSide(
     case 'absent':
       return ctx.t('timesheet.valueDidNotExist');
     case 'session': {
-      const neto =
-        side.netMinutes === null ? '' : ` · ${minutesToHHmm(side.netMinutes)}`;
+      const neto = side.netMinutes === null ? '' : ` · ${minutesToHHmm(side.netMinutes)}`;
       return `${hora(side.startsAt)} – ${hora(side.endsAt)}${neto}`;
     }
     case 'event': {
       const etiqueta = EVENT_LABEL_KEYS[side.eventType as TimeEvent['event_type']];
-      const nombre =
-        etiqueta === undefined ? side.eventType : ctx.t(etiqueta);
+      const nombre = etiqueta === undefined ? side.eventType : ctx.t(etiqueta);
       return `${nombre} · ${hora(side.occurredAt)}`;
     }
     default:

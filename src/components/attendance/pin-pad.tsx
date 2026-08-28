@@ -49,11 +49,7 @@ export function PinDots({
         return (
           <View
             key={index}
-            style={[
-              styles.dot,
-              filled ? styles.dotFilled : null,
-              error ? styles.dotError : null,
-            ]}
+            style={[styles.dot, filled ? styles.dotFilled : null, error ? styles.dotError : null]}
           />
         );
       })}

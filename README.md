@@ -36,16 +36,16 @@ y `SECURITY.md` para el modelo de seguridad.
 
 ## Requisitos
 
-| Herramienta | Versión | Notas |
-|---|---|---|
-| Node.js | 20 LTS o superior | `node --version` |
-| npm | 10 o superior | viene con Node |
-| Git | cualquiera reciente | |
-| Cuenta Supabase | plan gratuito sirve para desarrollo | |
-| Supabase CLI | 2.x | solo para migraciones y Edge Functions |
-| Cuenta Expo (EAS) | gratuita para empezar | solo para generar builds |
-| Cuenta Apple Developer | del propietario | solo para TestFlight |
-| iPad con iPadOS 16.4+ | | el mínimo lo fija Expo SDK 57 |
+| Herramienta            | Versión                             | Notas                                  |
+| ---------------------- | ----------------------------------- | -------------------------------------- |
+| Node.js                | 20 LTS o superior                   | `node --version`                       |
+| npm                    | 10 o superior                       | viene con Node                         |
+| Git                    | cualquiera reciente                 |                                        |
+| Cuenta Supabase        | plan gratuito sirve para desarrollo |                                        |
+| Supabase CLI           | 2.x                                 | solo para migraciones y Edge Functions |
+| Cuenta Expo (EAS)      | gratuita para empezar               | solo para generar builds               |
+| Cuenta Apple Developer | del propietario                     | solo para TestFlight                   |
+| iPad con iPadOS 16.4+  |                                     | el mínimo lo fija Expo SDK 57          |
 
 No hace falta macOS: los builds de iOS se generan en la nube con EAS Build. Sí
 hace falta un iPhone o iPad real para verificar cámara, notificaciones,
@@ -81,6 +81,7 @@ npx expo-doctor                                         # revisa el proyecto Exp
 npx tsc --noEmit                                        # typecheck (TypeScript strict)
 npm test                                                # pruebas Jest
 npx eslint .                                            # lint
+npx prettier --check .                                  # formato (npm run format lo arregla)
 ./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
 
 node scripts/generar-iconos.mjs                         # regenera icono, splash y favicon
@@ -141,8 +142,8 @@ Cuando abra, añade `/kiosk` a la URL: `http://localhost:8081/kiosk`.
 .\scripts\windows-empezar.ps1
 ```
 
-Si PowerShell responde *"no se puede cargar porque la ejecución de scripts está
-deshabilitada"*, es la política de ejecución de Windows, no un problema del proyecto.
+Si PowerShell responde _"no se puede cargar porque la ejecución de scripts está
+deshabilitada"_, es la política de ejecución de Windows, no un problema del proyecto.
 Para permitirlo solo en esta ventana:
 
 ```powershell
@@ -153,11 +154,11 @@ Los cuatro comandos de arriba funcionan siempre y no dependen de esa política.
 
 ### Qué se ve y qué no, sin credenciales de Supabase
 
-| Funciona | No funciona |
-|---|---|
-| Recorrer el kiosco: reloj, teclado, ayuda, activación | Validar un PIN |
-| Cambiar de idioma y ver todo traducido | El panel administrativo (se queda en "Preparando tu sesión") |
-| Redimensionar la ventana: diseño de iPad y de teléfono | Cualquier dato real |
+| Funciona                                               | No funciona                                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------ |
+| Recorrer el kiosco: reloj, teclado, ayuda, activación  | Validar un PIN                                               |
+| Cambiar de idioma y ver todo traducido                 | El panel administrativo (se queda en "Preparando tu sesión") |
+| Redimensionar la ventana: diseño de iPad y de teléfono | Cualquier dato real                                          |
 
 ## Trabajar desde Windows
 
@@ -169,15 +170,15 @@ npx expo start --web
 ```
 
 Se abre en Chrome o Edge. Para revisar el diseño responsive, usa las
-herramientas de desarrollo del navegador (F12 → *Toggle device toolbar*) con
+herramientas de desarrollo del navegador (F12 → _Toggle device toolbar_) con
 viewports equivalentes a:
 
-| Objetivo | Viewport aproximado |
-|---|---|
-| iPhone SE / ancho pequeño | 375 × 667 |
-| iPhone moderno | 393 × 852 |
-| iPad 10–11" vertical | 834 × 1194 |
-| iPad 10–11" horizontal | 1194 × 834 |
+| Objetivo                  | Viewport aproximado |
+| ------------------------- | ------------------- |
+| iPhone SE / ancho pequeño | 375 × 667           |
+| iPhone moderno            | 393 × 852           |
+| iPad 10–11" vertical      | 834 × 1194          |
+| iPad 10–11" horizontal    | 1194 × 834          |
 
 En la web se puede recorrer el flujo del kiosco (reposo, PIN, acciones,
 confirmación, resultado), el acceso administrativo, el cambio ES/EN y los
@@ -188,12 +189,12 @@ tamaños de texto.
 Estas cuatro cosas tienen adaptadores seguros para que la web no se rompa, pero
 **su comportamiento real solo se puede comprobar en un iPhone o iPad**:
 
-| Función | En web | Dónde verificarla de verdad |
-|---|---|---|
-| **Cámara** (foto opcional del fichaje) | `expo-camera` en web usa `getUserMedia`: pide permiso del navegador y puede no haber cámara. La foto nunca bloquea el fichaje. | iPad real, con la política `photoEnabled` activada en la ubicación |
-| **Notificaciones** | `expo-notifications` no tiene equivalente completo en web y requiere claves push; no hay notificaciones reales. | dispositivo real con build de development o preview |
-| **SecureStore** | no existe en web. `src/lib/security/secure-storage.ts` cae a `localStorage`, avisa por consola que **no es almacenamiento seguro** y se niega a funcionar si el build web fuera de producción. | dispositivo real: la credencial del kiosco solo está protegida en el Keychain de iOS |
-| **Acceso guiado de iPadOS** | es una función del sistema operativo; no existe en navegador. | iPad real (ver [Modo kiosco de verdad](#modo-kiosco-de-verdad-acceso-guiado-de-ipados)) |
+| Función                                | En web                                                                                                                                                                                         | Dónde verificarla de verdad                                                             |
+| -------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Cámara** (foto opcional del fichaje) | `expo-camera` en web usa `getUserMedia`: pide permiso del navegador y puede no haber cámara. La foto nunca bloquea el fichaje.                                                                 | iPad real, con la política `photoEnabled` activada en la ubicación                      |
+| **Notificaciones**                     | `expo-notifications` no tiene equivalente completo en web y requiere claves push; no hay notificaciones reales.                                                                                | dispositivo real con build de development o preview                                     |
+| **SecureStore**                        | no existe en web. `src/lib/security/secure-storage.ts` cae a `localStorage`, avisa por consola que **no es almacenamiento seguro** y se niega a funcionar si el build web fuera de producción. | dispositivo real: la credencial del kiosco solo está protegida en el Keychain de iOS    |
+| **Acceso guiado de iPadOS**            | es una función del sistema operativo; no existe en navegador.                                                                                                                                  | iPad real (ver [Modo kiosco de verdad](#modo-kiosco-de-verdad-acceso-guiado-de-ipados)) |
 
 Además, en web el `keep-awake` del kiosco no aplica y los gestos como la
 pulsación larga de 3 segundos sobre el logotipo dependen del ratón, no del dedo.
@@ -255,16 +256,16 @@ proyecto a diario.
 Cinco pasos, el último opcional. No hace falta la `service_role key` en ningún
 momento: todo pasa dentro del propio panel de Supabase.
 
-1. **Crear el proyecto.** En [supabase.com](https://supabase.com) → *New project*. El
+1. **Crear el proyecto.** En [supabase.com](https://supabase.com) → _New project_. El
    plan gratuito alcanza. Guarda la contraseña de base de datos que te pida, aunque
    para esto no la vas a usar.
 
-2. **Crear el esquema.** Menú lateral → **SQL Editor** → *New query* → pega TODO
+2. **Crear el esquema.** Menú lateral → **SQL Editor** → _New query_ → pega TODO
    `supabase/instalar-todo.sql` → **Run**. Son las 21 migraciones y los datos de
-   demostración en un solo archivo. Al terminar dice *Success. No rows returned*.
+   demostración en un solo archivo. Al terminar dice _Success. No rows returned_.
 
-3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → *Add user* →
-   *Create new user*:
+3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → _Add user_ →
+   _Create new user_:
    - tu correo y una contraseña;
    - marca **Auto Confirm User**. Sin eso el usuario queda sin confirmar y el acceso
      falla sin decir por qué.
@@ -279,7 +280,7 @@ momento: todo pasa dentro del propio panel de Supabase.
    el formato que espera la versión de GoTrue que corra tu proyecto. Desde el panel
    sale bien siempre.
 
-4. **Apuntar la app al proyecto.** *Project Settings* → *API*. Copia **Project URL** y
+4. **Apuntar la app al proyecto.** _Project Settings_ → _API_. Copia **Project URL** y
    **anon public** al `.env` del repositorio:
 
    ```
@@ -295,7 +296,7 @@ momento: todo pasa dentro del propio panel de Supabase.
    ```
 
 5. **Habilitar el enlace de recuperación de contraseña** (opcional, un minuto).
-   *Authentication* → *URL Configuration* → *Redirect URLs* → *Add URL*, y agrega las
+   _Authentication_ → _URL Configuration_ → _Redirect URLs_ → _Add URL_, y agrega las
    dos:
 
    ```
@@ -304,7 +305,7 @@ momento: todo pasa dentro del propio panel de Supabase.
    ```
 
    La primera es la app en el iPad; la segunda, la previsualización web. Sin esto
-   «Olvidé mi contraseña» **sí envía el correo**, pero el enlace lleva al *Site URL*
+   «Olvidé mi contraseña» **sí envía el correo**, pero el enlace lleva al _Site URL_
    del proyecto en vez de abrir la app, así que la pantalla para escribir la
    contraseña nueva no aparece. Es configuración del proyecto, no código: la app ya
    pide `krealoshift://restablecer` como URL de retorno.
@@ -348,29 +349,29 @@ supabase db push
 
 Aplica, en orden, los archivos de `supabase/migrations/`:
 
-| Migración | Qué crea |
-|---|---|
-| `…000100_initial_schema.sql` | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son *append-only* |
-| `…000200_rls.sql` | Row Level Security en todas las tablas expuestas |
-| `…000300_functions.sql` | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación |
-| `…000400_guards.sql` | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada) |
-| `…000500_kiosk_context.sql` | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN |
-| `…000600_offline_pin.sql` | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline |
-| `…000700_offline_verifier_device_key.sql` | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió |
-| `…000800_attendance_photos.sql` | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad |
-| `…000900_scheduled_jobs.sql` | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada |
-| `…001000_kiosk_devices_admin.sql` | vista de inventario de kioscos para el panel, sin exponer las credenciales |
-| `…001100_manager_alerts.sql` | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes |
-| `…001200_organization_logo.sql` | bucket de logo de la organización, de lectura pública y escritura solo del administrador |
-| `…001300_manager_add_time_event.sql` | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado |
-| `…001400_function_privileges.sql` | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca |
-| `…001500_authorize_rpc.sql` | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso |
-| `…001600_close_direct_writes.sql` | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable |
-| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada |
-| `…001800_kiosk_request_updates.sql` | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó |
-| `…001900_alertas_1106.sql` | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores |
-| `…002000_aviso_ultimo_contacto.sql` | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos |
-| `…002100_truncar_minutos.sql` | los segundos sueltos se truncan igual que en TypeScript: SQL redondeaba y había hasta un minuto de diferencia en lo que se paga |
+| Migración                                   | Qué crea                                                                                                                                       |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `…000100_initial_schema.sql`                | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son _append-only_                                                       |
+| `…000200_rls.sql`                           | Row Level Security en todas las tablas expuestas                                                                                               |
+| `…000300_functions.sql`                     | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación                                                     |
+| `…000400_guards.sql`                        | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada)                       |
+| `…000500_kiosk_context.sql`                 | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN                                                                       |
+| `…000600_offline_pin.sql`                   | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline                                          |
+| `…000700_offline_verifier_device_key.sql`   | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió                                                     |
+| `…000800_attendance_photos.sql`             | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad                                                                         |
+| `…000900_scheduled_jobs.sql`                | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada                                                              |
+| `…001000_kiosk_devices_admin.sql`           | vista de inventario de kioscos para el panel, sin exponer las credenciales                                                                     |
+| `…001100_manager_alerts.sql`                | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes                                                        |
+| `…001200_organization_logo.sql`             | bucket de logo de la organización, de lectura pública y escritura solo del administrador                                                       |
+| `…001300_manager_add_time_event.sql`        | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado                                                                     |
+| `…001400_function_privileges.sql`           | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca                                     |
+| `…001500_authorize_rpc.sql`                 | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso                                                            |
+| `…001600_close_direct_writes.sql`           | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable                                            |
+| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada                             |
+| `…001800_kiosk_request_updates.sql`         | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó          |
+| `…001900_alertas_1106.sql`                  | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores                 |
+| `…002000_aviso_ultimo_contacto.sql`         | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos |
+| `…002100_truncar_minutos.sql`               | los segundos sueltos se truncan igual que en TypeScript: SQL redondeaba y había hasta un minuto de diferencia en lo que se paga                |
 
 La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
 aplica lo que falte en orden de nombre.
@@ -411,8 +412,8 @@ un demo no pueda escribirle a una persona real.
 psql "<cadena de conexión de Supabase>" -f supabase/seed.sql
 ```
 
-La cadena de conexión está en el panel: *Project Settings → Database → Connection
-string*. También se puede pegar el archivo en el SQL Editor.
+La cadena de conexión está en el panel: _Project Settings → Database → Connection
+string_. También se puede pegar el archivo en el SQL Editor.
 
 El seed es idempotente y crea la organización Krealo Media Demo, dos ubicaciones
 con políticas distintas (largo de PIN, formato de hora, tolerancias), cinco
@@ -460,9 +461,9 @@ Edge Functions; no hay que configurarlas. Ninguno de estos secretos lleva prefij
 
 - en la app, el acceso administrativo con la cuenta `demo-owner@…` y la
   `DEMO_PASSWORD` que elegiste debe entrar al panel;
-- *Table Editor → `employee_pin_credentials`* debe mostrar hashes bcrypt, nunca
+- _Table Editor → `employee_pin_credentials`_ debe mostrar hashes bcrypt, nunca
   PIN legibles;
-- *Authentication → Policies* debe mostrar RLS activo en todas las tablas;
+- _Authentication → Policies_ debe mostrar RLS activo en todas las tablas;
 - para activar el iPad como kiosco hace falta un código de activación emitido
   desde el panel administrativo (pantalla pendiente, ver
   [Qué falta](#qué-falta)); mientras tanto se puede emitir llamando a la función
@@ -490,7 +491,7 @@ los componentes del teclado de PIN y la cuenta regresiva.
 
 El script levanta las migraciones sobre un **Postgres local**, sin nube y sin
 Supabase CLI. Para lograrlo aplica primero `supabase/tests/00_supabase_shim.sql`,
-un *shim* que reproduce lo mínimo del esquema `auth` de Supabase que usan las
+un _shim_ que reproduce lo mínimo del esquema `auth` de Supabase que usan las
 migraciones: la tabla `auth.users`, las funciones `auth.uid()` y `auth.role()`
 —que leen la misma variable de sesión `request.jwt.claims` que usa Supabase— y
 los roles `anon`, `authenticated` y `service_role`. Eso permite impersonar
@@ -539,7 +540,7 @@ trucos inseguros**. En el iPad de la tienda hay que activar Acceso guiado:
 5. Pulsar **tres veces el botón superior** (o el botón de inicio en los iPad que
    lo tienen).
 6. En el panel de Acceso guiado, desactivar lo que no debe usarse —normalmente
-   *Teclados* no, *Toque* sí, *Botones de volumen* a criterio— y pulsar
+   _Teclados_ no, _Toque_ sí, _Botones de volumen_ a criterio— y pulsar
    **Iniciar**.
 7. Para salir: tres pulsaciones otra vez e ingresar el código.
 
@@ -555,11 +556,11 @@ fijo.
 
 `eas.json` define tres perfiles, sin ningún secreto dentro:
 
-| Perfil | Para qué | Detalles |
-|---|---|---|
+| Perfil        | Para qué                                                      | Detalles                                        |
+| ------------- | ------------------------------------------------------------- | ----------------------------------------------- |
 | `development` | development client, para probar en un iPad real desde Windows | `developmentClient: true`, distribución interna |
-| `preview` | build instalable de revisión, sin App Store | distribución interna, `Release` |
-| `production` | App Store / TestFlight | distribución `store`, `autoIncrement: true` |
+| `preview`     | build instalable de revisión, sin App Store                   | distribución interna, `Release`                 |
+| `production`  | App Store / TestFlight                                        | distribución `store`, `autoIncrement: true`     |
 
 `cli.appVersionSource: "remote"` deja el número de build en manos de EAS: el
 `version` (`1.0.0`) vive en `app.config.ts` y el build number lo lleva EAS. Cada
@@ -719,11 +720,11 @@ eas.json        perfiles development, preview y production
 
 ## Documentos relacionados
 
-| Archivo | Qué contiene |
-|---|---|
-| `SECURITY.md` | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
-| `docs/DECISIONES.md` | decisiones técnicas y desviaciones, con su motivo |
-| `supabase/functions/README.md` | contrato de las Edge Functions y la decisión offline pendiente |
-| `e2e/README.md` | cómo correr los flujos de Maestro y qué falta para que pasen |
-| `docs/reference/` | referencias de diseño traídas del Publisher, de solo lectura |
-| `CLAUDE.md` | reglas del proyecto y de gestión de tareas para agentes |
+| Archivo                        | Qué contiene                                                                   |
+| ------------------------------ | ------------------------------------------------------------------------------ |
+| `SECURITY.md`                  | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
+| `docs/DECISIONES.md`           | decisiones técnicas y desviaciones, con su motivo                              |
+| `supabase/functions/README.md` | contrato de las Edge Functions y la decisión offline pendiente                 |
+| `e2e/README.md`                | cómo correr los flujos de Maestro y qué falta para que pasen                   |
+| `docs/reference/`              | referencias de diseño traídas del Publisher, de solo lectura                   |
+| `CLAUDE.md`                    | reglas del proyecto y de gestión de tareas para agentes                        |

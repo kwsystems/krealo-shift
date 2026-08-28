@@ -156,8 +156,7 @@ export default function KioskActionsScreen() {
   const openSession = verification.openSession;
   const requiredBreakMinutes = openSession?.requiredBreakMinutes ?? 0;
   const takenBreakMinutes = openSession?.takenBreakMinutes ?? 0;
-  const missingRequiredBreak =
-    requiredBreakMinutes > 0 && takenBreakMinutes < requiredBreakMinutes;
+  const missingRequiredBreak = requiredBreakMinutes > 0 && takenBreakMinutes < requiredBreakMinutes;
 
   const startAction = (event: TimeEventType) => {
     const result = transition(state, event);
@@ -438,7 +437,13 @@ export default function KioskActionsScreen() {
                 <Row gap={spacing.sm} wrap>
                   <StatusBadge
                     label={t(`attendance.status${statusKey(state)}`)}
-                    tone={state === 'WORKING' ? 'working' : state === 'ON_BREAK' ? 'onBreak' : 'offShift'}
+                    tone={
+                      state === 'WORKING'
+                        ? 'working'
+                        : state === 'ON_BREAK'
+                          ? 'onBreak'
+                          : 'offShift'
+                    }
                   />
                   {verification.employee.jobRoleName !== null ? (
                     <AppText variant="help" tone="subtle">
@@ -537,7 +542,12 @@ export default function KioskActionsScreen() {
             <Card testID="kiosk-error">
               <Row gap={spacing.sm} align="center">
                 <Ionicons name="alert-circle" size={sizes.iconMobile} color={colors.danger600} />
-                <AppText variant="body" tone="danger" accessibilityRole="alert" style={styles.flexOne}>
+                <AppText
+                  variant="body"
+                  tone="danger"
+                  accessibilityRole="alert"
+                  style={styles.flexOne}
+                >
                   {error}
                 </AppText>
               </Row>
@@ -579,13 +589,18 @@ export default function KioskActionsScreen() {
               {secondary !== null ? (
                 <DangerButton
                   label={t(`kiosk.${eventLabelKey(secondary)}`)}
-                  hint={closesOpenBreak(state, secondary) ? t('kiosk.closeOpenBreakBody') : undefined}
+                  hint={
+                    closesOpenBreak(state, secondary) ? t('kiosk.closeOpenBreakBody') : undefined
+                  }
                   onPress={() => startAction(secondary)}
                   testID={`kiosk-action-${secondary}`}
                 />
               ) : null}
 
-              <GhostButton label={t('kiosk.forgotToClock')} onPress={() => router.push('/kiosk/forgot')} />
+              <GhostButton
+                label={t('kiosk.forgotToClock')}
+                onPress={() => router.push('/kiosk/forgot')}
+              />
               <GhostButton label={t('common.cancel')} onPress={returnToIdle} />
             </Stack>
           ) : null}
@@ -672,7 +687,11 @@ export default function KioskActionsScreen() {
                     {t('errors.duplicateEvent')}
                   </AppText>
                 ) : null}
-                <PrimaryButton label={t('common.done')} onPress={returnToIdle} testID="kiosk-result-done" />
+                <PrimaryButton
+                  label={t('common.done')}
+                  onPress={returnToIdle}
+                  testID="kiosk-result-done"
+                />
               </Stack>
             </Card>
           ) : null}
@@ -723,7 +742,9 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function statusKey(state: 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK'): 'OffShift' | 'Working' | 'OnBreak' {
+function statusKey(
+  state: 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK',
+): 'OffShift' | 'Working' | 'OnBreak' {
   return state === 'WORKING' ? 'Working' : state === 'ON_BREAK' ? 'OnBreak' : 'OffShift';
 }
 

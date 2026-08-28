@@ -439,9 +439,7 @@ function SessionCard({ canSignOutEverywhere }: { canSignOutEverywhere: boolean }
   return (
     <FormCard title={t('auth.sessionTitle')} description={email ?? undefined}>
       <Stack gap={spacing.md}>
-        {role !== null ? (
-          <KeyValueRow label={t('roles.label')} value={t(`roles.${role}`)} />
-        ) : null}
+        {role !== null ? <KeyValueRow label={t('roles.label')} value={t(`roles.${role}`)} /> : null}
 
         <SecondaryButton
           label={t('auth.signOut')}
@@ -515,9 +513,7 @@ function AboutCard() {
           label={t('settings.support')}
           hint={env.EXPO_PUBLIC_SUPPORT_EMAIL}
           onPress={() => {
-            void Linking.openURL(`mailto:${env.EXPO_PUBLIC_SUPPORT_EMAIL}`).catch(
-              () => undefined,
-            );
+            void Linking.openURL(`mailto:${env.EXPO_PUBLIC_SUPPORT_EMAIL}`).catch(() => undefined);
           }}
           testID="settings-support"
         />

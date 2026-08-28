@@ -118,7 +118,12 @@ describe('composeAlert', () => {
   });
 
   it('no deja un hueco cuando la tienda no tiene nombre', () => {
-    const { body } = composeAlert({ type: 'noShow', locale: 'es-PE', count: 1, locationName: '  ' });
+    const { body } = composeAlert({
+      type: 'noShow',
+      locale: 'es-PE',
+      count: 1,
+      locationName: '  ',
+    });
     expect(body).toContain('—');
   });
 });

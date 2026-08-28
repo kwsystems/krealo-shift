@@ -61,7 +61,10 @@ function validateEvent(value: unknown): OfflineEvent | null {
   }
   if (typeof v.eventType !== 'string') return null;
   if (!EVENT_TYPES.includes(v.eventType as OfflineEvent['eventType'])) return null;
-  if (v.breakType !== undefined && !BREAK_TYPES.includes(v.breakType as OfflineEvent['breakType'])) {
+  if (
+    v.breakType !== undefined &&
+    !BREAK_TYPES.includes(v.breakType as OfflineEvent['breakType'])
+  ) {
     return null;
   }
   if (typeof v.occurredAtDevice !== 'string' || Number.isNaN(Date.parse(v.occurredAtDevice))) {

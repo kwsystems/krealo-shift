@@ -1,7 +1,4 @@
-import {
-  pushRegistrationDecision,
-  type PushRegistrationBlock,
-} from '../registration-policy';
+import { pushRegistrationDecision, type PushRegistrationBlock } from '../registration-policy';
 
 /**
  * La regla que decide si un dispositivo queda registrado para recibir alertas.

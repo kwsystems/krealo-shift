@@ -69,10 +69,18 @@ const RUTAS = [
 ];
 
 const TIPOS = {
-  '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
-  '.json': 'application/json', '.png': 'image/png', '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml', '.ico': 'image/x-icon', '.ttf': 'font/ttf',
-  '.woff': 'font/woff', '.woff2': 'font/woff2', '.wasm': 'application/wasm',
+  '.html': 'text/html',
+  '.js': 'text/javascript',
+  '.css': 'text/css',
+  '.json': 'application/json',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
+  '.ttf': 'font/ttf',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.wasm': 'application/wasm',
 };
 
 /**
@@ -165,7 +173,9 @@ for (const [nombre, ruta] of RUTAS) {
   await page.screenshot({ path: join(CAPTURAS, nombre + '.png') });
 
   if (estado !== 'ok' || errores.length > 0) fallos += 1;
-  console.log(`${estado === 'ok' && errores.length === 0 ? 'ok  ' : 'MAL '} ${nombre.padEnd(18)} ${ruta.padEnd(18)} ${estado}`);
+  console.log(
+    `${estado === 'ok' && errores.length === 0 ? 'ok  ' : 'MAL '} ${nombre.padEnd(18)} ${ruta.padEnd(18)} ${estado}`,
+  );
   if (texto) console.log(`     ${texto.slice(0, 120)}`);
   for (const err of errores.slice(0, 3)) console.log(`     ${err}`);
 

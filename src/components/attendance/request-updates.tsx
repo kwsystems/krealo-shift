@@ -56,7 +56,9 @@ export function RequestUpdatesCard({
           // La fecha afectada, no la de la revisión: lo que la persona recuerda es
           // "el día que me olvidé de marcar", no cuándo lo revisó su encargado.
           const fecha =
-            update.targetDate === null ? null : formatLongDate(update.targetDate, timezone, language);
+            update.targetDate === null
+              ? null
+              : formatLongDate(update.targetDate, timezone, language);
 
           return (
             <InlineNotice

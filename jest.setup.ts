@@ -52,8 +52,16 @@ jest.mock('expo-network', () => ({
  * entrega reales solo se comprueban en un dispositivo (§29).
  */
 jest.mock('expo-notifications', () => ({
-  getPermissionsAsync: jest.fn(async () => ({ granted: false, canAskAgain: true, status: 'undetermined' })),
-  requestPermissionsAsync: jest.fn(async () => ({ granted: true, canAskAgain: false, status: 'granted' })),
+  getPermissionsAsync: jest.fn(async () => ({
+    granted: false,
+    canAskAgain: true,
+    status: 'undetermined',
+  })),
+  requestPermissionsAsync: jest.fn(async () => ({
+    granted: true,
+    canAskAgain: false,
+    status: 'granted',
+  })),
   getExpoPushTokenAsync: jest.fn(async () => ({ data: 'ExponentPushToken[prueba]' })),
   addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
   getLastNotificationResponse: jest.fn(() => null),

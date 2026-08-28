@@ -7,16 +7,10 @@ import { colors, fontFamily, fontSize, lineHeight } from '@/theme/tokens';
  * colores a mano: eligen una variante y un tono de esta lista (§5).
  */
 export type TextVariant =
-  | 'kioskClock'
-  | 'kioskTitle'
-  | 'title'
-  | 'section'
-  | 'body'
-  | 'bodyStrong'
-  | 'help'
-  | 'label';
+  'kioskClock' | 'kioskTitle' | 'title' | 'section' | 'body' | 'bodyStrong' | 'help' | 'label';
 
-export type TextTone = 'default' | 'muted' | 'subtle' | 'onPrimary' | 'success' | 'warning' | 'danger' | 'primary';
+export type TextTone =
+  'default' | 'muted' | 'subtle' | 'onPrimary' | 'success' | 'warning' | 'danger' | 'primary';
 
 type Props = TextProps & {
   variant?: TextVariant;
@@ -53,7 +47,9 @@ export function AppText({
       style={[
         base,
         { color: toneColor[tone] },
-        size !== undefined ? { fontSize: size, lineHeight: Math.round(size * lineHeight.tight) } : null,
+        size !== undefined
+          ? { fontSize: size, lineHeight: Math.round(size * lineHeight.tight) }
+          : null,
         tabular ? styles.tabular : null,
         style,
       ]}

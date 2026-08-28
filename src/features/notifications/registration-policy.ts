@@ -32,16 +32,10 @@ import { canUseAdminPanel } from '@/stores/session-store';
  */
 
 export type PushRegistrationBlock =
-  | 'kiosk'
-  | 'web'
-  | 'noSession'
-  | 'noRole'
-  | 'noProjectId'
-  | 'resolving';
+  'kiosk' | 'web' | 'noSession' | 'noRole' | 'noProjectId' | 'resolving';
 
 export type PushRegistrationDecision =
-  | { allowed: true }
-  | { allowed: false; reason: PushRegistrationBlock };
+  { allowed: true } | { allowed: false; reason: PushRegistrationBlock };
 
 export function pushRegistrationDecision(input: {
   platform: string;

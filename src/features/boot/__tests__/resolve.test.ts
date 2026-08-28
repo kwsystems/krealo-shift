@@ -30,9 +30,9 @@ describe('resolveBootDestination', () => {
   });
 
   it('un kiosco va al reloj compartido aunque no haya sesión personal', () => {
-    expect(
-      resolveBootDestination({ ...base, isKioskDevice: true, phase: 'signedOut' }).kind,
-    ).toBe('kiosk');
+    expect(resolveBootDestination({ ...base, isKioskDevice: true, phase: 'signedOut' }).kind).toBe(
+      'kiosk',
+    );
   });
 
   it('el kiosco manda incluso sobre una sesión administrativa válida', () => {

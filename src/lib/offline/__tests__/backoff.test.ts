@@ -1,10 +1,4 @@
-import {
-  BACKOFF,
-  backoffDelayMs,
-  nextAttemptAt,
-  resolutionFor,
-  shouldRetry,
-} from '../backoff';
+import { BACKOFF, backoffDelayMs, nextAttemptAt, resolutionFor, shouldRetry } from '../backoff';
 
 /**
  * Pruebas de la política de reintentos (§17).

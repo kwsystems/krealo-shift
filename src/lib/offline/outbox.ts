@@ -104,10 +104,7 @@ function toEvent(row: OutboxRow): OutboxEvent {
  */
 async function signEvent(payload: string): Promise<string> {
   const deviceKey = (await secureStorage.get(SECURE_KEYS.kioskDeviceKey)) ?? '';
-  return Crypto.digestStringAsync(
-    Crypto.CryptoDigestAlgorithm.SHA256,
-    `${deviceKey}|${payload}`,
-  );
+  return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${deviceKey}|${payload}`);
 }
 
 /** Secuencia monótona por instalación. Nunca se reinicia mientras el kiosco viva. */
@@ -134,8 +131,7 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
   // El offset se guarda explícito: dentro de seis meses la zona puede haber
   // cambiado de reglas y `America/Lima` ya no diría lo mismo sobre esta fecha.
   const deviceOffsetMinutes = -now.getTimezoneOffset();
-  const deviceTimezone =
-    Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'America/Lima';
+  const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'America/Lima';
 
   const payload = [
     idempotencyKey,
