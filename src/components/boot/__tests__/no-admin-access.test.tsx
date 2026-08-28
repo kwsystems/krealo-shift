@@ -57,3 +57,50 @@ describe('pantalla de cuenta sin panel', () => {
     }
   });
 });
+
+/**
+ * Guarda del grupo de acceso (§8).
+ *
+ * ES LA MISMA CLASE DE FALLO, y era el más visible de todos: iniciar sesión con
+ * éxito no llevaba a ninguna parte. `sign-in.tsx` no navega a propósito, confiando en
+ * que "la ruta raíz redirige según rol"; pero a `/sign-in` se llega con un
+ * `<Redirect>`, o sea un `router.replace`, que DESMONTA la ruta raíz. La sesión se
+ * creaba, el botón dejaba de girar, no había error, y la persona seguía mirando el
+ * formulario.
+ */
+describe('guarda del grupo de acceso', () => {
+  const layout = readFileSync(join(__dirname, '../../../../app/(auth)/_layout.tsx'), 'utf8');
+
+  it('el layout del grupo saca de ahí a quien ya tiene sesión', () => {
+    // Era un `<Stack>` pelado, sin una sola condición.
+    expect(layout).toContain('useBootResolution');
+    expect(layout).toContain('Redirect');
+  });
+
+  it('sale por la ruta raíz, que es el único sitio que mapea destinos a pantallas', () => {
+    expect(layout).toContain('href="/"');
+  });
+
+  it('no puede entrar en bucle con la ruta raíz', () => {
+    /*
+     * `app/index.tsx` manda al acceso solo con el destino `signIn`, y el acceso sale
+     * solo con cualquier otro. Al leer las dos la misma función, para un mismo estado
+     * se cumple exactamente una de las dos condiciones. Si alguna de las dos dejara de
+     * usar la resolución compartida, este par de aserciones se cae.
+     */
+    const index = readFileSync(join(__dirname, '../../../../app/index.tsx'), 'utf8');
+    expect(index).toContain("case 'signIn':");
+    expect(layout).toContain("destination.kind !== 'signIn'");
+  });
+
+  it('la pantalla de contraseña nueva vive FUERA del grupo de acceso', () => {
+    /*
+     * Un enlace de recuperación crea una sesión real, así que la guarda de arriba
+     * echaría de la pantalla a la persona justo antes de dejarla escribir la
+     * contraseña. Si alguien mueve el archivo dentro de `(auth)`, la recuperación deja
+     * de funcionar sin que falle nada más.
+     */
+    const ruta = join(__dirname, '../../../../app/restablecer.tsx');
+    expect(readFileSync(ruta, 'utf8')).toContain('exchangeRecoveryCode');
+  });
+});

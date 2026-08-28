@@ -549,6 +549,49 @@ await conPagina(
   { comoKiosco: true },
 );
 
+// ---------------------------------------------------------------------------
+// 11. "Olvide mi contrasena" HACE algo
+// ---------------------------------------------------------------------------
+//
+// Era `onPress={() => undefined}`: se veia, se pulsaba y no pasaba nada. Sin servidor
+// la peticion falla, y eso vale: lo que se exige es que la pantalla RESPONDA. Un boton
+// que no cambia nada al pulsarlo es indistinguible de uno roto.
+await conPagina(
+  '/sign-in',
+  async (page, errores) => {
+    const caso = 'olvide mi contrasena responde';
+
+    const antes = await textoVisible(page);
+
+    // Sin correo escrito tiene que pedirlo, no callarse.
+    await page.getByTestId('sign-in-forgot-password').click();
+    await page.waitForTimeout(1200);
+    const sinCorreo = await textoVisible(page);
+    if (sinCorreo === antes) {
+      fallar(caso, 'sin correo escrito no dice nada al pulsar');
+      return;
+    }
+
+    // Y con un correo valido tiene que contestar algo distinto de nuevo.
+    await page.getByTestId('sign-in-email').fill('prueba@krealomedia.com');
+    await page.getByTestId('sign-in-forgot-password').click();
+    await page.waitForTimeout(2500);
+    const conCorreo = await textoVisible(page);
+    if (conCorreo === sinCorreo) {
+      fallar(caso, 'con correo valido no cambia nada en pantalla');
+      return;
+    }
+
+    if (errores.length > 0) {
+      fallar(caso, 'errores de consola: ' + errores.join(' | '));
+      return;
+    }
+    await page.screenshot({ path: join(CAPTURAS, 'olvide-contrasena.png') });
+    pasar(caso, conCorreo.slice(0, 90));
+  },
+  { comoKiosco: false },
+);
+
 await browser.close();
 servidor.close();
 

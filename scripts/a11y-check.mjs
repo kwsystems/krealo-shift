@@ -84,6 +84,7 @@ const RUTAS = [
   ['kiosco-salida', '/kiosk/exit'],
   ['kiosco-setup', '/kiosk/setup'],
   ['acceso', '/sign-in'],
+  ['restablecer', '/restablecer'],
 ];
 
 // ---- Contraste WCAG: relacion de luminancia relativa ----

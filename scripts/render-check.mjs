@@ -53,6 +53,10 @@ const CAPTURAS = process.env.RENDER_CHECK_SHOTS ?? '/tmp/ks-render-shots';
 const RUTAS = [
   ['inicio', '/'],
   ['acceso', '/sign-in'],
+  // Sin `code` en la URL: el caso del enlace roto o pegado a medias, que es el que
+  // se puede probar sin un correo de verdad.
+  ['restablecer', '/restablecer'],
+  ['kiosco-olvide', '/kiosk/forgot'],
   ['kiosco', '/kiosk'],
   ['kiosco-setup', '/kiosk/setup'],
   ['kiosco-ayuda', '/kiosk/help'],

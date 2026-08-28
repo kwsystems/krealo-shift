@@ -252,8 +252,8 @@ proyecto a diario.
 
 ### Ruta corta: sin CLI, pegando dos archivos en el panel
 
-Cuatro pasos. No hace falta la `service_role key` en ningún momento: todo pasa dentro
-del propio panel de Supabase.
+Cinco pasos, el último opcional. No hace falta la `service_role key` en ningún
+momento: todo pasa dentro del propio panel de Supabase.
 
 1. **Crear el proyecto.** En [supabase.com](https://supabase.com) → *New project*. El
    plan gratuito alcanza. Guarda la contraseña de base de datos que te pida, aunque
@@ -293,6 +293,21 @@ del propio panel de Supabase.
    ```powershell
    npx expo start --web --clear
    ```
+
+5. **Habilitar el enlace de recuperación de contraseña** (opcional, un minuto).
+   *Authentication* → *URL Configuration* → *Redirect URLs* → *Add URL*, y agrega las
+   dos:
+
+   ```
+   krealoshift://restablecer
+   http://localhost:8081/restablecer
+   ```
+
+   La primera es la app en el iPad; la segunda, la previsualización web. Sin esto
+   «Olvidé mi contraseña» **sí envía el correo**, pero el enlace lleva al *Site URL*
+   del proyecto en vez de abrir la app, así que la pantalla para escribir la
+   contraseña nueva no aparece. Es configuración del proyecto, no código: la app ya
+   pide `krealoshift://restablecer` como URL de retorno.
 
 Con eso el acceso ya funciona con tu correo y tu contraseña. Lo que sigue sin
 funcionar en la web es el kiosco de verdad: necesita un dispositivo activado, y eso

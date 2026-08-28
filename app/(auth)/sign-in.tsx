@@ -10,6 +10,7 @@ import { AppText } from '@/components/ui/app-text';
 import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { sendPasswordReset } from '@/features/auth/password-reset';
 import { getSupabase } from '@/lib/supabase/client';
 import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
 
@@ -35,10 +36,50 @@ export default function SignInScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState } = useForm<SignInValues>({
+  const [resetting, setResetting] = useState(false);
+  const [resetNotice, setResetNotice] = useState<string | null>(null);
+
+  const { control, handleSubmit, formState, getValues, setError, trigger } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
     defaultValues: { email: '', password: '' },
   });
+
+  /**
+   * Recuperación de contraseña (§8).
+   *
+   * ERA UN BOTÓN MUERTO: `onPress={() => undefined}`. Se veía, se pulsaba y no
+   * pasaba nada.
+   *
+   * Se reutiliza el correo que ya está escrito arriba en vez de abrir otra pantalla
+   * a pedirlo otra vez, y se valida SOLO ese campo: exigir también la contraseña
+   * para recuperar la contraseña es absurdo, y es lo que haría `handleSubmit`.
+   *
+   * El aviso es el mismo exista o no la cuenta. Distinguirlos convertiría esta
+   * pantalla en un comprobador de quién trabaja en la empresa, para cualquiera.
+   */
+  const onForgotPassword = async () => {
+    setResetNotice(null);
+
+    const emailValido = await trigger('email');
+    if (!emailValido) return;
+
+    setResetting(true);
+    const resultado = await sendPasswordReset(getValues('email'));
+    setResetting(false);
+
+    if (resultado.ok) {
+      setResetNotice(t('auth.resetSent'));
+      return;
+    }
+
+    if (resultado.kind === 'rateLimited') {
+      setError('email', { message: 'auth.resetRateLimited' });
+      return;
+    }
+    setError('email', {
+      message: resultado.kind === 'offline' ? 'errors.network' : 'errors.generic',
+    });
+  };
 
   const onSubmit = async (values: SignInValues) => {
     const supabase = getSupabase();
@@ -126,6 +167,21 @@ export default function SignInScreen() {
               </AppText>
             ) : null}
 
+            {resetNotice !== null ? (
+              <Stack gap={spacing.xs}>
+                <AppText
+                  variant="bodyStrong"
+                  accessibilityRole="alert"
+                  testID="sign-in-reset-notice"
+                >
+                  {resetNotice}
+                </AppText>
+                <AppText variant="help" tone="subtle">
+                  {t('auth.resetSentHint')}
+                </AppText>
+              </Stack>
+            ) : null}
+
             <PrimaryButton
               label={t('auth.signIn')}
               onPress={handleSubmit(onSubmit)}
@@ -137,8 +193,10 @@ export default function SignInScreen() {
             <Row justify="space-between" wrap>
               <GhostButton
                 label={t('auth.forgotPassword')}
-                onPress={() => undefined}
+                onPress={() => void onForgotPassword()}
+                loading={resetting}
                 fullWidth={false}
+                testID="sign-in-forgot-password"
               />
               {/*
                 Aqui tambien, y no solo en Ajustes: Ajustes vive DETRAS del acceso,
