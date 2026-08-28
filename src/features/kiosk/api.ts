@@ -45,7 +45,14 @@ const activateResponseSchema = z.object({
     publicId: z.string().min(1),
     displayName: z.string().min(1),
   }),
-  organization: z.object({ id: z.string().uuid(), name: z.string().min(1) }),
+  organization: z.object({
+    id: z.string().uuid(),
+    name: z.string().min(1),
+    // Ruta dentro del bucket público de logotipos, no una URL: la URL se compone al
+    // pintar. `nullable` porque la mayoría de las organizaciones no tendrán logotipo
+    // el primer día, y eso no es un error.
+    logoPath: z.string().nullable().default(null),
+  }),
   location: z.object({
     id: z.string().uuid(),
     name: z.string().min(1),
@@ -245,6 +252,7 @@ export async function activateKiosk(params: {
       displayName: d.device.displayName,
       organizationId: d.organization.id,
       organizationName: d.organization.name,
+      organizationLogoPath: d.organization.logoPath,
       locationId: d.location.id,
       locationName: d.location.name,
       timezone: d.location.timezone,
@@ -372,6 +380,15 @@ const rosterSchema = z.object({
     name: z.string(),
     timezone: z.string(),
   }),
+  // Viaja en el refresco periódico y no solo en la activación: si un administrador
+  // cambia el logotipo, un kiosco ya instalado tiene que enterarse sin que nadie
+  // vaya a la tienda a reactivarlo. `default` para tolerar un servidor anterior.
+  organization: z
+    .object({
+      name: z.string().nullable().default(null),
+      logoPath: z.string().nullable().default(null),
+    })
+    .default({ name: null, logoPath: null }),
   policies: policiesSchema,
   roster: z.array(
     z.object({

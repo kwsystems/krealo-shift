@@ -17,8 +17,13 @@ const ANDROID_PACKAGE = 'com.krealomedia.krealoshift';
 const IOS_PERMISSIONS = {
   camera:
     'Krealo Shift usa la cámara solo para tomar una foto opcional al fichar, cuando el administrador de la tienda activa esa función. Puedes fichar sin foto.',
+  // El texto decía "si decides adjuntar una imagen a una solicitud", que no era lo
+  // que hacía la app: no hay adjuntos en las solicitudes. El único uso real es que
+  // un administrador elija el logotipo de la empresa. Un texto de permiso que
+  // describe algo que la app no hace es exactamente lo que la revisión de App Store
+  // marca, y con razón: es lo único que la persona lee antes de decidir.
   photoLibrary:
-    'Krealo Shift no necesita tu galería para fichar. Este permiso solo se usa si decides adjuntar una imagen a una solicitud.',
+    'Krealo Shift no necesita tu galería para fichar. Un administrador puede abrirla para elegir el logotipo de la empresa, que se muestra en la pantalla del reloj.',
 } as const;
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
@@ -105,6 +110,15 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
         backgroundColor: '#F5F2FF',
         image: './assets/images/splash-icon.png',
         imageWidth: 160,
+      },
+    ],
+    [
+      // El plugin declara el permiso de galería en el build nativo. Sin él,
+      // `requestMediaLibraryPermissionsAsync` falla en el iPad con un error que no
+      // dice que falta una entrada en Info.plist.
+      'expo-image-picker',
+      {
+        photosPermission: IOS_PERMISSIONS.photoLibrary,
       },
     ],
     [

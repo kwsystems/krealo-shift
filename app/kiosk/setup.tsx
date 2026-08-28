@@ -9,9 +9,8 @@ import { FormField } from '@app/(auth)/sign-in';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
-import { activateKiosk, refreshKioskRoster } from '@/features/kiosk/api';
-import { cacheRosterAndShifts } from '@/features/kiosk/offline-session';
-import { storeOfflineVerifiers } from '@/lib/offline/pin';
+import { activateKiosk } from '@/features/kiosk/api';
+import { refreshOfflinePackage } from '@/lib/offline/sync';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { spacing } from '@/theme/tokens';
@@ -61,15 +60,13 @@ export default function KioskSetupScreen() {
 
     // Se baja el paquete offline ANTES de entrar al reloj: si el iPad se queda sin
     // red justo despues de activarse, sin esto no podria validar ningun PIN (§9.7).
-    const roster = await refreshKioskRoster();
-    if (roster.ok) {
-      await cacheRosterAndShifts({
-        roster: roster.data.roster,
-        shifts: roster.data.shifts,
-        policies: roster.data.policies,
-      });
-      await storeOfflineVerifiers(roster.data.verifiers);
-    }
+    //
+    // SE USA `refreshOfflinePackage` Y NO SE REPITE AQUI EL GUARDADO, que es lo que
+    // habia antes. Esa duplicacion es lo que produjo el fallo: la version de aqui
+    // guardaba equipo, turnos, politicas y verificadores, y la del refresco
+    // periodico solo los verificadores. Con dos copias, arreglar una no arregla la
+    // otra y nadie nota la diferencia mientras haya red.
+    await refreshOfflinePackage();
 
     router.replace('/kiosk');
   };

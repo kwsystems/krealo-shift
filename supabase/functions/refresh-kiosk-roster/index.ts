@@ -37,11 +37,19 @@ Deno.serve(async (request) => {
   }
   if (kiosk === null) return errorResponse('revoked', 'Este reloj fue desactivado.', 401);
 
-  const [location, assignments, shifts, verifiers] = await Promise.all([
+  const [location, organization, assignments, shifts, verifiers] = await Promise.all([
     supabase
       .from('locations')
       .select('id, name, timezone, settings')
       .eq('id', kiosk.locationId)
+      .maybeSingle(),
+    // El logotipo viaja en el refresco periódico y no solo en la activación: si un
+    // administrador lo cambia, un kiosco ya instalado tiene que enterarse sin que
+    // nadie vaya a la tienda a reactivarlo.
+    supabase
+      .from('organizations')
+      .select('id, name, logo_path')
+      .eq('id', kiosk.organizationId)
       .maybeSingle(),
     supabase
       .from('employee_location_assignments')
@@ -117,6 +125,12 @@ Deno.serve(async (request) => {
       id: location.data.id,
       name: location.data.name,
       timezone: location.data.timezone,
+    },
+    // `null` si no hay logotipo o si la consulta no devolvió nada: el kiosco pinta
+    // el nombre de la app en su lugar, que es lo que hacía antes de existir esto.
+    organization: {
+      name: organization.data?.name ?? null,
+      logoPath: organization.data?.logo_path ?? null,
     },
     policies: {
       pinLength: Number(settings.pinLength ?? 6),

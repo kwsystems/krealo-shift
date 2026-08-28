@@ -42,6 +42,14 @@ export type KioskBinding = {
   displayName: string;
   organizationId: string;
   organizationName: string;
+  /**
+   * Ruta del logotipo en el bucket público, o `null`.
+   *
+   * Se guarda en el binding y no se consulta al pintar porque la pantalla de reposo
+   * del kiosco se repinta cada segundo con el reloj: una consulta ahí serían 86.400
+   * peticiones al día por iPad para un dato que cambia una vez al año.
+   */
+  organizationLogoPath: string | null;
   locationId: string;
   locationName: string;
   timezone: string;
@@ -70,6 +78,13 @@ type KioskState = {
   hydrate: () => Promise<void>;
   activate: (binding: KioskBinding, credential: string, deviceKey: string) => Promise<void>;
   updatePolicies: (policies: Partial<KioskPolicies>) => Promise<void>;
+  /**
+   * Datos de la organización que llegan en el refresco periódico.
+   *
+   * Aparte de `updatePolicies` porque no son políticas: son identidad de marca, y
+   * mezclarlos obligaría a `Partial<KioskPolicies>` a admitir campos que no lo son.
+   */
+  updateOrganization: (params: { name?: string | null; logoPath?: string | null }) => Promise<void>;
   markRevoked: () => void;
   setScreenAwake: (awake: boolean) => void;
   /** Salir del modo kiosco borra la credencial y la clave del dispositivo. */
@@ -99,6 +114,29 @@ export const useKioskStore = create<KioskState>((set, get) => ({
     const current = get().binding;
     if (current === null) return;
     const next: KioskBinding = { ...current, policies: { ...current.policies, ...policies } };
+    await secureStorage.setJson(SECURE_KEYS.kioskCredential, next);
+    set({ binding: next });
+  },
+
+  updateOrganization: async ({ name, logoPath }) => {
+    const current = get().binding;
+    if (current === null) return;
+    const next: KioskBinding = {
+      ...current,
+      // `undefined` significa "el servidor no lo mandó, no lo toques"; `null`
+      // significa "ya no hay logotipo". Tratar los dos igual borraría el logotipo
+      // cada vez que respondiera un servidor anterior a esta función.
+      organizationName: name ?? current.organizationName,
+      organizationLogoPath: logoPath === undefined ? current.organizationLogoPath : logoPath,
+    };
+    if (
+      next.organizationName === current.organizationName &&
+      next.organizationLogoPath === current.organizationLogoPath
+    ) {
+      // Nada cambió: no se reescribe el Keychain. Esto corre en cada pase de
+      // sincronización, o sea cada minuto mientras el kiosco está activo.
+      return;
+    }
     await secureStorage.setJson(SECURE_KEYS.kioskCredential, next);
     set({ binding: next });
   },

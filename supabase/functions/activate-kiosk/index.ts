@@ -69,7 +69,11 @@ Deno.serve(async (request) => {
   if (!row) return errorResponse('not_authorized', 'Código de activación inválido.', 401);
 
   const [org, location] = await Promise.all([
-    supabase.from('organizations').select('id, name').eq('id', row.organization_id).maybeSingle(),
+    supabase
+      .from('organizations')
+      .select('id, name, logo_path')
+      .eq('id', row.organization_id)
+      .maybeSingle(),
     supabase
       .from('locations')
       .select('id, name, timezone, settings')
@@ -106,7 +110,7 @@ Deno.serve(async (request) => {
       publicId: row.device_public_id,
       displayName: body.data.displayName,
     },
-    organization: { id: org.data.id, name: org.data.name },
+    organization: { id: org.data.id, name: org.data.name, logoPath: org.data.logo_path ?? null },
     location: {
       id: location.data.id,
       name: location.data.name,

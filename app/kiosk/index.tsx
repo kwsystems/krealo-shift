@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { AppScreen, Row, Stack } from '@/components/ui/layout';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
+import { logoPublicUrl } from '@/features/settings/logo';
 import { buildOfflineSession, cacheAttendanceState } from '@/features/kiosk/offline-session';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { verifyPinOffline } from '@/lib/offline/pin';
@@ -42,6 +43,10 @@ export default function KioskIdleScreen() {
   const now = useLiveClock('second');
 
   const binding = useKioskStore((s) => s.binding);
+  // Se compone al pintar y no se guarda: una URL guardada queda inservible si el
+  // proyecto de Supabase cambia de dominio, que es lo que pasa al pasar de un
+  // proyecto de pruebas a uno de verdad.
+  const logoUrl = logoPublicUrl(binding?.organizationLogoPath ?? null);
   const revoked = useKioskStore((s) => s.revoked);
   const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
@@ -213,14 +218,46 @@ export default function KioskIdleScreen() {
             accessibilityHint={t('a11y.logoLongPress')}
             testID="kiosk-logo"
           >
-            <Stack gap={spacing.xs}>
-              <AppText variant="section" tone="primary">
-                {t('common.appName')}
-              </AppText>
-              <AppText variant="help" tone="subtle">
-                {binding?.locationName ?? ''}
-              </AppText>
-            </Stack>
+            <Row gap={spacing.sm} align="center">
+              {/*
+                EL LOGOTIPO SUSTITUYE AL NOMBRE DE LA APP, no se suma a él (§11.6).
+                Quien entra a la tienda tiene que reconocer el negocio, no la
+                herramienta que usa el negocio; y dos marcas juntas en la esquina de
+                una pantalla de reposo se leen como un error de montaje.
+
+                Sin logotipo se pinta el nombre de la app, que es lo que había antes
+                de existir esto.
+              */}
+              {logoUrl === null ? (
+                <Stack gap={spacing.xs}>
+                  <AppText variant="section" tone="primary">
+                    {t('common.appName')}
+                  </AppText>
+                  <AppText variant="help" tone="subtle">
+                    {binding?.locationName ?? ''}
+                  </AppText>
+                </Stack>
+              ) : (
+                <>
+                  <Image
+                    source={{ uri: logoUrl }}
+                    // `contain`: un logotipo recortado es un logotipo estropeado, y
+                    // aquí no se controla su relación de aspecto.
+                    resizeMode="contain"
+                    // El nombre de la organización como texto alternativo, para que
+                    // VoiceOver no lea "imagen" a secas.
+                    accessibilityLabel={binding?.organizationName ?? t('common.appName')}
+                    style={styles.orgLogo}
+                  />
+                  <Stack gap={spacing.xs}>
+                    <AppText variant="bodyStrong">{binding?.organizationName ?? ''}</AppText>
+                    <AppText variant="help" tone="subtle">
+                      {binding?.locationName ?? ''}
+                    </AppText>
+                  </Stack>
+                </>
+              )}
+            </Row>
           </Pressable>
 
           <SyncIndicator online={online} syncing={syncing} pendingCount={pendingCount} />
@@ -322,6 +359,11 @@ function minutesUntil(isoDate: string): number {
 const styles = StyleSheet.create({
   // 44 es el minimo de objetivo tactil de las guias de iOS y de §21.
   logoTarget: { minHeight: sizes.touchTargetMin, justifyContent: 'center' },
+  // 48 de alto: suficiente para reconocer un logotipo y no tanto como para competir
+  // con el reloj, que es el elemento dominante de esta pantalla (§9.1). Ancho
+  // generoso porque un logotipo horizontal es lo normal, con `contain` para no
+  // deformarlo.
+  orgLogo: { width: 160, height: 48 },
   container: { flex: 1, justifyContent: 'space-between', backgroundColor: colors.primary50 },
   clockBlock: { alignItems: 'center' },
   pinBlock: { alignItems: 'center' },

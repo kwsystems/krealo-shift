@@ -20,6 +20,7 @@ import {
   SelectField,
   ToggleField,
 } from '@/components/schedule/fields';
+import { OrganizationLogoField } from './logo-field';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
 import { AppText } from '@/components/ui/app-text';
@@ -144,6 +145,22 @@ function OrganizationCard({
         onChangeText={setName}
         error={nameValid ? undefined : t('settings.orgNameRequired')}
         testID="org-name"
+      />
+
+      {/*
+        El logotipo va justo después del nombre, que es cómo se lee la identidad de
+        la organización: cómo se llama y cómo se ve. Los ajustes de idioma, semana y
+        zona horaria son otra cosa, y meterlo entre ellos lo escondería.
+
+        No lo cubre el botón Guardar de esta tarjeta: la subida es inmediata, porque
+        una imagen ya subida a Storage no puede quedar "pendiente de guardar" sin que
+        el archivo y la columna se separen.
+      */}
+      <OrganizationLogoField
+        organizationId={organization.id}
+        logoPath={organization.logo_path}
+        canEdit={canEdit}
+        onChanged={() => scope.refetch()}
       />
 
       <SegmentedControl

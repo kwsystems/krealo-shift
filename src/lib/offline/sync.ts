@@ -15,6 +15,8 @@ import {
 } from './outbox';
 import { storeOfflineVerifiers } from './pin';
 import { attachPhoto, syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
+import { cacheRosterAndShifts } from '@/features/kiosk/offline-session';
+import { useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 
 /**
@@ -163,10 +165,34 @@ function toWirePayload(event: OutboxEvent) {
  *
  * Se llama al activar el kiosco y periódicamente: sin esto, un empleado nuevo no
  * podría fichar sin red, y uno que salió de la tienda seguiría pudiendo.
+ *
+ * ESO ES LO QUE DECÍA ESTE COMENTARIO Y NO ES LO QUE HACÍA. De las cuatro cosas
+ * solo guardaba los verificadores de PIN: `cacheRosterAndShifts` se llamaba
+ * únicamente desde `app/kiosk/setup.tsx`, o sea solo al activar el dispositivo. Las
+ * consecuencias eran todas silenciosas:
+ *
+ *   * un empleado contratado después de instalar el iPad no aparecía en el equipo
+ *     offline —sí podía fichar CON red, así que el fallo solo se veía el día que se
+ *     caía la red, que es justamente el día que importa—;
+ *   * uno que salió de la tienda seguía en el equipo offline indefinidamente;
+ *   * los turnos sin conexión se quedaban congelados en la semana de la activación;
+ *   * cambiar una política —activar la foto, la longitud del PIN, la tolerancia de
+ *     entrada temprana— no llegaba nunca a un iPad ya instalado.
+ *
+ * Y no se veía porque los verificadores SÍ se actualizaban: un PIN nuevo o rotado
+ * funcionaba sin red, lo que hace que el mecanismo parezca vivo.
  */
 export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
   const result = await refreshKioskRoster();
   if (!result.ok) return { ok: false };
+
+  // Equipo, turnos y políticas a SQLite. Reemplaza el conjunto entero, que es lo que
+  // hace que quien salió de la tienda desaparezca del iPad.
+  await cacheRosterAndShifts({
+    roster: result.data.roster,
+    shifts: result.data.shifts,
+    policies: result.data.policies,
+  });
 
   await storeOfflineVerifiers(
     result.data.verifiers.map((verifier) => ({
@@ -177,6 +203,16 @@ export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
       pinVersion: verifier.pinVersion,
     })),
   );
+
+  // Las políticas van TAMBIÉN al store del kiosco y no solo a SQLite: son las que
+  // deciden si la pantalla pide foto y cuántos dígitos tiene el teclado del PIN, y
+  // eso lo lee la interfaz del binding, no de la base local.
+  const kiosk = useKioskStore.getState();
+  await kiosk.updatePolicies(result.data.policies);
+  await kiosk.updateOrganization({
+    name: result.data.organization.name,
+    logoPath: result.data.organization.logoPath,
+  });
 
   await setSyncMetadata(SYNC_KEYS.lastRosterRefreshAt, new Date().toISOString());
   return { ok: true };

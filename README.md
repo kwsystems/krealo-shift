@@ -638,8 +638,6 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
 - **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, pero
   nada en la app los lee ni los escribe. No está en las listas P0/P1 de §26, así que
   no es un incumplimiento, pero sí es una tabla que hoy no sirve para nada;
-- **logotipo de la organización**: la migración `…001200` crea el bucket de lectura
-  pública y la política de escritura, y no hay interfaz que suba nada;
 - **resultado de solicitudes sin conexión**: el kiosco muestra el resultado de las
   solicitudes solo con red, y es una decisión escrita (ver
   `20260827001800_kiosk_request_updates.sql`), no un olvido. Si se quisiera offline,

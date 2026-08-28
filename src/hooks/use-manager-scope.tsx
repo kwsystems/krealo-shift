@@ -111,6 +111,14 @@ const organizationSchema = z.object({
   default_locale: z.string(),
   default_timezone: z.string(),
   week_starts_on: z.number().int().min(0).max(6),
+  /**
+   * Ruta del logotipo dentro del bucket `organization-logos`, no una URL.
+   *
+   * Se guarda la ruta y la URL se compone al pintar: una URL guardada en la base
+   * queda inservible si el proyecto de Supabase cambia de dominio, y ese es
+   * exactamente lo que pasa al mover de un proyecto de pruebas a uno de verdad.
+   */
+  logo_path: z.string().nullable().default(null),
 });
 
 export type ManagerOrganization = z.infer<typeof organizationSchema>;
@@ -148,7 +156,7 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
   const organization = await selectRows(organizationSchema, (client) =>
     client
       .from(TABLES.organizations)
-      .select('id, name, default_locale, default_timezone, week_starts_on')
+      .select('id, name, default_locale, default_timezone, week_starts_on, logo_path')
       .eq('id', membership.organization_id)
       .single(),
   );
