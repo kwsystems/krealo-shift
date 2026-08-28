@@ -29,7 +29,9 @@ export function useKioskDevices(organizationId: string | null) {
     queryFn: () => fetchKioskDevices(organizationId ?? ''),
     enabled: organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
-    // Sin permiso de lectura no hay nada que reintentar: el error es estable.
+    // Sin permiso no hay nada que reintentar: el error es estable. Sigue valiendo
+    // aunque ahora se lea la vista, porque quien no administra ninguna tienda ve
+    // cero filas y quien no tiene sesión ve "permiso denegado" siempre igual.
     retry: false,
   });
 }

@@ -396,29 +396,43 @@ export function InlineNotice({
   body,
   icon,
   action,
+  testID,
 }: {
   tone?: StatusTone;
-  title: string;
+  /**
+   * Opcional: un aviso de una sola frase no necesita titular. Antes era
+   * obligatorio y obligaba a partir en dos una frase que se lee mejor entera, o a
+   * inventar un titular de relleno.
+   */
+  title?: string;
   body?: string;
   icon?: IconName;
   action?: ReactNode;
+  /** Los flujos de `e2e/` afirman sobre los avisos: hace falta poder señalarlos. */
+  testID?: string;
 }) {
   const palette = statusPalette[tone];
   const resolvedIcon: IconName = icon ?? 'information-circle-outline';
+  // Con un solo texto se usa `bodyStrong`, que es como se veía antes el titular:
+  // un aviso de una frase en tipografía de ayuda se pierde entre las filas.
+  const soloUno = title === undefined || body === undefined;
 
   return (
     <View
       accessibilityRole="alert"
+      testID={testID}
       style={[styles.notice, { backgroundColor: palette.bg, borderColor: palette.border }]}
     >
       <Row gap={spacing.sm} align="flex-start">
         <Ionicons name={resolvedIcon} size={sizes.iconMobile} color={palette.fg} />
         <View style={styles.noticeText}>
-          <AppText variant="bodyStrong" style={{ color: palette.fg }}>
-            {title}
-          </AppText>
+          {title !== undefined ? (
+            <AppText variant="bodyStrong" style={{ color: palette.fg }}>
+              {title}
+            </AppText>
+          ) : null}
           {body !== undefined ? (
-            <AppText variant="help" style={{ color: palette.fg }}>
+            <AppText variant={soloUno ? 'bodyStrong' : 'help'} style={{ color: palette.fg }}>
               {body}
             </AppText>
           ) : null}

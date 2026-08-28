@@ -436,6 +436,53 @@ begin;
 rollback;
 
 begin;
+  set local role authenticated;
+
+  -- LAS COLUMNAS QUE LEE EL PANEL, fijadas por nombre.
+  --
+  -- Esta prueba existe por un fallo concreto: la consulta del panel apuntaba a la
+  -- TABLA `kiosk_devices` en vez de a esta vista, y nada lo detecto. El nombre de
+  -- una relacion es una cadena, asi que `tsc` no puede verlo, las pruebas de Jest
+  -- no tocan la base, y las pruebas SQL comprobaban la vista pero no que alguien
+  -- la estuviera usando. El sintoma en produccion era "permiso denegado" en
+  -- Configuracion y el boton de revocar un iPad perdido inalcanzable.
+  --
+  -- Lo que fija esto es la otra mitad: si alguien renombra o quita una de estas
+  -- columnas, falla aqui y no en la pantalla.
+  select test_assert(
+    (select count(*) from information_schema.columns
+      where table_name = 'kiosk_devices_admin'
+        and column_name in ('id', 'organization_id', 'location_id', 'location_name',
+                            'device_public_id', 'display_name', 'status', 'app_version',
+                            'last_seen_at', 'last_sync_at', 'minutes_since_sync')) = 11,
+    'La vista de kioscos expone las 11 columnas que lee el panel');
+rollback;
+
+begin;
+  select set_config('request.jwt.claims',
+    json_build_object('sub', :u_manager, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  -- `minutes_since_sync` es null solo si nunca sincronizo, y nunca negativo. El
+  -- panel trata el null como "atrasado" a proposito —un iPad activado que jamas
+  -- sincronizo es uno que nadie termino de instalar—, asi que ese null tiene que
+  -- significar exactamente eso y no "no pude calcularlo".
+  select test_assert(
+    not exists (
+      select 1 from kiosk_devices_admin
+      where (minutes_since_sync is null) <> (last_sync_at is null)
+         or minutes_since_sync < 0
+    ),
+    'minutes_since_sync es null si y solo si nunca sincronizo, y nunca negativo');
+
+  -- El nombre de la tienda viene resuelto en la vista: el panel lo muestra tal
+  -- cual y no hace una segunda consulta por cada kiosco.
+  select test_assert(
+    not exists (select 1 from kiosk_devices_admin where coalesce(location_name, '') = ''),
+    'Cada kiosco del inventario trae el nombre de su tienda');
+rollback;
+
+begin;
   select set_config('request.jwt.claims',
     json_build_object('sub', :u_other, 'role', 'authenticated')::text, true);
   set local role authenticated;

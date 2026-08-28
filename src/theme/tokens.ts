@@ -187,6 +187,13 @@ export const statusPalette = {
   onBreak: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
   late: { bg: colors.danger50, fg: colors.danger600, border: colors.danger600 },
   info: { bg: colors.info50, fg: colors.info600, border: colors.info600 },
+  /**
+   * Advertencia que no es un estado de asistencia. Comparte el ámbar de `onBreak`
+   * a propósito —un solo ámbar en la app— pero se nombra aparte: usar `onBreak`
+   * para "el iPad no sincroniza" le dice al siguiente que lee el código que eso
+   * tiene algo que ver con un descanso, y no lo tiene.
+   */
+  warning: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
 } as const;
 
 export type StatusTone = keyof typeof statusPalette;

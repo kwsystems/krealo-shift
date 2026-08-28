@@ -68,6 +68,7 @@ const defaultIcons: Record<StatusTone, IconName> = {
   onBreak: 'cafe-outline',
   late: 'alert-circle',
   info: 'information-circle-outline',
+  warning: 'warning-outline',
 };
 
 /** Estado vacío: icono, una frase y una acción. Nunca una caja hueca (§20). */

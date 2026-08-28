@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { Stack } from 'expo-router';
-import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 
+import { keepScreenAwake, releaseScreenAwake } from '@/lib/kiosk/screen-awake';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
+import { useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 
 /**
@@ -24,13 +25,20 @@ import { useNetworkStore } from '@/stores/network-store';
 const PERIODIC_SYNC_MS = 60_000;
 export default function KioskLayout() {
   const online = useNetworkStore((s) => s.online);
+  const setScreenAwake = useKioskStore((s) => s.setScreenAwake);
 
   useEffect(() => {
-    void activateKeepAwakeAsync();
+    // El detalle de por qué esto no es `void activateKeepAwakeAsync()` está en
+    // `src/lib/kiosk/screen-awake.ts`. Aquí solo queda el ciclo de vida.
+    let vivo = true;
+    void keepScreenAwake().then((ok) => {
+      if (vivo) setScreenAwake(ok);
+    });
     return () => {
-      void deactivateKeepAwake();
+      vivo = false;
+      releaseScreenAwake();
     };
-  }, []);
+  }, [setScreenAwake]);
 
   // Al arrancar y cada minuto: refresca el indicador e intenta enviar la cola.
   useEffect(() => {

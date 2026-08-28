@@ -387,6 +387,13 @@ function KiosksCard() {
   const [code, setCode] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<KioskDevice | null>(null);
 
+  // El umbral es el MISMO que usa el trabajo de notificaciones (§19): si el panel
+  // dijera "sin sincronizar" con otro número, el aviso del teléfono y la pantalla
+  // se contradirían sobre el mismo iPad.
+  const staleAfterMinutes =
+    scope.location?.settings.kioskSyncStaleMinutes ??
+    DEFAULT_LOCATION_SETTINGS.kioskSyncStaleMinutes;
+
   return (
     <FormCard title={t('settings.kiosks')} description={t('settings.kiosksHint')}>
       <AsyncSection
@@ -410,6 +417,7 @@ function KiosksCard() {
                   compact
                 />
               </Row>
+              <KeyValueRow label={t('settings.kioskLocation')} value={device.location_name} />
               <KeyValueRow
                 label={t('settings.kioskLastSeen')}
                 value={
@@ -419,9 +427,20 @@ function KiosksCard() {
                 }
               />
               <KeyValueRow
+                label={t('settings.kioskLastSync')}
+                value={describeSync(device.minutes_since_sync, staleAfterMinutes, t)}
+              />
+              <KeyValueRow
                 label={t('settings.kioskAppVersion')}
                 value={device.app_version ?? t('settings.unknownVersion')}
               />
+              {isSyncStale(device, staleAfterMinutes) ? (
+                <InlineNotice
+                  tone="warning"
+                  body={t('settings.kioskSyncStaleHint')}
+                  testID={`kiosk-sync-stale-${device.id}`}
+                />
+              ) : null}
               {device.status === 'active' ? (
                 <DangerButton
                   label={t('settings.kioskRevoke')}
@@ -571,4 +590,41 @@ function NotificationsCard() {
       </AsyncSection>
     </FormCard>
   );
+}
+
+/**
+ * Un kiosco lleva demasiado sin sincronizar (§19).
+ *
+ * `null` —nunca sincronizó— TAMBIÉN cuenta como atrasado, y es el caso que importa:
+ * un iPad activado que jamás sincronizó es un iPad que nadie terminó de instalar, y
+ * es justo el que pasaría desapercibido si `null` se tratara como "sin datos".
+ * Solo se avisa de dispositivos activos: uno revocado ya no debe sincronizar.
+ */
+export function isSyncStale(
+  device: Pick<KioskDevice, 'status' | 'minutes_since_sync'>,
+  staleAfterMinutes: number,
+): boolean {
+  if (device.status !== 'active') return false;
+  if (device.minutes_since_sync === null) return true;
+  return device.minutes_since_sync > staleAfterMinutes;
+}
+
+/**
+ * Cuánto lleva sin sincronizar, en palabras.
+ *
+ * Minutos por debajo de una hora y horas por encima: "hace 372 min" obliga a
+ * dividir mentalmente para saber si eso es mucho. Y cuando pasa del umbral el
+ * propio texto lo dice, en vez de dejar el juicio en manos de quien lee un número.
+ */
+export function describeSync(
+  minutes: number | null,
+  staleAfterMinutes: number,
+  t: (key: string, options?: Record<string, unknown>) => string,
+): string {
+  if (minutes === null) return t('settings.kioskNeverSynced');
+  if (minutes < 60) return t('settings.kioskSyncFresh', { minutes });
+  const hours = Math.floor(minutes / 60);
+  return minutes > staleAfterMinutes
+    ? t('settings.kioskSyncStale', { hours })
+    : t('settings.kioskSyncHours', { hours });
 }

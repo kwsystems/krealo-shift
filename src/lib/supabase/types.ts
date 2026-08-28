@@ -80,7 +80,6 @@ export const TABLES = {
   timeAdjustments: 'time_adjustments',
   timesheetPeriods: 'timesheet_periods',
   timeEditRequests: 'time_edit_requests',
-  kioskDevices: 'kiosk_devices',
   announcements: 'announcements',
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
@@ -95,6 +94,13 @@ export const VIEWS = {
    * Inventario de kioscos. Se lee la VISTA y nunca la tabla: `kiosk_devices` está
    * revocada para `authenticated` porque tiene dos secretos del dispositivo
    * (`credential_hash` y `offline_key`) que ninguna sesión de la app debe leer.
+   * Con `offline_key` y el archivo SQLite de un iPad se prueban los 10⁶ PIN.
+   *
+   * `kiosk_devices` NO está en `TABLES` a propósito, y por eso: tenerla ahí ya
+   * llevó una vez a consultarla desde el panel, la pantalla mostró "permiso
+   * denegado" y el botón de revocar un iPad perdido quedó inalcanzable. `tsc` no
+   * puede detectar eso, porque el nombre de una tabla es una cadena válida.
+   * Las Edge Functions sí la leen: van con `service_role` y su propio cliente.
    */
   kioskDevicesAdmin: 'kiosk_devices_admin',
 } as const;

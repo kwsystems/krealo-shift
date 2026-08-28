@@ -55,11 +55,23 @@ type KioskState = {
   binding: KioskBinding | null;
   /** El backend revocó el dispositivo: hay que mostrar la pantalla de revocado. */
   revoked: boolean;
+  /**
+   * Si se consiguió mantener la pantalla encendida. `null` hasta el primer intento.
+   *
+   * NO es un adorno: un iPad que se apaga sobre el pedestal es una cola de gente
+   * esperando (§4). Antes esto se pedía con `void activateKeepAwakeAsync()`, o sea
+   * descartando la promesa, así que un rechazo era una excepción sin capturar y
+   * NADIE se enteraba de que la pantalla iba a apagarse. Se guarda para poder
+   * decirlo en el diagnóstico, que es donde alguien lo va a mirar cuando la tienda
+   * se queje de que el reloj "se apaga solo".
+   */
+  screenAwake: boolean | null;
 
   hydrate: () => Promise<void>;
   activate: (binding: KioskBinding, credential: string, deviceKey: string) => Promise<void>;
   updatePolicies: (policies: Partial<KioskPolicies>) => Promise<void>;
   markRevoked: () => void;
+  setScreenAwake: (awake: boolean) => void;
   /** Salir del modo kiosco borra la credencial y la clave del dispositivo. */
   deactivate: () => Promise<void>;
 };
@@ -68,6 +80,7 @@ export const useKioskStore = create<KioskState>((set, get) => ({
   hydrated: false,
   binding: null,
   revoked: false,
+  screenAwake: null,
 
   hydrate: async () => {
     const binding = await secureStorage.getJson<KioskBinding>(SECURE_KEYS.kioskCredential);
@@ -91,6 +104,8 @@ export const useKioskStore = create<KioskState>((set, get) => ({
   },
 
   markRevoked: () => set({ revoked: true }),
+
+  setScreenAwake: (awake) => set({ screenAwake: awake }),
 
   deactivate: async () => {
     await secureStorage.remove(`${SECURE_KEYS.kioskCredential}.secret`);

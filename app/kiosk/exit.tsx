@@ -38,6 +38,7 @@ export default function KioskExitScreen() {
   const { t } = useTranslation();
 
   const binding = useKioskStore((s) => s.binding);
+  const screenAwake = useKioskStore((s) => s.screenAwake);
   const deactivate = useKioskStore((s) => s.deactivate);
   const { online, pendingCount, lastSyncAt, needsReviewCount } = useNetworkStore();
 
@@ -136,6 +137,16 @@ export default function KioskExitScreen() {
                 lastSyncAt === null
                   ? '—'
                   : formatClockTime(lastSyncAt, timezone, policies.timeFormat)
+              }
+            />
+            <DiagnosticRow
+              label={t('settings.kioskScreenAwake')}
+              value={
+                screenAwake === null
+                  ? t('settings.kioskScreenAwakeUnknown')
+                  : screenAwake
+                    ? t('settings.kioskScreenAwakeYes')
+                    : t('settings.kioskScreenAwakeNo')
               }
             />
             <DiagnosticRow

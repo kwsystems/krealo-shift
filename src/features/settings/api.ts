@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import type { LocationSettings } from '@/hooks/use-manager-scope';
-import { RPC, TABLES } from '@/lib/supabase/types';
+import { RPC, TABLES, VIEWS } from '@/lib/supabase/types';
 
 /**
  * Configuración de organización, ubicación, kioscos y notificaciones (§11.6).
@@ -50,10 +50,18 @@ const kioskDeviceSchema = z.object({
   id: z.string().uuid(),
   display_name: z.string(),
   location_id: z.string().uuid(),
+  location_name: z.string(),
+  device_public_id: z.string(),
   status: z.enum(['active', 'revoked']),
   app_version: z.string().nullable(),
   last_seen_at: z.string().nullable(),
   last_sync_at: z.string().nullable(),
+  /**
+   * Minutos desde la última sincronización, `null` si nunca sincronizó. Lo calcula
+   * la vista y no el cliente, para que el panel y el trabajo de notificaciones den
+   * la misma respuesta sobre el mismo kiosco.
+   */
+  minutes_since_sync: z.number().int().nullable(),
 });
 
 export type KioskDevice = z.infer<typeof kioskDeviceSchema>;
@@ -61,16 +69,29 @@ export type KioskDevice = z.infer<typeof kioskDeviceSchema>;
 /**
  * Relojes vinculados (§11.6).
  *
- * `kiosk_devices` está revocada para `authenticated` en la migración de RLS, así
- * que hoy esta consulta devuelve "acceso denegado" y la pantalla lo dice tal
- * cual: no inventamos una lista vacía que parecería "no hay kioscos".
+ * SE LEE LA VISTA `kiosk_devices_admin`, NUNCA LA TABLA, y no es un detalle de
+ * estilo: `kiosk_devices` está revocada para `authenticated` porque guarda dos
+ * secretos del dispositivo —`credential_hash` y `offline_key`—. Con `offline_key`
+ * y el archivo SQLite de un iPad se pueden probar los 10⁶ PIN posibles.
+ *
+ * Esto apuntaba a la tabla, así que la pantalla mostraba "permiso denegado" y el
+ * botón de revocar era inalcanzable. Revocar importa: es el corte de emergencia
+ * cuando un iPad se pierde, y también deja de repartirle verificadores de PIN.
+ *
+ * La vista filtra por `app_manages_location`, o sea que ya devuelve solo los
+ * kioscos de las tiendas que administra quien consulta; el filtro por
+ * organización de abajo es defensa en profundidad, no la barrera.
  */
 export async function fetchKioskDevices(organizationId: string): Promise<KioskDevice[]> {
   return selectRows(z.array(kioskDeviceSchema), (db) =>
     db
-      .from(TABLES.kioskDevices)
-      .select('id, display_name, location_id, status, app_version, last_seen_at, last_sync_at')
+      .from(VIEWS.kioskDevicesAdmin)
+      .select(
+        'id, display_name, location_id, location_name, device_public_id, status, ' +
+          'app_version, last_seen_at, last_sync_at, minutes_since_sync',
+      )
       .eq('organization_id', organizationId)
+      .order('location_name', { ascending: true })
       .order('display_name', { ascending: true }),
   );
 }
