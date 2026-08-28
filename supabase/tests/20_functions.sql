@@ -1169,3 +1169,89 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- El empleado se entera del resultado de su solicitud (§19)
+-- ===========================================================================
+--
+-- El kiosco YA CREA solicitudes de correccion y el encargado las resuelve en el
+-- panel, pero el empleado no se enteraba nunca. Lo que se fija aqui es que el
+-- contexto del kiosco lo devuelve, y sobre todo QUE NO DEVUELVE: el kiosco es un
+-- dispositivo compartido.
+begin;
+do $$
+declare
+  v_emp uuid := '55555555-5555-4555-8555-555555555551';  -- Sofia
+  v_otra uuid := '55555555-5555-4555-8555-555555555552';
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_org uuid := '11111111-1111-4111-8111-111111111111';
+  v_revisor uuid := '33333333-3333-4333-8333-333333333331';
+  v_ctx jsonb;
+  v_updates jsonb;
+begin
+  -- Una aprobada reciente, una rechazada reciente, una pendiente, una resuelta hace
+  -- mucho, y una de OTRA persona. Solo deben salir las dos primeras.
+  insert into time_edit_requests
+    (organization_id, employee_id, location_id, kind, reason, status,
+     reviewed_by, reviewed_at, reviewer_comment, target_date)
+  values
+    (v_org, v_emp, v_loc, 'forgot_clock_out', 'Me olvide de marcar la salida',
+     'approved', v_revisor, now() - interval '2 hours', 'Verificado con la camara',
+     current_date - 1),
+    (v_org, v_emp, v_loc, 'forgot_break', 'Tome el descanso y no lo registre',
+     'rejected', v_revisor, now() - interval '1 day', 'No coincide con el registro',
+     current_date - 2),
+    (v_org, v_emp, v_loc, 'correction', 'Pendiente de revisar', 'pending',
+     null, null, null, current_date),
+    (v_org, v_emp, v_loc, 'correction', 'Resuelta hace mucho', 'approved',
+     v_revisor, now() - interval '30 days', null, current_date - 30),
+    (v_org, v_otra, v_loc, 'forgot_clock_in', 'De otra persona', 'approved',
+     v_revisor, now() - interval '1 hour', null, current_date - 1);
+
+  v_ctx := kiosk_employee_context(v_emp, v_loc);
+  v_updates := v_ctx -> 'requestUpdates';
+
+  perform test_assert(v_updates is not null and jsonb_typeof(v_updates) = 'array',
+    'El contexto del kiosco devuelve requestUpdates como arreglo');
+
+  perform test_assert(jsonb_array_length(v_updates) = 2,
+    'Solo las resueltas hace poco: ni pendientes, ni antiguas, ni de otra persona — ' ||
+    'devueltas: ' || jsonb_array_length(v_updates));
+
+  -- Orden: la mas reciente primero. Quien mira el iPad diez segundos ve la de arriba.
+  perform test_assert((v_updates -> 0 ->> 'status') = 'approved',
+    'La mas reciente va primero');
+
+  perform test_assert((v_updates -> 0 ->> 'reason') = 'Me olvide de marcar la salida',
+    'Se devuelve el motivo que dio ella: sin eso "Aprobada" no dice de que');
+
+  perform test_assert((v_updates -> 0 ->> 'reviewerComment') = 'Verificado con la camara',
+    'Se devuelve el comentario de la revision');
+
+  perform test_assert((v_updates -> 1 ->> 'status') = 'rejected',
+    'Tambien se devuelven las rechazadas: un rechazo silencioso es peor que un rechazo');
+
+  -- LO QUE NO SE DEVUELVE. El kiosco es compartido: cualquiera que pase por el iPad
+  -- puede estar mirando la pantalla de otra persona.
+  perform test_assert(not (v_updates -> 0 ? 'reviewedBy'),
+    'NO se devuelve quien reviso la solicitud');
+
+  perform test_assert(
+    not exists (
+      select 1 from jsonb_array_elements(v_updates) e
+      where e::text ilike '%De otra persona%'
+    ),
+    'NO se filtra ninguna solicitud de otra persona');
+
+  -- Y una sin resolver no puede colarse por tener reviewed_at nulo.
+  perform test_assert(
+    not exists (
+      select 1 from jsonb_array_elements(v_updates) e
+      where (e ->> 'status') = 'pending' or (e ->> 'reviewedAt') is null
+    ),
+    'Ninguna pendiente aparece como resultado');
+
+  raise notice '  --- pruebas de resultado de solicitudes completas ---';
+end
+$$;
+rollback;

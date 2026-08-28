@@ -125,7 +125,17 @@
     "offlineStateUnknown": "We can't confirm your status without a connection. Wait for the network to come back.",
     "offlineNotReady": "This iPad can't validate PINs offline yet. Ask for it to be synced.",
     "offlineNeedsReactivation": "This iPad needs to be reactivated to validate PINs offline. It works normally with a connection.",
-    "savedOfflinePending": "Saved on this iPad. It will be sent on its own when the connection is back."
+    "savedOfflinePending": "Saved on this iPad. It will be sent on its own when the connection is back.",
+    "requestUpdatesTitle": "About what you reported",
+    "requestUpdateApproved": "Approved",
+    "requestUpdateRejected": "Not approved",
+    "requestUpdateOn": "on {{date}}",
+    "requestUpdateKindForgotClockIn": "Missing clock-in",
+    "requestUpdateKindForgotBreak": "Missing break",
+    "requestUpdateKindForgotClockOut": "Missing clock-out",
+    "requestUpdateKindCorrection": "Hours correction",
+    "requestUpdateKindUnscheduledShift": "Unscheduled shift",
+    "requestUpdateAskManager": "If you disagree, talk to your manager."
   },
   "attendance": {
     "statusOffShift": "Off shift",

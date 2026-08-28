@@ -125,7 +125,17 @@
     "offlineStateUnknown": "No podemos confirmar tu estado sin conexión. Espera a que vuelva la red.",
     "offlineNotReady": "Este iPad todavía no puede validar PIN sin conexión. Pide que se sincronice.",
     "offlineNeedsReactivation": "Este iPad necesita reactivarse para validar PIN sin conexión. Con red funciona normal.",
-    "savedOfflinePending": "Guardado en este iPad. Se enviará solo cuando vuelva la conexión."
+    "savedOfflinePending": "Guardado en este iPad. Se enviará solo cuando vuelva la conexión.",
+    "requestUpdatesTitle": "Sobre lo que reportaste",
+    "requestUpdateApproved": "Aprobado",
+    "requestUpdateRejected": "No aprobado",
+    "requestUpdateOn": "el {{date}}",
+    "requestUpdateKindForgotClockIn": "Entrada que faltaba",
+    "requestUpdateKindForgotBreak": "Descanso que faltaba",
+    "requestUpdateKindForgotClockOut": "Salida que faltaba",
+    "requestUpdateKindCorrection": "Corrección de horas",
+    "requestUpdateKindUnscheduledShift": "Turno sin programar",
+    "requestUpdateAskManager": "Si no estás de acuerdo, habla con tu encargado."
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

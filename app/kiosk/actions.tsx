@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { PhotoCapture, type PhotoResult } from '@/features/kiosk/photo-capture';
+import { RequestUpdatesCard } from '@/components/attendance/request-updates';
 import {
   BreakTypeSheet,
   ManagerOverrideSheet,
@@ -417,6 +418,19 @@ export default function KioskActionsScreen() {
               </AppText>
             )}
           </Card>
+
+          {/*
+            §19: "el resultado de solicitudes relevantes". Va justo debajo de la
+            identificación y ANTES de los botones de fichar, porque es información
+            que cambia lo que la persona hace a continuación: si le rechazaron la
+            salida que faltaba, va a querer hablar con su encargado hoy, no cuando
+            le llegue la boleta.
+          */}
+          <RequestUpdatesCard
+            updates={verification.requestUpdates}
+            timezone={timezone}
+            language={language}
+          />
 
           {/* Varios turnos elegibles: el empleado elige (§9.3) */}
           {verification.eligibleShifts.length > 1 && step.name === 'identify' ? (

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { EligibleShift, VerifyPinResponse } from './api';
+import type { EligibleShift, RequestUpdate, VerifyPinResponse } from './api';
 import type { OfflineSessionResult } from './offline-session';
 import type { AttendanceState, TimeEventType } from '@/domain/attendance-state-machine';
 
@@ -43,6 +43,20 @@ export type KioskSession = {
     openBreak: { startedAt: string; breakType: string } | null;
   } | null;
   earliestClockInAt: string | null;
+  /**
+   * Resultado de sus solicitudes de corrección resueltas hace poco (§19).
+   *
+   * SIEMPRE UN ARREGLO, vacío en modo offline y nunca `undefined`: la pantalla
+   * decide si pintar la tarjeta con `.length`, y un opcional obligaría a un
+   * `?? []` en cada uso, que es donde se olvida uno.
+   *
+   * Vacío sin conexión a propósito: el resultado de una solicitud lo resuelve un
+   * encargado en el panel, así que es información que solo existe en el servidor.
+   * Guardarla en el iPad para mostrarla sin red significaría replicar en SQLite
+   * datos de decisiones ajenas en un dispositivo compartido, para un aviso que la
+   * persona verá la próxima vez que el kiosco tenga red.
+   */
+  requestUpdates: RequestUpdate[];
 };
 
 type VerificationState = {
@@ -89,6 +103,7 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
         eligibleShifts: response.eligibleShifts,
         openSession: response.openSession,
         earliestClockInAt: response.earliestClockInAt,
+        requestUpdates: response.requestUpdates,
       },
       selectedShiftId: firstShiftId(response.eligibleShifts),
     }),
@@ -138,6 +153,10 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
                 openBreak: null,
               },
         earliestClockInAt: null,
+        // Sin conexión no hay resultados de solicitudes: los resuelve un encargado
+        // en el panel, así que solo existen en el servidor. Ver la nota en
+        // `KioskSession.requestUpdates`.
+        requestUpdates: [],
       },
       selectedShiftId: firstShiftId(shifts),
     });

@@ -54,6 +54,32 @@ const activateResponseSchema = z.object({
   policies: policiesSchema,
 });
 
+/**
+ * Resultado de una solicitud de corrección de esta persona (§19).
+ *
+ * El kiosco crea solicitudes y el encargado las resuelve en el panel; sin esto el
+ * empleado no se enteraba nunca de en qué quedó lo que reportó.
+ *
+ * NO trae quién revisó, a propósito: el iPad es compartido y §16 exige devolver
+ * solo lo necesario. Sí trae el motivo que dio la propia persona, porque
+ * "Aprobada" a secas no dice de qué cuando alguien tiene tres solicitudes.
+ */
+const requestUpdateSchema = z.object({
+  id: z.string().uuid(),
+  kind: z.enum([
+    'forgot_clock_in',
+    'forgot_break',
+    'forgot_clock_out',
+    'correction',
+    'unscheduled_shift',
+  ]),
+  status: z.enum(['approved', 'rejected']),
+  targetDate: z.string().nullable(),
+  reason: z.string(),
+  reviewerComment: z.string().nullable(),
+  reviewedAt: z.string(),
+});
+
 const verifyPinResponseSchema = z.object({
   actionToken: z.string().min(20),
   expiresAt: z.string(),
@@ -91,9 +117,14 @@ const verifyPinResponseSchema = z.object({
     })
     .nullable(),
   earliestClockInAt: z.string().nullable(),
+  // `default([])` y no `optional`: una respuesta de un servidor anterior a esta
+  // función no trae la clave, y la pantalla debe mostrar "sin novedades" y no
+  // reventar al leer `.length` de un undefined.
+  requestUpdates: z.array(requestUpdateSchema).default([]),
 });
 
 export type VerifyPinResponse = z.infer<typeof verifyPinResponseSchema>;
+export type RequestUpdate = z.infer<typeof requestUpdateSchema>;
 export type EligibleShift = VerifyPinResponse['eligibleShifts'][number];
 export type AttendanceState = VerifyPinResponse['attendanceState'];
 export type TimeEventType = VerifyPinResponse['allowedActions'][number];
