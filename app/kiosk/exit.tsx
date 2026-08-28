@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import Constants from 'expo-constants';
@@ -9,7 +9,7 @@ import { AppText } from '@/components/ui/app-text';
 import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { verifyPin } from '@/features/kiosk/api';
-import { refreshOfflinePackage, runSync } from '@/lib/offline/sync';
+import { lastSyncFailure, refreshOfflinePackage, runSync } from '@/lib/offline/sync';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { spacing } from '@/theme/tokens';
@@ -39,6 +39,19 @@ export default function KioskExitScreen() {
 
   const binding = useKioskStore((s) => s.binding);
   const screenAwake = useKioskStore((s) => s.screenAwake);
+  const [syncFailure, setSyncFailure] = useState<string | null>(null);
+
+  // Se lee al montar la pantalla y no de forma continua: es un dato de diagnostico
+  // que se consulta cuando algo va mal, no un indicador vivo.
+  useEffect(() => {
+    let vivo = true;
+    void lastSyncFailure().then((valor) => {
+      if (vivo) setSyncFailure(valor);
+    });
+    return () => {
+      vivo = false;
+    };
+  }, []);
   const deactivate = useKioskStore((s) => s.deactivate);
   const { online, pendingCount, lastSyncAt, needsReviewCount } = useNetworkStore();
 
@@ -138,6 +151,17 @@ export default function KioskExitScreen() {
                   ? '—'
                   : formatClockTime(lastSyncAt, timezone, policies.timeFormat)
               }
+            />
+            {/*
+              El ultimo fallo del motor de sincronizacion. Va aqui porque las
+              entradas del motor NO LANZAN —se llaman con `void` desde ocho sitios y
+              un rechazo seria una excepcion sin capturar—, y un error sin rastro
+              seria peor que uno ruidoso: la cola dejaria de vaciarse y el sintoma
+              que llega de la tienda es "las horas de ayer no aparecen".
+            */}
+            <DiagnosticRow
+              label={t('settings.kioskSyncFailure')}
+              value={syncFailure ?? t('settings.kioskSyncNoFailure')}
             />
             <DiagnosticRow
               label={t('settings.kioskScreenAwake')}

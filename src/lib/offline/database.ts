@@ -381,4 +381,14 @@ export const SYNC_KEYS = {
   lastSyncAt: 'last_sync_at',
   lastRosterRefreshAt: 'last_roster_refresh_at',
   deviceSequence: 'device_sequence',
+  /**
+   * Último fallo inesperado del motor de sincronización, o ausente si no hubo.
+   *
+   * Existe porque las entradas del motor no lanzan: se llaman con `void` desde ocho
+   * sitios y un rechazo ahí sería una excepción sin capturar. Pero tragarse el error
+   * y no dejar rastro convertiría un fallo ruidoso en uno invisible, y el síntoma
+   * que llegaría de la tienda sería "las horas de ayer no aparecen". Esto es el
+   * rastro, y el diagnóstico del kiosco lo muestra.
+   */
+  lastSyncError: 'last_sync_error',
 } as const;

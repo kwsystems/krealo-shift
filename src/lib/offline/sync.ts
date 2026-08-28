@@ -1,4 +1,4 @@
-import { SYNC_KEYS, setSyncMetadata } from './database';
+import { SYNC_KEYS, getSyncMetadata, setSyncMetadata } from './database';
 import * as FileSystem from 'expo-file-system';
 
 import {
@@ -44,13 +44,76 @@ export type SyncOutcome = {
   needsAttention: number;
   /** `true` si no se pudo contactar al servidor. No es un fallo del dispositivo. */
   offline: boolean;
+  /**
+   * Fallo INESPERADO del propio dispositivo: SQLite bloqueada, disco lleno, la base
+   * local sin abrir. Distinto de `offline`, que es una condición normal y prevista.
+   *
+   * Se informa por valor y no lanzando, porque estas funciones se llaman con `void`
+   * desde ocho sitios y un rechazo ahí sería una excepción sin capturar. Ver
+   * `noLanzar`.
+   */
+  failure: string | null;
 };
 
-/** Refleja en el store lo que hay en la cola, para el indicador del kiosco. */
+/** Resultado de un pase que no llegó a empezar. */
+const SIN_TRABAJO: SyncOutcome = {
+  attempted: 0,
+  accepted: 0,
+  needsAttention: 0,
+  offline: false,
+  failure: null,
+};
+
+/**
+ * Anota un fallo inesperado y lo deja donde alguien lo pueda ver.
+ *
+ * NO ES TRAGARSE EL ERROR. Las tres entradas de este módulo no lanzan a propósito
+ * —se llaman con `void` desde ocho sitios y un rechazo sería una excepción sin
+ * capturar, una por minuto mientras el kiosco esté activo—, pero un error que no
+ * deja rastro es peor que uno ruidoso: la cola dejaría de vaciarse, el indicador se
+ * quedaría con el último valor bueno, y el síntoma que llegaría de la tienda sería
+ * "las horas de ayer no aparecen".
+ *
+ * Así que queda en dos sitios: la consola, y los metadatos, que es lo que muestra el
+ * diagnóstico del kiosco.
+ */
+async function anotarFallo(donde: string, error: unknown): Promise<string> {
+  const mensaje = `${donde}: ${error instanceof Error ? error.message : String(error)}`;
+  console.warn('[krealo-shift] Fallo del motor de sincronización. ' + mensaje);
+  try {
+    await setSyncMetadata(SYNC_KEYS.lastSyncError, `${new Date().toISOString()} ${mensaje}`);
+  } catch {
+    // Si ni siquiera se puede escribir en la base local, no queda nada más que
+    // hacer: el aviso de consola ya salió.
+  }
+  return mensaje;
+}
+
+/** Último fallo inesperado, para el diagnóstico del kiosco. */
+export async function lastSyncFailure(): Promise<string | null> {
+  try {
+    return await getSyncMetadata(SYNC_KEYS.lastSyncError);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Refleja en el store lo que hay en la cola, para el indicador del kiosco.
+ *
+ * No lanza: se llama con `void` desde el layout del kiosco y desde la pantalla de
+ * acciones. Si falla, los indicadores se quedan con el último valor conocido, que es
+ * mejor que un rechazo sin capturar y mejor que ponerlos a cero, que diría "no hay
+ * nada pendiente" cuando lo que pasa es que no se pudo contar.
+ */
 export async function refreshQueueIndicators(): Promise<void> {
-  const [pending, attention] = await Promise.all([pendingCount(), needsReviewCount()]);
-  useNetworkStore.getState().setPendingCount(pending);
-  useNetworkStore.getState().setNeedsReviewCount(attention);
+  try {
+    const [pending, attention] = await Promise.all([pendingCount(), needsReviewCount()]);
+    useNetworkStore.getState().setPendingCount(pending);
+    useNetworkStore.getState().setNeedsReviewCount(attention);
+  } catch (error) {
+    await anotarFallo('refreshQueueIndicators', error);
+  }
 }
 
 /**
@@ -61,9 +124,7 @@ export async function refreshQueueIndicators(): Promise<void> {
  * red justo al abrir la app.
  */
 export async function runSync(): Promise<SyncOutcome> {
-  if (running) {
-    return { attempted: 0, accepted: 0, needsAttention: 0, offline: false };
-  }
+  if (running) return SIN_TRABAJO;
   running = true;
 
   const store = useNetworkStore.getState();
@@ -79,7 +140,7 @@ export async function runSync(): Promise<SyncOutcome> {
       await refreshQueueIndicators();
       store.markSynced();
       await setSyncMetadata(SYNC_KEYS.lastSyncAt, new Date().toISOString());
-      return { attempted: 0, accepted: 0, needsAttention: 0, offline: false };
+      return SIN_TRABAJO;
     }
 
     await markSending(batch.map((event) => event.idempotencyKey));
@@ -102,6 +163,7 @@ export async function runSync(): Promise<SyncOutcome> {
         accepted: 0,
         needsAttention: 0,
         offline: result.error.kind === 'offline',
+        failure: null,
       };
     }
 
@@ -136,7 +198,17 @@ export async function runSync(): Promise<SyncOutcome> {
     await setSyncMetadata(SYNC_KEYS.lastSyncAt, new Date().toISOString());
     store.markSynced();
 
-    return { attempted: batch.length, accepted, needsAttention: attention, offline: false };
+    return {
+      attempted: batch.length,
+      accepted,
+      needsAttention: attention,
+      offline: false,
+      failure: null,
+    };
+  } catch (error) {
+    // NO SE PROPAGA. Ver `anotarFallo`. Los eventos siguen en SQLite: lo que falló
+    // fue el pase, no la cola, y el siguiente disparador lo vuelve a intentar.
+    return { ...SIN_TRABAJO, failure: await anotarFallo('runSync', error) };
   } finally {
     running = false;
     useNetworkStore.getState().setSyncing(false);
@@ -183,6 +255,16 @@ function toWirePayload(event: OutboxEvent) {
  * funcionaba sin red, lo que hace que el mecanismo parezca vivo.
  */
 export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
+  try {
+    return await refreshOfflinePackageUnsafe();
+  } catch (error) {
+    // Tampoco lanza: se llama con `void` desde el menú del kiosco. Ver `anotarFallo`.
+    await anotarFallo('refreshOfflinePackage', error);
+    return { ok: false };
+  }
+}
+
+async function refreshOfflinePackageUnsafe(): Promise<{ ok: boolean }> {
   const result = await refreshKioskRoster();
   if (!result.ok) return { ok: false };
 
@@ -268,10 +350,26 @@ async function uploadPendingPhotos(): Promise<void> {
         // persona. Dejarla en el iPad sería guardarla dos veces sin motivo (§22).
         await FileSystem.deleteAsync(photo.localUri, { idempotent: true });
       } else {
-        await markPhotoFailed(photo.localUri);
+        await marcarFalloDeFoto(photo.localUri);
       }
     } catch {
-      await markPhotoFailed(photo.localUri);
+      await marcarFalloDeFoto(photo.localUri);
     }
+  }
+}
+
+/**
+ * `markPhotoFailed` sin propagar.
+ *
+ * Esta función documenta que "no lanza nunca", y no era cierto: el
+ * `markPhotoFailed` de recuperación está DENTRO del catch, así que si él también
+ * fallaba —la base local es justo lo que puede estar mal— la excepción salía de
+ * `uploadPendingPhotos`, de `runSync`, y acababa en un rechazo sin capturar.
+ */
+async function marcarFalloDeFoto(localUri: string): Promise<void> {
+  try {
+    await markPhotoFailed(localUri);
+  } catch (error) {
+    await anotarFallo('markPhotoFailed', error);
   }
 }

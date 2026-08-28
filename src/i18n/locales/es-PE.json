@@ -421,6 +421,8 @@
     "kioskScreenAwakeYes": "Sí",
     "kioskScreenAwakeNo": "No — el iPad puede apagarse",
     "kioskScreenAwakeUnknown": "Comprobando",
+    "kioskSyncFailure": "Último fallo de sincronización",
+    "kioskSyncNoFailure": "Ninguno",
     "kioskPendingEvents": "Eventos pendientes",
     "kioskRevoke": "Revocar dispositivo",
     "kioskGenerateCode": "Generar código de activación",

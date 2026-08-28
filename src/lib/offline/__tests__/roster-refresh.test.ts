@@ -43,7 +43,12 @@ jest.mock('../pin', () => ({
 }));
 
 jest.mock('../database', () => ({
-  SYNC_KEYS: { lastRosterRefreshAt: 'lastRosterRefreshAt', lastSyncAt: 'lastSyncAt' },
+  // `SYNC_KEYS` sale del modulo REAL y no se copia a mano. Copiado ya fallo una vez:
+  // la copia tenia dos claves y el modulo tres, asi que la asercion comparaba contra
+  // `undefined` y decia que el codigo estaba mal cuando lo que estaba mal era el
+  // mock. Un mock que duplica un valor del codigo se desincroniza igual que
+  // cualquier otra copia.
+  SYNC_KEYS: (jest.requireActual('../database') as { SYNC_KEYS: unknown }).SYNC_KEYS,
   setSyncMetadata: (...args: unknown[]) => mockSetSyncMetadata(...args),
   getSyncMetadata: jest.fn(),
 }));
@@ -164,6 +169,68 @@ describe('refreshOfflinePackage', () => {
 
     await refreshOfflinePackage();
 
-    expect(mockSetSyncMetadata).toHaveBeenCalledWith('lastRosterRefreshAt', expect.any(String));
+    expect(mockSetSyncMetadata).toHaveBeenCalledWith('last_roster_refresh_at', expect.any(String));
+  });
+});
+
+/**
+ * Y que las entradas del motor NO LANCEN NUNCA.
+ *
+ * Se llaman con `void` desde ocho sitios —el layout del kiosco, la pantalla de
+ * acciones, el menú de salida—, así que un rechazo ahí es una excepción sin
+ * capturar, una por minuto mientras el kiosco esté activo. Lo que puede fallar de
+ * verdad: SQLite bloqueada, disco lleno en el iPad, la base local sin abrir.
+ *
+ * Y lo que se comprueba además de que no lance: QUE DEJE RASTRO. Tragarse el error
+ * en silencio convertiría un fallo ruidoso en uno invisible, y el síntoma que
+ * llegaría de la tienda sería "las horas de ayer no aparecen".
+ */
+describe('el motor no lanza, pero deja rastro', () => {
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => warn.mockRestore());
+
+  it('refreshOfflinePackage devuelve ok:false en vez de propagar', async () => {
+    mockRefreshKioskRoster.mockRejectedValue(new Error('database is locked'));
+
+    await expect(refreshOfflinePackage()).resolves.toEqual({ ok: false });
+  });
+
+  it('y anota el fallo donde el diagnóstico lo pueda leer', async () => {
+    mockRefreshKioskRoster.mockRejectedValue(new Error('database is locked'));
+
+    await refreshOfflinePackage();
+
+    expect(mockSetSyncMetadata).toHaveBeenCalledWith(
+      'last_sync_error',
+      expect.stringContaining('database is locked'),
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it('aguanta que el propio guardado del rastro falle', async () => {
+    // La base local es justo lo que puede estar mal: si `setSyncMetadata` también
+    // falla, no queda nada por hacer y desde luego no se puede propagar.
+    mockRefreshKioskRoster.mockRejectedValue(new Error('disk full'));
+    mockSetSyncMetadata.mockRejectedValue(new Error('disk full'));
+
+    await expect(refreshOfflinePackage()).resolves.toEqual({ ok: false });
+  });
+
+  it('un fallo al guardar el equipo tampoco propaga', async () => {
+    // El fallo puede estar en cualquiera de los pasos, no solo en la petición.
+    mockRefreshKioskRoster.mockResolvedValue(RESPUESTA);
+    mockCacheRosterAndShifts.mockRejectedValue(new Error('SQLITE_BUSY'));
+
+    await expect(refreshOfflinePackage()).resolves.toEqual({ ok: false });
+    expect(mockSetSyncMetadata).toHaveBeenCalledWith(
+      'last_sync_error',
+      expect.stringContaining('SQLITE_BUSY'),
+    );
   });
 });
