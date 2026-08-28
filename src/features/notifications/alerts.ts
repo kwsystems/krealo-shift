@@ -16,9 +16,11 @@ import { z } from 'zod';
 export const managerAlertTypes = [
   'late',
   'noShow',
+  'earlyClockIn',
   'incompleteEntry',
   'nearOvertime',
   'newRequest',
+  'scheduleChange',
   'kioskNotSyncing',
   'wrongKiosk',
 ] as const;
@@ -57,10 +59,16 @@ export function routeForAlertType(type: ManagerAlertType): string {
     case 'late':
     case 'noShow':
       return '/(manager)';
-    // Un fichaje sin salida y las horas extra se arreglan en la hoja de horas.
+    // Un fichaje sin salida y las horas extra se arreglan en la hoja de horas. La
+    // entrada temprana también: es informativa, y lo que se quiere ver es cuántos
+    // minutos suma, que es una columna de esa pantalla y no un hecho aislado.
     case 'incompleteEntry':
     case 'nearOvertime':
+    case 'earlyClockIn':
       return '/(manager)/hours';
+    // Un cambio de horario lleva al horario, no a la lista de quién falta.
+    case 'scheduleChange':
+      return '/(manager)/schedule';
     // Las solicitudes viven en Más, junto a la bandeja.
     case 'newRequest':
       return '/(manager)/more';

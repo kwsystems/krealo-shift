@@ -303,14 +303,23 @@ rollback;
 -- Las preferencias de notificacion y las alertas que existen: mismo conjunto
 -- ===========================================================================
 --
--- ESTA PRUEBA EXISTE POR UN FALLO CONCRETO. La app ofrecia OCHO interruptores y
--- dos de ellos, `earlyClockIn` y `scheduleChange`, no controlaban nada: no hay
--- ninguna alerta de esos tipos. Se podian encender, se guardaban en la base, y no
--- pasaba nada nunca.
+-- ESTA PRUEBA EXISTE POR UN FALLO CONCRETO, Y LUEGO POR UNO MIO. La app ofrecia ocho
+-- interruptores y dos de ellos, `earlyClockIn` y `scheduleChange`, no controlaban
+-- nada: no existia ninguna alerta de esos tipos. Se podian encender, se guardaban, y
+-- no pasaba nada nunca. Un interruptor que no hace nada es indistinguible de "no ha
+-- pasado nada que avisar".
 --
--- Y no habia forma de detectarlo. Los interruptores escribian bien, la base los
--- guardaba bien, la funcion de alertas simplemente nunca leia esas dos claves. Un
--- interruptor que no hace nada es indistinguible de "no ha pasado nada que avisar".
+-- EL PRIMER ARREGLO FUE EL EQUIVOCADO: quitar los dos interruptores. La §19 lista
+-- siete notificaciones y no incluye esas dos, y con eso conclui que el conjunto de
+-- ocho estaba inventado. Pero la §11.6 —la que describe la pantalla de
+-- Configuracion— SI las lista. Se borraron dos preferencias que el proyecto pide.
+--
+-- Y ESTA PRUEBA PASO EN VERDE MIENTRAS ESO ESTABA MAL, que es lo que hay que
+-- recordar de ella: compara las preferencias con los tipos de alerta que declara la
+-- base, y las dos estaban de acuerdo en estar mal. Una prueba de coherencia entre dos
+-- copias no dice nada sobre si la copia es correcta. De ahi la cuenta explicita de
+-- abajo contra las secciones de la especificacion, que es lo unico que ata esto a
+-- algo externo.
 --
 -- Lo que se fija: el conjunto de claves por defecto tiene que ser EXACTAMENTE los
 -- tipos de alerta que la base declara, menos los que no llevan interruptor a
@@ -343,8 +352,15 @@ begin
       and c.conname like '%alert_type%'
   ) x;
 
-  perform test_assert(array_length(v_alertas, 1) = 7,
-    'La base declara 7 tipos de alerta, los 7 de la §19 — encontrados: ' ||
+  -- NUEVE, que es la UNION de las dos listas de la especificacion, no una de ellas:
+  --   en las dos     late, noShow, incompleteEntry, nearOvertime, newRequest
+  --   solo en §11.6  earlyClockIn, scheduleChange
+  --   solo en §19    wrongKiosk, kioskNotSyncing
+  -- Quitar de una lista lo que solo aparece en la otra deja al encargado sin un aviso
+  -- que el proyecto pide. El numero esta escrito a mano a proposito: cambiarlo obliga
+  -- a volver a la especificacion.
+  perform test_assert(array_length(v_alertas, 1) = 9,
+    'La base declara 9 tipos de alerta, la union de §11.6 y §19 — encontrados: ' ||
     coalesce(array_length(v_alertas, 1)::text, '0'));
 
   select array_agg(k order by k) into v_preferencias
@@ -373,22 +389,143 @@ begin
 end
 $$;
 
--- Y que no queden filas con las claves muertas ni con claves de menos: una
--- preferencia ausente vale `null`, y `(null)::boolean` en el `where` de las alertas
--- significa "no avisar". Ese es el modo de fallo que importa, porque una clave que
--- falta NO significa que el encargado no quiera saberlo.
+-- Y que ninguna fila le falte una clave, ni tenga una que no exista.
+--
+-- LO PRIMERO es el modo de fallo que importa: una preferencia ausente vale `null`, y
+-- `(null)::boolean` en el `where` de las alertas significa "no avisar". Una clave que
+-- falta NO significa que el encargado no quiera saberlo, asi que un `insert` que
+-- olvide una clave apaga un aviso en silencio.
+--
+-- LAS DOS se comprueban contra `default_notification_preferences()` y no contra una
+-- lista escrita aqui: asi la prueba sigue valiendo cuando el conjunto cambie. La
+-- version anterior nombraba `earlyClockIn` y `scheduleChange` como claves muertas, y
+-- al restituirlas —§11.6 si las pide— fallaba por lo contrario.
 do $$
 declare
-  v_malas integer;
+  v_faltan integer;
+  v_sobran integer;
 begin
-  select count(*) into v_malas
+  select count(*) into v_faltan
   from notification_preferences
-  where preferences ? 'earlyClockIn'
-     or preferences ? 'scheduleChange'
-     or not (preferences ?& array(select jsonb_object_keys(default_notification_preferences())));
+  where not (preferences ?& array(select jsonb_object_keys(default_notification_preferences())));
 
-  perform test_assert(v_malas = 0,
-    'Ninguna fila de preferencias tiene claves muertas ni le falta ninguna real — malas: ' ||
-    v_malas);
+  perform test_assert(v_faltan = 0,
+    'Ninguna fila de preferencias le falta una clave real — filas malas: ' || v_faltan);
+
+  select count(*) into v_sobran
+  from notification_preferences p
+  where exists (
+    select 1 from jsonb_object_keys(p.preferences) as k
+    where k not in (select jsonb_object_keys(default_notification_preferences()))
+  );
+
+  perform test_assert(v_sobran = 0,
+    'Ninguna fila de preferencias tiene claves que no existan — filas malas: ' || v_sobran);
 end
 $$;
+
+-- ===========================================================================
+-- Las dos alertas de §11.6 que faltaban se producen de verdad
+-- ===========================================================================
+--
+-- No basta con que la clave exista en las preferencias: eso es exactamente lo que ya
+-- pasaba y era el fallo. Aqui se provoca el hecho y se comprueba que la alerta sale.
+begin;
+do $$
+declare
+  v_org uuid := '11111111-1111-4111-8111-111111111111';
+  v_loc uuid := '22222222-2222-4222-8222-222222222221';
+  v_gerente uuid := '33333333-3333-4333-8333-333333333332';
+  v_owner uuid := '33333333-3333-4333-8333-333333333331';
+  -- La empleada que el seed deja SIN turno. Con la que esta trabajando, crear un
+  -- turno alrededor de ahora choca con la guarda de solapamiento, y con razon.
+  v_emp uuid := '55555555-5555-4555-8555-555555555554';
+  v_shift uuid;
+  v_pub uuid;
+begin
+  -- Sin dispositivo activo no hay destinatarios: `pending_manager_alerts` lo exige
+  -- como filtro, no como descarte posterior, para no escribir la fila de
+  -- deduplicacion de una alerta que no se puede enviar.
+  insert into push_tokens (user_id, expo_token, platform, device_name)
+  values (v_gerente, 'ExponentPushToken[prueba-1106-gerenta]', 'ios', 'iPad de prueba'),
+         (v_owner,   'ExponentPushToken[prueba-1106-dueña]',  'ios', 'iPhone de prueba')
+  on conflict do nothing;
+
+  -- --- ENTRADA TEMPRANA ---------------------------------------------------
+  -- Un turno que empieza dentro de una hora y una entrada ya fichada.
+  insert into shifts (organization_id, location_id, employee_id, starts_at, ends_at,
+                      status, publication_version, published_at)
+  values (v_org, v_loc, v_emp, now() + interval '1 hour', now() + interval '9 hours',
+          'published', 1, now())
+  returning id into v_shift;
+
+  insert into time_events (organization_id, employee_id, location_id, shift_id,
+                           event_type, occurred_at, source, idempotency_key)
+  values (v_org, v_emp, v_loc, v_shift, 'clock_in', now() - interval '5 minutes',
+          'kiosk', gen_random_uuid());
+
+  -- Apagada por defecto, asi que primero NO debe salir.
+  insert into notification_preferences (user_id, organization_id, preferences)
+  values (v_gerente, v_org, default_notification_preferences())
+  on conflict (user_id, organization_id) do update
+    set preferences = default_notification_preferences();
+
+  perform test_assert(
+    not exists (
+      select 1 from pending_manager_alerts(v_org)
+      where alert_type = 'earlyClockIn' and recipient_user_id = v_gerente
+    ),
+    'Entrada temprana viene APAGADA por defecto: no avisa sin que nadie la encienda');
+
+  update notification_preferences
+  set preferences = preferences || jsonb_build_object('earlyClockIn', true)
+  where user_id = v_gerente and organization_id = v_org;
+
+  perform test_assert(
+    exists (
+      select 1 from pending_manager_alerts(v_org)
+      where alert_type = 'earlyClockIn' and recipient_user_id = v_gerente
+        and subject_id = v_emp
+    ),
+    'Al encenderla, la entrada temprana SI produce alerta para quien administra la tienda');
+
+  -- --- CAMBIO DE HORARIO -------------------------------------------------
+  -- Republicacion con turnos cambiados, hecha por la propietaria.
+  insert into shift_publications (organization_id, location_id, week_starts_on,
+                                  publication_version, published_by, changed_shift_ids)
+  values (v_org, v_loc, current_date, 2, v_owner, array[v_shift])
+  returning id into v_pub;
+
+  perform test_assert(
+    exists (
+      select 1 from pending_manager_alerts(v_org)
+      where alert_type = 'scheduleChange' and recipient_user_id = v_gerente
+        and subject_id = v_pub
+    ),
+    'La republicacion con cambios avisa a los OTROS encargados de la tienda');
+
+  -- LA MITAD QUE IMPORTA: no se avisa a quien lo publico. Ya lo sabe, lo acaba de
+  -- hacer, y un aviso ahi entrena a la gente a ignorar los avisos.
+  perform test_assert(
+    not exists (
+      select 1 from pending_manager_alerts(v_org)
+      where alert_type = 'scheduleChange' and recipient_user_id = v_owner
+        and subject_id = v_pub
+    ),
+    'NO se avisa del cambio de horario a quien lo publico');
+
+  -- Una republicacion que no cambia ningun turno no es un cambio de horario:
+  -- avisar de ella entrena a ignorar el aviso.
+  insert into shift_publications (organization_id, location_id, week_starts_on,
+                                  publication_version, published_by, changed_shift_ids)
+  values (v_org, v_loc, current_date + 7, 3, v_owner, array[]::uuid[]);
+
+  perform test_assert(
+    (select count(*) from pending_manager_alerts(v_org)
+      where alert_type = 'scheduleChange' and recipient_user_id = v_gerente) = 1,
+    'Una republicacion sin turnos cambiados no genera alerta');
+
+  raise notice '  --- pruebas de las alertas de §11.6 completas ---';
+end
+$$;
+rollback;

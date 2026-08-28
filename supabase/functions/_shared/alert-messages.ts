@@ -22,12 +22,22 @@
  * que pase cerca del teléfono; el gerente lo ve un toque después, dentro de la app.
  */
 
+/**
+ * Los NUEVE tipos de alerta, que es la union de §11.6 y §19.
+ *
+ * Las dos secciones listan siete cada una y solo comparten cinco: §11.6 anade
+ * `earlyClockIn` y `scheduleChange`, §19 anade `wrongKiosk` y `kioskNotSyncing`. Si
+ * este arreglo se queda corto, `isManagerAlertType` descarta la alerta y el envio la
+ * salta EN SILENCIO: la fila queda marcada como entregada y nadie recibe nada.
+ */
 export const managerAlertTypes = [
   'late',
   'noShow',
+  'earlyClockIn',
   'incompleteEntry',
   'nearOvertime',
   'newRequest',
+  'scheduleChange',
   'kioskNotSyncing',
   'wrongKiosk',
 ] as const;
@@ -64,6 +74,13 @@ export const ALERT_COPY: Record<AlertLocale, Record<ManagerAlertType, AlertCopy>
       one: 'Un registro quedó abierto en {{location}}.',
       other: '{{count}} registros quedaron abiertos en {{location}}.',
     },
+    // Sin nombre y sin la hora exacta: es informativo, y quien lo tenga encendido lo
+    // que quiere ver es el patron, que esta en la hoja de horas.
+    earlyClockIn: {
+      title: 'Entrada antes del turno',
+      one: 'Alguien fichó antes del inicio de su turno en {{location}}.',
+      other: '{{count}} personas ficharon antes del inicio de su turno en {{location}}.',
+    },
     nearOvertime: {
       title: 'Cerca de horas extra',
       one: 'Alguien se acerca al umbral de horas extra en {{location}}.',
@@ -73,6 +90,13 @@ export const ALERT_COPY: Record<AlertLocale, Record<ManagerAlertType, AlertCopy>
       title: 'Solicitud pendiente',
       one: 'Hay una solicitud esperando tu revisión en {{location}}.',
       other: 'Hay {{count}} solicitudes esperando tu revisión en {{location}}.',
+    },
+    // No dice QUIEN publico ni QUE cambio: el nombre de quien publica es dato de un
+    // tercero en la pantalla de bloqueo, y el detalle esta en el horario a un toque.
+    scheduleChange: {
+      title: 'Cambio de horario',
+      one: 'Se publicó un cambio en el horario de {{location}}.',
+      other: 'Se publicaron {{count}} cambios en el horario de {{location}}.',
     },
     kioskNotSyncing: {
       title: 'Reloj sin sincronizar',
@@ -102,6 +126,11 @@ export const ALERT_COPY: Record<AlertLocale, Record<ManagerAlertType, AlertCopy>
       one: 'An entry was left open at {{location}}.',
       other: '{{count}} entries were left open at {{location}}.',
     },
+    earlyClockIn: {
+      title: 'Clock-in before the shift',
+      one: 'Someone clocked in before their shift started at {{location}}.',
+      other: '{{count}} people clocked in before their shift started at {{location}}.',
+    },
     nearOvertime: {
       title: 'Close to overtime',
       one: 'Someone is close to the overtime threshold at {{location}}.',
@@ -111,6 +140,11 @@ export const ALERT_COPY: Record<AlertLocale, Record<ManagerAlertType, AlertCopy>
       title: 'Pending request',
       one: 'One request is waiting for your review at {{location}}.',
       other: '{{count}} requests are waiting for your review at {{location}}.',
+    },
+    scheduleChange: {
+      title: 'Schedule change',
+      one: 'A schedule change was published for {{location}}.',
+      other: '{{count}} schedule changes were published for {{location}}.',
     },
     kioskNotSyncing: {
       title: 'Clock not syncing',

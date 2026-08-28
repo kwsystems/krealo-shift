@@ -524,9 +524,11 @@ function KiosksCard() {
 const NOTIFICATION_LABEL_KEYS: Record<NotificationKey, string> = {
   late: 'settings.notifyLate',
   noShow: 'settings.notifyNoShow',
+  earlyClockIn: 'settings.notifyEarlyClockIn',
   nearOvertime: 'settings.notifyNearOvertime',
   incompleteEntry: 'settings.notifyIncompleteEntry',
   newRequest: 'settings.notifyNewRequest',
+  scheduleChange: 'settings.notifyScheduleChange',
   kioskNotSyncing: 'settings.notifyKioskNotSyncing',
 };
 

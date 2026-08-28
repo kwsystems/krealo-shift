@@ -127,30 +127,44 @@ export async function revokeKioskDevice(deviceId: string): Promise<void> {
 }
 
 /**
- * Los interruptores de notificación (§19).
+ * Los interruptores de notificación (§11.6 y §19).
  *
- * SON SEIS Y CADA UNO APAGA UNA ALERTA QUE EXISTE. Había ocho, y dos de ellos
- * —`earlyClockIn` y `scheduleChange`— no controlaban nada: no hay ninguna alerta de
- * esos tipos ni en la base ni en las Edge Functions. Se podían encender, se
- * guardaban, y no pasaba nada nunca. Un interruptor que no hace nada es una mentira
- * que no se descubre: quien lo enciende no recibe el aviso y concluye que no ha
- * pasado nada que avisar, que es indistinguible de "todo va bien".
+ * SON OCHO Y CADA UNO APAGA UNA ALERTA QUE EXISTE.
  *
- * La §19 lista SIETE notificaciones. La séptima, `wrongKiosk` —intento de fichaje
- * desde un kiosco revocado o de otra tienda— no tiene interruptor a propósito: con
- * uno, quien se llevó el iPad podría silenciar el aviso de que se lo llevó. La
- * pantalla lo dice en vez de dejarlo implícito.
+ * LA ESPECIFICACIÓN SE CONTRADICE CONSIGO MISMA AQUÍ, y hay que saberlo antes de
+ * tocar esta lista. §11.6 —la pantalla de Configuración— lista siete preferencias.
+ * §19 —notificaciones— lista siete notificaciones. Solo cinco coinciden:
  *
- * Dos pruebas impiden que esto vuelva a separarse: `30_manager.sql` compara los
- * interruptores de la base con los tipos de alerta que la base declara, y
- * `__tests__/notification-keys.test.ts` compara esta lista con la de la base.
+ *   en las dos      late, noShow, incompleteEntry, nearOvertime, newRequest
+ *   solo en §11.6   earlyClockIn, scheduleChange
+ *   solo en §19     wrongKiosk, kioskNotSyncing
+ *
+ * Se implementa la UNIÓN: nueve alertas, ocho interruptores. `wrongKiosk` no lleva
+ * interruptor porque §11.6 no lo lista y porque con uno, quien se llevó el iPad
+ * podría silenciar el aviso de que se lo llevó; la pantalla lo dice en vez de
+ * dejarlo implícito.
+ *
+ * HISTORIA, porque el error es fácil de repetir: durante un rato esta lista tuvo
+ * SEIS claves. Quité `earlyClockIn` y `scheduleChange` porque no correspondían a
+ * ninguna alerta —cierto en ese momento— y porque §19 no las lista. Pero §11.6 sí, y
+ * el arreglo correcto era implementar las dos alertas que faltaban, no borrar dos
+ * preferencias que el proyecto pide. Leer una sección y decidir es como se hace ese
+ * error.
+ *
+ * Dos pruebas atan esto: `30_manager.sql` compara los interruptores con los tipos de
+ * alerta que declara la base Y provoca los nueve hechos, y
+ * `__tests__/notification-keys.test.ts` compara esta lista con la de la base. Ojo con
+ * la primera versión de esas pruebas: comparaban dos copias entre sí y pasaban en
+ * verde mientras las dos estaban mal.
  */
 export const notificationKeys = [
   'late',
   'noShow',
+  'earlyClockIn',
   'nearOvertime',
   'incompleteEntry',
   'newRequest',
+  'scheduleChange',
   'kioskNotSyncing',
 ] as const;
 
@@ -160,9 +174,15 @@ export type NotificationPreferences = Record<NotificationKey, boolean>;
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   late: true,
   noShow: true,
+  // La única apagada: no es una incidencia sino un patrón que suma en la nómina, y
+  // la máquina de estados ya impide fichar antes de la tolerancia, así que toda
+  // entrada temprana está dentro de lo permitido. Encendida sería un aviso por cada
+  // persona que llega diez minutos antes, todos los días.
+  earlyClockIn: false,
   nearOvertime: true,
   incompleteEntry: true,
   newRequest: true,
+  scheduleChange: true,
   kioskNotSyncing: true,
 };
 
@@ -178,13 +198,15 @@ const preferencesSchema = z
   .object({
     late: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.late),
     noShow: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.noShow),
+    earlyClockIn: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.earlyClockIn),
     nearOvertime: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.nearOvertime),
     incompleteEntry: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.incompleteEntry),
     newRequest: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.newRequest),
+    scheduleChange: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.scheduleChange),
     kioskNotSyncing: z.boolean().default(DEFAULT_NOTIFICATION_PREFERENCES.kioskNotSyncing),
   })
-  // `strip` (el modo por omisión) descarta claves desconocidas, así que una fila
-  // vieja con `earlyClockIn` se lee sin arrastrarla de vuelta al guardar.
+  // `strip` (el modo por omisión) descarta claves desconocidas: una fila escrita por
+  // una versión con más claves se lee sin arrastrarlas de vuelta al guardar.
   .catch(DEFAULT_NOTIFICATION_PREFERENCES);
 
 const preferencesRowSchema = z.object({ preferences: preferencesSchema });
