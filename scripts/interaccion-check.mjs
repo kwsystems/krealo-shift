@@ -22,13 +22,10 @@
  *   node scripts/interaccion-check.mjs /tmp/ks-web
  */
 
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const require = createRequire(import.meta.url);
+import { cargarPlaywright, sembrarKiosco, servirExport } from './lib/arnes-web.mjs';
 
 const RAIZ = process.argv[2];
 if (!RAIZ) {
@@ -42,58 +39,10 @@ const CAPTURAS = process.env.INTERACCION_SHOTS ?? '/tmp/ks-interaccion';
 /** Cuánto se espera a que un estado de carga se resuelva antes de llamarlo colgado. */
 const ESPERA_MAXIMA_MS = 12_000;
 
-const TIPOS = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.ttf': 'font/ttf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.wasm': 'application/wasm',
-};
-
-function resolver(url) {
-  const limpio = decodeURIComponent(url.split('?')[0]);
-  const directo = join(RAIZ, limpio);
-  if (existsSync(directo) && statSync(directo).isFile()) return directo;
-  const raizIndice = join(RAIZ, 'index.html');
-  return existsSync(raizIndice) ? raizIndice : null;
-}
-
-const servidor = createServer(async (req, res) => {
-  try {
-    const archivo = resolver(req.url ?? '/');
-    if (archivo === null) {
-      res.writeHead(404).end('no encontrado');
-      return;
-    }
-    const cuerpo = await readFile(archivo);
-    res.writeHead(200, { 'content-type': TIPOS[extname(archivo)] ?? 'application/octet-stream' });
-    res.end(cuerpo);
-  } catch {
-    res.writeHead(500).end('error');
-  }
-});
-
-await new Promise((listo) => servidor.listen(PUERTO, '127.0.0.1', listo));
+const { cerrar: cerrarServidor } = await servirExport(RAIZ, PUERTO);
 await mkdir(CAPTURAS, { recursive: true });
 
-let pw;
-try {
-  pw = require('playwright');
-} catch {
-  try {
-    pw = require('/opt/node22/lib/node_modules/playwright/index.js');
-  } catch {
-    console.error('Falta playwright. Instalalo o define NODE_PATH.');
-    process.exit(2);
-  }
-}
+const pw = cargarPlaywright();
 
 const browser = await pw.chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM ?? undefined,
@@ -143,48 +92,6 @@ async function conPagina(ruta, cuerpo, { comoKiosco = true } = {}) {
   } finally {
     await context.close();
   }
-}
-
-/**
- * Siembra una credencial de kiosco antes de que cargue la app.
- *
- * En web, `secureStorage` cae a `localStorage` con el prefijo `krealo-shift.dev.`
- * (es un respaldo declarado y ruidoso: ver src/lib/security/secure-storage.ts). Eso
- * permite abrir el kiosco COMO SI el iPad estuviera activado, que es la unica forma de
- * llegar al teclado del PIN sin un servidor.
- *
- * Sin esto, `/kiosk` muestra —correctamente— su estado vacio de "este iPad todavia no
- * es un reloj", y no hay teclado que probar.
- */
-const BINDING = {
-  deviceId: '66666666-6666-4666-8666-666666666661',
-  devicePublicId: 'demo-kiosk-main',
-  displayName: 'iPad de prueba',
-  organizationId: '11111111-1111-4111-8111-111111111111',
-  organizationName: 'Krealo Media Demo',
-  organizationLogoPath: null,
-  locationId: '22222222-2222-4222-8222-222222222221',
-  locationName: 'Sede Principal',
-  timezone: 'America/Lima',
-  policies: {
-    pinLength: 6,
-    photoEnabled: false,
-    earlyClockInMinutes: 10,
-    lateGraceMinutes: 5,
-    allowUnscheduledShifts: true,
-    timeFormat: '24h',
-    requiredBreakMinutes: 0,
-  },
-  activatedAt: new Date().toISOString(),
-};
-
-async function sembrarKiosco(page) {
-  await page.addInitScript((binding) => {
-    const P = 'krealo-shift.dev.';
-    localStorage.setItem(P + 'kiosk.credential', JSON.stringify(binding));
-    localStorage.setItem(P + 'kiosk.credential.secret', 'credencial-de-prueba');
-    localStorage.setItem(P + 'kiosk.deviceKey', 'a'.repeat(64));
-  }, BINDING);
 }
 
 /**
@@ -601,7 +508,7 @@ await conPagina(
 );
 
 await browser.close();
-servidor.close();
+cerrarServidor();
 
 console.log(`\nCapturas en ${CAPTURAS}`);
 if (fallos > 0) {

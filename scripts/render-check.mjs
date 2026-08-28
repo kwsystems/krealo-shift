@@ -33,13 +33,10 @@
  *    NoModificationAllowedError. Es un fallo del arnes que parece de la app.
  */
 
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { readFile, mkdir } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { mkdir } from 'node:fs/promises';
+import { join } from 'node:path';
 
-const require = createRequire(import.meta.url);
+import { cargarPlaywright, servirExport } from './lib/arnes-web.mjs';
 
 const RAIZ = process.argv[2];
 if (!RAIZ) {
@@ -68,75 +65,10 @@ const RUTAS = [
   ['panel-mas', '/more'],
 ];
 
-const TIPOS = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.jpg': 'image/jpeg',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.ttf': 'font/ttf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.wasm': 'application/wasm',
-};
-
-/**
- * Resuelve una URL a un archivo del export.
- *
- * El proyecto usa `web.output: 'single'`, o sea una sola pagina con enrutado en el
- * cliente: solo existe `index.html` y el router decide la pantalla a partir de la
- * ruta. Asi que cualquier ruta que no sea un archivo real cae en `index.html`, que
- * es lo que hace un servidor de SPA.
- *
- * Antes el proyecto usaba `output: 'static'`, que escribia un .html por ruta, y esta
- * funcion buscaba `/team.html`. Se cambio porque el modo estatico ROMPIA el servidor
- * de desarrollo: fallaba con "Worker chunk not found" de expo-sqlite, o sea que
- * `npx expo start --web` no arrancaba. Ver app.config.ts.
- */
-function resolver(url) {
-  const limpio = decodeURIComponent(url.split('?')[0]);
-  const directo = join(RAIZ, limpio);
-  if (existsSync(directo) && statSync(directo).isFile()) return directo;
-  if (existsSync(directo) && statSync(directo).isDirectory()) {
-    const indice = join(directo, 'index.html');
-    if (existsSync(indice)) return indice;
-  }
-  // Respaldo de SPA: la ruta la resuelve el router en el navegador.
-  const raizIndice = join(RAIZ, 'index.html');
-  return existsSync(raizIndice) ? raizIndice : null;
-}
-
-const servidor = createServer(async (req, res) => {
-  const archivo = resolver(req.url ?? '/');
-  if (archivo === null) {
-    res.writeHead(404).end('no encontrado');
-    return;
-  }
-  try {
-    res.writeHead(200, { 'Content-Type': TIPOS[extname(archivo)] ?? 'application/octet-stream' });
-    res.end(await readFile(archivo));
-  } catch {
-    res.writeHead(500).end('error');
-  }
-});
-
-await new Promise((listo) => servidor.listen(PUERTO, '127.0.0.1', listo));
+const { cerrar: cerrarServidor } = await servirExport(RAIZ, PUERTO);
 await mkdir(CAPTURAS, { recursive: true });
 
-let pw;
-try {
-  pw = require('playwright');
-} catch {
-  try {
-    pw = require('/opt/node22/lib/node_modules/playwright/index.js');
-  } catch {
-    console.error('Falta playwright. Instalalo o define NODE_PATH.');
-    process.exit(2);
-  }
-}
+const pw = cargarPlaywright();
 
 const browser = await pw.chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM ?? undefined,
@@ -183,7 +115,7 @@ for (const [nombre, ruta] of RUTAS) {
 }
 
 await browser.close();
-servidor.close();
+cerrarServidor();
 
 console.log(`\nCapturas en ${CAPTURAS}`);
 if (fallos > 0) {

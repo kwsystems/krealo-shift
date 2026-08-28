@@ -39,7 +39,7 @@ const EXIT_LONG_PRESS_MS = 3000;
 
 export default function KioskIdleScreen() {
   const { t } = useTranslation();
-  const { scaleFont, isWide, isCompact } = useResponsive();
+  const { scaleFont, isWide, isCompact, isLandscape } = useResponsive();
   const now = useLiveClock('second');
 
   const binding = useKioskStore((s) => s.binding);
@@ -222,6 +222,110 @@ export default function KioskIdleScreen() {
     );
   }
 
+  /*
+   * EL iPad HORIZONTAL DEJABA MEDIA PANTALLA VACIA.
+   *
+   * §33: "No aparecen formularios estrechos flotando en un iPad vacío; usar composición
+   * adaptable". El reloj y el teclado se apilaban en una columna centrada, asi que en
+   * horizontal —como esta un iPad en un pedestal la mitad de las veces— quedaban dos
+   * franjas vacias a los lados y todo mas pequeño de lo que cabia.
+   *
+   * `isLandscape` ya existia en `useResponsive` y NO LA USABA NADIE: la adaptacion
+   * estaba prevista y sin hacer. En vertical no cambia nada, a proposito.
+   *
+   * Los bloques se extraen a constantes en vez de duplicarse en las dos ramas: dos
+   * copias de este teclado se separarian en la primera correccion que toque una sola.
+   */
+  const dosColumnas = isWide && isLandscape;
+
+  const bloqueReloj = (
+    <Stack gap={spacing.xs} style={styles.clockBlock}>
+      <AppText
+        variant="kioskClock"
+        // En dos columnas el reloj tiene media pantalla y sube a 120: a 64 dejaba de ser
+        // el elemento dominante que pide §9.1 y el título de la otra columna se leía
+        // primero. Ver el token `kioskClockLandscapeMax`.
+        size={scaleFont(
+          fontSize.kioskClockMin,
+          dosColumnas ? fontSize.kioskClockLandscapeMax : fontSize.kioskClockMax,
+        )}
+        tabular
+        accessibilityRole="header"
+      >
+        {formatClockTime(now, timezone, policies.timeFormat, language)}
+      </AppText>
+      <AppText variant="body" tone="muted">
+        {formatLongDate(now, timezone, language)}
+      </AppText>
+    </Stack>
+  );
+
+  const bloquePin = (
+    <Stack gap={spacing.lg} style={styles.pinBlock}>
+      <Stack gap={spacing.xs}>
+        <AppText
+          variant="kioskTitle"
+          size={scaleFont(fontSize.kioskTitleMin, fontSize.kioskTitleMax)}
+          style={styles.centerText}
+        >
+          {t('kiosk.idleTitle')}
+        </AppText>
+        <AppText variant="body" tone="muted" style={styles.centerText}>
+          {t('kiosk.idleSubtitle')}
+        </AppText>
+      </Stack>
+
+      <PinDots length={pinLength} entered={pin.length} error={error !== null} />
+
+      {/*
+      SEÑAL DE QUE ESTÁ PASANDO ALGO (§20: "para cada pantalla implementar
+      skeleton o carga"). No la había: mientras se validaba el PIN, la única
+      cosa que ocurría era `disabled={checking}` en el teclado, así que la
+      persona tecleaba sus seis dígitos y la pantalla se quedaba EXACTAMENTE
+      IGUAL. Volvía a tocar, los botones no respondían porque estaban
+      deshabilitados, y concluía que el iPad está roto. En una tienda con red
+      lenta una validación tarda varios segundos, y este es el flujo más usado
+      de la app.
+
+      CON TEXTO Y NO SOLO UN INDICADOR GIRANDO: el iPad está sobre un pedestal
+      y se mira a un metro de distancia. Un giro de veinte píxeles no se ve.
+
+      Va en el sitio del error, no además: los dos no pueden coexistir —el
+      error se limpia al teclear— y ocupar la misma línea evita que la pantalla
+      salte de altura al cambiar de uno a otro.
+    */}
+      {checking ? (
+        <AppText
+          variant="body"
+          tone="muted"
+          style={styles.centerText}
+          accessibilityRole="alert"
+          testID="kiosk-pin-checking"
+        >
+          {t('kiosk.pinChecking')}
+        </AppText>
+      ) : error !== null ? (
+        <AppText
+          variant="body"
+          tone="danger"
+          style={styles.centerText}
+          accessibilityRole="alert"
+          testID="kiosk-pin-error"
+        >
+          {error}
+        </AppText>
+      ) : null}
+
+      <NumericKeypad
+        onDigit={appendDigit}
+        onBackspace={() => setPin((c) => c.slice(0, -1))}
+        onClear={clearPin}
+        size={isWide ? 'kiosk' : 'mobile'}
+        disabled={checking}
+      />
+    </Stack>
+  );
+
   return (
     <AppScreen tone="kiosk" padded={false} testID="kiosk-idle">
       <View style={[styles.container, { padding: isCompact ? spacing.lg : spacing.xxl }]}>
@@ -260,13 +364,17 @@ export default function KioskIdleScreen() {
                 herramienta que usa el negocio; y dos marcas juntas en la esquina de
                 una pantalla de reposo se leen como un error de montaje.
 
-                Sin logotipo se pinta el nombre de la app, que es lo que había antes
-                de existir esto.
+                Sin logotipo se pinta el NOMBRE DE LA ORGANIZACIÓN, por el mismo
+                motivo. Aquí decía el nombre de la app, y eso contradecía el párrafo de
+                arriba: una tienda que no ha subido su logotipo veía "Krealo Shift" en
+                su propio reloj en lugar de su nombre, que la base ya conoce. El nombre
+                de la app queda solo como último recurso, para cuando no hay ni binding
+                —un instante en el arranque—.
               */}
               {logoUrl === null ? (
                 <Stack gap={spacing.xs}>
                   <AppText variant="section" tone="primary">
-                    {t('common.appName')}
+                    {binding?.organizationName ?? t('common.appName')}
                   </AppText>
                   <AppText variant="help" tone="subtle">
                     {binding?.locationName ?? ''}
@@ -320,85 +428,18 @@ export default function KioskIdleScreen() {
           </View>
         ) : null}
 
-        {/* Reloj y fecha: el elemento dominante de la pantalla */}
-        <Stack gap={spacing.xs} style={styles.clockBlock}>
-          <AppText
-            variant="kioskClock"
-            size={scaleFont(fontSize.kioskClockMin, fontSize.kioskClockMax)}
-            tabular
-            accessibilityRole="header"
-          >
-            {formatClockTime(now, timezone, policies.timeFormat, language)}
-          </AppText>
-          <AppText variant="body" tone="muted">
-            {formatLongDate(now, timezone, language)}
-          </AppText>
-        </Stack>
-
-        {/* Instrucción y PIN */}
-        <Stack gap={spacing.lg} style={styles.pinBlock}>
-          <Stack gap={spacing.xs}>
-            <AppText
-              variant="kioskTitle"
-              size={scaleFont(fontSize.kioskTitleMin, fontSize.kioskTitleMax)}
-              style={styles.centerText}
-            >
-              {t('kiosk.idleTitle')}
-            </AppText>
-            <AppText variant="body" tone="muted" style={styles.centerText}>
-              {t('kiosk.idleSubtitle')}
-            </AppText>
-          </Stack>
-
-          <PinDots length={pinLength} entered={pin.length} error={error !== null} />
-
-          {/*
-            SEÑAL DE QUE ESTÁ PASANDO ALGO (§20: "para cada pantalla implementar
-            skeleton o carga"). No la había: mientras se validaba el PIN, la única
-            cosa que ocurría era `disabled={checking}` en el teclado, así que la
-            persona tecleaba sus seis dígitos y la pantalla se quedaba EXACTAMENTE
-            IGUAL. Volvía a tocar, los botones no respondían porque estaban
-            deshabilitados, y concluía que el iPad está roto. En una tienda con red
-            lenta una validación tarda varios segundos, y este es el flujo más usado
-            de la app.
-
-            CON TEXTO Y NO SOLO UN INDICADOR GIRANDO: el iPad está sobre un pedestal
-            y se mira a un metro de distancia. Un giro de veinte píxeles no se ve.
-
-            Va en el sitio del error, no además: los dos no pueden coexistir —el
-            error se limpia al teclear— y ocupar la misma línea evita que la pantalla
-            salte de altura al cambiar de uno a otro.
-          */}
-          {checking ? (
-            <AppText
-              variant="body"
-              tone="muted"
-              style={styles.centerText}
-              accessibilityRole="alert"
-              testID="kiosk-pin-checking"
-            >
-              {t('kiosk.pinChecking')}
-            </AppText>
-          ) : error !== null ? (
-            <AppText
-              variant="body"
-              tone="danger"
-              style={styles.centerText}
-              accessibilityRole="alert"
-              testID="kiosk-pin-error"
-            >
-              {error}
-            </AppText>
-          ) : null}
-
-          <NumericKeypad
-            onDigit={appendDigit}
-            onBackspace={() => setPin((c) => c.slice(0, -1))}
-            onClear={clearPin}
-            size={isWide ? 'kiosk' : 'mobile'}
-            disabled={checking}
-          />
-        </Stack>
+        {/* Reloj y teclado: en columna, o en dos columnas si el iPad está horizontal */}
+        {dosColumnas ? (
+          <View style={styles.dosColumnas}>
+            <View style={styles.columna}>{bloqueReloj}</View>
+            <View style={styles.columna}>{bloquePin}</View>
+          </View>
+        ) : (
+          <>
+            {bloqueReloj}
+            {bloquePin}
+          </>
+        )}
 
         {/* Pie: idioma, ayuda y pendientes de sincronizar */}
         <Stack gap={spacing.sm}>
@@ -450,6 +491,10 @@ const styles = StyleSheet.create({
   orgLogo: { width: 160, height: 48 },
   container: { flex: 1, justifyContent: 'space-between', backgroundColor: colors.primary50 },
   clockBlock: { alignItems: 'center' },
+  // Dos columnas en iPad horizontal: el reloj a un lado y el teclado al otro. `flex: 1`
+  // para que se reparta el espacio del medio, que es lo que antes quedaba vacio.
+  dosColumnas: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: spacing.xxl },
+  columna: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   pinBlock: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
   // Aviso discreto: informa sin competir con el reloj, que es el elemento dominante

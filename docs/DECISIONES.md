@@ -84,6 +84,33 @@ eso ya no pueden contestar cosas distintas ni rebotarse la una a la otra.
   fallaron. Un control que no hace nada es invisible para cualquier chequeo que solo
   mire píxeles.
 
+### El kiosco en iPad horizontal usa dos columnas
+
+En horizontal el reloj y el teclado se apilaban en una columna centrada, así que quedaban
+dos franjas vacías a los lados. §33 lo prohíbe: «No aparecen formularios estrechos
+flotando en un iPad vacío; usar composición adaptable». Ahora, con `isWide && isLandscape`,
+el reloj va a un lado y el teclado al otro.
+
+- **Cómo se encontró:** haciendo las capturas para la App Store a 2732×2048. Ninguna
+  prueba lo veía, porque la pantalla renderizaba perfectamente: lo que estaba mal era la
+  composición, y eso solo se ve mirándola al tamaño real.
+- **`isLandscape` ya existía en `useResponsive` y no la usaba nadie:** la adaptación
+  estaba prevista y sin hacer.
+- **Costo, y el ajuste que hizo falta:** al pasar a dos columnas el reloj a 64 dejó de ser
+  el elemento dominante que pide §9.1 —el título de la otra columna se leía primero—, así
+  que en dos columnas sube a 120. Se comprobó en la captura, no se supuso.
+- **Vertical no cambia:** ni en iPad ni en teléfono.
+
+### El nombre de la organización, no el de la app, en el reloj de la tienda
+
+Sin logotipo cargado, la cabecera del kiosco mostraba «Krealo Shift». El comentario justo
+encima decía lo contrario: «Quien entra a la tienda tiene que reconocer el negocio, no la
+herramienta que usa el negocio». Ahora muestra el nombre de la organización, que el
+binding ya trae, y el de la app queda como último recurso.
+
+- **Por qué se anota:** el código contradecía su propio comentario, y esa clase de fallo
+  sobrevive porque quien lee el comentario da por hecho que el código hace lo que dice.
+
 ### La analítica mide, pero todavía no envía a ningún sitio
 
 Los nueve eventos de §31 están instrumentados en sus nueve sitios, con tipo cerrado y

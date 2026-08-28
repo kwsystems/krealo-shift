@@ -24,19 +24,9 @@
  * "arreglar" una paleta que estaba bien.
  */
 
-import { createRequire } from 'node:module';
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { existsSync, statSync } from 'node:fs';
-import { join, extname } from 'node:path';
+import { cargarPlaywright, servirExport } from './lib/arnes-web.mjs';
 
-const require = createRequire(import.meta.url);
-let pw;
-try {
-  pw = require('playwright');
-} catch {
-  pw = require('/opt/node22/lib/node_modules/playwright/index.js');
-}
+const pw = cargarPlaywright();
 
 const RAIZ = process.argv[2];
 if (!RAIZ) {
@@ -45,42 +35,7 @@ if (!RAIZ) {
 }
 const PUERTO = 8111;
 
-const TIPOS = {
-  '.html': 'text/html',
-  '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.json': 'application/json',
-  '.png': 'image/png',
-  '.svg': 'image/svg+xml',
-  '.ico': 'image/x-icon',
-  '.ttf': 'font/ttf',
-  '.woff': 'font/woff',
-  '.woff2': 'font/woff2',
-  '.wasm': 'application/wasm',
-  '.jpg': 'image/jpeg',
-};
-
-// Respaldo de SPA: el proyecto usa `web.output: 'single'`, asi que solo existe
-// index.html y la ruta la resuelve el router en el navegador.
-function resolver(url) {
-  const limpio = decodeURIComponent(url.split('?')[0]);
-  const d = join(RAIZ, limpio);
-  if (existsSync(d) && statSync(d).isFile()) return d;
-  if (existsSync(d) && statSync(d).isDirectory()) {
-    const i = join(d, 'index.html');
-    if (existsSync(i)) return i;
-  }
-  const raiz = join(RAIZ, 'index.html');
-  return existsSync(raiz) ? raiz : null;
-}
-
-const servidor = createServer(async (req, res) => {
-  const f = resolver(req.url ?? '/');
-  if (!f) return res.writeHead(404).end('no');
-  res.writeHead(200, { 'Content-Type': TIPOS[extname(f)] ?? 'application/octet-stream' });
-  res.end(await readFile(f));
-});
-await new Promise((r) => servidor.listen(PUERTO, '127.0.0.1', r));
+const { cerrar: cerrarServidor } = await servirExport(RAIZ, PUERTO);
 
 const browser = await pw.chromium.launch({
   executablePath: process.env.PLAYWRIGHT_CHROMIUM ?? undefined,
@@ -248,7 +203,7 @@ for (const [nombre, ruta] of RUTAS) {
 }
 
 await browser.close();
-servidor.close();
+cerrarServidor();
 
 if (problemas > 0) {
   console.error(`\n${problemas} problemas de accesibilidad.`);

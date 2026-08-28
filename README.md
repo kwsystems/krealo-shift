@@ -90,6 +90,7 @@ node scripts/interaccion-check.mjs <dir-export>          # abre la app y la USA:
 node scripts/a11y-check.mjs <dir-export>                # contraste, nombres, objetivos táctiles, texto 150%
 node scripts/e2e-ids-check.mjs                          # testIDs referenciados que ya no existen
 node scripts/coherencia-check.mjs                       # claves i18n huérfanas y controles que no hacen nada
+node scripts/capturas-store.mjs <dir-export>            # capturas para la App Store, en los tamaños exactos
 python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
 
 eas login                                               # autenticarse en EAS
@@ -652,7 +653,12 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
 
 **Trabajo pendiente de verdad, que sí se puede hacer aquí:**
 
-- **capturas para la App Store**;
+- **capturas para la App Store del PANEL administrativo**: `scripts/capturas-store.mjs`
+  genera 24 capturas —kiosco y acceso, en los tres tamaños que pide App Store Connect y
+  en los dos idiomas— y comprueba el tamaño de cada PNG leyendo su cabecera, porque
+  Apple rechaza una captura de un píxel de más. Las del panel necesitan una sesión real
+  contra un Supabase real, así que el script las hace solo con credenciales:
+  `KS_SHOT_EMAIL=... KS_SHOT_PASSWORD=... node scripts/capturas-store.mjs <export>`;
 - **revisar el icono con Andree**: hay uno propio, generado por
   `scripts/generar-iconos.mjs` a partir de los tokens de color de la app, y ya no es
   el de la plantilla de Expo. Pero el motivo gráfico es una decisión de marca, y esa

@@ -101,6 +101,15 @@ export const fontSize = {
   /** Hora del kiosco: 48–64 según ancho. */
   kioskClockMin: 48,
   kioskClockMax: 64,
+  /**
+   * Hora del kiosco en iPad HORIZONTAL, donde ocupa media pantalla para ella sola.
+   *
+   * §9.1 dice que la hora es el elemento dominante de la pantalla de reposo. Con el
+   * reloj a 64 en una columna de 1300 px dejaba de serlo: el título "Marca tu entrada o
+   * salida" de la otra columna se leía primero, y lo que la persona busca al acercarse
+   * al iPad es la hora. Se mide en la captura de 2732x2048, no se supone.
+   */
+  kioskClockLandscapeMax: 120,
   /** Título del kiosco: 34–44 según ancho. */
   kioskTitleMin: 34,
   kioskTitleMax: 44,
