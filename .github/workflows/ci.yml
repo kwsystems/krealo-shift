@@ -90,6 +90,14 @@ jobs:
       - name: Auditar accesibilidad
         run: node scripts/a11y-check.mjs /tmp/export-web
 
+      # Los iconos los genera scripts/generar-iconos.mjs a partir de una definicion
+      # geometrica y de los tokens de color de la app. Va en este trabajo porque
+      # necesita el Chromium que ya se instalo arriba. Sin este chequeo, cambiar un
+      # token de marca deja los PNG con el color viejo y nadie lo nota: un icono
+      # equivocado no rompe ninguna prueba, solo se ve raro en un iPad.
+      - name: Comprobar que los iconos estan al dia
+        run: node scripts/generar-iconos.mjs --verificar
+
       # Que los flujos de e2e/ apunten a testID que existen. No hay simulador de iOS
       # aqui, asi que los flujos no se ejecutan: sin esto, un id mal escrito no se
       # detecta nunca y e2e/ pasa a ser documentacion equivocada.

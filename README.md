@@ -83,6 +83,9 @@ npm test                                                # pruebas Jest
 npx eslint .                                            # lint
 ./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
 
+node scripts/generar-iconos.mjs                         # regenera icono, splash y favicon
+python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
+
 eas login                                               # autenticarse en EAS
 eas build:configure                                     # crea/asocia el projectId de EAS
 eas build --platform ios --profile preview              # build interno instalable
@@ -625,10 +628,12 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
 
 **Trabajo pendiente de verdad, que sí se puede hacer aquí:**
 
-- **icono y splash definitivos**: `assets/images/icon.png` sigue siendo el de la
-  plantilla de Expo, el fondo azul con la «A». Es un bloqueo para TestFlight, no un
-  detalle estético;
 - **capturas para la App Store**;
+- **revisar el icono con Andree**: hay uno propio, generado por
+  `scripts/generar-iconos.mjs` a partir de los tokens de color de la app, y ya no es
+  el de la plantilla de Expo. Pero el motivo gráfico es una decisión de marca, y esa
+  es suya: si tiene un logotipo de Krealo Shift, sustituirlo es cambiar los PNG o la
+  geometría del script, y no toca código;
 - **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, pero
   nada en la app los lee ni los escribe. No está en las listas P0/P1 de §26, así que
   no es un incumplimiento, pero sí es una tabla que hoy no sirve para nada;
