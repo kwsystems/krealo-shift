@@ -672,7 +672,7 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   habría que replicar en el iPad decisiones de un encargado.
 
 **Lo que NO falta, por si la lista anterior confundió a alguien:** el esquema y las
-22 migraciones, RLS con 255 aserciones, las 8 Edge Functions, el modo kiosco completo,
+22 migraciones, RLS con 265 aserciones, las 8 Edge Functions, el modo kiosco completo,
 el editor de horarios semanal, hojas de tiempo con exportación CSV, correcciones y
 aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
 envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés

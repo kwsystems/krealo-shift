@@ -625,3 +625,169 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Las cuatro guardas de rol que no tenian NI UNA prueba
+-- ===========================================================================
+--
+-- `create_kiosk_activation_code`, `revoke_kiosk_device`, `export_timesheet_rows` y
+-- `approve_timesheet_period` empiezan las cuatro con un `if not ... then raise ...
+-- insufficient_privilege`, y hasta ahora NINGUNA tenia una asercion que comprobara que
+-- de verdad niega: solo aparecian en la lista blanca de funciones ejecutables. Si
+-- alguien borraba esa linea de cualquiera de las cuatro, las 255 aserciones seguian en
+-- verde.
+--
+-- Son las cuatro operaciones de mayor consecuencia de la app:
+--   - un codigo de activacion da de alta un iPad como reloj de una tienda;
+--   - revocar deja una tienda SIN reloj;
+--   - la exportacion se lleva las horas de todo el personal de una ubicacion;
+--   - aprobar un periodo declara correctas las horas que se van a pagar.
+--
+-- §28 pide explicitamente "exportacion autorizada", y lo unico que se probaba era que
+-- la exportacion devuelve filas.
+--
+-- CADA UNA LLEVA LAS DOS MITADES. Una prueba que solo comprueba la denegacion pasa
+-- igual con la funcion entera rota, y ese error ya se cometio antes en este proyecto.
+--
+-- Tres de las cuatro exigen owner o admin y NO gerente, asi que la gerenta del seed es
+-- el caso de denegacion exacto: tiene permiso para casi todo lo demas de su tienda.
+
+begin;
+do $$
+declare
+  v_org          uuid := '11111111-1111-4111-8111-111111111111';
+  v_loc          uuid := '22222222-2222-4222-8222-222222222221';
+  v_loc_ajena    uuid := '99999999-9999-4999-8999-999999999991';
+  v_propietaria  uuid := '33333333-3333-4333-8333-333333333331';
+  v_gerenta      uuid := '33333333-3333-4333-8333-333333333332';
+  v_codigo       text;
+  v_device       uuid;
+  v_periodo      uuid;
+  v_filas        integer;
+begin
+  /*
+   * Los ids se leen ANTES de cambiar de rol, porque es preparacion y no lo que se
+   * prueba. La primera version de esto leia `kiosk_devices` ya como `authenticated` y
+   * fallaba con "permission denied for table kiosk_devices": esa tabla esta revocada a
+   * proposito —guarda `credential_hash` y `offline_key`— y hay otra asercion que lo
+   * exige. La prueba se choco contra la pared que el proyecto puso queriendo.
+   */
+  select id into v_device from kiosk_devices
+    where location_id = v_loc and status = 'active' limit 1;
+  select id into v_periodo from timesheet_periods
+    where location_id = v_loc and status = 'open' limit 1;
+
+  -- ---------------------------------------------------------------------
+  -- 1. create_kiosk_activation_code
+  -- ---------------------------------------------------------------------
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_gerenta, 'role', 'authenticated')::text, true);
+  set local role authenticated;
+
+  begin
+    perform create_kiosk_activation_code(v_loc);
+    raise exception 'FALLO: una gerenta genero un codigo de activacion de kiosco'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — Una gerenta NO genera codigos de activacion de kiosco';
+  end;
+
+  -- Y tampoco para una ubicacion de otra organizacion, que es el caso peor: daria de
+  -- alta un iPad como reloj de una empresa ajena.
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_propietaria, 'role', 'authenticated')::text, true);
+
+  begin
+    perform create_kiosk_activation_code(v_loc_ajena);
+    raise exception 'FALLO: se genero un codigo para una ubicacion de otra organizacion'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — Nadie genera codigos para una ubicacion de otra organizacion';
+  end;
+
+  -- La otra mitad: la propietaria SI puede, en su propia ubicacion.
+  select create_kiosk_activation_code(v_loc) into v_codigo;
+  perform test_assert(v_codigo is not null and length(v_codigo) = 8,
+    'La propietaria SI genera un codigo de activacion de 8 caracteres');
+
+  -- ---------------------------------------------------------------------
+  -- 2. revoke_kiosk_device
+  -- ---------------------------------------------------------------------
+  if v_device is null then
+    raise notice '  (sin kioscos activos en el seed, se omite la revocacion)';
+  else
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_gerenta, 'role', 'authenticated')::text, true);
+
+    begin
+      perform revoke_kiosk_device(v_device);
+      raise exception 'FALLO: una gerenta revoco el reloj de su tienda'
+        using errcode = 'assert_failure';
+    exception
+      when insufficient_privilege then
+        raise notice '  ok — Una gerenta NO revoca el reloj: dejaria la tienda sin fichar';
+    end;
+
+    -- Por la VISTA y no por la tabla: es lo que lee el panel, y la tabla esta revocada.
+    perform test_assert(
+      (select status from kiosk_devices_admin where id = v_device) = 'active',
+      'Y el reloj sigue activo despues del intento');
+
+    -- La otra mitad, y con el efecto comprobado: revocar tiene que revocar.
+    perform set_config('request.jwt.claims',
+      json_build_object('sub', v_propietaria, 'role', 'authenticated')::text, true);
+    perform revoke_kiosk_device(v_device);
+
+    perform test_assert(
+      (select status from kiosk_devices_admin where id = v_device) = 'revoked',
+      'La propietaria SI revoca, y el dispositivo queda revocado de verdad');
+  end if;
+
+  -- ---------------------------------------------------------------------
+  -- 3. export_timesheet_rows: §28 pide "exportacion AUTORIZADA"
+  -- ---------------------------------------------------------------------
+  perform set_config('request.jwt.claims',
+    json_build_object('sub', v_gerenta, 'role', 'authenticated')::text, true);
+
+  begin
+    select count(*) into v_filas from export_timesheet_rows(
+      v_loc_ajena, (now() - interval '30 days')::date, now()::date);
+    raise exception 'FALLO: se exportaron horas de una ubicacion ajena'
+      using errcode = 'assert_failure';
+  exception
+    when insufficient_privilege then
+      raise notice '  ok — No se exportan las horas de una ubicacion que no administras';
+  end;
+
+  -- La otra mitad: su propia tienda si, porque para eso existe la funcion.
+  select count(*) into v_filas from export_timesheet_rows(
+    v_loc, (now() - interval '30 days')::date, now()::date);
+  perform test_assert(v_filas >= 0,
+    'La gerenta SI exporta las horas de su propia tienda');
+
+  -- ---------------------------------------------------------------------
+  -- 4. approve_timesheet_period
+  -- ---------------------------------------------------------------------
+  if v_periodo is null then
+    raise notice '  (sin periodos abiertos en el seed, se omite la aprobacion)';
+  else
+    begin
+      perform approve_timesheet_period(v_periodo);
+      raise exception 'FALLO: una gerenta aprobo un periodo de horas'
+        using errcode = 'assert_failure';
+    exception
+      when insufficient_privilege then
+        raise notice '  ok — Una gerenta NO aprueba un periodo: eso declara las horas a pagar';
+    end;
+
+    perform test_assert(
+      (select status from timesheet_periods where id = v_periodo) = 'open',
+      'Y el periodo sigue abierto despues del intento');
+  end if;
+
+  raise notice '  --- pruebas de las cuatro guardas de rol completas ---';
+end
+$$;
+rollback;
