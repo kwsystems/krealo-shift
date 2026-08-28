@@ -111,6 +111,12 @@ jobs:
       - name: Comprobar los testID de los flujos
         run: node scripts/e2e-ids-check.mjs
 
+      # Lo declarado que nadie usa, y los controles que no hacen nada. Las dos cosas se
+      # encontraron a mano despues de meses, y tres de las claves huerfanas no eran
+      # texto sobrante: eran funciones que §31 y §8 pedian y que nunca se conectaron.
+      - name: Comprobar coherencia (i18n huerfana, controles muertos)
+        run: node scripts/coherencia-check.mjs
+
       # supabase/instalar-todo.sql es una copia de 230 KB de las migraciones, para
       # poder crear el esquema pegando un solo archivo en el editor SQL de Supabase.
       # Una copia que nadie comprueba se queda vieja en silencio, y el sintoma es un

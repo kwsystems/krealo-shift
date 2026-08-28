@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
+import * as Clipboard from 'expo-clipboard';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +12,12 @@ import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
+import { formatKioskDiagnostics } from '@/features/kiosk/diagnostics';
+import {
+  readCameraPermission,
+  readNotificationsPermission,
+  type PermissionLabel,
+} from '@/features/kiosk/permission-status';
 import { lastSyncFailure, refreshOfflinePackage, runSync } from '@/lib/offline/sync';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
@@ -57,13 +64,25 @@ export default function KioskExitScreen() {
    */
   const [exiting, setExiting] = useState(false);
 
-  // Se lee al montar la pantalla y no de forma continua: es un dato de diagnostico
-  // que se consulta cuando algo va mal, no un indicador vivo.
+  const [permissions, setPermissions] = useState<{
+    camera: PermissionLabel | null;
+    notifications: PermissionLabel | null;
+  }>({ camera: null, notifications: null });
+  const [copied, setCopied] = useState(false);
+
+  // Se lee al montar la pantalla y no de forma continua: son datos de diagnostico
+  // que se consultan cuando algo va mal, no indicadores vivos.
   useEffect(() => {
     let vivo = true;
     void lastSyncFailure().then((valor) => {
       if (vivo) setSyncFailure(valor);
     });
+    // Ninguna de las dos lecturas lanza; el detalle esta en permission-status.ts.
+    void Promise.all([readCameraPermission(), readNotificationsPermission()]).then(
+      ([camera, notifications]) => {
+        if (vivo) setPermissions({ camera, notifications });
+      },
+    );
     return () => {
       vivo = false;
     };
@@ -132,6 +151,43 @@ export default function KioskExitScreen() {
     }
 
     setError(t('kiosk.pinIncorrect'));
+  };
+
+  /**
+   * Copiar el diagnóstico (§31).
+   *
+   * El texto lo compone `formatKioskDiagnostics` desde un tipo cerrado, y no un
+   * volcado de lo que hay en pantalla: así "sin datos personales" es una propiedad del
+   * módulo y no una intención de esta pantalla. El detalle está ahí.
+   *
+   * `copied` se apaga solo. Un aviso permanente haría dudar de si se copió esta vez o
+   * la anterior, y en una pantalla de diagnóstico eso importa.
+   */
+  const copyDiagnostics = () => {
+    const texto = formatKioskDiagnostics({
+      devicePublicId: binding?.devicePublicId ?? null,
+      locationName: binding?.locationName ?? null,
+      timezone: binding?.timezone ?? null,
+      appVersion: Constants.expoConfig?.version ?? null,
+      online,
+      pendingCount,
+      needsReviewCount,
+      lastSyncAt,
+      lastSyncError: syncFailure,
+      screenAwake,
+      cameraPermission: permissions.camera,
+      notificationsPermission: permissions.notifications,
+      generatedAt: new Date().toISOString(),
+    });
+
+    // Si el portapapeles falla, se dice: un botón de copiar que no copia y no avisa
+    // hace que la persona pegue en el correo lo que hubiera antes en el portapapeles.
+    void Clipboard.setStringAsync(texto)
+      .then(() => {
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2500);
+      })
+      .catch(() => setError(t('errors.generic')));
   };
 
   const appendDigit = (digit: string) => {
@@ -249,9 +305,46 @@ export default function KioskExitScreen() {
               label={t('settings.appVersion')}
               value={Constants.expoConfig?.version ?? '—'}
             />
+            {/*
+              El identificador OPACO del dispositivo, que §31 pide y no estaba: lo que
+              se mostraba era el nombre amigable, que no sirve para buscar el
+              dispositivo en la base ni para que soporte lo identifique sin ambigüedad
+              cuando dos iPads se llaman "Caja 1".
+            */}
+            <DiagnosticRow
+              label={t('settings.kioskDeviceId')}
+              value={binding?.devicePublicId ?? '—'}
+            />
+            {/*
+              Estado de los permisos, también de §31. Es lo primero que hay que mirar
+              cuando de una tienda llega "la foto no se guarda" o "no llegan los
+              avisos": casi siempre es un permiso denegado, y sin verlo aquí nadie lo
+              sabe sin caminar hasta el iPad.
+            */}
+            <DiagnosticRow
+              label={t('settings.permissionCamera')}
+              value={
+                permissions.camera === null
+                  ? t('common.loading')
+                  : t(`settings.permission_${permissions.camera}`)
+              }
+            />
+            <DiagnosticRow
+              label={t('settings.permissionNotifications')}
+              value={
+                permissions.notifications === null
+                  ? t('common.loading')
+                  : t(`settings.permission_${permissions.notifications}`)
+              }
+            />
           </Card>
 
           <Stack gap={spacing.md}>
+            <SecondaryButton
+              label={copied ? t('settings.diagnosticsCopied') : t('settings.copyDiagnostics')}
+              onPress={copyDiagnostics}
+              testID="kiosk-copy-diagnostics"
+            />
             <SecondaryButton
               label={t('kiosk.menuSync')}
               onPress={() => {

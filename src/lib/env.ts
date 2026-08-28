@@ -9,13 +9,19 @@ import { z } from 'zod';
  *
  * En desarrollo mostramos un error claro con las claves que faltan; en producción
  * no revelamos valores.
+ *
+ * AQUÍ NO HAY `EXPO_PUBLIC_SENTRY_DSN`, y su ausencia es deliberada. Estaba declarada
+ * y validada, y NO LA LEÍA NADIE: no hay SDK de crash reporting en el proyecto. Una
+ * variable así es una promesa falsa —alguien pega un DSN, reinicia, y no se reporta
+ * nada— y peor aún en la que precisamente sirve para saber que la app se rompió.
+ * Elegir el servicio y dar el DSN es de Andree; cuando exista, la variable vuelve junto
+ * al SDK que la use, no antes. El motivo largo está en `docs/DECISIONES.md`.
  */
 
 const envSchema = z.object({
   EXPO_PUBLIC_APP_ENV: z.enum(['development', 'preview', 'production']).default('development'),
   EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
   EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
-  EXPO_PUBLIC_SENTRY_DSN: z.string().optional().default(''),
   EXPO_PUBLIC_SUPPORT_EMAIL: z.string().email().optional().default('soporte@krealomedia.com'),
   EXPO_PUBLIC_PRIVACY_URL: z.string().url().optional().default('https://krealomedia.com/privacidad'),
 });
@@ -26,7 +32,6 @@ const raw = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
   EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
   EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
-  EXPO_PUBLIC_SENTRY_DSN: process.env.EXPO_PUBLIC_SENTRY_DSN,
   EXPO_PUBLIC_SUPPORT_EMAIL: process.env.EXPO_PUBLIC_SUPPORT_EMAIL,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
 };
@@ -66,7 +71,6 @@ export const env: Env = parsed.success
         (raw.EXPO_PUBLIC_APP_ENV as Env['EXPO_PUBLIC_APP_ENV'] | undefined) ?? 'development',
       EXPO_PUBLIC_SUPABASE_URL: raw.EXPO_PUBLIC_SUPABASE_URL ?? '',
       EXPO_PUBLIC_SUPABASE_ANON_KEY: raw.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
-      EXPO_PUBLIC_SENTRY_DSN: raw.EXPO_PUBLIC_SENTRY_DSN ?? '',
       EXPO_PUBLIC_SUPPORT_EMAIL: raw.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'soporte@krealomedia.com',
       EXPO_PUBLIC_PRIVACY_URL: raw.EXPO_PUBLIC_PRIVACY_URL ?? 'https://krealomedia.com/privacidad',
     };

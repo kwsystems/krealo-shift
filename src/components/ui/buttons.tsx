@@ -35,6 +35,22 @@ type Props = {
   style?: ViewStyle;
 };
 
+/**
+ * `onPress` para un botón que va dentro de un `<Link asChild>`.
+ *
+ * EXISTE PARA QUE UN BOTÓN MUERTO NO SE PAREZCA A UNO VÁLIDO.
+ *
+ * `onPress` es obligatorio, y cuando el que navega es el `Link` de encima, el botón no
+ * tiene nada que hacer al pulsarse. Eso se escribía `onPress={() => undefined}`, que
+ * es EXACTAMENTE lo mismo que se escribe cuando alguien deja un botón sin implementar.
+ * Así sobrevivió meses a la vista "Olvidé mi contraseña": un control que se veía, se
+ * pulsaba y no hacía nada, indistinguible de los dos usos legítimos que hay al lado.
+ *
+ * Con un nombre, los dos casos se distinguen leyendo, y `scripts/coherencia-check.mjs`
+ * puede prohibir el resto sin falsos positivos.
+ */
+export const pressHandledByLink = (): void => undefined;
+
 export function AppButton({
   label,
   onPress,

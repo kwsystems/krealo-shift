@@ -4,32 +4,23 @@
     "ok": "Aceptar",
     "cancel": "Cancelar",
     "save": "Guardar",
-    "delete": "Eliminar",
     "edit": "Editar",
     "done": "Listo",
     "back": "Atrás",
-    "next": "Siguiente",
     "close": "Cerrar",
     "retry": "Reintentar",
     "search": "Buscar",
-    "filter": "Filtrar",
-    "clear": "Limpiar",
     "loading": "Cargando…",
     "today": "Hoy",
-    "yesterday": "Ayer",
-    "tomorrow": "Mañana",
     "language": "Idioma",
     "spanish": "Español",
     "english": "Inglés",
-    "hours_one": "{{count}} hora",
-    "hours_other": "{{count}} horas",
     "minutes_one": "{{count}} minuto",
     "minutes_other": "{{count}} minutos",
     "pendingRecords_one": "{{count}} registro pendiente de sincronizar",
     "pendingRecords_other": "{{count}} registros pendientes de sincronizar"
   },
   "boot": {
-    "starting": "Iniciando Krealo Shift…",
     "resolvingSession": "Preparando tu sesión",
     "noAdminTitle": "Tu cuenta no abre el panel",
     "noAdminBody": "Iniciaste sesión bien, pero tu cuenta figura como empleado. El panel de administración es para propietarios, administradores y gerentes.",
@@ -54,8 +45,6 @@
     "passwordTooShort": "La contraseña debe tener al menos {{count}} caracteres.",
     "employeeNoAccountNotice": "Los empleados no necesitan cuenta: fichan con su PIN en el iPad de la tienda.",
     "resetTitle": "Recuperar tu contraseña",
-    "resetBody": "Escribe tu correo y te enviamos un enlace para crear una contraseña nueva.",
-    "resetSend": "Enviarme el enlace",
     "resetSent": "Listo. Si ese correo tiene una cuenta, te llegará un enlace en unos minutos.",
     "resetSentHint": "Revisa también la carpeta de spam. El enlace caduca en una hora y sirve una sola vez.",
     "resetRateLimited": "Ya se enviaron varios correos seguidos. Espera unos minutos antes de pedir otro.",
@@ -67,7 +56,10 @@
     "newPasswordSave": "Guardar contraseña",
     "newPasswordSaved": "Contraseña actualizada. Ya puedes usarla para ingresar.",
     "resetVerifying": "Comprobando el enlace",
-    "resetNoCode": "Este enlace no trae el código de recuperación. Pide otro desde la pantalla de acceso."
+    "resetNoCode": "Este enlace no trae el código de recuperación. Pide otro desde la pantalla de acceso.",
+    "sessionTitle": "Tu sesión",
+    "signOutEverywhereHint": "Cierra la sesión en tu teléfono y en cualquier otro dispositivo donde hayas entrado. No afecta a los relojes de las tiendas: esos usan su propia credencial.",
+    "signOutEverywhereConfirm": "Vas a salir de esta app y de todos los demás dispositivos donde hayas iniciado sesión. Tendrás que ingresar otra vez en cada uno."
   },
   "kiosk": {
     "idleTitle": "Marca tu entrada o salida",
@@ -168,8 +160,7 @@
     "eventClockIn": "Entrada",
     "eventClockOut": "Salida",
     "eventBreakStart": "Inicio de descanso",
-    "eventBreakEnd": "Fin de descanso",
-    "eventAdjustment": "Corrección del gerente"
+    "eventBreakEnd": "Fin de descanso"
   },
   "admin": {
     "tabHome": "Inicio",
@@ -274,7 +265,6 @@
     "weeklyLimitWarning": "{{name}} supera el límite semanal configurado.",
     "totalWeeklyHours": "Total semanal: {{hours}}",
     "noShiftsThisWeek": "Esta semana no tiene turnos",
-    "noShiftsHint": "Copia la semana anterior o agrega turnos uno por uno.",
     "retroactiveWarning": "Estás cambiando una semana pasada. Queda registrado quién lo hizo y cuándo.",
     "publishHistory": "Historial de publicación",
     "addShiftFor": "Agregar turno a {{name}} el {{date}}",
@@ -333,7 +323,6 @@
     "breaks": "Descansos",
     "overtimeInformative": "Horas extra (informativo)",
     "netHours": "Horas netas",
-    "grossHours": "Horas brutas",
     "dailyDetail": "Detalle diario",
     "addManualEntry": "Agregar fichaje manual",
     "correctEntry": "Corregir fichaje",
@@ -341,7 +330,6 @@
     "reasonLabel": "Motivo",
     "previousValue": "Valor anterior",
     "newValue": "Valor nuevo",
-    "changedBy": "Modificado por",
     "changeHistory": "Historial de cambios",
     "approvePeriod": "Aprobar periodo",
     "reopenPeriod": "Reabrir periodo",
@@ -350,7 +338,6 @@
     "statusReopened": "Reabierto",
     "statusNeedsReview": "Necesita revisión",
     "exportCsv": "Exportar CSV",
-    "share": "Compartir",
     "flagMissingClockOut": "Falta marcar salida",
     "flagOverlap": "Solapamiento",
     "flagAbnormalDuration": "Duración inusual",
@@ -384,7 +371,9 @@
     "reopened": "Periodo reabierto",
     "sendManualEntry": "Enviar fichaje manual",
     "statusFilter": "Estado",
-    "stillOpen": "Sin salida"
+    "stillOpen": "Sin salida",
+    "valueDidNotExist": "No existía",
+    "valueUnknownShape": "Formato no reconocido"
   },
   "requests": {
     "title": "Solicitudes",
@@ -398,7 +387,6 @@
     "statusApproved": "Aprobada",
     "statusRejected": "Rechazada",
     "noRequests": "No hay solicitudes pendientes",
-    "impactOnTimesheet": "Impacto en la hoja de tiempo",
     "approvedApplied": "Aprobada y aplicada a la hoja de tiempo.",
     "approvedNotApplied": "Aprobada. Las horas todavía hay que corregirlas a mano.",
     "commentSaved": "Comentario guardado.",
@@ -511,7 +499,17 @@
     "weekDay4": "Jueves",
     "weekDay5": "Viernes",
     "weekDay6": "Sábado",
-    "kioskSyncStaleMinutes": "Aviso de reloj sin sincronizar (minutos)"
+    "kioskSyncStaleMinutes": "Aviso de reloj sin sincronizar (minutos)",
+    "diagnosticsCopied": "Diagnóstico copiado",
+    "permissionCamera": "Permiso de cámara",
+    "permissionNotifications": "Permiso de avisos",
+    "permission_granted": "Concedido",
+    "permission_denied": "Denegado",
+    "permission_undetermined": "Sin preguntar",
+    "permission_unsupported": "No aplica",
+    "permission_unknown": "No se pudo leer",
+    "aboutTitle": "Acerca de esta app",
+    "support": "Escribir a soporte"
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",
@@ -536,15 +534,11 @@
     "errorTitle": "Algo no salió bien",
     "errorBody": "Vuelve a intentarlo. Si sigue pasando, avisa a tu administrador.",
     "offlineTitle": "Sin conexión",
-    "offlineBody": "Puedes seguir fichando. Guardamos todo en este iPad.",
     "offlineBanner": "Sin conexión · {{count}} pendientes",
-    "syncedAt": "Última sincronización: {{time}}",
-    "syncing": "Sincronizando…",
     "permissionDeniedTitle": "Falta un permiso",
     "permissionDeniedBody": "Revisa el permiso en Ajustes e inténtalo otra vez.",
     "sessionExpiredTitle": "Tu sesión caducó",
     "sessionExpiredBody": "Ingresa nuevamente para continuar.",
-    "entityDisabledTitle": "Esto ya no está activo",
     "partiallySyncedTitle": "Sincronización parcial",
     "partiallySyncedBody": "Algunos registros necesitan que tu gerente los revise.",
     "needsReviewBadge": "Necesita revisión",
@@ -596,5 +590,12 @@
     "netDecimal": "Horas netas decimales",
     "status": "Estado",
     "flags": "Alertas"
+  },
+  "roles": {
+    "owner": "Propietario",
+    "admin": "Administrador",
+    "manager": "Gerente",
+    "employee": "Empleado",
+    "label": "Tu rol"
   }
 }

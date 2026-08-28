@@ -4,32 +4,23 @@
     "ok": "OK",
     "cancel": "Cancel",
     "save": "Save",
-    "delete": "Delete",
     "edit": "Edit",
     "done": "Done",
     "back": "Back",
-    "next": "Next",
     "close": "Close",
     "retry": "Try again",
     "search": "Search",
-    "filter": "Filter",
-    "clear": "Clear",
     "loading": "Loading…",
     "today": "Today",
-    "yesterday": "Yesterday",
-    "tomorrow": "Tomorrow",
     "language": "Language",
     "spanish": "Spanish",
     "english": "English",
-    "hours_one": "{{count}} hour",
-    "hours_other": "{{count}} hours",
     "minutes_one": "{{count}} minute",
     "minutes_other": "{{count}} minutes",
     "pendingRecords_one": "{{count}} record pending sync",
     "pendingRecords_other": "{{count}} records pending sync"
   },
   "boot": {
-    "starting": "Starting Krealo Shift…",
     "resolvingSession": "Getting your session ready",
     "noAdminTitle": "Your account can't open the panel",
     "noAdminBody": "You signed in correctly, but your account is set up as an employee. The admin panel is for owners, admins and managers.",
@@ -54,8 +45,6 @@
     "passwordTooShort": "Password must be at least {{count}} characters.",
     "employeeNoAccountNotice": "Employees don't need an account: they clock in with their PIN on the store iPad.",
     "resetTitle": "Recover your password",
-    "resetBody": "Enter your email and we'll send you a link to create a new password.",
-    "resetSend": "Send me the link",
     "resetSent": "Done. If that email has an account, a link will arrive in a few minutes.",
     "resetSentHint": "Check your spam folder too. The link expires in an hour and works only once.",
     "resetRateLimited": "Several emails were just sent. Wait a few minutes before asking for another.",
@@ -67,7 +56,10 @@
     "newPasswordSave": "Save password",
     "newPasswordSaved": "Password updated. You can use it to sign in now.",
     "resetVerifying": "Checking the link",
-    "resetNoCode": "This link doesn't carry a recovery code. Ask for another from the sign-in screen."
+    "resetNoCode": "This link doesn't carry a recovery code. Ask for another from the sign-in screen.",
+    "sessionTitle": "Your session",
+    "signOutEverywhereHint": "Signs you out on your phone and any other device where you signed in. It does not affect the store clocks: those use their own credential.",
+    "signOutEverywhereConfirm": "You'll be signed out of this app and every other device where you signed in. You'll need to sign in again on each one."
   },
   "kiosk": {
     "idleTitle": "Clock in or out",
@@ -168,8 +160,7 @@
     "eventClockIn": "Clock in",
     "eventClockOut": "Clock out",
     "eventBreakStart": "Break start",
-    "eventBreakEnd": "Break end",
-    "eventAdjustment": "Manager adjustment"
+    "eventBreakEnd": "Break end"
   },
   "admin": {
     "tabHome": "Home",
@@ -274,7 +265,6 @@
     "weeklyLimitWarning": "{{name}} goes over the configured weekly limit.",
     "totalWeeklyHours": "Weekly total: {{hours}}",
     "noShiftsThisWeek": "No shifts this week",
-    "noShiftsHint": "Copy the previous week or add shifts one by one.",
     "retroactiveWarning": "You're changing a past week. We record who did it and when.",
     "publishHistory": "Publish history",
     "addShiftFor": "Add a shift for {{name}} on {{date}}",
@@ -333,7 +323,6 @@
     "breaks": "Breaks",
     "overtimeInformative": "Overtime (informational)",
     "netHours": "Net hours",
-    "grossHours": "Gross hours",
     "dailyDetail": "Daily detail",
     "addManualEntry": "Add manual entry",
     "correctEntry": "Correct entry",
@@ -341,7 +330,6 @@
     "reasonLabel": "Reason",
     "previousValue": "Previous value",
     "newValue": "New value",
-    "changedBy": "Changed by",
     "changeHistory": "Change history",
     "approvePeriod": "Approve period",
     "reopenPeriod": "Reopen period",
@@ -350,7 +338,6 @@
     "statusReopened": "Reopened",
     "statusNeedsReview": "Needs review",
     "exportCsv": "Export CSV",
-    "share": "Share",
     "flagMissingClockOut": "Missing clock out",
     "flagOverlap": "Overlap",
     "flagAbnormalDuration": "Unusual duration",
@@ -384,7 +371,9 @@
     "reopened": "Period reopened",
     "sendManualEntry": "Send manual entry",
     "statusFilter": "Status",
-    "stillOpen": "Still open"
+    "stillOpen": "Still open",
+    "valueDidNotExist": "Didn't exist",
+    "valueUnknownShape": "Unrecognized format"
   },
   "requests": {
     "title": "Requests",
@@ -398,7 +387,6 @@
     "statusApproved": "Approved",
     "statusRejected": "Rejected",
     "noRequests": "No pending requests",
-    "impactOnTimesheet": "Impact on the timesheet",
     "approvedApplied": "Approved and applied to the timesheet.",
     "approvedNotApplied": "Approved. The hours still need to be corrected by hand.",
     "commentSaved": "Comment saved.",
@@ -511,7 +499,17 @@
     "weekDay4": "Thursday",
     "weekDay5": "Friday",
     "weekDay6": "Saturday",
-    "kioskSyncStaleMinutes": "Clock-not-syncing alert (minutes)"
+    "kioskSyncStaleMinutes": "Clock-not-syncing alert (minutes)",
+    "diagnosticsCopied": "Diagnostics copied",
+    "permissionCamera": "Camera permission",
+    "permissionNotifications": "Notification permission",
+    "permission_granted": "Granted",
+    "permission_denied": "Denied",
+    "permission_undetermined": "Not asked yet",
+    "permission_unsupported": "Not applicable",
+    "permission_unknown": "Couldn't read it",
+    "aboutTitle": "About this app",
+    "support": "Email support"
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",
@@ -536,15 +534,11 @@
     "errorTitle": "Something went wrong",
     "errorBody": "Try again. If it keeps happening, tell your admin.",
     "offlineTitle": "No connection",
-    "offlineBody": "You can keep clocking. We save everything on this iPad.",
     "offlineBanner": "Offline · {{count}} pending",
-    "syncedAt": "Last sync: {{time}}",
-    "syncing": "Syncing…",
     "permissionDeniedTitle": "A permission is missing",
     "permissionDeniedBody": "Check the permission in Settings and try again.",
     "sessionExpiredTitle": "Your session expired",
     "sessionExpiredBody": "Sign in again to continue.",
-    "entityDisabledTitle": "This is no longer active",
     "partiallySyncedTitle": "Partial sync",
     "partiallySyncedBody": "Some records need your manager to review them.",
     "needsReviewBadge": "Needs review",
@@ -596,5 +590,12 @@
     "netDecimal": "Net hours decimal",
     "status": "Status",
     "flags": "Alerts"
+  },
+  "roles": {
+    "owner": "Owner",
+    "admin": "Admin",
+    "manager": "Manager",
+    "employee": "Employee",
+    "label": "Your role"
   }
 }

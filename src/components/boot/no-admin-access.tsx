@@ -3,7 +3,7 @@ import { Link } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
+import { GhostButton, pressHandledByLink, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { useSessionStore } from '@/stores/session-store';
 import { spacing } from '@/theme/tokens';
@@ -65,7 +65,7 @@ export function NoAdminAccessScreen() {
             <Link href="/kiosk/setup" asChild>
               <GhostButton
                 label={t('auth.setupKioskLink')}
-                onPress={() => undefined}
+                onPress={pressHandledByLink}
                 testID="no-admin-setup-kiosk"
               />
             </Link>

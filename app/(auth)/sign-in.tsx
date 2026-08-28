@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { Link } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
@@ -7,11 +7,17 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import {
+  GhostButton,
+  PrimaryButton,
+  pressHandledByLink,
+  SecondaryButton,
+} from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { sendPasswordReset } from '@/features/auth/password-reset';
 import { getSupabase } from '@/lib/supabase/client';
+import { useSessionStore } from '@/stores/session-store';
 import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -38,6 +44,22 @@ export default function SignInScreen() {
 
   const [resetting, setResetting] = useState(false);
   const [resetNotice, setResetNotice] = useState<string | null>(null);
+
+  /**
+   * Por qué está aquí esta persona, si no vino por su propio pie.
+   *
+   * Una sesión que caduca —o que otro dispositivo revoca con "cerrar sesión en todos
+   * los dispositivos"— dejaba a la persona en este formulario vacío SIN UNA PALABRA. Lo
+   * que se lee ahí es "hice algo mal" o "la app se rompió", y lo que hay que leer es
+   * "vuelve a entrar". Los textos existían traducidos y nadie los mostraba.
+   *
+   * Se lee una vez al montar: el motivo se limpia al mostrarlo, así que un `useState`
+   * inicial evita que desaparezca en el primer repintado.
+   */
+  const [endReason] = useState(() => useSessionStore.getState().endReason);
+  useEffect(() => {
+    if (endReason !== null) useSessionStore.getState().clearEndReason();
+  }, [endReason]);
 
   const { control, handleSubmit, formState, getValues, setError, trigger } = useForm<SignInValues>({
     resolver: zodResolver(signInSchema),
@@ -118,6 +140,17 @@ export default function SignInScreen() {
               {t('auth.signInSubtitle')}
             </AppText>
           </Stack>
+
+          {endReason === 'expired' ? (
+            <Card testID="sign-in-session-expired">
+              <AppText variant="bodyStrong" accessibilityRole="alert">
+                {t('states.sessionExpiredTitle')}
+              </AppText>
+              <AppText variant="help" tone="subtle">
+                {t('states.sessionExpiredBody')}
+              </AppText>
+            </Card>
+          ) : null}
 
           <Card>
             <Controller
@@ -215,7 +248,7 @@ export default function SignInScreen() {
             <Link href="/kiosk/setup" asChild>
               <SecondaryButton
                 label={t('auth.setupKioskLink')}
-                onPress={() => undefined}
+                onPress={pressHandledByLink}
                 testID="setup-kiosk-link"
               />
             </Link>

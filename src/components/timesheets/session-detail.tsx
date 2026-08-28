@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { alertLabelKey } from './session-row';
 import { FormField } from '@app/(auth)/sign-in';
@@ -16,6 +17,10 @@ import { PrimaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { dateKeyOf, localTimeOf, shiftInstants } from '@/features/schedules/week';
+import {
+  readAdjustmentSide,
+  type AdjustmentSide,
+} from '@/features/timesheets/adjustment-summary';
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { SupportedLanguage } from '@/i18n';
@@ -169,13 +174,38 @@ export function SessionDetailSheet({
           {t('timesheet.noChanges')}
         </AppText>
       ) : (
-        <Stack gap={spacing.xs}>
+        <Stack gap={spacing.md}>
           {adjustments.map((adjustment) => (
-            <KeyValueRow
-              key={adjustment.id}
-              label={`${formatClockTime(adjustment.created_at, timezone, timeFormat, language)} · ${adjustment.channel}`}
-              value={adjustment.reason}
-            />
+            <Stack key={adjustment.id} gap={spacing.xs}>
+              <KeyValueRow
+                label={`${formatClockTime(adjustment.created_at, timezone, timeFormat, language)} · ${adjustment.channel}`}
+                value={adjustment.reason}
+              />
+              {/*
+                QUÉ cambió, y no solo que algo cambió. Los dos valores ya venían en la
+                consulta y no se pintaban: un motivo suelto —"corrección de salida"— no
+                dice si fueron cinco minutos o cinco horas, que es lo único que se revisa
+                en una auditoría. §11.4 pide ver el historial de cambios.
+              */}
+              <KeyValueRow
+                label={t('timesheet.previousValue')}
+                value={describeSide(readAdjustmentSide(adjustment.before_value), {
+                  t,
+                  timezone,
+                  timeFormat,
+                  language,
+                })}
+              />
+              <KeyValueRow
+                label={t('timesheet.newValue')}
+                value={describeSide(readAdjustmentSide(adjustment.after_value), {
+                  t,
+                  timezone,
+                  timeFormat,
+                  language,
+                })}
+              />
+            </Stack>
           ))}
         </Stack>
       )}
@@ -325,4 +355,42 @@ export function ManualEntrySheet({
       />
     </AdminSheet>
   );
+}
+
+/**
+ * Un lado de la corrección, en una línea legible.
+ *
+ * La forma la decide `readAdjustmentSide`; aquí solo se traduce. Se separa porque una
+ * forma desconocida tiene que decirse —no adivinarse ni romper la pantalla— y eso es
+ * una decisión de presentación, no de datos.
+ */
+function describeSide(
+  side: AdjustmentSide,
+  ctx: {
+    t: TFunction;
+    timezone: string;
+    timeFormat: TimeFormatPreference;
+    language: SupportedLanguage;
+  },
+): string {
+  const hora = (iso: string | null) =>
+    iso === null ? '—' : formatClockTime(iso, ctx.timezone, ctx.timeFormat, ctx.language);
+
+  switch (side.kind) {
+    case 'absent':
+      return ctx.t('timesheet.valueDidNotExist');
+    case 'session': {
+      const neto =
+        side.netMinutes === null ? '' : ` · ${minutesToHHmm(side.netMinutes)}`;
+      return `${hora(side.startsAt)} – ${hora(side.endsAt)}${neto}`;
+    }
+    case 'event': {
+      const etiqueta = EVENT_LABEL_KEYS[side.eventType as TimeEvent['event_type']];
+      const nombre =
+        etiqueta === undefined ? side.eventType : ctx.t(etiqueta);
+      return `${nombre} · ${hora(side.occurredAt)}`;
+    }
+    default:
+      return ctx.t('timesheet.valueUnknownShape');
+  }
 }

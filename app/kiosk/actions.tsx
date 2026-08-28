@@ -66,7 +66,22 @@ type Sheet =
 type Step =
   | { name: 'identify' }
   | { name: 'confirm'; event: TimeEventType; breakType?: 'paid' | 'unpaid' | 'meal' | 'other' }
-  | { name: 'result'; event: TimeEventType; occurredAt: string; offline: boolean; shiftEndsAt: string | null };
+  | {
+      name: 'result';
+      event: TimeEventType;
+      occurredAt: string;
+      offline: boolean;
+      shiftEndsAt: string | null;
+      /**
+       * El servidor ya tenía este evento (misma clave de idempotencia).
+       *
+       * Se guarda para DECIRLO. Un `duplicate` pintaba la misma confirmación que un
+       * fichaje nuevo, así que quien pulsa dos veces —o reintenta tras un timeout en
+       * el que la primera sí llegó— ve dos "entrada registrada" y se queda con la duda
+       * de si quedaron dos. El texto para esto ya existía traducido y no se usaba.
+       */
+      duplicate: boolean;
+    };
 
 export default function KioskActionsScreen() {
   const { t } = useTranslation();
@@ -245,6 +260,10 @@ export default function KioskActionsScreen() {
         event,
         occurredAt: queued.occurredAtDevice,
         offline: true,
+        // Sin conexión no hay respuesta del servidor, así que no se sabe si es
+        // duplicado. Si lo fuera, la cola lo descubre al sincronizar y ahí se resuelve
+        // como éxito, que es lo correcto: el evento ya estaba registrado.
+        duplicate: false,
         shiftEndsAt: selectedShift?.endsAt ?? null,
       });
     } catch {
@@ -323,6 +342,7 @@ export default function KioskActionsScreen() {
         occurredAt: result.data.occurredAt,
         offline: false,
         shiftEndsAt: result.data.summary.shiftEndsAt,
+        duplicate: result.data.status === 'duplicate',
       });
       return;
     }
@@ -593,6 +613,16 @@ export default function KioskActionsScreen() {
                 {step.offline ? (
                   <AppText variant="help" tone="warning" style={styles.centerText}>
                     {t('kiosk.savedOfflinePending')}
+                  </AppText>
+                ) : null}
+                {step.duplicate ? (
+                  <AppText
+                    variant="help"
+                    tone="muted"
+                    style={styles.centerText}
+                    testID="kiosk-result-duplicate"
+                  >
+                    {t('errors.duplicateEvent')}
                   </AppText>
                 ) : null}
                 <PrimaryButton label={t('common.done')} onPress={returnToIdle} testID="kiosk-result-done" />

@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { Linking } from 'react-native';
+import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 
 import { useKioskDevices, useNotificationPreferences, useSettingsMutations } from './hooks';
@@ -35,6 +37,8 @@ import {
   type ManagerOrganization,
 } from '@/hooks/use-manager-scope';
 import { LanguageSwitch } from '@/components/ui/language-switch';
+import { env } from '@/lib/env';
+import { useSessionStore } from '@/stores/session-store';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
@@ -83,6 +87,8 @@ export function SettingsPanel() {
             ) : null}
             <KiosksCard />
             <NotificationsCard key={`notifications-${scope.organization.id}`} />
+            <SessionCard canSignOutEverywhere={scope.isAdmin} />
+            <AboutCard />
           </Stack>
         ) : null}
       </AsyncSection>
@@ -391,6 +397,131 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
         loading={mutations.saveLocation.isPending}
         testID="location-save"
       />
+    </FormCard>
+  );
+}
+
+/**
+ * Sesión de esta persona: cerrar sesión aquí, y en todos los dispositivos (§8).
+ *
+ * NO HABÍA NINGÚN CIERRE DE SESIÓN EN LA INTERFAZ. La función existía en el store,
+ * pero nada la llamaba: quien entraba al panel no tenía forma de salir, ni de dejar
+ * de estar dentro en un iPad compartido. Y "cerrar sesión en todos los dispositivos",
+ * que §8 pide explícitamente para administradores, no existía en absoluto —solo su
+ * etiqueta traducida, que es lo que delató las dos ausencias—.
+ *
+ * El global va detrás de una confirmación y el normal no: cerrar aquí se deshace
+ * volviendo a entrar, y cerrar en todas partes echa a la persona de su teléfono, del
+ * iPad de la oficina y de donde estuviera, y eso no se pulsa por error.
+ */
+function SessionCard({ canSignOutEverywhere }: { canSignOutEverywhere: boolean }) {
+  const { t } = useTranslation();
+  const email = useSessionStore((state) => state.user?.email ?? null);
+  const role = useSessionStore((state) => state.role);
+  const signOut = useSessionStore((state) => state.signOut);
+  const signOutEverywhere = useSessionStore((state) => state.signOutEverywhere);
+
+  const [working, setWorking] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+
+  /*
+   * No se navega a mano al terminar: el cambio de sesión lo recoge la resolución de
+   * arranque, que es la única que decide destinos. Y el botón se libera pase lo que
+   * pase: las dos funciones no lanzan, pero un botón girando para siempre sería peor
+   * que el propio fallo.
+   */
+  const cerrar = (todos: boolean) => {
+    setConfirming(false);
+    setWorking(true);
+    void (todos ? signOutEverywhere() : signOut()).finally(() => setWorking(false));
+  };
+
+  return (
+    <FormCard title={t('auth.sessionTitle')} description={email ?? undefined}>
+      <Stack gap={spacing.md}>
+        {role !== null ? (
+          <KeyValueRow label={t('roles.label')} value={t(`roles.${role}`)} />
+        ) : null}
+
+        <SecondaryButton
+          label={t('auth.signOut')}
+          onPress={() => cerrar(false)}
+          loading={working}
+          testID="settings-sign-out"
+        />
+
+        {canSignOutEverywhere ? (
+          <Stack gap={spacing.xs}>
+            <DangerButton
+              label={t('auth.signOutEverywhere')}
+              onPress={() => setConfirming(true)}
+              loading={working}
+              testID="settings-sign-out-everywhere"
+            />
+            <AppText variant="help" tone="subtle">
+              {t('auth.signOutEverywhereHint')}
+            </AppText>
+          </Stack>
+        ) : null}
+      </Stack>
+
+      <ConfirmSheet
+        visible={confirming}
+        title={t('auth.signOutEverywhere')}
+        body={t('auth.signOutEverywhereConfirm')}
+        confirmLabel={t('auth.signOutEverywhere')}
+        destructive
+        onConfirm={() => cerrar(true)}
+        onCancel={() => setConfirming(false)}
+      />
+    </FormCard>
+  );
+}
+
+/**
+ * Versión, política de privacidad y soporte.
+ *
+ * `EXPO_PUBLIC_PRIVACY_URL` y `EXPO_PUBLIC_SUPPORT_EMAIL` estaban declaradas y
+ * validadas en `src/lib/env.ts` desde el principio, con valor por defecto, y NO LAS
+ * LEÍA NADIE. Una variable de entorno que no se usa es una promesa: alguien la
+ * configura, reinicia, y no cambia nada.
+ *
+ * Y la política de privacidad no es decorativa: App Store la exige para publicar (paso
+ * 7 de la lista de la cuenta Apple en el README), y lo normal es poder abrirla desde
+ * dentro de la app, no solo desde la ficha de la tienda.
+ *
+ * Los dos enlaces se abren con `Linking`, que en iOS resuelve `https:` y `mailto:`. Si
+ * el sistema no puede abrirlos —un simulador sin cliente de correo— no se hace nada
+ * visible; no vale la pena un error para esto.
+ */
+function AboutCard() {
+  const { t } = useTranslation();
+
+  return (
+    <FormCard title={t('settings.aboutTitle')}>
+      <Stack gap={spacing.md}>
+        <KeyValueRow
+          label={t('settings.appVersion')}
+          value={Constants.expoConfig?.version ?? '—'}
+        />
+        <SecondaryButton
+          label={t('settings.privacy')}
+          onPress={() => {
+            void Linking.openURL(env.EXPO_PUBLIC_PRIVACY_URL).catch(() => undefined);
+          }}
+          testID="settings-privacy"
+        />
+        <SecondaryButton
+          label={t('settings.support')}
+          hint={env.EXPO_PUBLIC_SUPPORT_EMAIL}
+          onPress={() => {
+            void Linking.openURL(`mailto:${env.EXPO_PUBLIC_SUPPORT_EMAIL}`).catch(
+              () => undefined,
+            );
+          }}
+          testID="settings-support"
+        />
+      </Stack>
     </FormCard>
   );
 }

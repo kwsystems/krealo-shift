@@ -1,4 +1,5 @@
 import { execute } from '@/hooks/use-admin-query';
+import { getSupabase } from '@/lib/supabase/client';
 import { TABLES } from '@/lib/supabase/types';
 import type { PushPlatform } from './push-adapter';
 
@@ -66,6 +67,37 @@ let rememberedToken: string | null = null;
 
 export function rememberPushToken(expoToken: string): void {
   rememberedToken = expoToken;
+}
+
+/**
+ * Apaga TODOS los tokens de la persona, no solo el de este dispositivo (§8).
+ *
+ * Es la mitad que le faltaba a "cerrar sesión en todos los dispositivos": revocar las
+ * sesiones deja a los otros dispositivos en la pantalla de acceso, pero sus tokens de
+ * push siguen activos en la base, así que seguirían recibiendo las alertas de la
+ * tienda hasta que alguien abriera la app en cada uno. Cerrar sesión en todas partes
+ * porque un teléfono se perdió y que ese teléfono siga vibrando con los avisos del
+ * negocio es exactamente el fallo que la función existe para evitar.
+ *
+ * Se hace ANTES de revocar, igual que el de este dispositivo: después, la política RLS
+ * de `push_tokens` ya no deja escribir porque `auth.uid()` es nulo.
+ *
+ * Nunca lanza. Cerrar sesión tiene que funcionar aunque no haya red.
+ */
+export async function deactivateAllPushTokens(): Promise<void> {
+  rememberedToken = null;
+  try {
+    const db = getSupabase();
+    const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
+    if (userId === null) return;
+
+    await execute((client) =>
+      client.from(TABLES.pushTokens).update({ is_active: false }).eq('user_id', userId),
+    );
+  } catch {
+    // Mismo costo aceptado que arriba: sin red los tokens se quedan activos hasta que
+    // Expo los declare muertos, y bloquear el cierre de sesión sería peor.
+  }
 }
 
 /**

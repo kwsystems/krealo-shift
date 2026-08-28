@@ -88,6 +88,7 @@ node scripts/render-check.mjs <dir-export>               # ¿pinta cada ruta sin
 node scripts/interaccion-check.mjs <dir-export>          # abre la app y la USA: teclea un PIN, toca botones
 node scripts/a11y-check.mjs <dir-export>                # contraste, nombres, objetivos táctiles, texto 150%
 node scripts/e2e-ids-check.mjs                          # testIDs referenciados que ya no existen
+node scripts/coherencia-check.mjs                       # claves i18n huérfanas y controles que no hacen nada
 python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
 
 eas login                                               # autenticarse en EAS
@@ -213,7 +214,6 @@ cp .env.example .env
 EXPO_PUBLIC_APP_ENV=development
 EXPO_PUBLIC_SUPABASE_URL=
 EXPO_PUBLIC_SUPABASE_ANON_KEY=
-EXPO_PUBLIC_SENTRY_DSN=
 EXPO_PUBLIC_SUPPORT_EMAIL=
 EXPO_PUBLIC_PRIVACY_URL=
 ```

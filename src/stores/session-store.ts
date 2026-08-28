@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 
-import { deactivateRememberedPushToken } from '@/features/notifications/api';
+import {
+  deactivateAllPushTokens,
+  deactivateRememberedPushToken,
+} from '@/features/notifications/api';
 import { getSupabase } from '@/lib/supabase/client';
 
 /**
@@ -22,16 +25,35 @@ export type SessionUser = {
 
 export type SessionPhase = 'unknown' | 'signedOut' | 'signedIn';
 
+/**
+ * Por qué se acabó la sesión, cuando se acabó.
+ *
+ * `expired` es el caso que no se contaba: el refresh token caduca o se revoca, la app
+ * cae a la pantalla de acceso y NO DICE NADA. La persona ve el formulario vacío y
+ * supone que hizo algo mal, o que la app se rompió. Existían hasta los textos
+ * traducidos —`states.sessionExpiredTitle` y `Body`— sin nadie que los mostrara.
+ *
+ * `signedOut` es cuando la persona lo pidió: ahí no hay nada que explicar, y mostrar
+ * "tu sesión caducó" a quien acaba de pulsar "cerrar sesión" sería mentir.
+ */
+export type SessionEndReason = 'expired' | 'signedOut';
+
 type SessionState = {
   phase: SessionPhase;
   user: SessionUser | null;
   /** Se resuelve tras cargar la membresía; `null` mientras no se conoce. */
   role: AppRole | null;
   organizationId: string | null;
+  /** Motivo del último fin de sesión, para que el acceso lo pueda explicar. */
+  endReason: SessionEndReason | null;
 
   hydrate: () => Promise<void>;
   setMembership: (params: { role: AppRole; organizationId: string }) => void;
   signOut: () => Promise<void>;
+  /** Revoca la sesión en TODOS los dispositivos de la persona (§8). */
+  signOutEverywhere: () => Promise<void>;
+  /** Se llama al mostrar el aviso, para que no reaparezca en el siguiente acceso. */
+  clearEndReason: () => void;
   /** Suscripción a los cambios de sesión de Supabase. Devuelve el limpiador. */
   subscribe: () => () => void;
 };
@@ -46,11 +68,12 @@ type SessionState = {
  */
 const SESSION_TIMEOUT_MS = 6_000;
 
-export const useSessionStore = create<SessionState>((set) => ({
+export const useSessionStore = create<SessionState>((set, get) => ({
   phase: 'unknown',
   user: null,
   role: null,
   organizationId: null,
+  endReason: null,
 
   hydrate: async () => {
     const supabase = getSupabase();
@@ -137,7 +160,17 @@ export const useSessionStore = create<SessionState>((set) => ({
 
   setMembership: ({ role, organizationId }) => set({ role, organizationId }),
 
+  clearEndReason: () => set({ endReason: null }),
+
   signOut: async () => {
+    /*
+     * El motivo se marca ANTES de llamar al servidor, y no después, porque
+     * `onAuthStateChange` se dispara DURANTE ese await: si el motivo se pusiera al
+     * final, el listener llegaría primero y llamaría "sesión caducada" a un cierre que
+     * la persona pidió. Marcarlo antes hace que el orden deje de importar.
+     */
+    set({ endReason: 'signedOut' });
+
     // ANTES de cerrar la sesión, y no después: la política RLS de `push_tokens`
     // exige `auth.uid()`, así que en cuanto la sesión se cierra ya no hay forma de
     // apagar el token. Sin esto, un iPhone que cambia de manos sigue recibiendo las
@@ -146,6 +179,34 @@ export const useSessionStore = create<SessionState>((set) => ({
 
     const supabase = getSupabase();
     if (supabase !== null) await supabase.auth.signOut();
+    set({ phase: 'signedOut', user: null, role: null, organizationId: null });
+  },
+
+  /**
+   * Cerrar sesión en TODOS los dispositivos (§8).
+   *
+   * Lo pedía la especificación desde el principio y existía hasta la etiqueta
+   * traducida —`auth.signOutEverywhere`—, pero no había ni función ni botón. Y no
+   * había NINGÚN cierre de sesión en la interfaz: quien entraba al panel no tenía
+   * forma de salir.
+   *
+   * `scope: 'global'` revoca todos los refresh tokens de la persona, así que los demás
+   * dispositivos caen a la pantalla de acceso en cuanto intentan refrescar. NO afecta a
+   * los relojes de tienda: un kiosco no usa sesión personal, usa su propia credencial
+   * de dispositivo, y se revoca desde Ajustes → Relojes.
+   *
+   * Los tokens de push se apagan TODOS y no solo el de aquí: revocar sesiones y dejar
+   * el teléfono perdido vibrando con los avisos del negocio no es cerrar sesión en
+   * todas partes.
+   */
+  signOutEverywhere: async () => {
+    // Igual que arriba: el motivo primero, porque el listener se adelanta.
+    set({ endReason: 'signedOut' });
+
+    await deactivateAllPushTokens();
+
+    const supabase = getSupabase();
+    if (supabase !== null) await supabase.auth.signOut({ scope: 'global' });
     set({ phase: 'signedOut', user: null, role: null, organizationId: null });
   },
 
@@ -160,12 +221,31 @@ export const useSessionStore = create<SessionState>((set) => ({
     try {
       ({ data } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session === null) {
-          set({ phase: 'signedOut', user: null, role: null, organizationId: null });
+          /*
+           * Aquí es donde muere una sesión que SÍ existía: el refresh token caducó o se
+           * revocó —incluido "cerrar sesión en todos los dispositivos" pulsado en otro
+           * teléfono—. Antes esto dejaba a la persona en el formulario de acceso sin
+           * una palabra, y lo que se lee ahí es "hice algo mal" o "la app se rompió".
+           *
+           * Si el cierre lo pidió la persona, `signOut` ya dejó el motivo puesto y no se
+           * pisa: decirle "tu sesión caducó" a quien acaba de pulsar "cerrar sesión"
+           * sería mentir.
+           */
+          set({
+            phase: 'signedOut',
+            user: null,
+            role: null,
+            organizationId: null,
+            endReason: get().endReason ?? 'expired',
+          });
           return;
         }
         set({
           phase: 'signedIn',
           user: { userId: session.user.id, email: session.user.email ?? null },
+          // Entrar bien borra el motivo anterior: si no, el aviso reaparecería la
+          // próxima vez que alguien vea el acceso.
+          endReason: null,
         });
       }));
     } catch (error) {

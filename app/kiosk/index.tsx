@@ -50,7 +50,7 @@ export default function KioskIdleScreen() {
   const revoked = useKioskStore((s) => s.revoked);
   const markRevoked = useKioskStore((s) => s.markRevoked);
   const language = usePreferencesStore((s) => s.language);
-  const { online, syncing, pendingCount } = useNetworkStore();
+  const { online, syncing, pendingCount, needsReviewCount } = useNetworkStore();
   const setFromOnline = useKioskVerificationStore((s) => s.setFromOnline);
   const setFromOffline = useKioskVerificationStore((s) => s.setFromOffline);
 
@@ -298,6 +298,28 @@ export default function KioskIdleScreen() {
           <SyncIndicator online={online} syncing={syncing} pendingCount={pendingCount} />
         </Row>
 
+        {/*
+          EVENTOS QUE NECESITAN QUE ALGUIEN LOS MIRE (§16).
+          La especificación pide que el cliente "conserve y MUESTRE cualquier evento que
+          requiera intervención". Se conservaban y se contaban, pero el contador vivía
+          solo en el diagnóstico, que está detrás del PIN de un gerente: o sea que en la
+          tienda nadie lo veía nunca, y un fichaje trabado se quedaba trabado hasta que
+          las horas no cuadraban a fin de mes.
+
+          Aquí no se nombra a nadie: es un aviso de que hay trabajo para el gerente, no
+          el registro de una persona en una pantalla compartida.
+        */}
+        {needsReviewCount > 0 ? (
+          <View style={styles.reviewNotice} testID="kiosk-needs-review">
+            <AppText variant="bodyStrong" tone="warning" style={styles.centerText}>
+              {t('states.partiallySyncedTitle')}
+            </AppText>
+            <AppText variant="help" tone="muted" style={styles.centerText}>
+              {t('states.partiallySyncedBody')}
+            </AppText>
+          </View>
+        ) : null}
+
         {/* Reloj y fecha: el elemento dominante de la pantalla */}
         <Stack gap={spacing.xs} style={styles.clockBlock}>
           <AppText
@@ -430,5 +452,8 @@ const styles = StyleSheet.create({
   clockBlock: { alignItems: 'center' },
   pinBlock: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
+  // Aviso discreto: informa sin competir con el reloj, que es el elemento dominante
+  // de esta pantalla (§9.1).
+  reviewNotice: { alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.base },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 });
