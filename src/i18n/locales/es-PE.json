@@ -149,7 +149,11 @@
     "requestUpdateKindCorrection": "Corrección de horas",
     "requestUpdateKindUnscheduledShift": "Turno sin programar",
     "requestUpdateAskManager": "Si no estás de acuerdo, habla con tu encargado.",
-    "exiting": "Saliendo del modo reloj…"
+    "exiting": "Saliendo del modo reloj…",
+    "privacyTitle": "Qué se guarda de ti",
+    "privacyRecorded": "La hora de tus entradas, salidas y descansos, y en qué tienda los marcaste. Tu gerente los ve para calcular tus horas.",
+    "privacyPhoto": "La foto solo se toma si tu tienda la tiene activada, solo en el momento de fichar, y se borra sola después del plazo que fije tu empresa.",
+    "privacyNot": "La cámara no graba entre fichajes, y la app no usa tu ubicación ni reconoce tu cara: te identifica tu PIN."
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

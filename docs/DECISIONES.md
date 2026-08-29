@@ -84,6 +84,33 @@ eso ya no pueden contestar cosas distintas ni rebotarse la una a la otra.
   fallaron. Un control que no hace nada es invisible para cualquier chequeo que solo
   mire píxeles.
 
+### Los seis componentes de §25 que no existen con ese nombre
+
+§25 lista 23 componentes reutilizables mínimos. Seis no existen con ese nombre —`AppHeader`,
+`Avatar`, `TimeDisplay`, `AttendanceStatusCard`, `TimelineEvent`, `ResponsiveSidebar`— y se
+revisó uno por uno si eso era un hueco. No lo es: la capacidad está, repartida en piezas más
+pequeñas o resuelta por el framework.
+
+- **`AppHeader` y `TimeDisplay`:** las piezas compartidas ya existen y son `AppText` con sus
+  variantes (`variant="title"`, `tabular`). Envolverlas en un componente por cada uso de una
+  línea añade una capa que no quita ninguna duplicación.
+- **`Avatar`:** las iniciales se pintan en UN solo sitio, la identificación del kiosco. Un
+  componente reutilizable con un uso no es reutilizable, es una indirección.
+- **`AttendanceStatusCard`:** existe como composición —avatar, saludo, `StatusBadge` con el
+  color del estado y «trabajando desde HH:mm»— y es lo que cumple el primer criterio visual
+  de §33: entender en menos de tres segundos si estás fuera de turno, trabajando o en
+  descanso.
+- **`TimelineEvent`:** el historial de eventos usa `KeyValueRow`, que hace lo mismo.
+- **`ResponsiveSidebar`:** lo da Expo Router con `tabBarPosition: 'left'` y
+  `tabBarVariant: 'material'`, decidido por `useResponsive().useSidebar`. Un componente
+  propio sería reimplementar la navegación del framework para que el nombre coincida.
+
+- **Por qué se anota:** porque la lista de §25 es una lista de nombres y alguien va a
+  comprobarla. Crear seis envoltorios finos para que los nombres cuadren es justo la deuda
+  que este proyecto pasó una sesión entera quitando: cosas declaradas que nadie usa.
+- **Lo que sí se hizo:** extraer los componentes cuando había un motivo real —las filas de
+  las listas, para poder virtualizar y probar—, no para completar una lista.
+
 ### Dos listas virtualizadas de tres, y por qué la tercera no
 
 §23 pide listas virtualizadas y no había ni un `FlatList` en la app: las tres listas se

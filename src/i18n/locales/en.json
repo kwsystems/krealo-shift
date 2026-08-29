@@ -149,7 +149,11 @@
     "requestUpdateKindCorrection": "Hours correction",
     "requestUpdateKindUnscheduledShift": "Unscheduled shift",
     "requestUpdateAskManager": "If you disagree, talk to your manager.",
-    "exiting": "Leaving clock mode…"
+    "exiting": "Leaving clock mode…",
+    "privacyTitle": "What we store about you",
+    "privacyRecorded": "The time of your clock-ins, clock-outs and breaks, and which store you marked them at. Your manager sees them to work out your hours.",
+    "privacyPhoto": "A photo is only taken if your store has it turned on, only at the moment you clock in, and it deletes itself after the period your company sets.",
+    "privacyNot": "The camera does not record between clock-ins, and the app does not use your location or recognise your face: your PIN identifies you."
   },
   "attendance": {
     "statusOffShift": "Off shift",
