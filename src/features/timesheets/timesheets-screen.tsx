@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { StyleSheet } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
@@ -26,7 +27,7 @@ import {
 } from '@/components/schedule/fields';
 import { WeekNavigator } from '@/components/schedule/week-tools';
 import { ManualEntrySheet, SessionDetailSheet } from '@/components/timesheets/session-detail';
-import { SessionRow } from '@/components/timesheets/session-row';
+import { SessionList } from '@/components/timesheets/session-list';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
@@ -214,10 +215,15 @@ export function TimesheetsScreen() {
   const periodStatus = period.data?.status ?? 'open';
   const conflict = adminErrorKind(mutations.adjust.error) === 'conflict';
 
+  /*
+   * `AppScreen` SIN `scroll`: la lista de sesiones es la que scrollea. Un `FlatList`
+   * dentro de un `ScrollView` vertical no virtualiza NADA —React Native lo avisa por
+   * consola— así que dejar el `scroll` habría hecho el cambio inútil y silencioso.
+   */
   return (
-    <AppScreen tone="canvas" scroll>
-      <ResponsiveContainer>
-        <Stack gap={spacing.lg}>
+    <AppScreen tone="canvas">
+      <ResponsiveContainer style={estilos.flexOne}>
+        <Stack gap={spacing.lg} style={estilos.flexOne}>
           <AppText variant="title" accessibilityRole="header">
             {t('timesheet.title')}
           </AppText>
@@ -434,21 +440,16 @@ export function TimesheetsScreen() {
                 emptyBody={t('timesheet.noEntriesHint')}
                 onRetry={() => void sessions.refetch()}
               >
-                <Stack gap={spacing.sm}>
-                  {visibleSessions.map((session) => (
-                    <SessionRow
-                      key={session.id}
-                      session={session}
-                      employeeName={names.get(session.employee_id) ?? t('team.unknownEmployee')}
-                      alerts={alertsBySession.get(session.id) ?? []}
-                      timezone={scope.timezone}
-                      timeFormat={scope.timeFormat}
-                      language={language}
-                      onPress={setSelected}
-                      testID={`session-${session.id}`}
-                    />
-                  ))}
-                </Stack>
+                <SessionList
+                  sessions={visibleSessions}
+                  employeeNames={names}
+                  alertsBySession={alertsBySession}
+                  unknownEmployeeLabel={t('team.unknownEmployee')}
+                  timezone={scope.timezone}
+                  timeFormat={scope.timeFormat}
+                  language={language}
+                  onSelect={setSelected}
+                />
               </AsyncSection>
             </Stack>
           </AsyncSection>
@@ -562,3 +563,9 @@ function daysBetween(from: string, to: string): number {
   if (Number.isNaN(desde) || Number.isNaN(hasta)) return 0;
   return Math.max(0, Math.round((hasta - desde) / MS_POR_DIA) + 1);
 }
+
+const estilos = StyleSheet.create({
+  // La cadena de `flex: 1` desde la pantalla hasta la lista. Sin ella el `FlatList` no
+  // tiene altura acotada y crece sin fin, que es lo mismo que no virtualizar.
+  flexOne: { flex: 1 },
+});

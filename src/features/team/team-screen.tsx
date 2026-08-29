@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import type { EmployeeDraft } from './api';
@@ -8,6 +8,7 @@ import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from 
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
 import { FormField } from '@app/(auth)/sign-in';
 import { AsyncSection } from '@/components/schedule/data-states';
+import { MemberList } from '@/components/team/member-list';
 import {
   InlineNotice,
   SegmentedControl,
@@ -16,8 +17,7 @@ import {
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
-import { StatusBadge } from '@/components/ui/states';
+import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { addDaysToKey, dateKeyOf } from '@/features/schedules/week';
 import { useRequests } from '@/features/requests/hooks';
 import { useJobRoles } from './hooks';
@@ -25,7 +25,6 @@ import { useDailySummaries } from '@/features/timesheets/hooks';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { currentLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
-import { minutesToHHmm } from '@/utils/time';
 
 /**
  * Equipo (§11.2): buscar, filtrar, ver, crear, asignar, activar/desactivar y
@@ -128,6 +127,21 @@ export function TeamScreen() {
     [recent.data, selected],
   );
 
+  /**
+   * Minutos recientes por empleado, en un `Map` y calculado UNA vez.
+   *
+   * Antes cada fila hacía su propio `filter` + `reduce` sobre todos los resúmenes
+   * diarios: con doscientos empleados y un mes de datos eso es doscientos recorridos del
+   * mismo array en cada render. Ahora se agrega una vez y la fila solo busca su id.
+   */
+  const recentMinutesByMember = useMemo(() => {
+    const total = new Map<string, number>();
+    for (const day of recent.data ?? []) {
+      total.set(day.employee_id, (total.get(day.employee_id) ?? 0) + day.net_minutes);
+    }
+    return total;
+  }, [recent.data]);
+
   const submitForm = (draft: EmployeeDraft) => {
     if (form === null) return;
 
@@ -168,10 +182,15 @@ export function TeamScreen() {
     );
   };
 
+  /*
+   * `AppScreen` SIN `scroll`: la lista virtualizada es la que scrollea. Un `FlatList`
+   * dentro de un `ScrollView` vertical no virtualiza NADA —React Native lo avisa por
+   * consola— así que dejar el `scroll` aquí habría hecho el cambio inútil y silencioso.
+   */
   return (
-    <AppScreen tone="canvas" scroll>
-      <ResponsiveContainer>
-        <Stack gap={spacing.lg}>
+    <AppScreen tone="canvas">
+      <ResponsiveContainer style={styles.flexOne}>
+        <Stack gap={spacing.lg} style={styles.flexOne}>
           <Row justify="space-between" align="flex-start" gap={spacing.md} wrap>
             <AppText variant="title" accessibilityRole="header">
               {t('team.title')}
@@ -197,7 +216,7 @@ export function TeamScreen() {
             emptyBody={t('settings.noLocationsHint')}
             onRetry={scope.refetch}
           >
-            <Stack gap={spacing.base}>
+            <Stack gap={spacing.base} style={styles.flexOne}>
               <FormField
                 label={t('common.search')}
                 value={search}
@@ -267,66 +286,12 @@ export function TeamScreen() {
                 }
                 onRetry={team.refetch}
               >
-                <Stack gap={spacing.sm}>
-                  {filtered.map((member) => {
-                    const minutes = (recent.data ?? [])
-                      .filter((day) => day.employee_id === member.id)
-                      .reduce((total, day) => total + day.net_minutes, 0);
-
-                    return (
-                      <Pressable
-                        key={member.id}
-                        onPress={() => setSelectedId(member.id)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`${member.displayName}. ${
-                          member.status === 'active'
-                            ? t('team.statusActive')
-                            : t('team.statusInactive')
-                        }`}
-                        accessibilityHint={t('team.openEmployeeHint')}
-                        testID={`team-member-${member.id}`}
-                        style={({ pressed }) => [pressed ? styles.pressed : null]}
-                      >
-                        <Card>
-                          <Row justify="space-between" gap={spacing.md} align="flex-start">
-                            <Stack gap={spacing.xs}>
-                              <AppText variant="bodyStrong">{member.displayName}</AppText>
-                              <AppText variant="help" tone="subtle">
-                                {member.jobRoleIds.length === 0
-                                  ? t('team.noJobRolesAssigned')
-                                  : member.jobRoleIds
-                                      .map((id) => jobRoleNames.get(id) ?? '')
-                                      .filter((name) => name !== '')
-                                      .join(', ')}
-                              </AppText>
-                            </Stack>
-                            <Stack gap={spacing.xs}>
-                              <StatusBadge
-                                label={
-                                  member.status === 'active'
-                                    ? t('team.statusActive')
-                                    : member.status === 'inactive'
-                                      ? t('team.statusInactive')
-                                      : t('team.statusInvited')
-                                }
-                                tone={member.status === 'active' ? 'working' : 'offShift'}
-                                icon={
-                                  member.status === 'active'
-                                    ? 'checkmark-circle'
-                                    : 'pause-circle-outline'
-                                }
-                                compact
-                              />
-                              <AppText variant="label" tone="subtle" tabular>
-                                {`${t('team.recentHours')}: ${minutesToHHmm(minutes)}`}
-                              </AppText>
-                            </Stack>
-                          </Row>
-                        </Card>
-                      </Pressable>
-                    );
-                  })}
-                </Stack>
+                <MemberList
+                  members={filtered}
+                  recentMinutesByMember={recentMinutesByMember}
+                  jobRoleNames={jobRoleNames}
+                  onSelect={setSelectedId}
+                />
               </AsyncSection>
             </Stack>
           </AsyncSection>
@@ -403,5 +368,6 @@ export function TeamScreen() {
 }
 
 const styles = StyleSheet.create({
+  flexOne: { flex: 1 },
   pressed: { opacity: 0.7 },
 });

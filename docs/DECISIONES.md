@@ -84,6 +84,33 @@ eso ya no pueden contestar cosas distintas ni rebotarse la una a la otra.
   fallaron. Un control que no hace nada es invisible para cualquier chequeo que solo
   mire píxeles.
 
+### Dos listas virtualizadas de tres, y por qué la tercera no
+
+§23 pide listas virtualizadas y no había ni un `FlatList` en la app: las tres listas se
+pintaban con `.map()` dentro de un `ScrollView`, o sea montando todas las filas de golpe.
+Con los cuatro empleados del seed no se nota nada, que es por lo que sobrevivió.
+
+Se virtualizaron las dos que crecen sin techo:
+
+- **hoja de tiempo**: un mes de un local con cincuenta personas son más de mil filas;
+- **equipo**: una empresa de verdad tiene cientos de empleados.
+
+**La bandeja de solicitudes NO**, y es una decisión, no un olvido: comparte pantalla con
+el panel de configuración, que es un formulario largo y tiene que scrollear entero. Una
+lista virtualizada dentro de ese `ScrollView` no virtualizaría nada —React Native lo avisa
+por consola— así que habría que partir la pantalla en dos, y lo que se gana es poco: la
+bandeja solo contiene lo que un gerente todavía no ha resuelto.
+
+- **Cómo se comprueba, sin backend:** las listas son componentes que reciben un array, así
+  que una prueba les da 300 filas y comprueba que la 250 NO está montada. Con `.map()`
+  estarían las 300 y la prueba falla — verificado volviendo a poner el `.map()`. La otra
+  mitad también se prueba: una lista corta se monta entera, porque una prueba que solo
+  exige filas ausentes pasaría con una lista que no muestra nada.
+- **Lo que NO se puede verificar aquí:** cómo queda la pantalla completa con datos reales,
+  porque necesita una sesión de Supabase. El scroll de la pantalla pasa a ser el de la
+  lista, con la cabecera y los filtros fijos arriba — que en iPad es mejor y en teléfono
+  hay que mirarlo en el dispositivo (tarea `NBTEQcPVN4AJ8X0Nyazk`).
+
 ### El kiosco en iPad horizontal usa dos columnas
 
 En horizontal el reloj y el teclado se apilaban en una columna centrada, así que quedaban
