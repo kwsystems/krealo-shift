@@ -18,16 +18,42 @@ import { z } from 'zod';
  * al SDK que la use, no antes. El motivo largo está en `docs/DECISIONES.md`.
  */
 
+/**
+ * Una variable presente pero VACÍA es una variable sin poner.
+ *
+ * ESTO ROMPÍA EL CAMINO DOCUMENTADO. El README dice —correctamente— «copia
+ * `.env.example` a `.env` y pega la URL y la anon key», y `.env.example` trae
+ * `EXPO_PUBLIC_SUPPORT_EMAIL=` y `EXPO_PUBLIC_PRIVACY_URL=` en blanco, porque una
+ * plantilla no puede traer valores de nadie. Al arrancar, esas dos llegaban como cadena
+ * vacía, y `.optional()` NO cubre la cadena vacía: solo cubre `undefined`. Así que
+ * `.email()` y `.url()` fallaban y la app decía «Falta configuración del entorno»
+ * nombrando dos variables que ni siquiera son obligatorias.
+ *
+ * Se ve solo si se sigue la instrucción tal cual, con un `.env` recién copiado. Se
+ * encontró clonando el repositorio desde cero y haciendo exactamente lo que dice el
+ * README, no leyéndolo.
+ *
+ * Se aplica SOLO a las opcionales: en las obligatorias, una cadena vacía tiene que
+ * seguir fallando, y con su nombre en el mensaje. Ese caso está resuelto abajo y tiene
+ * su propio comentario.
+ */
+const vacioEsAusente = (valor: unknown) => (valor === '' ? undefined : valor);
+
 const envSchema = z.object({
-  EXPO_PUBLIC_APP_ENV: z.enum(['development', 'preview', 'production']).default('development'),
+  EXPO_PUBLIC_APP_ENV: z.preprocess(
+    vacioEsAusente,
+    z.enum(['development', 'preview', 'production']).default('development'),
+  ),
   EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
   EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
-  EXPO_PUBLIC_SUPPORT_EMAIL: z.string().email().optional().default('soporte@krealomedia.com'),
-  EXPO_PUBLIC_PRIVACY_URL: z
-    .string()
-    .url()
-    .optional()
-    .default('https://krealomedia.com/privacidad'),
+  EXPO_PUBLIC_SUPPORT_EMAIL: z.preprocess(
+    vacioEsAusente,
+    z.string().email().optional().default('soporte@krealomedia.com'),
+  ),
+  EXPO_PUBLIC_PRIVACY_URL: z.preprocess(
+    vacioEsAusente,
+    z.string().url().optional().default('https://krealomedia.com/privacidad'),
+  ),
 });
 
 export type Env = z.infer<typeof envSchema>;
