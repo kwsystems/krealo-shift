@@ -114,11 +114,22 @@ hay que documentarlo aquí; los directorios `/ios` y `/android` están en
 Los cuatro pasos, desde cero, en PowerShell. No hace falta nada más que
 [Node.js LTS](https://nodejs.org) y [Git](https://git-scm.com/download/win).
 
+> **La rama importa.** Todo el trabajo vive en `claude/proxima-tarea-uwy0ab`, no en
+> `main`. Un `git clone` a secas te deja en `main`, que no tiene nada de esto: la app no
+> arrancaría y parecería un problema de tu máquina. Por eso el paso 1 lleva `--branch`.
+
 ```powershell
 # 1. Descargar el proyecto (crea la carpeta krealo-shift en tu usuario)
 cd $HOME
-git clone https://github.com/kwsystems/krealo-shift.git
+git clone --branch claude/proxima-tarea-uwy0ab https://github.com/kwsystems/krealo-shift.git
 cd krealo-shift
+
+# Si YA lo tenías clonado de antes, en vez del clone:
+#   cd $HOME\krealo-shift
+#   git fetch origin
+#   git checkout claude/proxima-tarea-uwy0ab
+#   git pull
+#   npm install     # hay dependencias nuevas desde la última vez
 
 # 2. Instalar dependencias (tarda unos minutos la primera vez)
 npm install
