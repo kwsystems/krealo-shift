@@ -374,7 +374,8 @@
     "stillOpen": "Sin salida",
     "valueDidNotExist": "No existía",
     "valueUnknownShape": "Formato no reconocido",
-    "changedBy": "Modificado por"
+    "changedBy": "Modificado por",
+    "overtimeEquivalent": "Equivalente ×{{factor}} (referencia)"
   },
   "requests": {
     "title": "Solicitudes",
@@ -510,7 +511,8 @@
     "permission_unsupported": "No aplica",
     "permission_unknown": "No se pudo leer",
     "aboutTitle": "Acerca de esta app",
-    "support": "Escribir a soporte"
+    "support": "Escribir a soporte",
+    "overtimeMultiplierPercent": "Multiplicador de horas extra (%, solo referencia)"
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",
@@ -590,7 +592,9 @@
     "netHours": "Horas netas",
     "netDecimal": "Horas netas decimales",
     "status": "Estado",
-    "flags": "Alertas"
+    "flags": "Alertas",
+    "regularHours": "Horas regulares",
+    "overtimeHours": "Horas extra"
   },
   "roles": {
     "owner": "Propietario",

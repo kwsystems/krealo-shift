@@ -178,6 +178,8 @@ export function TimesheetsScreen() {
     unpaidBreak: t('csv.unpaidBreak'),
     netHours: t('csv.netHours'),
     netDecimal: t('csv.netDecimal'),
+    regularHours: t('csv.regularHours'),
+    overtimeHours: t('csv.overtimeHours'),
     status: t('csv.status'),
     flags: t('csv.flags'),
   };
@@ -194,6 +196,9 @@ export function TimesheetsScreen() {
         timezone: scope.timezone,
         timeFormat: scope.timeFormat,
         language,
+        // El umbral es de la UBICACIÓN, no una constante: exportar dos ubicaciones con
+        // el mismo umbral fijo daría horas extra equivocadas en una de las dos.
+        dailyOvertimeThresholdMinutes: scope.settings.dailyOvertimeThresholdMinutes,
       });
       await shareCsv({ fileName: timesheetFileName({ from, to }), content });
       return rows.length;
@@ -291,6 +296,32 @@ export function TimesheetsScreen() {
                   tone="onBreak"
                   icon="trending-up-outline"
                 />
+                {/*
+                  EQUIVALENTE CON EL MULTIPLICADOR (§13), y solo si hay horas extra: una
+                  casilla que dice 00:00 x1.5 es ruido en la fila de totales.
+
+                  §13 pide el multiplicador entre las políticas configurables y no
+                  existía. Y pone su límite en la misma sección: "La app registra y
+                  resume tiempo; no debe afirmar que reemplaza la revisión de nómina o
+                  asesoría laboral". Por eso el número va con la palabra "referencia" en
+                  su etiqueta y en horas, NO en dinero: en cuanto esto mostrara un
+                  importe, alguien lo pagaría sin revisarlo.
+                */}
+                {totals.overtimeMinutes > 0 ? (
+                  <StatTile
+                    label={t('timesheet.overtimeEquivalent', {
+                      factor: (scope.settings.overtimeMultiplierPercent / 100).toFixed(2),
+                    })}
+                    value={minutesToHHmm(
+                      Math.round(
+                        (totals.overtimeMinutes * scope.settings.overtimeMultiplierPercent) / 100,
+                      ),
+                    )}
+                    tone="onBreak"
+                    icon="calculator-outline"
+                    testID="total-overtime-equivalent"
+                  />
+                ) : null}
                 <StatTile
                   label={t('timesheet.breaks')}
                   value={minutesToHHmm(totals.unpaidBreakMinutes + totals.paidBreakMinutes)}

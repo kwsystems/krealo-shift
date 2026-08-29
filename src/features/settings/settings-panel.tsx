@@ -239,26 +239,55 @@ function OrganizationCard({
   );
 }
 
-type NumericSettingKey =
-  | 'photoRetentionDays'
-  | 'earlyClockInMinutes'
-  | 'lateGraceMinutes'
-  | 'requiredBreakMinutes'
-  | 'dailyOvertimeThresholdMinutes'
-  | 'weeklyOvertimeThresholdMinutes'
-  | 'minimumRestMinutes'
-  | 'kioskSyncStaleMinutes';
+/**
+ * Las claves NUMÉRICAS de `LocationSettings`, DERIVADAS del tipo y no escritas a mano.
+ *
+ * Antes era una unión copiada a mano de las mismas ocho claves. Una segunda copia de una
+ * lista se separa de la primera en cuanto alguien añade un ajuste: el tipo lo aceptaría,
+ * el panel no lo mostraría, y el ajuste nuevo quedaría en la base sin forma de cambiarlo.
+ * Derivándola, añadir un número a `LocationSettings` obliga a decidir aquí qué etiqueta
+ * lleva, porque `NUMERIC_SETTINGS` deja de compilar hasta que se añade.
+ */
+type ClaveNumerica = {
+  [K in keyof LocationSettings]: LocationSettings[K] extends number ? K : never;
+}[keyof LocationSettings];
 
-const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = [
-  { key: 'earlyClockInMinutes', labelKey: 'settings.earlyClockInMinutes' },
-  { key: 'lateGraceMinutes', labelKey: 'settings.lateGraceMinutes' },
-  { key: 'requiredBreakMinutes', labelKey: 'settings.requiredBreakMinutes' },
-  { key: 'dailyOvertimeThresholdMinutes', labelKey: 'settings.dailyOvertimeThreshold' },
-  { key: 'weeklyOvertimeThresholdMinutes', labelKey: 'settings.weeklyOvertimeThreshold' },
-  { key: 'minimumRestMinutes', labelKey: 'settings.minimumRestMinutes' },
-  { key: 'photoRetentionDays', labelKey: 'settings.photoRetentionDays' },
-  { key: 'kioskSyncStaleMinutes', labelKey: 'settings.kioskSyncStaleMinutes' },
-];
+/**
+ * `pinLength` es numérico y NO se edita aquí, a propósito.
+ *
+ * Bajarlo de 6 a 4 deja fuera a TODA la tienda de golpe: los PIN guardados son hashes de
+ * seis dígitos y el teclado validaría al cuarto, así que nadie podría volver a fichar
+ * hasta que un administrador le pusiera un PIN nuevo a cada persona. Eso no es un campo
+ * que se cambia de paso mirando ajustes; necesita un flujo propio que reasigne los PIN, y
+ * §11.6 no lo pide entre los ajustes de ubicación.
+ *
+ * La exclusión es explícita y no un olvido: la lista de abajo es un `Record` exhaustivo,
+ * así que sin esta línea el panel no compilaría.
+ */
+type ClaveNumericaNoEditable = 'pinLength';
+
+type NumericSettingKey = Exclude<ClaveNumerica, ClaveNumericaNoEditable>;
+
+/**
+ * Etiqueta de cada ajuste numérico. Es un `Record` y no una lista suelta a propósito: un
+ * `Record<NumericSettingKey, string>` no compila si falta una clave, así que un ajuste
+ * numérico nuevo NO puede quedarse sin campo en el panel por descuido.
+ */
+const ETIQUETAS_NUMERICAS: Record<NumericSettingKey, string> = {
+  earlyClockInMinutes: 'settings.earlyClockInMinutes',
+  lateGraceMinutes: 'settings.lateGraceMinutes',
+  requiredBreakMinutes: 'settings.requiredBreakMinutes',
+  dailyOvertimeThresholdMinutes: 'settings.dailyOvertimeThreshold',
+  weeklyOvertimeThresholdMinutes: 'settings.weeklyOvertimeThreshold',
+  minimumRestMinutes: 'settings.minimumRestMinutes',
+  photoRetentionDays: 'settings.photoRetentionDays',
+  kioskSyncStaleMinutes: 'settings.kioskSyncStaleMinutes',
+  overtimeMultiplierPercent: 'settings.overtimeMultiplierPercent',
+};
+
+const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = (
+  Object.keys(ETIQUETAS_NUMERICAS) as NumericSettingKey[]
+).map((key) => ({ key, labelKey: ETIQUETAS_NUMERICAS[key] }));
 
 function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdit: boolean }) {
   const { t } = useTranslation();
@@ -277,6 +306,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
     weeklyOvertimeThresholdMinutes: String(location.settings.weeklyOvertimeThresholdMinutes),
     minimumRestMinutes: String(location.settings.minimumRestMinutes),
     kioskSyncStaleMinutes: String(location.settings.kioskSyncStaleMinutes),
+    overtimeMultiplierPercent: String(location.settings.overtimeMultiplierPercent),
   });
   const [saved, setSaved] = useState(false);
 
@@ -295,6 +325,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
     weeklyOvertimeThresholdMinutes: parseNumber('weeklyOvertimeThresholdMinutes'),
     minimumRestMinutes: parseNumber('minimumRestMinutes'),
     kioskSyncStaleMinutes: parseNumber('kioskSyncStaleMinutes'),
+    overtimeMultiplierPercent: parseNumber('overtimeMultiplierPercent'),
   });
 
   return (

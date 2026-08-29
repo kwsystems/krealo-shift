@@ -33,6 +33,23 @@ export const DEFAULT_LOCATION_SETTINGS = {
   /** Descanso mínimo entre dos turnos antes de advertir (§11.3). */
   minimumRestMinutes: 660,
   /**
+   * Multiplicador de horas extra, SOLO INFORMATIVO (§13). En centésimas: 150 es 1.5×.
+   *
+   * §13 lo pide entre las políticas configurables de horas extra y no existía. Va en
+   * centésimas y no como decimal porque el resto de ajustes de la ubicación son enteros
+   * y comparten el mismo campo de texto numérico: un decimal ahí obliga a decidir si el
+   * separador es coma o punto según el idioma, y esa es una fuente de errores que no
+   * vale la pena por un número que no se usa para pagar.
+   *
+   * Por defecto 150, que es lo más común, y §13 es explícita en que NO se codifica la
+   * legislación de ningún país como verdad universal: es un valor de partida que cada
+   * ubicación cambia.
+   *
+   * INFORMATIVO significa informativo: la app resume tiempo y no calcula remuneraciones
+   * (§13, §34). El número que produce se etiqueta como referencia en la pantalla.
+   */
+  overtimeMultiplierPercent: 150,
+  /**
    * Cuánto puede pasar un reloj sin sincronizar antes de avisar al gerente (§19).
    * El razonamiento del valor está en
    * `supabase/migrations/20260827001100_manager_alerts.sql`, que es donde manda:
@@ -85,6 +102,14 @@ const locationSettingsSchema = z
       .int()
       .min(1)
       .default(DEFAULT_LOCATION_SETTINGS.kioskSyncStaleMinutes),
+    // Mínimo 100: un multiplicador menor que 1 significaría pagar la hora extra MENOS
+    // que la normal, que no es un ajuste, es un error de tecleo.
+    overtimeMultiplierPercent: z
+      .number()
+      .int()
+      .min(100)
+      .max(1000)
+      .default(DEFAULT_LOCATION_SETTINGS.overtimeMultiplierPercent),
   })
   // Una ubicación con `settings` incompleto o nulo no debe romper el panel: se
   // usan los valores por defecto de la especificación (§11.6).

@@ -4,6 +4,7 @@ import {
   formatClockTime,
   minutesToDecimalHours,
   minutesToHHmm,
+  splitRegularAndOvertime,
   type TimeFormatPreference,
 } from '@/utils/time';
 
@@ -28,6 +29,8 @@ export type CsvColumnKey =
   | 'unpaidBreak'
   | 'netHours'
   | 'netDecimal'
+  | 'regularHours'
+  | 'overtimeHours'
   | 'status'
   | 'flags';
 
@@ -41,6 +44,8 @@ export const CSV_COLUMNS: CsvColumnKey[] = [
   'unpaidBreak',
   'netHours',
   'netDecimal',
+  'regularHours',
+  'overtimeHours',
   'status',
   'flags',
 ];
@@ -62,6 +67,14 @@ export type CsvOptions = {
   timezone: string;
   timeFormat?: TimeFormatPreference;
   language?: SupportedLanguage;
+  /**
+   * Umbral diario de la ubicación, en minutos, para separar regulares de extra.
+   *
+   * Se pasa y no se lee de ninguna parte porque esta función es pura, y porque el
+   * umbral es de la UBICACIÓN: exportar dos ubicaciones con el mismo umbral fijo daría
+   * números equivocados en una de las dos.
+   */
+  dailyOvertimeThresholdMinutes: number;
 };
 
 function minutesCell(value: number | null): string {
@@ -69,12 +82,34 @@ function minutesCell(value: number | null): string {
 }
 
 export function buildTimesheetCsv(rows: TimesheetExportRow[], options: CsvOptions): string {
-  const { labels, timezone, timeFormat = '24h', language = 'es-PE' } = options;
+  const {
+    labels,
+    timezone,
+    timeFormat = '24h',
+    language = 'es-PE',
+    dailyOvertimeThresholdMinutes,
+  } = options;
 
   const header = buildCsvLine(CSV_COLUMNS.map((column) => labels[column]));
 
-  const body = rows.map((row) =>
-    buildCsvLine([
+  const body = rows.map((row) => {
+    /*
+     * REGULARES Y EXTRA, que §13 manda separar y el CSV no llevaba.
+     *
+     * La pantalla ya los mostraba; el archivo no. Y el archivo es justo lo que sale de
+     * la app hacia quien hace la nómina, así que obligaba a recalcular fuera lo que la
+     * app ya calculaba bien dentro — y ahí es donde se cometen los errores.
+     *
+     * Se derivan del umbral y no se guardan en la base a propósito: el umbral de una
+     * ubicación se puede cambiar, y unas horas extra congeladas con el umbral viejo
+     * dejarían de cuadrar con lo que muestra la pantalla.
+     */
+    const { regularMinutes, overtimeMinutes } = splitRegularAndOvertime(
+      row.net_minutes ?? 0,
+      dailyOvertimeThresholdMinutes,
+    );
+
+    return buildCsvLine([
       row.employee_name,
       row.work_date,
       row.clock_in === null ? '' : formatClockTime(row.clock_in, timezone, timeFormat, language),
@@ -84,10 +119,12 @@ export function buildTimesheetCsv(rows: TimesheetExportRow[], options: CsvOption
       minutesCell(row.unpaid_break_minutes),
       minutesCell(row.net_minutes),
       minutesToDecimalHours(row.net_minutes ?? 0).toFixed(2),
+      minutesCell(regularMinutes),
+      minutesCell(overtimeMinutes),
       row.status,
       (row.flags ?? []).join(' '),
-    ]),
-  );
+    ]);
+  });
 
   // Salto de línea CRLF: es lo que espera Excel en Windows, y el equipo de
   // Krealo revisa estas exportaciones en Windows.

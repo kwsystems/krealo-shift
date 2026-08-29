@@ -374,7 +374,8 @@
     "stillOpen": "Still open",
     "valueDidNotExist": "Didn't exist",
     "valueUnknownShape": "Unrecognized format",
-    "changedBy": "Changed by"
+    "changedBy": "Changed by",
+    "overtimeEquivalent": "Equivalent ×{{factor}} (reference)"
   },
   "requests": {
     "title": "Requests",
@@ -510,7 +511,8 @@
     "permission_unsupported": "Not applicable",
     "permission_unknown": "Couldn't read it",
     "aboutTitle": "About this app",
-    "support": "Email support"
+    "support": "Email support",
+    "overtimeMultiplierPercent": "Overtime multiplier (%, reference only)"
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",
@@ -590,7 +592,9 @@
     "netHours": "Net hours",
     "netDecimal": "Net hours decimal",
     "status": "Status",
-    "flags": "Alerts"
+    "flags": "Alerts",
+    "regularHours": "Regular hours",
+    "overtimeHours": "Overtime hours"
   },
   "roles": {
     "owner": "Owner",
