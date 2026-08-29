@@ -507,6 +507,42 @@ await conPagina(
   { comoKiosco: false },
 );
 
+// ---------------------------------------------------------------------------
+// 12. El arranque en frio NO dice que la sesion caduco
+// ---------------------------------------------------------------------------
+//
+// UN FALLO QUE ESTE CHEQUEO NO VEIA. La primera pantalla de alguien que abre la app por
+// primera vez decia "Tu sesion caduco". No caduco nada: nunca habia entrado.
+//
+// El chequeo de render lo daba por bueno porque la pantalla se pinta y no hay errores de
+// consola, y el caso del panel lo daba por bueno porque buscaba "Correo" y ahi estaba.
+// Ninguna de las dos aserciones miraba si el texto TENIA SENTIDO. Se vio levantando la app
+// con `expo start --web` y leyendola.
+await conPagina(
+  '/',
+  async (page, errores) => {
+    const caso = 'arranque en frio sin sesion previa';
+    await page.waitForTimeout(2000);
+    const texto = await textoVisible(page);
+
+    if (/sesi[oó]n cadu|session (has )?expired/i.test(texto)) {
+      fallar(caso, 'dice que la sesion caduco sin que hubiera habido ninguna');
+      return;
+    }
+    // Y la otra mitad: tiene que llegar al acceso, no quedarse en blanco.
+    if (!/Ingresa a Krealo Shift|Sign in to Krealo Shift/i.test(texto)) {
+      fallar(caso, 'no llego al acceso: ' + texto.slice(0, 160));
+      return;
+    }
+    if (errores.length > 0) {
+      fallar(caso, 'errores de consola: ' + errores.join(' | '));
+      return;
+    }
+    pasar(caso, texto.slice(0, 70));
+  },
+  { comoKiosco: false },
+);
+
 await browser.close();
 cerrarServidor();
 

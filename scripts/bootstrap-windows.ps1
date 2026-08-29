@@ -158,7 +158,6 @@ if (Test-Path '.env') {
     'EXPO_PUBLIC_APP_ENV=development',
     'EXPO_PUBLIC_SUPABASE_URL=https://ejemplo.supabase.co',
     'EXPO_PUBLIC_SUPABASE_ANON_KEY=clave-de-relleno-solo-para-ver-la-interfaz',
-    'EXPO_PUBLIC_SENTRY_DSN=',
     'EXPO_PUBLIC_SUPPORT_EMAIL=soporte@krealomedia.com',
     'EXPO_PUBLIC_PRIVACY_URL=https://krealomedia.com/privacidad'
   )

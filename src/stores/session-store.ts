@@ -227,16 +227,28 @@ export const useSessionStore = create<SessionState>((set, get) => ({
            * teléfono—. Antes esto dejaba a la persona en el formulario de acceso sin
            * una palabra, y lo que se lee ahí es "hice algo mal" o "la app se rompió".
            *
+           * `phase === 'signedIn'` NO ES OPCIONAL, y costó verlo: este mismo callback se
+           * dispara en el ARRANQUE EN FRÍO con `session === null` —el evento
+           * `INITIAL_SESSION` de Supabase— y la fase todavía en `unknown`. Sin la
+           * comprobación, la primera pantalla que veía alguien que abre la app por
+           * primera vez decía "Tu sesión caducó". No caducó nada: nunca entró.
+           *
+           * Se vio levantando la app de verdad con `expo start --web`, no en una prueba:
+           * el arranque en frío es justo lo que no ocurre cuando ya tienes el estado
+           * puesto para probar otra cosa.
+           *
            * Si el cierre lo pidió la persona, `signOut` ya dejó el motivo puesto y no se
            * pisa: decirle "tu sesión caducó" a quien acaba de pulsar "cerrar sesión"
            * sería mentir.
            */
+          const habiaSesion = get().phase === 'signedIn';
+
           set({
             phase: 'signedOut',
             user: null,
             role: null,
             organizationId: null,
-            endReason: get().endReason ?? 'expired',
+            endReason: habiaSesion ? (get().endReason ?? 'expired') : get().endReason,
           });
           return;
         }

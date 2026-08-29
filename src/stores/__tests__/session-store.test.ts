@@ -39,6 +39,7 @@ jest.mock('@/lib/supabase/client', () => ({
 
 jest.mock('@/features/notifications/api', () => ({
   deactivateRememberedPushToken: jest.fn(),
+  deactivateAllPushTokens: jest.fn(),
 }));
 
 describe('arranque de la sesión', () => {
@@ -48,7 +49,13 @@ describe('arranque de la sesión', () => {
     jest.clearAllMocks();
     jest.useRealTimers();
     warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    useSessionStore.setState({ phase: 'unknown', user: null, role: null, organizationId: null });
+    useSessionStore.setState({
+      phase: 'unknown',
+      user: null,
+      role: null,
+      organizationId: null,
+      endReason: null,
+    });
     mockOnAuthStateChange.mockReturnValue({ subscription: { unsubscribe: jest.fn() } });
   });
 
@@ -121,6 +128,78 @@ describe('arranque de la sesión', () => {
     expect(typeof desuscribir).toBe('function');
     expect(() => desuscribir()).not.toThrow();
     expect(warn).toHaveBeenCalled();
+  });
+});
+
+/**
+ * Por qué se acabó la sesión, y sobre todo cuándo NO se acabó ninguna.
+ *
+ * ESTE BLOQUE EXISTE POR UN FALLO QUE ESCRIBÍ Y QUE NINGUNA PRUEBA VIO: la primera
+ * pantalla de alguien que abría la app por primera vez decía "Tu sesión caducó". No
+ * caducó nada: nunca había entrado.
+ *
+ * `onAuthStateChange` se dispara en el ARRANQUE EN FRÍO con `session === null` —el
+ * evento `INITIAL_SESSION` de Supabase— y el código marcaba `expired` sin comprobar que
+ * antes hubiera habido sesión, aunque su propio comentario decía "aquí es donde muere una
+ * sesión que SÍ existía".
+ *
+ * Se vio levantando la app con `expo start --web` y mirándola. El arranque en frío es
+ * justo lo que no ocurre en una prueba que ya tiene el estado puesto para probar otra
+ * cosa.
+ */
+describe('motivo del fin de sesión', () => {
+  const dispararCambio = (session: unknown) => {
+    const escuchar = mockOnAuthStateChange.mock.calls[0]?.[0] as
+      ((evento: string, sesion: unknown) => void) | undefined;
+    escuchar?.('INITIAL_SESSION', session);
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    useSessionStore.setState({
+      phase: 'unknown',
+      user: null,
+      role: null,
+      organizationId: null,
+      endReason: null,
+    });
+    mockOnAuthStateChange.mockReturnValue({ subscription: { unsubscribe: jest.fn() } });
+  });
+
+  it('EL ARRANQUE EN FRÍO no dice que la sesión caducó', () => {
+    useSessionStore.getState().subscribe();
+    dispararCambio(null);
+
+    expect(useSessionStore.getState().phase).toBe('signedOut');
+    expect(useSessionStore.getState().endReason).toBeNull();
+  });
+
+  it('una sesión que SÍ existía y desaparece sola sí caducó', () => {
+    useSessionStore.setState({ phase: 'signedIn' });
+    useSessionStore.getState().subscribe();
+    dispararCambio(null);
+
+    expect(useSessionStore.getState().endReason).toBe('expired');
+  });
+
+  it('un cierre que pidió la persona no se llama caducidad', () => {
+    // `signOut` marca el motivo ANTES de llamar al servidor, porque el listener se
+    // dispara durante ese await. Aquí se simula ese orden.
+    useSessionStore.setState({ phase: 'signedIn', endReason: 'signedOut' });
+    useSessionStore.getState().subscribe();
+    dispararCambio(null);
+
+    expect(useSessionStore.getState().endReason).toBe('signedOut');
+  });
+
+  it('entrar bien borra el motivo anterior', () => {
+    // Si no, el aviso reaparecería la próxima vez que alguien viera el acceso.
+    useSessionStore.setState({ phase: 'signedOut', endReason: 'expired' });
+    useSessionStore.getState().subscribe();
+    dispararCambio({ user: { id: 'u1', email: 'a@b.com' } });
+
+    expect(useSessionStore.getState().phase).toBe('signedIn');
+    expect(useSessionStore.getState().endReason).toBeNull();
   });
 });
 
