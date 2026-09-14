@@ -75,8 +75,9 @@ enumera qué claves faltan (`src/lib/env.ts`).
 
 ```bash
 npm install                                             # dependencias
-npx expo start                                          # servidor de desarrollo
-npx expo start --web                                    # previsualización web (Windows)
+npm run web:demo                                        # LA WEB CON DATOS DE DEMOSTRACIÓN (sin backend)
+npx expo start                                          # servidor de desarrollo (nativo)
+npm run web                                             # la web contra tu Supabase (necesita .env)
 npx expo-doctor                                         # revisa el proyecto Expo
 npx tsc --noEmit                                        # typecheck (TypeScript strict)
 npm test                                                # pruebas Jest
@@ -93,6 +94,14 @@ node scripts/coherencia-check.mjs                       # claves i18n huérfanas
 node scripts/capturas-store.mjs <dir-export>            # capturas para la App Store, en los tamaños exactos
 python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
 
+npm run demo:export                                     # compila la demostración a dist-demo/
+npm run demo:check                                      # la recorre en Chromium: ¿hay contenido y son distintas?
+npm run demo:export:prod                                # la compila COMO PRODUCCIÓN (dist-demo-prod/)
+npm run demo:check:prod                                 # además: ¿arranca la web publicada? ¿el kiosco explica su límite?
+
+npm run web:build                                       # compila la web de producción a dist/
+npm run web:deploy                                      # compila y publica en Firebase Hosting
+
 eas login                                               # autenticarse en EAS
 eas build:configure                                     # crea/asocia el projectId de EAS
 eas build --platform ios --profile preview              # build interno instalable
@@ -103,6 +112,10 @@ eas submit --platform ios --profile production          # subir el build a App S
 Atajos equivalentes definidos en `package.json`: `npm start`, `npm run web`,
 `npm run typecheck`, `npm run lint`, `npm run doctor`, `npm test`.
 
+**`npm run demo:check:prod` es el que hay que correr antes de publicar.** Compila la
+web como se publica y comprueba que arranca: una guarda mal puesta ya dejó una vez la
+web publicada en una página completamente en blanco, y en desarrollo no se notaba.
+
 Ninguna dependencia actual requiere `expo prebuild`: el proyecto sigue en
 workflow administrado y todo lo nativo se configura desde `app.config.ts`
 (plugins de Expo). Si en el futuro se agrega una dependencia que sí lo exija,
@@ -111,7 +124,7 @@ hay que documentarlo aquí; los directorios `/ios` y `/android` están en
 
 ## Primera vez en Windows
 
-Los cuatro pasos, desde cero, en PowerShell. No hace falta nada más que
+Tres pasos, desde cero, en PowerShell. No hace falta nada más que
 [Node.js LTS](https://nodejs.org) y [Git](https://git-scm.com/download/win).
 
 ```powershell
@@ -129,21 +142,37 @@ cd krealo-shift
 # 2. Instalar dependencias (tarda unos minutos la primera vez)
 npm install
 
-# 3. Crear la configuración mínima para que la app arranque
-Copy-Item .env.example .env
-notepad .env    # pega la URL y la anon key de Supabase, o déjalo así para solo mirar
-
-# 4. Arrancar
-npx expo start --web
+# 3. Arrancar con datos de demostración
+npm run web:demo
 ```
 
-Cuando abra, añade `/kiosk` a la URL: `http://localhost:8081/kiosk`.
+Y ya está: se abre el navegador y **estás dentro**, sin crear ninguna cuenta y sin
+pegar ninguna clave. Verás el panel completo con datos inventados —quién está
+trabajando ahora, el equipo, el horario de la semana, las horas y las solicitudes—
+con un aviso permanente de que nada de eso es real.
+
+Es la forma de mirar la aplicación, criticarla y decidir sobre ella sin montar antes
+una base de datos. Los datos viven en la memoria de la pestaña y se pierden al
+recargar, que es justo lo que uno quiere cuando está probando.
+
+Cuando abra, añade `/kiosk` a la URL para ver el reloj de fichaje:
+`http://localhost:8081/kiosk`.
+
+### Con datos de verdad
+
+Cuando exista el proyecto de Supabase (ver «Configurar Supabase paso a paso»):
+
+```powershell
+Copy-Item .env.example .env
+notepad .env    # pega la URL y la anon key
+npm run web
+```
 
 **Si te equivocas de carpeta**, el síntoma es
 `fatal: not a git repository`: significa que no estás dentro de `krealo-shift`.
 `cd $HOME\krealo-shift` y vuelve a intentarlo.
 
-### El script que hace los pasos 2 a 4 de una
+### El script que hace los pasos 2 y 3 de una
 
 ```powershell
 .\scripts\windows-empezar.ps1
@@ -157,15 +186,22 @@ Para permitirlo solo en esta ventana:
 Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 ```
 
-Los cuatro comandos de arriba funcionan siempre y no dependen de esa política.
+Los comandos de arriba funcionan siempre y no dependen de esa política.
 
-### Qué se ve y qué no, sin credenciales de Supabase
+### Qué se ve y qué no
 
-| Funciona                                               | No funciona                                                  |
-| ------------------------------------------------------ | ------------------------------------------------------------ |
-| Recorrer el kiosco: reloj, teclado, ayuda, activación  | Validar un PIN                                               |
-| Cambiar de idioma y ver todo traducido                 | El panel administrativo (se queda en "Preparando tu sesión") |
-| Redimensionar la ventana: diseño de iPad y de teléfono | Cualquier dato real                                          |
+Con `npm run web:demo` se recorre **todo**: las cinco pestañas del panel con datos, el
+kiosco y los dos idiomas. Lo único que no hace es hablar con un servidor de verdad.
+
+| Funciona con `web:demo`                                      | Sigue necesitando Supabase                       |
+| ------------------------------------------------------------ | ------------------------------------------------ |
+| El panel entero: inicio, equipo, horario, horas, solicitudes | Datos reales de tu negocio                       |
+| El kiosco: reloj, teclado de PIN, ayuda, activación          | Validar un PIN de verdad contra la base          |
+| Los dos idiomas y el cambio en caliente                      | Que lo que fiches quede guardado en alguna parte |
+| Redimensionar la ventana: escritorio, iPad y teléfono        | Correos de recuperación de contraseña            |
+
+Sin `web:demo` **y** sin `.env`, la app se para en «Falta configuración del entorno» y
+te dice exactamente qué variables faltan. Eso es a propósito.
 
 ## Trabajar desde Windows
 
@@ -209,6 +245,31 @@ pulsación larga de 3 segundos sobre el logotipo dependen del ratón, no del ded
 Para probar en un dispositivo real desde Windows, la vía es un build de
 development con EAS (`eas build --profile development`) instalado en el iPad, y
 `npx expo start --dev-client` en la máquina.
+
+## Publicar la web
+
+La web se aloja en **Firebase Hosting** y el backend sigue en Supabase (decidido con
+Andree el 2026-09-14). La configuración está en `firebase.json` y el paso a paso, con
+lo que hace falta de tu parte, en **[`docs/FIREBASE-HOSTING.md`](docs/FIREBASE-HOSTING.md)**.
+
+En corto, una vez que exista el proyecto de Firebase:
+
+```powershell
+npm install -g firebase-tools   # una sola vez
+firebase login                  # una sola vez
+firebase use --add              # una sola vez: elige el proyecto
+npm run web:deploy
+```
+
+Dos cosas que conviene saber antes:
+
+- El **modo kiosco no funciona en la web publicada**, a propósito, y la app lo explica
+  en pantalla. El panel administrativo sí. El motivo está en
+  `src/lib/kiosk/disponibilidad.ts`.
+- **Recargar la página en una ruta interna** (`/team`, `/schedule`) depende del
+  reenvío a `index.html` de `firebase.json`. Si alguien quita esa regla, la web
+  publicada da 404 al recargar y navegando desde la raíz todo parece correcto. Hay una
+  prueba que lo vigila.
 
 ## Variables de entorno
 

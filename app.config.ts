@@ -77,7 +77,11 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
 
   web: {
-    // Expo Web es superficie de desarrollo para trabajar desde Windows, no producción.
+    // DESDE EL 2026-09-14 LA WEB ES LA SUPERFICIE PRINCIPAL, no una vista previa.
+    // Se publica en Firebase Hosting (decisión de Andree; ver `firebase.json` y la
+    // sección del README). El texto de abajo se escribió cuando web era solo una
+    // herramienta para trabajar desde Windows, y esa parte ya no es cierta; lo que
+    // sigue siendo cierto, y por eso se conserva, es POR QUÉ `single` y no `static`.
     //
     // `single` Y NO `static`, y el motivo es concreto: con `output: 'static'` el
     // servidor de desarrollo NO ARRANCA. Devuelve 500 con
@@ -92,8 +96,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // desarrollo, que es lo que usa una persona en Windows.
     //
     // Lo que se pierde con `single` es el prerenderizado por ruta, que sirve para
-    // SEO de un sitio desplegado. Aquí no se despliega nada: la web es una
-    // herramienta de desarrollo. No se pierde nada que este proyecto use.
+    // SEO. Aquí no importa: esto es un panel detrás de un inicio de sesión, no un
+    // sitio que deba aparecer en buscadores.
+    //
+    // Y tiene una consecuencia OPERATIVA que no es opcional: como solo existe
+    // `index.html`, cualquier ruta que no sea la raíz —/team, /schedule— vive solo
+    // en el router. El alojamiento TIENE que reenviar todo a `index.html` o recargar
+    // la página en cualquier ruta interna da 404. Eso es lo que hace la regla de
+    // `rewrites` en `firebase.json`.
     output: 'single',
     favicon: './assets/images/favicon.png',
     bundler: 'metro',

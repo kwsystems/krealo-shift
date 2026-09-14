@@ -255,9 +255,7 @@ export default function ManagerHomeScreen() {
                                   duration: minutesToHHmm(
                                     Math.max(
                                       0,
-                                      Math.round(
-                                        (now.getTime() - Date.parse(entry.since)) / 60000,
-                                      ),
+                                      Math.round((now.getTime() - Date.parse(entry.since)) / 60000),
                                     ),
                                   ),
                                 })}
