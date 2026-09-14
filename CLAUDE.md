@@ -100,6 +100,14 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
 - `/tasks/list` corta en 500 ítems y puede devolver registros `act_*` / `rec_*`
   además de tareas normales.
 - Usar el token equivocado en `create`/`update` da `PUBLISHER_AUTH_FAILED`.
+- **`/tasks/create` recorta `description` a 2000 caracteres exactos y responde
+  `success: true` sin avisar.** `/tasks/update` NO recorta: acepta y devuelve
+  intactos al menos 9000 caracteres (medido). Por eso, para una descripción larga:
+  **crear con un resumen corto y escribir el texto completo con `update`**, y
+  comprobar siempre la longitud leída contra la enviada.
+  Verificado el 2026-09-14 comparando los borradores enviados con lo guardado: los
+  primeros 2000 caracteres coinciden byte a byte y el resto se perdió. Dejó 27 de
+  las 43 tareas del proyecto cortadas a media palabra.
 
 ## Skills instalados (`.claude/skills/`) — 219
 
