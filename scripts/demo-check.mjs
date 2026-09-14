@@ -80,6 +80,32 @@ for (const [nombre, ruta] of RUTAS) {
   console.log(`  ${nombre.padEnd(9)} ${String(texto.length).padStart(5)} car.  ${ruta}`);
 }
 
+/*
+ * La cabecera de escritorio aparece en ancho y NO en teléfono.
+ *
+ * Las dos mitades importan. Que aparezca es lo que da identidad al panel en un
+ * monitor; que NO aparezca en teléfono es lo que impide que robe alto de pantalla
+ * donde el alto es el recurso escaso. Un `useSidebar` mal puesto rompe una de las dos
+ * sin romper ninguna pantalla, así que nada más lo notaría.
+ */
+for (const [etiqueta, ancho, esperada] of [
+  ['teléfono', 390, false],
+  ['escritorio', 1440, true],
+]) {
+  const ctx = await navegador.newContext({ viewport: { width: ancho, height: 900 } });
+  const pag = await ctx.newPage();
+  await pag.goto(base + '/', { waitUntil: 'networkidle' });
+  await pag.waitForTimeout(1800);
+  const hay = (await pag.locator('[data-testid="desktop-header"]').count()) > 0;
+  if (hay !== esperada) {
+    problemas.push(
+      `cabecera en ${etiqueta} (${ancho}px): ${hay ? 'aparece y no debería' : 'no aparece y debería'}`,
+    );
+  }
+  console.log(`  cabecera  ${etiqueta.padEnd(11)} ${hay ? 'sí' : 'no'}  (se espera ${esperada ? 'sí' : 'no'})`);
+  await ctx.close();
+}
+
 await navegador.close();
 await cerrar();
 

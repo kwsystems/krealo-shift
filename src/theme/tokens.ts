@@ -187,6 +187,17 @@ export const breakpoints = {
 export const SIDEBAR_MIN_WIDTH = breakpoints.wide;
 
 /**
+ * Ancho de la barra lateral cuando hay sidebar (§6.3, §33).
+ *
+ * Sin fijarlo, la barra se quedaba en los 360 px que le tocan por omisión, que es
+ * ancho de pantalla de teléfono: en un monitor de 1920 se comía casi una quinta parte
+ * de la ventana para cinco palabras. Un panel de escritorio pone la navegación en una
+ * columna estrecha y da el resto al contenido; 248 es el ancho habitual y entra
+ * "Horario" sin cortarse.
+ */
+export const SIDEBAR_WIDTH = 248;
+
+/**
  * Estados de asistencia y su color semántico. El color nunca es la única señal:
  * cada estado lleva además icono y texto (§5, §21).
  */

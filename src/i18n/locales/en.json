@@ -187,7 +187,12 @@
     "workedHours": "Worked",
     "nobodyRightNow": "Nobody is clocked in right now",
     "nobodyRightNowHint": "People working, on break, late or absent show up here.",
-    "openSchedule": "Open the schedule"
+    "openSchedule": "Open the schedule",
+    "sinceLabel": "Since {{time}}",
+    "elapsedLabel": "{{duration}} so far",
+    "sinceBreakLabel": "On break since {{time}}",
+    "dueAtLabel": "Starts at {{time}}",
+    "shouldHaveEnteredLabel": "Was due at {{time}}"
   },
   "team": {
     "title": "Team",
@@ -609,5 +614,8 @@
   },
   "demo": {
     "banner": "Demo mode: this data is made up and resets on reload. There is no real server."
+  },
+  "app": {
+    "name": "Krealo Shift"
   }
 }

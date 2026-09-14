@@ -2,13 +2,22 @@ import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
+import { DesktopHeader } from '@/components/layout/desktop-header';
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
 import { ManagerScopeProvider } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, colors, fontFamily, fontSize, sizes, spacing } from '@/theme/tokens';
+import {
+  borderWidth,
+  colors,
+  fontFamily,
+  fontSize,
+  SIDEBAR_WIDTH,
+  sizes,
+  spacing,
+} from '@/theme/tokens';
 
 /**
  * Navegación de propietario, gerente y administrador (§6.3).
@@ -80,6 +89,13 @@ export default function ManagerLayout() {
 
   return (
     <ManagerScopeProvider>
+      {/*
+        La cabecera va DENTRO del provider porque lee la organización y la sede, y
+        FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una
+        cabecera que empieza donde acaba la navegación no es una cabecera de app. En
+        pantallas estrechas no pinta nada (ver DesktopHeader).
+      */}
+      <DesktopHeader />
       <Tabs
         screenOptions={{
           headerShown: false,
@@ -98,10 +114,26 @@ export default function ManagerLayout() {
             borderRightWidth: useSidebar ? borderWidth.hairline : 0,
             minHeight: sizes.touchTargetPreferred,
             paddingTop: useSidebar ? spacing.base : 0,
+            /*
+             * Sin esto la barra lateral se queda en los 360 px que le tocan por
+             * omisión —ancho de teléfono— y en un monitor se come casi una quinta
+             * parte de la ventana para cinco palabras.
+             *
+             * VAN LOS DOS, y `minWidth` es el que de verdad manda: react-navigation
+             * calcula un ancho mínimo por omisión con `getDefaultSidebarWidth` y lo
+             * aplica como `minWidth`, así que poner solo `width` no cambiaba NADA —un
+             * `min-width` mayor gana siempre—. Se vio midiendo el DOM, no leyendo el
+             * código: la barra seguía en 360 con el `width` puesto.
+             */
+            ...(useSidebar ? { width: SIDEBAR_WIDTH, minWidth: SIDEBAR_WIDTH } : null),
           },
           tabBarItemStyle: {
             minHeight: sizes.touchTargetPreferred,
             justifyContent: 'center',
+            // En vertical, cada pestaña se queda con el alto que necesita en vez de
+            // repartirse la columna entera: si no, cinco pestañas ocupan toda la
+            // altura de un monitor y quedan separadas por huecos enormes.
+            ...(useSidebar ? { flex: 0, marginBottom: spacing.xs } : null),
           },
           tabBarLabelStyle: {
             fontFamily: fontFamily.medium,

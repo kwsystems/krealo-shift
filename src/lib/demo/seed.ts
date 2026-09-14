@@ -259,6 +259,78 @@ export function crearAlmacen(): Almacen {
     }
   }
 
+  /*
+   * Turnos de HOY que ya terminaron.
+   *
+   * Sin esto, el lunes la demostración enseñaba 00:00 en todas partes: «registradas
+   * 00:00 / 132:00», cada fila de Horas a cero y el resumen de la semana vacío. El
+   * bucle de arriba solo cierra los días ANTERIORES a hoy, así que un lunes no cerraba
+   * ninguno. Una app de control horario que enseña cero horas trabajadas parece rota,
+   * y era justo la queja de la que salió todo esto.
+   *
+   * Las horas se cuentan hacia atrás desde AHORA, no desde una hora fija del día: así
+   * son pasado a cualquier hora a la que se abra la demostración, también a las nueve
+   * de la mañana.
+   */
+  for (let persona = 6; persona < 10; persona += 1) {
+    contadorSesion += 1;
+    const entrada = new Date(ahora.getTime() - (8 * 60 + persona * 7) * 60000);
+    const salida = new Date(ahora.getTime() - (2 * 60 + persona * 5) * 60000);
+    const brutos = Math.round((salida.getTime() - entrada.getTime()) / 60000);
+    const descansoNoPagado = 30;
+    const netos = brutos - descansoNoPagado;
+    const ubicacion = persona % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1;
+    const revisar = persona === 7;
+
+    sesiones.push({
+      id: sesionId(contadorSesion),
+      organization_id: DEMO_ORG_ID,
+      employee_id: empleadoId(persona + 1),
+      location_id: ubicacion,
+      shift_id: null,
+      starts_at: aISO(entrada),
+      ends_at: aISO(salida),
+      gross_minutes: brutos,
+      paid_break_minutes: 0,
+      unpaid_break_minutes: descansoNoPagado,
+      net_minutes: netos,
+      status: revisar ? 'needs_review' : 'complete',
+      flags: revisar ? ['late'] : [],
+      updated_at: aISO(salida),
+    });
+
+    resumenDiario.push({
+      employee_id: empleadoId(persona + 1),
+      location_id: ubicacion,
+      work_date: fechaClave(hoy),
+      sessions: 1,
+      gross_minutes: brutos,
+      paid_break_minutes: 0,
+      unpaid_break_minutes: descansoNoPagado,
+      net_minutes: netos,
+      needs_review: revisar,
+      flags: revisar ? ['late'] : [],
+    });
+
+    for (const [tipo, cuando] of [
+      ['clock_in', entrada],
+      ['clock_out', salida],
+    ] as const) {
+      contadorEvento += 1;
+      eventos.push({
+        id: eventoId(contadorEvento),
+        organization_id: DEMO_ORG_ID,
+        employee_id: empleadoId(persona + 1),
+        location_id: ubicacion,
+        event_type: tipo,
+        break_type: null,
+        occurred_at: aISO(cuando),
+        source: 'kiosk',
+        is_offline: false,
+      });
+    }
+  }
+
   // Hoy: gente dentro ahora mismo, que es lo que hace viva la pantalla de inicio.
   const enCurso = [
     { persona: 0, entradaHace: 185, enDescanso: false },

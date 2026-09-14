@@ -187,7 +187,12 @@
     "workedHours": "Registradas",
     "nobodyRightNow": "Nadie está fichado ahora",
     "nobodyRightNowHint": "Aquí aparecen quienes están trabajando, en descanso, atrasados o ausentes.",
-    "openSchedule": "Abrir el horario"
+    "openSchedule": "Abrir el horario",
+    "sinceLabel": "Desde las {{time}}",
+    "elapsedLabel": "Lleva {{duration}}",
+    "sinceBreakLabel": "En descanso desde las {{time}}",
+    "dueAtLabel": "Entra a las {{time}}",
+    "shouldHaveEnteredLabel": "Debía entrar a las {{time}}"
   },
   "team": {
     "title": "Equipo",
@@ -609,5 +614,8 @@
   },
   "demo": {
     "banner": "Modo demostración: los datos son inventados y se pierden al recargar. No es un servidor real."
+  },
+  "app": {
+    "name": "Krealo Shift"
   }
 }

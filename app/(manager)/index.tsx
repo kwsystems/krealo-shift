@@ -11,6 +11,7 @@ import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerDashboard, type RightNowEntry } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useNetworkStore } from '@/stores/network-store';
 import { spacing } from '@/theme/tokens';
 import { currentLanguage } from '@/i18n';
@@ -29,6 +30,7 @@ export default function ManagerHomeScreen() {
   const scope = useManagerScope();
   const language = currentLanguage();
   const now = useLiveClock('minute');
+  const { isWide } = useResponsive();
 
   const online = useNetworkStore((state) => state.online);
   const syncing = useNetworkStore((state) => state.syncing);
@@ -44,6 +46,32 @@ export default function ManagerHomeScreen() {
   });
 
   const names = useEmployeeNames(scope.organization?.id ?? null);
+
+  /**
+   * `since` NO significa lo mismo en los cinco estados: es la entrada de quien está
+   * trabajando, el inicio del descanso de quien descansa, y el INICIO DEL TURNO de
+   * quien todavía no ha llegado o no llegó. Ver `RightNowEntry.since`.
+   *
+   * Una sola etiqueta para los cinco mentía: «Desde las 09:00 · Lleva 08:34» junto a
+   * «No se presentó» decía que alguien que no vino llevaba ocho horas dentro. El
+   * dato era correcto y la frase era falsa, que es la peor combinación.
+   */
+  const timeLabelKey = (estado: RightNowEntry['state']): string => {
+    switch (estado) {
+      case 'working':
+        return 'admin.sinceLabel';
+      case 'onBreak':
+        return 'admin.sinceBreakLabel';
+      case 'upcoming':
+        return 'admin.dueAtLabel';
+      default:
+        return 'admin.shouldHaveEnteredLabel';
+    }
+  };
+
+  /** Solo se lleva tiempo dentro quien está dentro. */
+  const cuentaTiempo = (estado: RightNowEntry['state']): boolean =>
+    estado === 'working' || estado === 'onBreak';
 
   const stateLabel = (entry: RightNowEntry): string => {
     switch (entry.state) {
@@ -194,15 +222,47 @@ export default function ManagerHomeScreen() {
                                   ? entry.name
                                   : (names.get(entry.employeeId) ?? t('team.unknownEmployee'))}
                               </AppText>
+                              {/*
+                                La hora suelta —"14:23"— no dice de qué. Con la
+                                etiqueta se lee sin tener que deducirla del estado.
+                              */}
                               <AppText variant="help" tone="subtle" tabular>
-                                {formatClockTime(
-                                  entry.since,
-                                  scope.timezone,
-                                  scope.timeFormat,
-                                  language,
-                                )}
+                                {t(timeLabelKey(entry.state), {
+                                  time: formatClockTime(
+                                    entry.since,
+                                    scope.timezone,
+                                    scope.timeFormat,
+                                    language,
+                                  ),
+                                })}
                               </AppText>
                             </Stack>
+
+                            {/*
+                              El tiempo transcurrido solo en pantalla ancha.
+                              En un monitor la fila tenía el nombre a la izquierda y la
+                              etiqueta de estado a 1.100 px de distancia, con el medio
+                              vacío: eso es lo que hace que una app se lea como un
+                              móvil estirado. Y no es relleno: cuánto lleva dentro
+                              alguien es el dato que decide si mandarlo a descansar.
+                              En teléfono no se pinta, porque ahí el ancho es el
+                              recurso escaso y la fila ya va justa. Y solo para quien
+                              está DENTRO: ver `cuentaTiempo`.
+                            */}
+                            {isWide && cuentaTiempo(entry.state) ? (
+                              <AppText variant="help" tone="subtle" tabular>
+                                {t('admin.elapsedLabel', {
+                                  duration: minutesToHHmm(
+                                    Math.max(
+                                      0,
+                                      Math.round(
+                                        (now.getTime() - Date.parse(entry.since)) / 60000,
+                                      ),
+                                    ),
+                                  ),
+                                })}
+                              </AppText>
+                            ) : null}
                             <StatusBadge
                               label={stateLabel(entry)}
                               tone={
