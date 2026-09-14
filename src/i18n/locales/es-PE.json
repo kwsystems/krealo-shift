@@ -606,5 +606,8 @@
     "manager": "Gerente",
     "employee": "Empleado",
     "label": "Tu rol"
+  },
+  "demo": {
+    "banner": "Modo demostración: los datos son inventados y se pierden al recargar. No es un servidor real."
   }
 }

@@ -14,6 +14,7 @@ import {
   useFonts,
 } from '@expo-google-fonts/inter';
 
+import { DemoBanner } from '@/components/ui/demo-banner';
 import { MissingConfigScreen } from '@/components/ui/missing-config';
 import { NotificationsGate } from '@/features/notifications/notifications-gate';
 import { isEnvConfigured } from '@/lib/env';
@@ -149,6 +150,12 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <StatusBar style="dark" />
+          {/*
+            El aviso de demostracion va ARRIBA DEL TODO y fuera del Stack, para que
+            ninguna pantalla —incluido el kiosco a pantalla completa— pueda taparlo.
+            Con la demostracion apagada no pinta nada.
+          */}
+          <DemoBanner />
           <Stack screenOptions={{ headerShown: false, contentStyle: styles.content }}>
             <Stack.Screen name="index" />
             <Stack.Screen name="(auth)" />

@@ -606,5 +606,8 @@
     "manager": "Manager",
     "employee": "Employee",
     "label": "Your role"
+  },
+  "demo": {
+    "banner": "Demo mode: this data is made up and resets on reload. There is no real server."
   }
 }

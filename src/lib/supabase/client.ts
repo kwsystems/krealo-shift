@@ -3,6 +3,8 @@ import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
 import { createClient, type SupabaseClient, type SupportedStorage } from '@supabase/supabase-js';
 
+import { getDemoClient } from '@/lib/demo/client';
+import { isDemoMode } from '@/lib/demo/config';
 import { env, isEnvConfigured } from '@/lib/env';
 import { secureStorage } from '@/lib/security/secure-storage';
 import type { Database } from './types';
@@ -38,6 +40,13 @@ let client: AppSupabaseClient | null = null;
  * reventar con un error técnico (§20).
  */
 export function getSupabase(): AppSupabaseClient | null {
+  /**
+   * El desvío del modo demostración va ANTES que nada, porque este es el único punto
+   * por el que pasa todo el acceso a datos de la app. Sustituyendo aquí, ninguna
+   * pantalla, hook o feature necesita enterarse de que está en demostración: el resto
+   * del código sigue hablando con lo que cree que es Supabase.
+   */
+  if (isDemoMode) return getDemoClient();
   if (!isEnvConfigured) return null;
   if (client !== null) return client;
 

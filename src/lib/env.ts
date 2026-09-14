@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { isDemoMode } from '@/lib/demo/config';
+
 /**
  * Validación de variables de entorno (especificación §30).
  *
@@ -87,7 +89,14 @@ export const missingEnvKeys: string[] = parsed.success
       .map((issue) => String(issue.path[0] ?? ''))
       .filter((key, index, all) => key !== '' && all.indexOf(key) === index);
 
-export const isEnvConfigured = parsed.success;
+/**
+ * EN MODO DEMOSTRACIÓN NO HACE FALTA CONFIGURACIÓN, y por eso esto no es `parsed.success`
+ * a secas: sin esta línea, la app con `EXPO_PUBLIC_DEMO=1` seguiría parándose en «Falta
+ * configuración del entorno», que es exactamente la pared que el modo demostración
+ * existe para quitar. No afloja nada fuera de ese modo: con la demostración apagada, las
+ * dos claves de Supabase siguen siendo obligatorias y el mensaje sigue nombrándolas.
+ */
+export const isEnvConfigured = parsed.success || isDemoMode;
 
 /**
  * Valores de entorno. Si la configuración está incompleta, devolvemos strings
