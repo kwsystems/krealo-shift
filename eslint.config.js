@@ -12,6 +12,7 @@ module.exports = defineConfig([
       'dist/*',
       // Salida de `npm run demo:export`: es un paquete compilado, no codigo fuente.
       'dist-demo/*',
+      'dist-demo-prod/*',
       '.expo/*',
       'node_modules/*',
       'coverage/*',

@@ -17,10 +17,12 @@ import { canUseAdminPanel } from '@/stores/session-store';
  *      escaparate. Y §19 lo dice sin rodeos: el empleado en kiosco no recibe
  *      push en P0/P1.
  *
- *   2. `web` — la previsualización web existe para trabajar desde Windows (§29),
- *      no es una superficie de producción. `expo-notifications` no obtiene un
- *      token de Expo en web sin claves VAPID configuradas, así que registrar
- *      allí solo produciría un error.
+ *   2. `web` — el motivo NO es que la web sea de segunda: desde 2026-09-14 la web
+ *      es la superficie principal y se publica en Firebase Hosting. El motivo es
+ *      técnico y sigue en pie: `expo-notifications` no obtiene un token de Expo en
+ *      web sin claves VAPID configuradas, así que registrar allí solo produciría un
+ *      error. Cuando haya VAPID, esta exclusión se revisa; la pantalla ya lo dice
+ *      así (`notifications.unavailableWeb`).
  *
  *   3. `noSession` / `noRole` — sin sesión no hay a quién asociar el token, y sin
  *      rol administrativo no hay nada que notificar: en P0/P1 el empleado no

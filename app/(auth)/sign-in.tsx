@@ -16,6 +16,7 @@ import {
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { sendPasswordReset } from '@/features/auth/password-reset';
+import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { getSupabase } from '@/lib/supabase/client';
 import { useSessionStore } from '@/stores/session-store';
 import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
@@ -241,18 +242,27 @@ export default function SignInScreen() {
             </Row>
           </Card>
 
-          <Card>
-            <AppText variant="help" tone="subtle">
-              {t('auth.employeeNoAccountNotice')}
-            </AppText>
-            <Link href="/kiosk/setup" asChild>
-              <SecondaryButton
-                label={t('auth.setupKioskLink')}
-                onPress={pressHandledByLink}
-                testID="setup-kiosk-link"
-              />
-            </Link>
-          </Card>
+          {/*
+            La tarjeta entera desaparece donde el modo kiosco no es posible.
+            Ofrecer "configurar este dispositivo como reloj" en un navegador era
+            mandar a alguien a una pantalla que solo sabe decir que no; y el aviso de
+            que los empleados fichan con su PIN tampoco ayuda a quien no puede montar
+            el reloj desde aquí. El porqué está en `src/lib/kiosk/disponibilidad.ts`.
+          */}
+          {kioskModeAvailable ? (
+            <Card>
+              <AppText variant="help" tone="subtle">
+                {t('auth.employeeNoAccountNotice')}
+              </AppText>
+              <Link href="/kiosk/setup" asChild>
+                <SecondaryButton
+                  label={t('auth.setupKioskLink')}
+                  onPress={pressHandledByLink}
+                  testID="setup-kiosk-link"
+                />
+              </Link>
+            </Card>
+          ) : null}
         </Stack>
       </ResponsiveContainer>
     </AppScreen>

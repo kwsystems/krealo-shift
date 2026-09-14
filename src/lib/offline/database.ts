@@ -220,9 +220,12 @@ create table if not exists sync_metadata (
  * la base es un archivo real. Perder un fichaje de verdad sería inaceptable; perder
  * uno de una previsualización no lo es.
  *
- * Y como en `secure-storage.ts`, se niega a correr en un build de producción web:
- * si alguien despliega la web como si fuera la app, mejor que falle al arrancar que
- * en silencio con una cola que se borra sola.
+ * En un build web de producción esto lanza, y ahora es un RESPALDO, no la guarda
+ * principal: el modo kiosco ya no se alcanza ahí —lo corta `kioskModeAvailable`, que
+ * explica el límite en pantalla en vez de reventar—, así que esta excepción solo
+ * salta si alguien abre un camino nuevo hasta la cola sin pasar por esa comprobación.
+ * Se queda precisamente para eso: fallar a la vista antes que aceptar fichajes en una
+ * cola que se borra sola.
  */
 function databaseNameForPlatform(): string {
   if (Platform.OS !== 'web') return DATABASE_NAME;

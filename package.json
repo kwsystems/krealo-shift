@@ -17,7 +17,9 @@
     "test:watch": "jest --watch",
     "doctor": "expo-doctor",
     "demo:export": "cross-env EXPO_PUBLIC_DEMO=1 expo export --platform web --output-dir dist-demo --clear",
-    "demo:check": "node scripts/demo-check.mjs dist-demo"
+    "demo:check": "node scripts/demo-check.mjs dist-demo",
+    "demo:export:prod": "cross-env EXPO_PUBLIC_DEMO=1 EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist-demo-prod --clear",
+    "demo:check:prod": "node scripts/demo-check.mjs dist-demo dist-demo-prod"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

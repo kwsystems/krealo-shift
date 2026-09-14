@@ -3,6 +3,8 @@ import { AppState } from 'react-native';
 import { Stack, useSegments } from 'expo-router';
 
 import { KioskNotSetUpState, useKioskNotSetUp } from '@/components/kiosk/not-set-up';
+import { KioskUnavailableHere } from '@/components/kiosk/unavailable-here';
+import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { keepScreenAwake, releaseScreenAwake } from '@/lib/kiosk/screen-awake';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskStore } from '@/stores/kiosk-store';
@@ -82,6 +84,18 @@ export default function KioskLayout() {
     });
     return () => subscription.remove();
   }, []);
+
+  /*
+   * PRIMERO si el kiosco puede existir aquí, y solo después si está configurado.
+   *
+   * El orden no es indiferente: donde el modo kiosco no es posible, ofrecer
+   * "configurar este dispositivo" manda a la gente a un callejón sin salida, porque
+   * la activación falla al intentar guardar la credencial. Se aplica a TODAS las
+   * rutas, `setup` incluida, que es justamente la que no debe abrirse.
+   */
+  if (!kioskModeAvailable) {
+    return <KioskUnavailableHere />;
+  }
 
   /*
    * LA GUARDA DE CREDENCIAL VA AQUÍ, no en cada pantalla.

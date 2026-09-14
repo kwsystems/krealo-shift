@@ -20,11 +20,15 @@
  *   EXPO_PUBLIC_DEMO=1 npx expo export --platform web --output-dir <dir>
  *   node scripts/demo-check.mjs <dir>
  */
+import { existsSync } from 'node:fs';
+
 import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
+/** Opcional: un segundo export compilado con EXPO_PUBLIC_APP_ENV=production. */
+const DIR_PROD = process.argv[3];
 if (DIR === undefined) {
-  console.error('Uso: node scripts/demo-check.mjs <directorio-del-export>');
+  console.error('Uso: node scripts/demo-check.mjs <export-demo> [export-produccion]');
   process.exit(2);
 }
 
@@ -81,6 +85,60 @@ for (const [nombre, ruta] of RUTAS) {
 }
 
 /*
+ * En un build de PRODUCCIÓN web, el kiosco explica su límite en vez de reventar.
+ *
+ * Esta comprobación existe por el fallo más caro que ha tenido este proyecto en web:
+ * `secure-storage.ts` lanzaba en cualquier acceso dentro de un build web de
+ * producción, y como el arranque lee la credencial del kiosco para saber si el
+ * dispositivo es un reloj, publicar la web servía UNA PÁGINA EN BLANCO. El panel
+ * entero, inalcanzable. En desarrollo no pasaba nada, así que ningún arnés anterior lo
+ * veía: la diferencia estaba justo en la variable que solo vale en el build publicado.
+ *
+ * Se intentó cubrirlo con una prueba unitaria y no salió: el módulo elige el almacén
+ * al cargarse, así que un `beforeAll` llegaba tarde y la prueba acababa ejercitando el
+ * almacén nativo mientras decía hablar de web —pasaba en verde sin comprobar nada—, y
+ * rehacer el registro de módulos para adelantarse rompe la inicialización de
+ * jest-expo. Esto se comprueba abriendo el build publicado, que además es como se
+ * encontró.
+ *
+ * Solo corre si se le pasa un segundo directorio con el build de producción.
+ */
+if (DIR_PROD !== undefined) {
+  if (!existsSync(DIR_PROD)) {
+    console.error(`No existe "${DIR_PROD}". Compílalo antes con: npm run demo:export:prod`);
+    process.exit(2);
+  }
+  const { base: baseProd, cerrar: cerrarProd } = await servirExport(DIR_PROD, 8124);
+  const ctx = await navegador.newContext({ viewport: { width: 1440, height: 900 } });
+  const pag = await ctx.newPage();
+  const erroresProd = [];
+  pag.on('pageerror', (e) => erroresProd.push(String(e).slice(0, 200)));
+
+  for (const [ruta, debeDecir] of [
+    ['/', null],
+    ['/kiosk', 'kiosk-unavailable-here'],
+    ['/kiosk/setup', 'kiosk-unavailable-here'],
+  ]) {
+    await pag.goto(baseProd + ruta, { waitUntil: 'networkidle' });
+    await pag.waitForTimeout(2200);
+    const texto = ((await pag.evaluate(() => document.body.innerText)) || '').trim();
+
+    if (texto.length < MINIMO_CARACTERES) {
+      problemas.push(`producción ${ruta}: pantalla en blanco (${texto.length} caracteres)`);
+    }
+    if (debeDecir !== null) {
+      const hay = (await pag.locator(`[data-testid="${debeDecir}"]`).count()) > 0;
+      if (!hay) problemas.push(`producción ${ruta}: falta la explicación del kiosco`);
+    }
+    console.log(`  producción ${ruta.padEnd(13)} ${String(texto.length).padStart(5)} car.`);
+  }
+
+  if (erroresProd.length > 0) problemas.push(`producción: ${erroresProd[0]}`);
+  await ctx.close();
+  await cerrarProd();
+}
+
+/*
  * La cabecera de escritorio aparece en ancho y NO en teléfono.
  *
  * Las dos mitades importan. Que aparezca es lo que da identidad al panel en un
@@ -102,7 +160,9 @@ for (const [etiqueta, ancho, esperada] of [
       `cabecera en ${etiqueta} (${ancho}px): ${hay ? 'aparece y no debería' : 'no aparece y debería'}`,
     );
   }
-  console.log(`  cabecera  ${etiqueta.padEnd(11)} ${hay ? 'sí' : 'no'}  (se espera ${esperada ? 'sí' : 'no'})`);
+  console.log(
+    `  cabecera  ${etiqueta.padEnd(11)} ${hay ? 'sí' : 'no'}  (se espera ${esperada ? 'sí' : 'no'})`,
+  );
   await ctx.close();
 }
 
