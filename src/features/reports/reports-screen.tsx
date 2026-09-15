@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import { hoursByEmployee, minutesByDay, minutesByReason, punctuality } from './aggregate';
+import {
+  breakMinutesByEmployee,
+  buildExportRows,
+  buildReportCsv,
+  buildReportSummary,
+  reportFileName,
+} from './export';
 import { useBreakTimeByReason } from './hooks';
+import { ShareReportSheet } from './share-sheet';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { InlineNotice, StatTile } from '@/components/schedule/fields';
 import { WeekNavigator } from '@/components/schedule/week-tools';
@@ -10,13 +19,14 @@ import { ChartCard } from '@/components/charts/chart-frame';
 import { DayColumns, type DayColumn } from '@/components/charts/day-columns';
 import { RankingBars, type RankingRow } from '@/components/charts/ranking-bars';
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton } from '@/components/ui/buttons';
+import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import {
   addWeeks,
   currentWeekStart,
   dateKeyOf,
   formatDateKeyLong,
+  formatDateKeyShort,
   formatDayColumn,
   formatWeekdayShort,
   weekDays,
@@ -27,6 +37,9 @@ import { useEmployeeNames } from '@/features/team/hooks';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerScope } from '@/hooks/use-manager-scope';
+import { track } from '@/lib/analytics';
+import { CSV_BOM } from '@/features/timesheets/csv';
+import { compartirArchivo } from '@/lib/compartir/archivo';
 import { currentLanguage } from '@/i18n';
 import { breakReasonLabels } from '@/i18n/break-reason-labels';
 import { chart, spacing } from '@/theme/tokens';
@@ -62,6 +75,7 @@ export function ReportsScreen() {
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [señalado, setSeñalado] = useState<Señalado>(null);
+  const [compartirAbierto, setCompartirAbierto] = useState(false);
   const [personaElegida, setPersonaElegida] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
@@ -137,6 +151,8 @@ export function ReportsScreen() {
   const dias = minutesByDay(resumenFiltrado, weekDays(weekStart));
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
   const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
+  // Para el resumen que se comparte: los motivos del local entero, sin filtro.
+  const motivosSinFiltrar = useMemo(() => minutesByReason(breaks.data ?? []), [breaks.data]);
 
   const totalMinutos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
   const extraMinutos = ranking.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
@@ -207,6 +223,113 @@ export function ReportsScreen() {
     isToday: dia.dateKey === hoyKey,
   }));
 
+  /*
+   * Compartir. El contenido se arma AQUÍ, con lo que ya está en pantalla, y no con una
+   * consulta nueva: si el archivo se pidiera aparte, lo enviado y lo visto podrían ser
+   * dos cosas distintas —otra semana, otra sede— y nadie se enteraría hasta que alguien
+   * comparase el correo con la pantalla.
+   *
+   * Y se comparte SIN el filtro de persona aplicado, a propósito: el botón está fuera
+   * del filtro y dice «las horas de N personas». Mandar en silencio el reporte de una
+   * sola porque quedó un filtro puesto sería exactamente lo contrario de decir qué se
+   * está mandando.
+   */
+  const pausasPorPersona = useMemo(() => breakMinutesByEmployee(breaks.data ?? []), [breaks.data]);
+
+  const periodoLegible = t('reports.periodRange', {
+    from: formatDateKeyShort(from, language),
+    to: formatDateKeyShort(to, language),
+  });
+
+  const compartir = useMutation({
+    mutationFn: async (formato: 'csv' | 'resumen') => {
+      const filas = buildExportRows({
+        ranking: hoursByEmployee(filasResumen, umbral),
+        nameOf: nombre,
+        punctuality: punctuality(filasSesiones),
+        breakMinutesByEmployee: pausasPorPersona,
+      });
+
+      if (formato === 'csv') {
+        const contenido = buildReportCsv({
+          rows: filas,
+          labels: {
+            employee: t('reports.csvEmployee'),
+            days: t('reports.csvDays'),
+            netHours: t('reports.csvNetHours'),
+            netDecimal: t('reports.csvNetDecimal'),
+            regularHours: t('reports.csvRegular'),
+            overtimeHours: t('reports.csvOvertime'),
+            shifts: t('reports.csvShifts'),
+            lateArrivals: t('reports.csvLate'),
+            breakMinutes: t('reports.csvBreakMinutes'),
+          },
+        });
+        await compartirArchivo({
+          nombre: reportFileName({ from, to }),
+          // La marca de orden de bytes, igual que en el CSV de Horas: sin ella Excel
+          // abre «Núñez» como «NuÃ±ez» y el reporte se devuelve.
+          contenido: `${CSV_BOM}${contenido}`,
+          tipoMime: 'text/csv',
+          uti: 'public.comma-separated-values-text',
+          titulo: reportFileName({ from, to }),
+        });
+        return filas.length;
+      }
+
+      const texto = buildReportSummary({
+        labels: {
+          heading: t('reports.summaryHeading', {
+            location: scope.locations.find((sede) => sede.id === scope.locationId)?.name ?? '',
+            period: periodoLegible,
+          }),
+          totalHours: t('reports.totalHours'),
+          people: t('reports.people'),
+          overtime: t('reports.overtime'),
+          punctuality: t('reports.onTime'),
+          punctualityUnknown: t('reports.punctualityNoDataShort'),
+          topPerson: t('reports.summaryTop'),
+          topReason: t('reports.summaryTopReason'),
+          footer: t('reports.summaryFooter'),
+        },
+        totalMinutes: totalMinutos,
+        people: ranking.length,
+        overtimeMinutes: extraMinutos,
+        punctuality: punctuality(filasSesiones),
+        top:
+          ranking[0] === undefined
+            ? null
+            : { name: nombre(ranking[0].employeeId), minutes: ranking[0].netMinutes },
+        topReason:
+          motivosSinFiltrar[0] === undefined
+            ? null
+            : {
+                name: etiquetaMotivo[motivosSinFiltrar[0].reason],
+                minutes: motivosSinFiltrar[0].minutes,
+              },
+      });
+
+      await compartirArchivo({
+        nombre: t('reports.summaryFileName', { from, to }),
+        contenido: texto,
+        tipoMime: 'text/plain',
+        uti: 'public.plain-text',
+        titulo: t('reports.shareTitle'),
+      });
+      return filas.length;
+    },
+    /*
+     * Se reutiliza `timesheet_exported` y NO se inventa un décimo evento: §31 nombra
+     * nueve y hay una prueba que lo comprueba contra este archivo. Esto ES una
+     * exportación de hoja de tiempo, solo que iniciada desde otra pantalla, y se miden
+     * los TAMAÑOS, nunca qué se exportó ni de quién.
+     */
+    onSuccess: (filas) => {
+      track({ name: 'timesheet_exported', rowCount: filas, dayCount: 7 });
+      setCompartirAbierto(false);
+    },
+  });
+
   const señalarFila =
     (titulo: string) =>
     (row: RankingRow | null): void => {
@@ -247,6 +370,34 @@ export function ReportsScreen() {
             onPrevious={() => setWeekOffset((valor) => valor - 1)}
             onNext={() => setWeekOffset((valor) => valor + 1)}
             onGoToCurrent={() => setWeekOffset(0)}
+          />
+
+          {/*
+            Compartir vive JUNTO al periodo, no al final de la pantalla. Lo que se manda
+            es «esta semana», así que el botón tiene que estar donde se ve cuál es: al
+            final, después de cinco gráficos, ya nadie recuerda qué semana está mirando.
+            Deshabilitado mientras no hay nada que mandar, que es más honesto que
+            compartir un archivo con solo la fila de cabecera.
+          */}
+          <Row>
+            <SecondaryButton
+              label={t('reports.share')}
+              onPress={() => setCompartirAbierto(true)}
+              disabled={ranking.length === 0}
+              fullWidth={false}
+              testID="report-share-open"
+            />
+          </Row>
+
+          <ShareReportSheet
+            visible={compartirAbierto}
+            onClose={() => setCompartirAbierto(false)}
+            periodo={periodoLegible}
+            personas={ranking.length}
+            compartiendo={compartir.isPending ? (compartir.variables ?? null) : null}
+            onCsv={() => compartir.mutate('csv')}
+            onResumen={() => compartir.mutate('resumen')}
+            error={compartir.error}
           />
 
           <AsyncSection

@@ -24,6 +24,8 @@
  *   npm run demo:export
  *   node scripts/reportes-check.mjs dist-demo
  */
+import { readFileSync } from 'node:fs';
+
 import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
@@ -65,7 +67,10 @@ function soloHoras(texto) {
 
 // ------------------------------------------------- 1. Reportes contra Horas
 {
-  const contexto = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const contexto = await navegador.newContext({
+    viewport: { width: 1440, height: 1000 },
+    acceptDownloads: true,
+  });
   const pagina = await contexto.newPage();
   const errores = [];
   pagina.on('pageerror', (e) => errores.push(String(e).slice(0, 200)));
@@ -154,6 +159,77 @@ function soloHoras(texto) {
     console.log(
       `  ${nombre.padEnd(18)} ${marcas.length} marcas, ${eje} de ${Math.min(...marcas)} a ${Math.max(...marcas)} px`,
     );
+  }
+
+  /*
+   * ----------------------------------------- 4. lo que se comparte es lo que se ve
+   *
+   * Un botón de compartir que no descarga nada no lanza ningún error: la hoja se abre,
+   * se toca, y no pasa nada. Y en la web eso era literalmente el caso —`expo-sharing`
+   * no existe en un navegador— así que «Exportar CSV» en Horas llevaba roto desde que
+   * la web pasó a ser la forma principal de usar la app.
+   *
+   * No basta con que descargue: se SUMA la columna decimal del CSV y se exige que dé
+   * el mismo total que la pantalla. Así se cubre de una vez que el archivo llega, que
+   * no va vacío, que el decimal de nómina no está escrito como el reloj (1.30 en vez
+   * de 1.50) y que lo exportado es el mismo periodo que lo mirado.
+   */
+  await pagina.locator('[data-testid="report-share-open"]').click();
+  await pagina.waitForTimeout(900);
+
+  const queSeComparte = (
+    (await pagina.locator('[data-testid="report-share-what"]').innerText()) || ''
+  )
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!/\d/.test(queSeComparte)) {
+    problemas.push('la hoja de compartir no dice cuántas personas ni de qué periodo');
+  }
+  console.log(`  compartir dice: ${queSeComparte}`);
+
+  const esperaCsv = pagina.waitForEvent('download', { timeout: 20000 }).catch(() => null);
+  await pagina.locator('[data-testid="report-share-csv"]').click();
+  const bajada = await esperaCsv;
+
+  if (bajada === null) {
+    problemas.push('compartir el CSV no descargó ningún archivo en el navegador');
+  } else {
+    const ruta = '/tmp/krealo-reporte-check.csv';
+    await bajada.saveAs(ruta);
+    const texto = readFileSync(ruta, 'utf8');
+    const lineas = texto.trim().split(/\r?\n/);
+    /*
+     * El decimal es la 4ª de nueve columnas, y se cuenta DESDE EL FINAL: un apellido con
+     * coma va entrecomillado y `split(',')` lo parte igual, así que contar desde el
+     * principio se desplazaría justo en las filas que importan. Desde el final, las seis
+     * últimas columnas nunca se mueven.
+     *
+     * Contándolo desde el principio la primera versión leía la columna del reloj y
+     * `parseFloat('11:21')` daba 11: sumaba 45 h donde hay 48.85, y el arnés acusaba a
+     * la app de un error que era suyo.
+     */
+    const suma = lineas
+      .slice(1)
+      .map((linea) => Number.parseFloat(linea.split(',').slice(-6)[0] ?? '0'))
+      .reduce((a, b) => a + b, 0);
+    const [hh = '0', mm = '0'] = (reporteNeto ?? '0:0').split(':');
+    const pantalla = Number.parseInt(hh, 10) + Number.parseInt(mm, 10) / 60;
+    const desvio = Math.abs(suma - pantalla);
+    console.log(
+      `  CSV ${bajada.suggestedFilename()}: ${lineas.length - 1} filas, suma ${suma.toFixed(2)} h contra ${pantalla.toFixed(2)} h en pantalla`,
+    );
+    if (lineas.length < 2) {
+      problemas.push('el CSV compartido no tiene ni una fila de datos');
+    }
+    // Tolerancia de un minuto por fila: cada fila redondea a dos decimales.
+    if (desvio > (lineas.length - 1) * 0.017 + 0.01) {
+      problemas.push(
+        `el CSV NO suma lo que enseña la pantalla: ${suma.toFixed(2)} h contra ${pantalla.toFixed(2)} h.`,
+      );
+    }
+    if (!texto.startsWith('\uFEFF')) {
+      problemas.push('al CSV le falta la marca de orden de bytes: Excel abrirá los acentos mal');
+    }
   }
 
   if (errores.length > 0) problemas.push(`Reportes lanzó: ${errores[0]}`);
