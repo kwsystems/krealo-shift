@@ -37,6 +37,7 @@ const RUTAS = [
   ['equipo', '/team'],
   ['horario', '/schedule'],
   ['horas', '/hours'],
+  ['reportes', '/reports'],
   ['mas', '/more'],
   ['kiosco', '/kiosk'],
 ];

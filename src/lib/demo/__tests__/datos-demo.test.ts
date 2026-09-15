@@ -24,9 +24,11 @@ import { fetchPublications, fetchWeekShifts } from '@/features/schedules/api';
 import { fetchDailySummaries, fetchPeriod, fetchWorkSessions } from '@/features/timesheets/api';
 import { fetchRequests } from '@/features/requests/api';
 import { fetchKioskDevices } from '@/features/settings/api';
+import { fetchBreakTimeByReason } from '@/features/reports/api';
 import { getSupabase } from '@/lib/supabase/client';
 import { DEMO_LOCATION_1, DEMO_ORG_ID } from '@/lib/demo/seed';
 import { TABLES } from '@/lib/supabase/types';
+import { BREAK_REASONS } from '@/domain/break-reason';
 
 const lunes = (() => {
   const hoy = new Date();
@@ -151,6 +153,26 @@ describe('modo demostración', () => {
       locationId: DEMO_LOCATION_1,
     });
     expect(solicitudes.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * Reportes se apoya en `break_time_by_reason`, una vista NUEVA. Una vista que la
+   * semilla no tenga no da error: devuelve cero filas, y el gráfico de «en qué se va
+   * el tiempo» sale vacío para siempre sin que nada lo denuncie —exactamente el fallo
+   * silencioso que ya dejó la app entera en «falta un permiso»—. Por eso se comprueba
+   * que responde CON datos, y que los motivos son de los que la app conoce.
+   */
+  it('Reportes recibe pausas con motivo, no una vista vacía', async () => {
+    const pausas = await fetchBreakTimeByReason({
+      locationId: DEMO_LOCATION_1,
+      from: clave(new Date(lunes.getTime() - 7 * 86400000)),
+      to: clave(domingo),
+    });
+    expect(pausas.length).toBeGreaterThan(0);
+    const motivos = new Set(pausas.map((fila) => fila.break_reason));
+    for (const motivo of motivos) {
+      expect(BREAK_REASONS).toContain(motivo);
+    }
   });
 
   it('hay relojes en el inventario de kioscos', async () => {

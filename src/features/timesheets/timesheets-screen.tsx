@@ -301,6 +301,14 @@ export function TimesheetsScreen() {
                   value={minutesToHHmm(totals.overtimeMinutes)}
                   tone="onBreak"
                   icon="trending-up-outline"
+                  /*
+                   * El `testID` lo pide `scripts/reportes-check.mjs`: abre esta
+                   * pestaña y la de Reportes en la misma semana y exige que las dos
+                   * digan lo mismo. Si no lo dicen, una de las dos miente sobre las
+                   * horas de gente real, y eso no puede depender de que alguien se
+                   * acuerde de compararlas a mano.
+                   */
+                  testID="total-overtime"
                 />
                 {/*
                   EQUIVALENTE CON EL MULTIPLICADOR (§13), y solo si hay horas extra: una

@@ -8,6 +8,7 @@ import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
 import type { BreakReason } from '@/domain/break-reason';
+import { breakReasonLabels } from '@/i18n/break-reason-labels';
 import { colors, radii, shadows, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -82,14 +83,7 @@ export function BreakReasonSheet({
 }) {
   const { t } = useTranslation();
 
-  const labels: Record<BreakReason, string> = {
-    meal: t('kiosk.reasonMeal'),
-    rest: t('kiosk.reasonRest'),
-    permit: t('kiosk.reasonPermit'),
-    meeting: t('kiosk.reasonMeeting'),
-    training: t('kiosk.reasonTraining'),
-    other: t('kiosk.reasonOther'),
-  };
+  const labels = breakReasonLabels(t);
 
   return (
     <Sheet visible={visible} onClose={onCancel} testID="break-reason-sheet">

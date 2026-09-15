@@ -105,6 +105,15 @@ export const VIEWS = {
 
   dailyTimeSummary: 'daily_time_summary',
   /**
+   * Minutos de pausa por empleado, día y motivo (§11.4, pedido de Andree 2026-09-15).
+   *
+   * Responde a «en qué se va el tiempo que no se trabaja» sin traerse los intervalos
+   * crudos al cliente para sumarlos ahí: son cientos de filas por semana y la cuenta
+   * la hace mejor la base. La vista es `security_invoker = true`, así que cada quien ve
+   * exactamente las sedes que su RLS le deja ver, ni una más.
+   */
+  breakTimeByReason: 'break_time_by_reason',
+  /**
    * Inventario de kioscos. Se lee la VISTA y nunca la tabla: `kiosk_devices` está
    * revocada para `authenticated` porque tiene dos secretos del dispositivo
    * (`credential_hash` y `offline_key`) que ninguna sesión de la app debe leer.

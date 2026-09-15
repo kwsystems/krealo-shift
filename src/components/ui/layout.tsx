@@ -97,12 +97,19 @@ export function Stack({
   children,
   gap = spacing.base,
   style,
+  testID,
 }: {
   children: ReactNode;
   gap?: number;
   style?: ViewStyle;
+  /** Igual que en `Row`: los arneses y las pruebas E2E señalan contenedores. */
+  testID?: string;
 }) {
-  return <View style={[{ gap }, style]}>{children}</View>;
+  return (
+    <View testID={testID} style={[{ gap }, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function Row({

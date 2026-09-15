@@ -206,6 +206,19 @@ export function formatDayColumn(key: DateKey, language: SupportedLanguage): stri
   return format(utc, 'EEE d', { locale: dateFnsLocales[language] });
 }
 
+/**
+ * Solo el día de la semana: "lun", "Mon".
+ *
+ * Para ejes donde no cabe la fecha entera. En un teléfono de 390 px, siete etiquetas
+ * "lun 14" no entran y salían cortadas —"mar…", "mié…"—, que es peor que no poner el
+ * número: una etiqueta a medias se lee mal y encima parece un fallo.
+ */
+export function formatWeekdayShort(key: DateKey, language: SupportedLanguage): string {
+  const utc = keyToUtc(key);
+  if (utc === null) return key;
+  return format(utc, 'EEE', { locale: dateFnsLocales[language] });
+}
+
 /** Fecha larga del encabezado: "27 de agosto de 2026". */
 export function formatDateKeyLong(key: DateKey, language: SupportedLanguage): string {
   const utc = keyToUtc(key);

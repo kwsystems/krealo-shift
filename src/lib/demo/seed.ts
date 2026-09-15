@@ -1,4 +1,5 @@
 import type { Almacen, Fila } from './postgrest';
+import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 
 /**
  * Los datos de la demostración.
@@ -41,6 +42,44 @@ const turnoId = (n: number) => id('55555555', n);
 const sesionId = (n: number) => id('66666666', n);
 const eventoId = (n: number) => id('77777777', n);
 const solicitudId = (n: number) => id('88888888', n);
+const pausaId = (n: number) => id('aaaaaaaa', n);
+
+/**
+ * Los motivos que se reparten entre las personas de la demostración, en este orden.
+ * Se recorren en círculo, así que hay al menos uno de cada en cuanto hay seis
+ * personas fichando, que es lo que hace que el gráfico de motivos tenga algo que
+ * enseñar.
+ */
+const MOTIVOS_DEMO: readonly BreakReason[] = [
+  'meal',
+  'rest',
+  'permit',
+  'meeting',
+  'training',
+  'other',
+];
+
+/**
+ * Cuánto dura una pausa de cada tipo, en minutos.
+ *
+ * NO SON TODAS DE 30, y eso lo descubrió el arnés, no el ojo. Con la primera versión
+ * —media hora para todo el mundo— el gráfico de «en qué se va el tiempo que no se
+ * trabaja» salía con cuatro barras EXACTAMENTE iguales. No estaba roto: los datos eran
+ * planos, y un gráfico de barras iguales no responde la pregunta que lo justifica. Una
+ * demostración así enseña un tablero que parece inútil.
+ *
+ * Los números son los que se ven en una tienda de verdad: la comida es la pausa larga,
+ * el descanso corto es corto, un permiso personal se lleva una hora, y una reunión o
+ * una capacitación duran lo que duran.
+ */
+const MINUTOS_POR_MOTIVO: Readonly<Record<BreakReason, number>> = {
+  meal: 45,
+  rest: 12,
+  permit: 60,
+  meeting: 25,
+  training: 40,
+  other: 20,
+};
 
 function aISO(fecha: Date): string {
   return fecha.toISOString();
@@ -190,6 +229,8 @@ export function crearAlmacen(): Almacen {
   const sesiones: Fila[] = [];
   const trabajandoAhora: Fila[] = [];
   const resumenDiario: Fila[] = [];
+  const intervalos: Fila[] = [];
+  const pausasPorMotivo: Fila[] = [];
 
   let contadorSesion = 0;
   let contadorEvento = 0;
@@ -200,9 +241,42 @@ export function crearAlmacen(): Almacen {
     for (let persona = 0; persona < 6; persona += 1) {
       contadorSesion += 1;
       const entrada = conHora(fecha, 8, persona % 2 === 0 ? 0 : 9);
-      const salida = conHora(fecha, 14, persona % 3 === 0 ? 12 : 0);
+      /*
+       * UNA PERSONA CIERRA LA TIENDA y se pasa del umbral diario; el resto sale a las
+       * dos. Sin esto, la demostración no tenía ni un minuto de horas extra, así que el
+       * gráfico que las compara enseñaba su estado vacío SIEMPRE y la barra apilada
+       * —dos series, leyenda y hueco de superficie entre tramos— no se veía nunca.
+       *
+       * Lo cazó `scripts/reportes-check.mjs` leyendo «extra 00:00» en las dos pantallas:
+       * cuadraban, sí, pero cuadraban en cero, que es la forma más fácil de cuadrar y
+       * la que no demuestra nada.
+       */
+      const cierra = persona === 3 ? 'tarde' : persona === 0 ? 'pronto' : null;
+      const salida =
+        cierra === 'tarde'
+          ? conHora(fecha, 19, 30)
+          : cierra === 'pronto'
+            ? conHora(fecha, 17, 10)
+            : conHora(fecha, 14, persona % 3 === 0 ? 12 : 0);
       const brutos = Math.round((salida.getTime() - entrada.getTime()) / 60000);
-      const descansoNoPagado = 30;
+      /*
+       * CADA PERSONA SE AUSENTA POR UN MOTIVO DISTINTO, y de ahí sale si esos minutos
+       * cuentan como trabajados o no. No es adorno: si en la demostración todas las
+       * pausas fueran «comida», el gráfico de «en qué se va el tiempo que no se
+       * trabaja» enseñaría una sola barra y no demostraría nada de lo que existe para
+       * demostrar.
+       *
+       * El reparto pagado/no pagado NO se escribe a mano aquí: sale de
+       * `DEFAULT_PAID_REASONS`, la misma tabla que usa la app de verdad. Así la
+       * demostración no puede contradecir a la app —si mañana una reunión deja de
+       * contar como trabajo, estos números cambian solos— y `net_minutes` sigue
+       * siendo bruto menos lo que de verdad no se paga.
+       */
+      const motivo = MOTIVOS_DEMO[persona % MOTIVOS_DEMO.length] ?? 'meal';
+      const minutosPausa = MINUTOS_POR_MOTIVO[motivo];
+      const pagada = DEFAULT_PAID_REASONS[motivo];
+      const descansoPagado = pagada ? minutosPausa : 0;
+      const descansoNoPagado = pagada ? 0 : minutosPausa;
       const netos = brutos - descansoNoPagado;
       const tarde = persona % 2 !== 0;
       const ubicacion = persona % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1;
@@ -216,11 +290,11 @@ export function crearAlmacen(): Almacen {
         starts_at: aISO(entrada),
         ends_at: aISO(salida),
         gross_minutes: brutos,
-        paid_break_minutes: 0,
+        paid_break_minutes: descansoPagado,
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
         status: tarde ? 'needs_review' : 'complete',
-        flags: tarde ? ['late'] : [],
+        flags: tarde ? ['late_arrival'] : [],
         updated_at: aISO(salida),
       });
 
@@ -230,17 +304,47 @@ export function crearAlmacen(): Almacen {
         work_date: fechaClave(fecha),
         sessions: 1,
         gross_minutes: brutos,
-        paid_break_minutes: 0,
+        paid_break_minutes: descansoPagado,
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
         needs_review: tarde,
-        flags: tarde ? ['late'] : [],
+        flags: tarde ? ['late_arrival'] : [],
+      });
+
+      const inicioPausa = conHora(fecha, 11);
+      const finPausa = conHora(fecha, 11, minutosPausa);
+      const tipoPausa = pagada ? 'paid' : 'unpaid';
+
+      intervalos.push({
+        id: pausaId(contadorSesion),
+        work_session_id: sesionId(contadorSesion),
+        organization_id: DEMO_ORG_ID,
+        employee_id: empleadoId(persona + 1),
+        starts_at: aISO(inicioPausa),
+        ends_at: aISO(finPausa),
+        duration_minutes: minutosPausa,
+        break_type: tipoPausa,
+        break_reason: motivo,
+      });
+
+      // La vista `break_time_by_reason` la calcula la base con SQL; aquí es una tabla
+      // ya agregada, igual que `daily_time_summary`. Se construye del MISMO intervalo
+      // de arriba para que el gráfico de motivos no pueda discrepar de las pausas.
+      pausasPorMotivo.push({
+        organization_id: DEMO_ORG_ID,
+        location_id: ubicacion,
+        employee_id: empleadoId(persona + 1),
+        work_date: fechaClave(fecha),
+        break_reason: motivo,
+        break_type: tipoPausa,
+        pauses: 1,
+        minutes: minutosPausa,
       });
 
       for (const [tipo, cuando, descanso] of [
         ['clock_in', entrada, null],
-        ['break_start', conHora(fecha, 11), 'unpaid'],
-        ['break_end', conHora(fecha, 11, 30), 'unpaid'],
+        ['break_start', inicioPausa, tipoPausa],
+        ['break_end', finPausa, tipoPausa],
         ['clock_out', salida, null],
       ] as const) {
         contadorEvento += 1;
@@ -281,6 +385,14 @@ export function crearAlmacen(): Almacen {
     const netos = brutos - descansoNoPagado;
     const ubicacion = persona % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1;
     const revisar = persona === 7;
+    /*
+     * Alguien que cubrió sin turno programado. Lo marca el servidor con `unscheduled`,
+     * y existe aquí porque es el caso que el gráfico de puntualidad tiene que saber
+     * dejar fuera: sin turno no hay hora a la que llegar, así que no puede llegar
+     * tarde ni a tiempo. Sin una fila así, la nota que lo explica no se ve nunca en la
+     * demostración y nadie se entera de que la regla existe.
+     */
+    const sinTurno = persona === 9;
 
     sesiones.push({
       id: sesionId(contadorSesion),
@@ -295,7 +407,7 @@ export function crearAlmacen(): Almacen {
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
       status: revisar ? 'needs_review' : 'complete',
-      flags: revisar ? ['late'] : [],
+      flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
       updated_at: aISO(salida),
     });
 
@@ -309,7 +421,7 @@ export function crearAlmacen(): Almacen {
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
       needs_review: revisar,
-      flags: revisar ? ['late'] : [],
+      flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
     });
 
     for (const [tipo, cuando] of [
@@ -553,12 +665,13 @@ export function crearAlmacen(): Almacen {
   almacen.set('push_tokens', []);
   almacen.set('announcements', []);
   almacen.set('audit_logs', []);
-  almacen.set('break_intervals', []);
+  almacen.set('break_intervals', intervalos);
   almacen.set('time_adjustments', correcciones);
 
   // Vistas: aquí son tablas de solo lectura ya calculadas. La base las deriva con SQL.
   almacen.set('employees_working_now', trabajandoAhora);
   almacen.set('daily_time_summary', resumenDiario);
+  almacen.set('break_time_by_reason', pausasPorMotivo);
   almacen.set('time_adjustments_with_author', correcciones);
   almacen.set('kiosk_devices_admin', kioscos);
 

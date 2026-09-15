@@ -22,9 +22,15 @@ import {
 /**
  * Navegación de propietario, gerente y administrador (§6.3).
  *
- * Cinco pestañas: Inicio, Equipo, Horario, Horas y Más. Horario es una pestaña
- * principal, no una pantalla escondida, porque cambiar los turnos cada semana es
- * la tarea central del administrador (§6.3, §11.3).
+ * Seis pestañas: Inicio, Equipo, Horario, Horas, Reportes y Más. Horario es una
+ * pestaña principal, no una pantalla escondida, porque cambiar los turnos cada semana
+ * es la tarea central del administrador (§6.3, §11.3).
+ *
+ * REPORTES TAMBIÉN VA AQUÍ Y NO DENTRO DE «MÁS». Lo pidió Andree como importantísimo,
+ * y lo que vive dentro de «Más» se abre el primer día y no se vuelve a abrir: un
+ * tablero que hay que ir a buscar no se mira. La sexta pestaña aprieta la barra en un
+ * teléfono estrecho, y por eso `scripts/reportes-check.mjs` mide las seis etiquetas a
+ * 390 px y falla si alguna se corta; medirlo era la condición para añadirla.
  *
  * En iPad con ancho suficiente la barra inferior se convierte en un SIDEBAR
  * lateral con etiqueta al lado del icono, en lugar de estirar una interfaz de
@@ -174,6 +180,15 @@ export default function ManagerLayout() {
             title: t('admin.tabHours'),
             tabBarIcon: ({ color }) => (
               <Ionicons name="time-outline" size={sizes.iconMobile} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="reports"
+          options={{
+            title: t('admin.tabReports'),
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="bar-chart-outline" size={sizes.iconMobile} color={color} />
             ),
           }}
         />

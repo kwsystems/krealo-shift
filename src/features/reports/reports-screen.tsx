@@ -1,0 +1,462 @@
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { hoursByEmployee, minutesByDay, minutesByReason, punctuality } from './aggregate';
+import { useBreakTimeByReason } from './hooks';
+import { AsyncSection } from '@/components/schedule/data-states';
+import { InlineNotice, StatTile } from '@/components/schedule/fields';
+import { WeekNavigator } from '@/components/schedule/week-tools';
+import { ChartCard } from '@/components/charts/chart-frame';
+import { DayColumns, type DayColumn } from '@/components/charts/day-columns';
+import { RankingBars, type RankingRow } from '@/components/charts/ranking-bars';
+import { AppText } from '@/components/ui/app-text';
+import { GhostButton } from '@/components/ui/buttons';
+import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import {
+  addWeeks,
+  currentWeekStart,
+  dateKeyOf,
+  formatDateKeyLong,
+  formatDayColumn,
+  formatWeekdayShort,
+  weekDays,
+  weekEnd,
+  weekRangeInstants,
+} from '@/features/schedules/week';
+import { useEmployeeNames } from '@/features/team/hooks';
+import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
+import { useLiveClock } from '@/hooks/use-live-clock';
+import { useManagerScope } from '@/hooks/use-manager-scope';
+import { currentLanguage } from '@/i18n';
+import { breakReasonLabels } from '@/i18n/break-reason-labels';
+import { chart, spacing } from '@/theme/tokens';
+import { minutesToHHmm } from '@/utils/time';
+
+/**
+ * Reportes (pedido de Andree, 2026-09-15: «quién produce más», «importantísimo»).
+ *
+ * SE LLAMA HORAS TRABAJADAS Y NO PRODUCTIVIDAD, Y NO ES UN MATIZ
+ * Esta app mide cuándo entra y sale la gente. Eso son horas presentes, no trabajo
+ * hecho: quien atiende la caja en hora punta y quien está de pie en una tienda vacía
+ * marcan lo mismo. Titular esta pantalla "productividad" haría que el número de
+ * arriba se leyera como un juicio sobre las personas, y llevaría a decidir ascensos y
+ * despidos con una cifra que no mide nada de eso. El ranking dice quién acumuló más
+ * horas en el periodo, que es un dato útil y verdadero, y lo dice con esas palabras.
+ *
+ * POR QUÉ ES PESTAÑA PROPIA Y NO UNA ENTRADA DENTRO DE «MÁS»
+ * Porque se pidió como importantísimo, y lo que vive dentro de «Más» se abre una vez
+ * el primer día y no se vuelve a abrir. Un tablero que hay que buscar no se mira.
+ *
+ * EL PERIODO ES LA MISMA SEMANA QUE HORAS, con la misma navegación, y los datos salen
+ * de las mismas dos consultas. Así «cuadra con Horas» no es algo que haya que vigilar
+ * en cada cambio: es lo único que la pantalla puede hacer.
+ */
+
+type Señalado = { titulo: string; detalle: string } | null;
+
+export function ReportsScreen() {
+  const { t } = useTranslation();
+  const scope = useManagerScope();
+  const language = currentLanguage();
+  const now = useLiveClock('minute');
+
+  const [weekOffset, setWeekOffset] = useState(0);
+  const [señalado, setSeñalado] = useState<Señalado>(null);
+  const [personaElegida, setPersonaElegida] = useState<string | null>(null);
+
+  const nowISO = now.toISOString();
+  const thisWeekStart = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
+  const weekStart = addWeeks(thisWeekStart, weekOffset);
+  const from = weekStart;
+  const to = weekEnd(weekStart);
+  /*
+   * Sin `useMemo`, a proposito, y aqui y en `dias` por la misma razon.
+   *
+   * El React Compiler ya memoriza este componente entero. Con el `useMemo` escrito a
+   * mano puesto, el compilador NO PODIA conservarlo —`weekDays(weekStart)` produce un
+   * array que luego entra en una funcion importada, y desde fuera no puede probar que
+   * no lo modifique— y ante la duda se rendia con el componente COMPLETO: cero
+   * memorizacion en toda la pantalla, que es lo contrario de lo que el `useMemo`
+   * buscaba. Lo dice `react-hooks/preserve-manual-memoization`, que aqui esta como
+   * error. Quitandolo, memoriza el compilador y memoriza todo.
+   */
+  const range = weekRangeInstants(weekStart, scope.timezone);
+
+  const organizationId = scope.organization?.id ?? null;
+  const summaries = useDailySummaries({ locationId: scope.locationId, from, to });
+  const sessions = useWorkSessions({
+    locationId: scope.locationId,
+    fromISO: range.fromISO,
+    toISO: range.toISO,
+    cacheKey: { from, to },
+  });
+  const breaks = useBreakTimeByReason({ locationId: scope.locationId, from, to });
+  const names = useEmployeeNames(organizationId);
+
+  const nombre = (employeeId: string) => names.get(employeeId) ?? t('reports.unknownPerson');
+  const etiquetaMotivo = breakReasonLabels(t);
+
+  const umbral = scope.settings.dailyOvertimeThresholdMinutes;
+  const filasResumen = useMemo(() => summaries.data ?? [], [summaries.data]);
+  const filasSesiones = useMemo(() => sessions.data ?? [], [sessions.data]);
+
+  const ranking = useMemo(() => hoursByEmployee(filasResumen, umbral), [filasResumen, umbral]);
+  /*
+   * Tocar a alguien en el ranking FILTRA el resto del tablero a esa persona.
+   *
+   * Es lo que convierte cuatro graficos sueltos en algo con lo que se investiga: se ve
+   * quien acumulo mas horas, se toca, y las otras tres responden «asi fue su semana,
+   * estas fueron sus tardanzas, en esto se le fue el tiempo». Sin esto, la pregunta
+   * siguiente —la unica que de verdad se hace uno— no tiene respuesta en la pantalla.
+   *
+   * El RANKING no se filtra, a proposito: dejarlo en una sola barra seria un grafico
+   * de una barra, que no compara nada. Se queda entero con la fila resaltada, que
+   * ademas es lo que permite salir del filtro tocando otra vez.
+   */
+  const resumenFiltrado = useMemo(
+    () =>
+      personaElegida === null
+        ? filasResumen
+        : filasResumen.filter((fila) => fila.employee_id === personaElegida),
+    [filasResumen, personaElegida],
+  );
+  const sesionesFiltradas = useMemo(
+    () =>
+      personaElegida === null
+        ? filasSesiones
+        : filasSesiones.filter((fila) => fila.employee_id === personaElegida),
+    [filasSesiones, personaElegida],
+  );
+  const pausasFiltradas = useMemo(() => {
+    const filas = breaks.data ?? [];
+    return personaElegida === null
+      ? filas
+      : filas.filter((fila) => fila.employee_id === personaElegida);
+  }, [breaks.data, personaElegida]);
+
+  const dias = minutesByDay(resumenFiltrado, weekDays(weekStart));
+  const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
+  const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
+
+  const totalMinutos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
+  const extraMinutos = ranking.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
+  const conExtra = ranking.filter((fila) => fila.overtimeMinutes > 0);
+  // Hoy en la zona de la SEDE, no en la del navegador: un gerente que mira el tablero
+  // desde otro huso subrayaria el dia equivocado.
+  const hoyKey = dateKeyOf(nowISO, scope.timezone);
+
+  const cargando = summaries.isPending || sessions.isPending;
+  const error = summaries.error ?? sessions.error;
+
+  // --------------------------------------------------------------- ranking
+  const filasRanking: RankingRow[] = ranking.map((fila) => ({
+    id: fila.employeeId,
+    label: nombre(fila.employeeId),
+    valueText: minutesToHHmm(fila.netMinutes),
+    hint: t('reports.daysWorked', { count: fila.days }),
+    segments: [{ value: fila.netMinutes, color: chart.series1, label: t('reports.worked') }],
+  }));
+  const maxRanking = ranking[0]?.netMinutes ?? 0;
+
+  // ------------------------------------------------------------ horas extra
+  const filasExtra: RankingRow[] = conExtra.map((fila) => ({
+    id: fila.employeeId,
+    label: nombre(fila.employeeId),
+    valueText: minutesToHHmm(fila.overtimeMinutes),
+    hint: t('reports.ofTotal', { total: minutesToHHmm(fila.netMinutes) }),
+    // Dos series de verdad —normales y extra— así que se apilan, con leyenda
+    // obligatoria y un hueco de superficie entre las dos.
+    segments: [
+      { value: fila.regularMinutes, color: chart.series1, label: t('reports.regular') },
+      { value: fila.overtimeMinutes, color: chart.series2, label: t('reports.overtime') },
+    ],
+  }));
+  const maxExtra = Math.max(...conExtra.map((fila) => fila.netMinutes), 0);
+
+  // ----------------------------------------------------------- puntualidad
+  const filasTardanza: RankingRow[] = puntualidad.byEmployee
+    .filter((fila) => fila.late > 0)
+    .map((fila) => ({
+      id: fila.employeeId,
+      label: nombre(fila.employeeId),
+      valueText: String(fila.late),
+      hint: t('reports.ofShifts', { count: fila.measured }),
+      segments: [{ value: fila.late, color: chart.attention, label: t('reports.lateArrivals') }],
+    }));
+  const maxTardanza = Math.max(...filasTardanza.map((f) => f.segments[0]?.value ?? 0), 0);
+
+  // --------------------------------------------------------------- motivos
+  const totalPausas = motivos.reduce((suma, fila) => suma + fila.minutes, 0);
+  const filasMotivo: RankingRow[] = motivos.map((fila) => ({
+    id: fila.reason,
+    label: etiquetaMotivo[fila.reason],
+    valueText: minutesToHHmm(fila.minutes),
+    hint: t('reports.reasonShare', { percent: fila.sharePercent, count: fila.pauses }),
+    segments: [{ value: fila.minutes, color: chart.series1, label: t('reports.breakTime') }],
+  }));
+  const maxMotivo = motivos[0]?.minutes ?? 0;
+
+  // ------------------------------------------------------------------ días
+  const columnas: DayColumn[] = dias.map((dia) => ({
+    key: dia.dateKey,
+    short: formatDayColumn(dia.dateKey, language),
+    tiny: formatWeekdayShort(dia.dateKey, language),
+    long: formatDateKeyLong(dia.dateKey, language),
+    value: dia.netMinutes,
+    valueText: minutesToHHmm(dia.netMinutes),
+    isToday: dia.dateKey === hoyKey,
+  }));
+
+  const señalarFila =
+    (titulo: string) =>
+    (row: RankingRow | null): void => {
+      if (row === null) return setSeñalado(null);
+      const tramos = row.segments.filter((tramo) => tramo.value > 0);
+      const detalle =
+        tramos.length > 1
+          ? tramos.map((tramo) => `${tramo.label} ${minutesToHHmm(tramo.value)}`).join(' · ')
+          : row.valueText;
+      setSeñalado({ titulo, detalle: `${row.label}: ${detalle}` });
+    };
+
+  const lectura = (titulo: string): string | null =>
+    señalado !== null && señalado.titulo === titulo ? señalado.detalle : null;
+
+  return (
+    <AppScreen scroll>
+      <ResponsiveContainer>
+        <Stack gap={spacing.lg}>
+          <Stack gap={spacing.xs}>
+            <AppText variant="title" accessibilityRole="header">
+              {t('reports.title')}
+            </AppText>
+            {/*
+              La advertencia va ARRIBA y no en una nota al pie. Es lo que separa leer
+              este tablero bien de leerlo mal, y una nota al pie de un tablero no la
+              lee nadie.
+            */}
+            <AppText variant="help" tone="subtle">
+              {t('reports.subtitle')}
+            </AppText>
+          </Stack>
+
+          <WeekNavigator
+            weekStart={weekStart}
+            language={language}
+            isCurrentWeek={weekOffset === 0}
+            onPrevious={() => setWeekOffset((valor) => valor - 1)}
+            onNext={() => setWeekOffset((valor) => valor + 1)}
+            onGoToCurrent={() => setWeekOffset(0)}
+          />
+
+          <AsyncSection
+            isPending={cargando}
+            error={error}
+            isEmpty={filasResumen.length === 0 && filasSesiones.length === 0}
+            loadingLabel={t('reports.loading')}
+            emptyTitle={t('reports.emptyTitle')}
+            emptyBody={t('reports.emptyBody')}
+            onRetry={() => {
+              void summaries.refetch();
+              void sessions.refetch();
+            }}
+          >
+            <Stack gap={spacing.lg}>
+              {/*
+                El aviso del filtro va ARRIBA del todo, antes de cualquier numero. Si
+                estuviera al pie, se leeria el tablero entero creyendo que habla de la
+                tienda cuando habla de una sola persona, y no hay forma de equivocarse
+                mas cara que esa en una pantalla de horas.
+              */}
+              {personaElegida !== null ? (
+                <InlineNotice
+                  tone="info"
+                  body={t('reports.personPicked', { name: nombre(personaElegida) })}
+                  action={
+                    <GhostButton
+                      label={t('reports.clearPerson')}
+                      onPress={() => setPersonaElegida(null)}
+                      fullWidth={false}
+                    />
+                  }
+                  testID="report-person-picked"
+                />
+              ) : null}
+
+              <Row gap={spacing.sm} wrap>
+                <StatTile
+                  label={t('reports.totalHours')}
+                  value={minutesToHHmm(totalMinutos)}
+                  icon="time-outline"
+                  testID="report-total"
+                />
+                <StatTile
+                  label={t('reports.people')}
+                  value={String(ranking.length)}
+                  icon="people-outline"
+                  testID="report-people"
+                />
+                <StatTile
+                  label={t('reports.overtime')}
+                  value={minutesToHHmm(extraMinutos)}
+                  tone={extraMinutos > 0 ? 'warning' : 'offShift'}
+                  icon="alert-circle-outline"
+                  testID="report-overtime"
+                />
+                <StatTile
+                  label={t('reports.onTime')}
+                  value={
+                    puntualidad.onTimePercent === null
+                      ? t('reports.noData')
+                      : `${puntualidad.onTimePercent}%`
+                  }
+                  tone={
+                    puntualidad.onTimePercent === null
+                      ? 'offShift'
+                      : puntualidad.onTimePercent >= 90
+                        ? 'working'
+                        : 'late'
+                  }
+                  icon="walk-outline"
+                  testID="report-ontime"
+                />
+              </Row>
+
+              <ChartCard
+                title={t('reports.whoWorkedMost')}
+                subtitle={t('reports.whoWorkedMostHint')}
+                readout={lectura('ranking')}
+                footnote={t('reports.hoursAreNotOutput')}
+                testID="chart-ranking"
+              >
+                {filasRanking.length === 0 ? (
+                  <AppText variant="help" tone="subtle">
+                    {t('reports.noHours')}
+                  </AppText>
+                ) : (
+                  <RankingBars
+                    rows={filasRanking}
+                    max={maxRanking}
+                    onPoint={señalarFila('ranking')}
+                    onPress={(row) =>
+                      setPersonaElegida((actual) => (actual === row.id ? null : row.id))
+                    }
+                    selectedId={personaElegida}
+                    testID="ranking-hours"
+                  />
+                )}
+              </ChartCard>
+
+              <ChartCard
+                title={t('reports.howTheWeekGoes')}
+                subtitle={t('reports.howTheWeekGoesHint')}
+                readout={señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null}
+                testID="chart-week"
+              >
+                <DayColumns
+                  days={columnas}
+                  onPoint={(day) =>
+                    setSeñalado(
+                      day === null
+                        ? null
+                        : { titulo: 'dias', detalle: `${day.long}: ${day.valueText}` },
+                    )
+                  }
+                  testID="week-columns"
+                />
+              </ChartCard>
+
+              <ChartCard
+                title={t('reports.punctuality')}
+                subtitle={
+                  puntualidad.onTimePercent === null
+                    ? t('reports.punctualityNoData')
+                    : /*
+                       * DOS plurales en una frase, y `count` de i18next solo cubre uno.
+                       * Con un solo `count` la frase salia «1 tardanzas de 1 turnos»
+                       * en cuanto se filtraba por una persona —se vio al probar el
+                       * filtro, no leyendo el codigo—. Asi que el numero de tardanzas
+                       * se traduce aparte, con su propio plural, y entra ya escrito.
+                       */
+                      t('reports.punctualitySummary', {
+                        percent: puntualidad.onTimePercent,
+                        lateText: t('reports.lateCount', { count: puntualidad.late }),
+                        count: puntualidad.measured,
+                      })
+                }
+                readout={lectura('tardanzas')}
+                footnote={
+                  puntualidad.unscheduled > 0
+                    ? t('reports.unscheduledExcluded', { count: puntualidad.unscheduled })
+                    : undefined
+                }
+                testID="chart-punctuality"
+              >
+                {filasTardanza.length === 0 ? (
+                  <AppText variant="help" tone="subtle">
+                    {t('reports.nobodyLate')}
+                  </AppText>
+                ) : (
+                  <RankingBars
+                    rows={filasTardanza}
+                    max={maxTardanza}
+                    onPoint={señalarFila('tardanzas')}
+                    testID="ranking-late"
+                  />
+                )}
+              </ChartCard>
+
+              <ChartCard
+                title={t('reports.overtimeTitle')}
+                subtitle={t('reports.overtimeHint')}
+                legend={[
+                  { color: chart.series1, label: t('reports.regular') },
+                  { color: chart.series2, label: t('reports.overtime') },
+                ]}
+                readout={lectura('extra')}
+                footnote={t('reports.overtimeIsInformational')}
+                testID="chart-overtime"
+              >
+                {filasExtra.length === 0 ? (
+                  <AppText variant="help" tone="subtle">
+                    {t('reports.noOvertime')}
+                  </AppText>
+                ) : (
+                  <RankingBars
+                    rows={filasExtra}
+                    max={maxExtra}
+                    onPoint={señalarFila('extra')}
+                    testID="ranking-overtime"
+                  />
+                )}
+              </ChartCard>
+
+              <ChartCard
+                title={t('reports.whereTimeGoes')}
+                subtitle={t('reports.whereTimeGoesHint', { total: minutesToHHmm(totalPausas) })}
+                readout={lectura('motivos')}
+                testID="chart-reasons"
+              >
+                <AsyncSection
+                  isPending={breaks.isPending}
+                  error={breaks.error}
+                  isEmpty={filasMotivo.length === 0}
+                  emptyTitle={t('reports.noBreaksTitle')}
+                  emptyBody={t('reports.noBreaksBody')}
+                  onRetry={() => void breaks.refetch()}
+                >
+                  <RankingBars
+                    rows={filasMotivo}
+                    max={maxMotivo}
+                    onPoint={señalarFila('motivos')}
+                    testID="ranking-reasons"
+                  />
+                </AsyncSection>
+              </ChartCard>
+            </Stack>
+          </AsyncSection>
+        </Stack>
+      </ResponsiveContainer>
+    </AppScreen>
+  );
+}

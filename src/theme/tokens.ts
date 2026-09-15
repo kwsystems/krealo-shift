@@ -271,3 +271,64 @@ export function interpolateFontByHeight(height: number, min: number, max: number
   const ratio = (height - corto) / (holgado - corto);
   return Math.round(min + (max - min) * ratio);
 }
+
+/**
+ * Especificación de los gráficos de Reportes.
+ *
+ * EL COLOR AQUÍ NO SE ELIGIÓ MIRÁNDOLO. Se validó con el script de la disciplina
+ * (`validate_palette.js`), que mide en OKLab la banda de luminosidad, el suelo de
+ * croma, la separación entre pares bajo protanopia y deuteranopia simuladas, el
+ * suelo para visión normal y el contraste contra la superficie. Esa diferencia
+ * importó de verdad:
+ *
+ *   - `primary600` + `warning600` (los dos únicos colores que se tocan, en la barra
+ *     apilada de horas extra) → TODO PASA. Peor par ΔE 31.3 con protanopia, 34.8
+ *     con visión normal, contraste ≥ 3:1 los dos.
+ *   - `success600` + `danger600`, que es lo que cualquiera pinta para «a tiempo /
+ *     tarde» → **FALLA**: ΔE 4.8 con deuteranopia. Verde y rojo son el MISMO COLOR
+ *     para una de cada doce personas, y un gráfico de puntualidad pintado así no
+ *     dice nada al 8% de quien lo mire. Por eso la puntualidad NO es una barra de
+ *     dos colores: es una sola serie —las tardanzas, que es lo accionable— sobre
+ *     una pista neutra, con el número al lado.
+ *
+ * Si alguien añade un color a esta lista, el paso obligatorio es volver a correr el
+ * validador con la lista entera, no mirarla.
+ */
+export const chart = {
+  /**
+   * Serie 1. Casi todos los gráficos son UNA serie —minutos— sobre categorías sin
+   * orden propio (personas, días, motivos), y ahí todas las barras van de este color.
+   * Pintar cada barra de un color distinto gastaría el canal de identidad en repetir
+   * lo que el largo de la barra ya dice.
+   */
+  series1: colors.primary600,
+  /** Serie 2. Solo se usa donde hay DOS series de verdad: normales y extra. */
+  series2: colors.warning600,
+  /** Lo que hay que mirar: tardanzas, tiempo no trabajado. Nunca "serie 3". */
+  attention: colors.danger600,
+  /** Pista sin rellenar de un medidor: un paso claro, no gris muerto. */
+  track: colors.primary100,
+  /** Rejilla y línea base: un paso por encima de la superficie, sólida y discreta. */
+  grid: colors.border,
+} as const;
+
+/**
+ * Medidas fijas de las marcas. No se improvisan por gráfico: un proyecto donde cada
+ * barra tiene su grosor se lee como cuatro proyectos.
+ */
+export const chartMarks = {
+  /** Grosor de barra. El tope de la disciplina son 24; 14 deja aire en la banda. */
+  barThickness: 14,
+  /** Columna de día: más ancha porque son solo siete y hay sitio. */
+  columnThickness: 24,
+  /** Extremo del dato redondeado; el que apoya en la línea base va cuadrado. */
+  endRadius: 4,
+  /**
+   * Hueco en color superficie entre dos tramos que se tocan. Es lo que separa los
+   * tramos de una barra apilada: un borde alrededor de la marca sería tinta que no
+   * es dato.
+   */
+  surfaceGap: 2,
+  /** Alto del área de trazado de las columnas de la semana. */
+  columnPlotHeight: 132,
+} as const;
