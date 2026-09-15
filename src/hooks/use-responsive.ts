@@ -1,6 +1,12 @@
 import { useWindowDimensions } from 'react-native';
 
-import { SIDEBAR_MIN_WIDTH, breakpoints, interpolateFontSize } from '@/theme/tokens';
+import {
+  SIDEBAR_MIN_WIDTH,
+  breakpoints,
+  interpolateFontByHeight,
+  interpolateFontSize,
+  kioskHeights,
+} from '@/theme/tokens';
 
 export type Density = 'compact' | 'regular' | 'wide' | 'extraWide';
 
@@ -17,6 +23,16 @@ export type Responsive = {
   useSidebar: boolean;
   /** Escala tipográfica del kiosco según ancho (§5). */
   scaleFont: (min: number, max: number) => number;
+  /**
+   * Escala tipográfica según el ALTO disponible.
+   *
+   * Existe porque en un teléfono el ancho ya está por debajo del primer punto de corte
+   * y `scaleFont` devuelve siempre el mínimo, sin enterarse de que la pantalla es baja.
+   * Eso cortaba la última fila del teclado del kiosco. Ver `interpolateFontByHeight`.
+   */
+  scaleFontAlto: (min: number, max: number) => number;
+  /** Pantalla baja: hay que apretar lo vertical para que quepa lo que importa. */
+  isShort: boolean;
 };
 
 export function useResponsive(): Responsive {
@@ -40,5 +56,7 @@ export function useResponsive(): Responsive {
     isLandscape: width > height,
     useSidebar: width >= SIDEBAR_MIN_WIDTH,
     scaleFont: (min, max) => interpolateFontSize(width, min, max),
+    scaleFontAlto: (min, max) => interpolateFontByHeight(height, min, max),
+    isShort: height < kioskHeights.holgado,
   };
 }

@@ -21,7 +21,8 @@
     "demo:export:prod": "cross-env EXPO_PUBLIC_DEMO=1 EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist-demo-prod --clear",
     "demo:check:prod": "node scripts/demo-check.mjs dist-demo dist-demo-prod",
     "web:build": "cross-env EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist --clear",
-    "web:deploy": "npm run web:build && firebase deploy --only hosting"
+    "web:deploy": "npm run web:build && firebase deploy --only hosting",
+    "kiosco:check": "node scripts/kiosco-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

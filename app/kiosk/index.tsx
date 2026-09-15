@@ -39,7 +39,7 @@ const EXIT_LONG_PRESS_MS = 3000;
 
 export default function KioskIdleScreen() {
   const { t } = useTranslation();
-  const { scaleFont, isWide, isCompact, isLandscape } = useResponsive();
+  const { scaleFont, scaleFontAlto, isWide, isCompact, isLandscape, isShort } = useResponsive();
   const now = useLiveClock('second');
 
   const binding = useKioskStore((s) => s.binding);
@@ -245,27 +245,49 @@ export default function KioskIdleScreen() {
         // En dos columnas el reloj tiene media pantalla y sube a 120: a 64 dejaba de ser
         // el elemento dominante que pide §9.1 y el título de la otra columna se leía
         // primero. Ver el token `kioskClockLandscapeMax`.
-        size={scaleFont(
-          fontSize.kioskClockMin,
-          dosColumnas ? fontSize.kioskClockLandscapeMax : fontSize.kioskClockMax,
+        /*
+          EL MÁS PEQUEÑO DE LOS DOS, y ese `Math.min` es todo el arreglo.
+
+          El ancho solo sabe decir "es un teléfono, usa el mínimo"; el alto sabe decir
+          "además es una pantalla baja, baja más". Quedarse con el mayor de los dos
+          dejaba el reloj en 48 en una pantalla de 640 de alto y empujaba el teclado
+          fuera de la pantalla: la última fila —Borrar, 0, borrar dígito— se cortaba.
+        */
+        size={Math.min(
+          scaleFont(
+            fontSize.kioskClockMin,
+            dosColumnas ? fontSize.kioskClockLandscapeMax : fontSize.kioskClockMax,
+          ),
+          scaleFontAlto(fontSize.kioskClockShort, fontSize.kioskClockMax),
         )}
         tabular
         accessibilityRole="header"
       >
         {formatClockTime(now, timezone, policies.timeFormat, language)}
       </AppText>
-      <AppText variant="body" tone="muted">
+      {/*
+        La fecha baja a tamaño de ayuda en pantalla corta. Sigue estando —en un reloj
+        de fichaje saber el día importa, y un fichaje puesto en el día equivocado es
+        una corrección manual— pero no compite con el teclado por el alto.
+      */}
+      <AppText variant={isShort ? 'help' : 'body'} tone="muted">
         {formatLongDate(now, timezone, language)}
       </AppText>
     </Stack>
   );
 
   const bloquePin = (
-    <Stack gap={spacing.lg} style={styles.pinBlock}>
+    // El hueco entre el título y el teclado también encoge en una pantalla baja: son
+    // otros 12 px que el teclado necesita y que aquí no hacen ninguna falta.
+    <Stack gap={isShort ? spacing.sm : spacing.lg} style={styles.pinBlock}>
       <Stack gap={spacing.xs}>
         <AppText
           variant="kioskTitle"
-          size={scaleFont(fontSize.kioskTitleMin, fontSize.kioskTitleMax)}
+          // Mismo criterio que el reloj: manda la dimensión más apretada.
+          size={Math.min(
+            scaleFont(fontSize.kioskTitleMin, fontSize.kioskTitleMax),
+            scaleFontAlto(fontSize.kioskTitleShort, fontSize.kioskTitleMax),
+          )}
           style={styles.centerText}
         >
           {t('kiosk.idleTitle')}
@@ -328,7 +350,16 @@ export default function KioskIdleScreen() {
 
   return (
     <AppScreen tone="kiosk" padded={false} testID="kiosk-idle">
-      <View style={[styles.container, { padding: isCompact ? spacing.lg : spacing.xxl }]}>
+      <View
+        style={[
+          styles.container,
+          {
+            paddingHorizontal: isCompact ? spacing.lg : spacing.xxl,
+            // El relleno vertical es de lo primero que sobra cuando falta alto.
+            paddingVertical: isShort ? spacing.md : isCompact ? spacing.lg : spacing.xxl,
+          },
+        ]}
+      >
         {/* Encabezado: logo e ubicación a la izquierda, sincronización a la derecha */}
         <Row justify="space-between" align="flex-start">
           {/*

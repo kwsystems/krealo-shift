@@ -99,6 +99,8 @@ export const fontWeight = {
 
 export const fontSize = {
   /** Hora del kiosco: 48–64 según ancho. */
+  /** Mínimo absoluto del reloj en una pantalla baja. Ver `interpolateFontByHeight`. */
+  kioskClockShort: 30,
   kioskClockMin: 48,
   kioskClockMax: 64,
   /**
@@ -111,6 +113,8 @@ export const fontSize = {
    */
   kioskClockLandscapeMax: 120,
   /** Título del kiosco: 34–44 según ancho. */
+  /** Mínimo absoluto del título en una pantalla baja. */
+  kioskTitleShort: 20,
   kioskTitleMin: 34,
   kioskTitleMax: 44,
   titleMobileMin: 28,
@@ -229,5 +233,41 @@ export function interpolateFontSize(width: number, min: number, max: number): nu
   if (width <= from) return min;
   if (width >= to) return max;
   const ratio = (width - from) / (to - from);
+  return Math.round(min + (max - min) * ratio);
+}
+
+/**
+ * Altos de referencia del reloj de fichaje.
+ *
+ * `corto` es un iPhone SE de pie (568) y `holgado` un teléfono moderno (760). Entre
+ * los dos, el reloj y el título encogen; por debajo de `corto` se quedan en su mínimo
+ * absoluto y no bajan más, porque un reloj ilegible tampoco sirve.
+ */
+export const kioskHeights = {
+  corto: 568,
+  holgado: 760,
+} as const;
+
+/**
+ * Escala tipográfica según el ALTO disponible.
+ *
+ * POR QUÉ HACÍA FALTA, Y NO BASTABA CON EL ANCHO
+ * `interpolateFontSize` solo mira el ancho. En un teléfono el ancho ya está por debajo
+ * del primer punto de corte, así que el reloj se quedaba clavado en su mínimo de 48 y
+ * el título en 34 *hiciera lo que hiciera la altura*. En una pantalla de 360×640 eso
+ * empujaba el teclado hacia abajo y LA ÚLTIMA FILA QUEDABA CORTADA: "Borrar", "0" y el
+ * borrado de dígito se veían a medias. Medido en el navegador, no supuesto.
+ *
+ * El orden de sacrificio no es arbitrario. Lo primero que encoge es lo decorativo —el
+ * reloj gigante y el título—; el teclado y los puntos del PIN no se tocan nunca, porque
+ * son el objetivo táctil y §25 fija un mínimo por debajo del cual no se puede bajar.
+ * Un reloj más pequeño es una molestia; un teclado que no cabe es la aplicación entera
+ * sin funcionar.
+ */
+export function interpolateFontByHeight(height: number, min: number, max: number): number {
+  const { corto, holgado } = kioskHeights;
+  if (height <= corto) return min;
+  if (height >= holgado) return max;
+  const ratio = (height - corto) / (holgado - corto);
   return Math.round(min + (max - min) * ratio);
 }
