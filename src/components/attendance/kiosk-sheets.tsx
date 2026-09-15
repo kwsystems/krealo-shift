@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -50,6 +50,93 @@ function Sheet({
         </View>
       </View>
     </Modal>
+  );
+}
+
+/** Tope de la nota. El mismo que la restricción de la base, que rechazaría el evento. */
+const NOTA_MAXIMA = 500;
+
+/**
+ * «Otro», ¿otro qué?
+ *
+ * La única pantalla de la app donde se le pide a alguien que ESCRIBA mientras ficha, así
+ * que todo aquí está puesto para que cueste lo mínimo:
+ *
+ *   - se abre con el teclado ya levantado (`autoFocus`): el toque que hace falta para
+ *     levantarlo es un toque que no debería hacer falta;
+ *   - el botón de seguir está APAGADO hasta que hay algo escrito, y dice por qué, en vez
+ *     de dejar pulsar y contestar con un error después;
+ *   - una línea basta y así lo dice. Pedir «describe el motivo» invita a un párrafo que
+ *     nadie va a escribir con gente esperando detrás;
+ *   - se puede volver a los motivos, por si eligió «Otro» y luego vio que sí era una
+ *     comida. Volver NO lleva a la pantalla del PIN: teclear seis dígitos otra vez es la
+ *     clase de castigo que enseña a poner «comida» para todo.
+ *
+ * NO HAY FORMA DE SALTÁRSELA, y esa es la única razón por la que existe: «Otro» es la
+ * opción que menos cuesta elegir, así que sin nada que la frene acaba siendo el cajón
+ * donde cae la mitad de los registros, y entonces el reporte de «en qué se va el tiempo
+ * que no se trabaja» no responde nada. El servidor la exige también, porque el kiosco no
+ * es la única vía: ver `20260915000200_nota_de_pausa.sql`.
+ */
+export function BreakNoteSheet({
+  visible,
+  onSubmit,
+  onCancel,
+}: {
+  visible: boolean;
+  onSubmit: (note: string) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const [texto, setTexto] = useState('');
+
+  const limpio = texto.trim();
+  const listo = limpio.length > 0;
+
+  const enviar = () => {
+    if (!listo) return;
+    setTexto('');
+    onSubmit(limpio);
+  };
+
+  const cancelar = () => {
+    setTexto('');
+    onCancel();
+  };
+
+  return (
+    <Sheet visible={visible} onClose={cancelar} testID="break-note-sheet">
+      <Stack gap={spacing.md}>
+        <AppText variant="section">{t('kiosk.reasonNoteTitle')}</AppText>
+        <AppText variant="help" tone="muted">
+          {t('kiosk.reasonNoteHint')}
+        </AppText>
+        <TextInput
+          value={texto}
+          onChangeText={setTexto}
+          autoFocus
+          // Una línea, y que el teclado ofrezca «listo» en vez de salto de línea: es
+          // exactamente lo que hay que hacer aquí, y ahorra buscar el botón.
+          returnKeyType="done"
+          onSubmitEditing={enviar}
+          maxLength={NOTA_MAXIMA}
+          placeholder={t('kiosk.reasonNotePlaceholder')}
+          placeholderTextColor={colors.ink500}
+          style={styles.notaEntrada}
+          accessibilityLabel={t('kiosk.reasonNoteTitle')}
+          testID="break-note-input"
+        />
+        <PrimaryButton
+          label={t('common.continue')}
+          hint={listo ? undefined : t('kiosk.reasonNoteRequired')}
+          onPress={enviar}
+          disabled={!listo}
+          size="kiosk"
+          testID="break-note-submit"
+        />
+        <GhostButton label={t('common.back')} onPress={cancelar} testID="break-note-cancel" />
+      </Stack>
+    </Sheet>
   );
 }
 
@@ -276,6 +363,19 @@ export function PhotoNotice() {
 }
 
 const styles = StyleSheet.create({
+  // Alto de objetivo táctil de kiosco y texto grande: se escribe de pie, a un brazo de
+  // distancia y a veces con la pantalla sucia.
+  notaEntrada: {
+    minHeight: sizes.buttonKiosk,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radii.input,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.md,
+    fontSize: 20,
+    color: colors.ink900,
+    backgroundColor: colors.surface,
+  },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25, 23, 42, 0.35)' },
   backdropTouchable: { flex: 1 },
   sheet: {

@@ -18,7 +18,8 @@
     "minutes_one": "{{count}} minuto",
     "minutes_other": "{{count}} minutos",
     "pendingRecords_one": "{{count}} registro pendiente de sincronizar",
-    "pendingRecords_other": "{{count}} registros pendientes de sincronizar"
+    "pendingRecords_other": "{{count}} registros pendientes de sincronizar",
+    "continue": "Continuar"
   },
   "boot": {
     "resolvingSession": "Preparando tu sesión",
@@ -169,7 +170,9 @@
     "reasonCountsAsWork": "Cuenta como trabajado",
     "reasonDoesNotCount": "No cuenta como trabajado",
     "reasonNoteTitle": "¿Qué pasó?",
-    "reasonNoteHint": "Una línea basta. Sirve para que tu gerente no tenga que preguntarte después."
+    "reasonNoteHint": "Una línea basta. Sirve para que tu gerente no tenga que preguntarte después.",
+    "reasonNotePlaceholder": "Ej.: fui a la clínica",
+    "reasonNoteRequired": "Escribe una línea para continuar"
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

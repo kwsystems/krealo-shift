@@ -43,6 +43,7 @@ type OfflineEvent = {
   eventType: (typeof EVENT_TYPES)[number];
   breakType?: (typeof BREAK_TYPES)[number];
   breakReason?: (typeof BREAK_REASONS)[number];
+  breakNote?: string;
   shiftId: string | null;
   occurredAtDevice: string;
   deviceSequence: number;
@@ -85,6 +86,13 @@ function validateEvent(value: unknown): OfflineEvent | null {
       ? (v.breakReason as OfflineEvent['breakReason'])
       : undefined,
     breakType: v.breakType as OfflineEvent['breakType'] | undefined,
+    // Recortada y con tope, igual que en submit-time-event: la restriccion de la tabla
+    // rechazaria el insert entero, y perder el fichaje de alguien de la cola porque
+    // escribio de mas seria perder una hora de trabajo por un campo de texto.
+    breakNote:
+      typeof v.breakNote === 'string' && v.breakNote.trim() !== ''
+        ? v.breakNote.trim().slice(0, 500)
+        : undefined,
     shiftId: isUuid(v.shiftId) ? v.shiftId : null,
     occurredAtDevice: v.occurredAtDevice,
     deviceSequence: v.deviceSequence,
@@ -158,6 +166,7 @@ Deno.serve(async (request) => {
       p_shift_id: event.shiftId,
       p_break_type: event.breakType ?? null,
       p_break_reason: event.breakReason ?? null,
+      p_break_note: event.breakNote ?? null,
       p_photo_path: event.photoPath,
     });
 

@@ -1,4 +1,9 @@
-import { BREAK_REASONS, breakTypeForReason, type BreakReason } from '@/domain/break-reason';
+import {
+  BREAK_REASONS,
+  breakTypeForReason,
+  requiresNote,
+  type BreakReason,
+} from '@/domain/break-reason';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
@@ -10,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { PhotoCapture, type PhotoResult } from '@/features/kiosk/photo-capture';
 import { RequestUpdatesCard } from '@/components/attendance/request-updates';
 import {
+  BreakNoteSheet,
   BreakReasonSheet,
   ManagerOverrideSheet,
   PhotoNotice,
@@ -68,6 +74,8 @@ const OPCIONES_DE_MOTIVO = BREAK_REASONS;
 type Sheet =
   | { name: 'none' }
   | { name: 'breakReason' }
+  /** Solo para «Otro»: el motivo ya está elegido y falta la explicación. */
+  | { name: 'breakNote'; reason: BreakReason }
   | { name: 'requiredBreak' }
   | { name: 'managerOverride' };
 
@@ -78,6 +86,7 @@ type Step =
       event: TimeEventType;
       breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
       breakReason?: BreakReason;
+      breakNote?: string;
     }
   | {
       name: 'result';
@@ -256,6 +265,7 @@ export default function KioskActionsScreen() {
         eventType: event,
         breakType: step.name === 'confirm' ? step.breakType : undefined,
         breakReason: step.name === 'confirm' ? step.breakReason : undefined,
+        breakNote: step.name === 'confirm' ? step.breakNote : undefined,
         shiftId: selectedShift?.id ?? null,
         locationId: binding.locationId,
         pinVersion: verification.pinVersion,
@@ -344,6 +354,7 @@ export default function KioskActionsScreen() {
       eventType: event,
       breakType: step.name === 'confirm' ? step.breakType : undefined,
       breakReason: step.name === 'confirm' ? step.breakReason : undefined,
+      breakNote: step.name === 'confirm' ? step.breakNote : undefined,
       shiftId: selectedShift?.id ?? null,
       idempotencyKey,
       occurredAtDevice: new Date().toISOString(),
@@ -716,6 +727,18 @@ export default function KioskActionsScreen() {
         options={OPCIONES_DE_MOTIVO}
         esPagado={(reason) => breakTypeForReason(reason, policies.paidBreakReasons) === 'paid'}
         onSelect={(reason) => {
+          /*
+           * «Otro» pide una línea de explicación ANTES de seguir. Sin ella acaba siendo
+           * el cajón donde cae la mitad de los registros —es el que menos cuesta
+           * elegir— y el reporte de tiempos muertos deja de responder nada.
+           *
+           * Se pregunta AQUÍ y no en la confirmación porque aquí es donde la persona
+           * acaba de decidir; en la pantalla siguiente ya está pensando en irse.
+           */
+          if (requiresNote(reason)) {
+            setSheet({ name: 'breakNote', reason });
+            return;
+          }
           setSheet({ name: 'none' });
           setStep({
             name: 'confirm',
@@ -727,6 +750,28 @@ export default function KioskActionsScreen() {
           });
         }}
         onCancel={() => setSheet({ name: 'none' })}
+      />
+
+      <BreakNoteSheet
+        visible={sheet.name === 'breakNote'}
+        onSubmit={(note) => {
+          const reason = sheet.name === 'breakNote' ? sheet.reason : 'other';
+          setSheet({ name: 'none' });
+          setStep({
+            name: 'confirm',
+            event: 'break_start',
+            breakType: breakTypeForReason(reason, policies.paidBreakReasons),
+            breakReason: reason,
+            breakNote: note,
+          });
+        }}
+        /*
+         * Cancelar vuelve a la lista de motivos, NO al inicio. Quien llegó aquí quiere
+         * pausar; devolverlo a la pantalla de PIN le haría teclear seis dígitos otra vez
+         * con la cola detrás, y es la clase de castigo que enseña a elegir «comida»
+         * para todo.
+         */
+        onCancel={() => setSheet({ name: 'breakReason' })}
       />
 
       <RequiredBreakSheet

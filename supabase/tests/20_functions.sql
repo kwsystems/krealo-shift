@@ -1499,3 +1499,121 @@ begin
 end
 $$;
 rollback;
+
+-- ===========================================================================
+-- Una pausa por «Otro» tiene que explicarse
+-- ===========================================================================
+--
+-- «Otro» es la opcion que menos cuesta elegir, asi que sin nada que la frene acaba
+-- siendo el cajon donde cae la mitad de los registros, y el reporte de tiempos muertos
+-- deja de responder nada. La nota es lo unico que convierte ese cajon en informacion.
+--
+-- SE COMPRUEBA EN EL SERVIDOR, que es donde de verdad se obliga. El kiosco tambien la
+-- pide, pero el kiosco no es la unica via: esta la cola offline y estan las Edge
+-- Functions. Si la regla solo viviera en la pantalla, estas pruebas pasarian probando
+-- una pantalla y el agujero seguiria abierto.
+
+begin;
+do $$
+declare
+  v_device uuid := '66666666-6666-4666-8666-666666666661';
+  v_loc    uuid := '22222222-2222-4222-8222-222222222221';
+  v_org    uuid := '11111111-1111-4111-8111-111111111111';
+  v_emp    uuid;
+  v_res    record;
+  v_nota   text;
+  v_fallo  boolean;
+  v_sesion uuid;
+begin
+  insert into employees (organization_id, full_name, status)
+    values (v_org, 'Pausa Sin Explicar', 'active') returning id into v_emp;
+  insert into employee_location_assignments (employee_id, location_id)
+    values (v_emp, v_loc) on conflict do nothing;
+
+  select * into v_res from submit_time_event(
+    p_device_id => v_device, p_employee_id => v_emp,
+    p_event_type => 'clock_in', p_idempotency_key => gen_random_uuid());
+  perform test_assert(v_res.status = 'accepted', 'Entra a trabajar');
+
+  -- 1. «Otro» a secas: rechazado.
+  v_fallo := false;
+  begin
+    perform submit_time_event(
+      p_device_id => v_device, p_employee_id => v_emp,
+      p_event_type => 'break_start', p_break_type => 'unpaid',
+      p_break_reason => 'other', p_idempotency_key => gen_random_uuid());
+  exception when check_violation then
+    v_fallo := true;
+  end;
+  perform test_assert(v_fallo, 'Una pausa por «Otro» SIN nota se rechaza');
+
+  -- 2. Una nota de solo espacios tampoco es una explicacion. Es el hueco por el que se
+  --    escapa cualquier campo obligatorio: se pulsa espacio y ya esta.
+  v_fallo := false;
+  begin
+    perform submit_time_event(
+      p_device_id => v_device, p_employee_id => v_emp,
+      p_event_type => 'break_start', p_break_type => 'unpaid',
+      p_break_reason => 'other', p_break_note => '     ',
+      p_idempotency_key => gen_random_uuid());
+  exception when check_violation then
+    v_fallo := true;
+  end;
+  perform test_assert(v_fallo, 'Una nota de solo espacios NO cuenta como explicacion');
+
+  -- 3. Los demas motivos NO piden nota: son explicacion suficiente por si mismos, y
+  --    pedirla convertiria cada descanso de diez minutos en un formulario.
+  select * into v_res from submit_time_event(
+    p_device_id => v_device, p_employee_id => v_emp,
+    p_event_type => 'break_start', p_break_type => 'unpaid',
+    p_break_reason => 'meal', p_idempotency_key => gen_random_uuid());
+  perform test_assert(v_res.status = 'accepted', 'Una pausa por comida NO necesita nota');
+
+  select * into v_res from submit_time_event(
+    p_device_id => v_device, p_employee_id => v_emp,
+    p_event_type => 'break_end', p_break_type => 'unpaid',
+    p_break_reason => 'meal', p_idempotency_key => gen_random_uuid());
+  perform test_assert(v_res.status = 'accepted', 'Y se vuelve de ella sin nota');
+
+  -- 4. Con nota, se acepta y la nota QUEDA GUARDADA recortada.
+  select * into v_res from submit_time_event(
+    p_device_id => v_device, p_employee_id => v_emp,
+    p_event_type => 'break_start', p_break_type => 'unpaid',
+    p_break_reason => 'other', p_break_note => '  Fui a la clinica por un corte  ',
+    p_idempotency_key => gen_random_uuid());
+  perform test_assert(v_res.status = 'accepted', 'Con nota, la pausa por «Otro» se acepta');
+
+  select break_note into v_nota from time_events where id = v_res.event_id;
+  perform test_assert(v_nota = 'Fui a la clinica por un corte',
+    'La nota se guarda sin los espacios de los bordes — dio: ' || coalesce(v_nota, 'null'));
+
+  -- 5. Y LLEGA A `break_intervals`, que es de donde leen los reportes. Sin esto la nota
+  --    existiria en el evento crudo y no la veria nadie, que es lo mismo que no tenerla.
+  select break_note into v_nota from break_intervals where start_event_id = v_res.event_id;
+  perform test_assert(v_nota = 'Fui a la clinica por un corte',
+    'La nota llega al intervalo, que es de donde leen los reportes — dio: '
+    || coalesce(v_nota, 'null'));
+
+  -- 6. VOLVER de la pausa no pide nota. Exigirla al volver dejaria a alguien sin poder
+  --    reanudar su jornada por un campo de texto, con la cola esperando detras.
+  select * into v_res from submit_time_event(
+    p_device_id => v_device, p_employee_id => v_emp,
+    p_event_type => 'break_end', p_break_type => 'unpaid',
+    p_break_reason => 'other', p_idempotency_key => gen_random_uuid());
+  perform test_assert(v_res.status = 'accepted', 'Volver de la pausa NO pide nota otra vez');
+
+  -- 7. Reconstruir la sesion conserva la nota. Es lo que pasa cada vez que un gerente
+  --    corrige una hora, o sea el caso mas normal que hay.
+  select id into v_sesion from work_sessions where employee_id = v_emp order by starts_at desc limit 1;
+  perform rebuild_work_session_unchecked(v_sesion);
+  select bi.break_note into v_nota
+    from break_intervals bi
+    where bi.work_session_id = v_sesion and bi.break_note is not null
+    limit 1;
+  perform test_assert(v_nota = 'Fui a la clinica por un corte',
+    'Reconstruir la sesion CONSERVA la nota — dio: ' || coalesce(v_nota, 'null'));
+
+  raise notice '  --- pruebas de nota de pausa completas ---';
+end
+$$;
+rollback;

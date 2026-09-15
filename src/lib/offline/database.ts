@@ -19,7 +19,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DATABASE_NAME = 'krealo-shift-offline.db';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 let handle: SQLite.SQLiteDatabase | null = null;
 
@@ -126,6 +126,7 @@ create table if not exists outbox_time_events (
   ),
   break_type text,
   break_reason text,
+  break_note text,
   shift_id text,
   location_id text not null,
   occurred_at_device text not null,
@@ -260,7 +261,16 @@ let warnedAboutWebDatabase = false;
  * caché, se vuelven a bajar en el siguiente refresco, y mientras no estén el
  * dispositivo valida contra el servidor, que es el camino seguro.
  */
-async function applyMigrations(database: SQLite.SQLiteDatabase, previous: number): Promise<void> {
+/**
+ * EXPORTADA para poder probarla. No hay SQLite en Jest, pero sí se puede comprobar
+ * QUÉ SENTENCIAS emite ante una base vieja, que es donde estaba el fallo: la columna
+ * que se añade al esquema y nadie migra no se nota en una instalación nueva ni en una
+ * prueba que crea la base de cero.
+ */
+export async function applyMigrations(
+  database: SQLite.SQLiteDatabase,
+  previous: number,
+): Promise<void> {
   // v1 → v2: los verificadores del PIN dejan de ser el hash bcrypt y pasan a ser
   // salt + verificador ligado al dispositivo. La tabla se recrea en vez de
   // agregarle columnas: las filas viejas contienen justo el dato que ya no
@@ -280,6 +290,34 @@ async function applyMigrations(database: SQLite.SQLiteDatabase, previous: number
     const hasEventId = columns.some((column) => column.name === 'event_id');
     if (hasTable && !hasEventId) {
       await database.execAsync('alter table pending_media add column event_id text');
+    }
+  }
+
+  /*
+   * v3 → v4: la cola gana `break_reason` y `break_note`.
+   *
+   * `break_reason` SE AÑADIÓ AL ESQUEMA SIN MIGRACIÓN, y eso era un fallo con
+   * consecuencias: `create table if not exists` no toca una tabla que ya existe, así
+   * que un iPad que ya estaba activado se habría quedado con la tabla vieja y CADA
+   * FICHAJE habría fallado al insertar una columna inexistente —en un reloj compartido,
+   * con la cola detrás—. En una instalación nueva no se ve, y las pruebas crean la base
+   * de cero, así que no lo veía nada. Se arregla aquí junto con la nota, que se añade
+   * de la misma forma y habría repetido el mismo fallo.
+   *
+   * Se comprueba columna a columna y no por la versión: un iPad que ya corrió el
+   * esquema nuevo tiene `break_reason` y no `break_note`, y las dos rutas tienen que
+   * acabar igual.
+   */
+  if (previous >= 1 && previous < 4) {
+    const columns = await database.getAllAsync<{ name: string }>(
+      "pragma table_info('outbox_time_events')",
+    );
+    if (columns.length > 0) {
+      for (const columna of ['break_reason', 'break_note']) {
+        if (!columns.some((column) => column.name === columna)) {
+          await database.execAsync(`alter table outbox_time_events add column ${columna} text`);
+        }
+      }
     }
   }
 }

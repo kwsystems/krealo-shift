@@ -39,12 +39,28 @@ type Body = {
   eventType: (typeof EVENT_TYPES)[number];
   breakType?: (typeof BREAK_TYPES)[number];
   breakReason?: (typeof BREAK_REASONS)[number];
+  breakNote?: string;
   shiftId: string | null;
   idempotencyKey: string;
   occurredAtDevice?: string;
   deviceSequence?: number;
   isOffline: boolean;
 };
+
+/**
+ * La nota de una pausa por «Otro».
+ *
+ * Se recorta y se limita a 500 caracteres AQUI TAMBIEN, no solo en la base: la
+ * restriccion de la tabla rechazaria el insert entero, y perder el fichaje de alguien
+ * porque escribio de mas seria un castigo absurdo. Recortar conserva la hora, que es lo
+ * que de verdad importa, y conserva ademas los primeros 500 caracteres de la
+ * explicacion, que es practicamente toda.
+ */
+function notaDePausa(valor: unknown): string | undefined {
+  if (typeof valor !== 'string') return undefined;
+  const limpia = valor.trim().slice(0, 500);
+  return limpia === '' ? undefined : limpia;
+}
 
 function validate(value: unknown): Body | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -70,6 +86,7 @@ function validate(value: unknown): Body | null {
     eventType: v.eventType as Body['eventType'],
     breakType: v.breakType as Body['breakType'] | undefined,
     breakReason: motivoValido ? (v.breakReason as Body['breakReason']) : undefined,
+    breakNote: notaDePausa(v.breakNote),
     shiftId: isUuid(v.shiftId) ? v.shiftId : null,
     idempotencyKey: v.idempotencyKey,
     occurredAtDevice: typeof v.occurredAtDevice === 'string' ? v.occurredAtDevice : undefined,
@@ -111,6 +128,7 @@ Deno.serve(async (request) => {
     p_shift_id: body.data.shiftId,
     p_break_type: body.data.breakType ?? null,
     p_break_reason: body.data.breakReason ?? null,
+    p_break_note: body.data.breakNote ?? null,
     p_occurred_at_device: body.data.occurredAtDevice ?? null,
     p_device_sequence: body.data.deviceSequence ?? null,
     p_is_offline: body.data.isOffline,

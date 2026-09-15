@@ -28,6 +28,8 @@ export type OutboxEventInput = {
   eventType: TimeEventType;
   breakType?: BreakType;
   breakReason?: import('@/domain/break-reason').BreakReason;
+  /** Obligatoria cuando el motivo es «Otro». Ver `requiresNote`. */
+  breakNote?: string;
   shiftId: string | null;
   locationId: string;
   pinVersion: number;
@@ -41,6 +43,7 @@ export type OutboxEvent = {
   eventType: TimeEventType;
   breakType: BreakType | null;
   breakReason: import('@/domain/break-reason').BreakReason | null;
+  breakNote: string | null;
   shiftId: string | null;
   locationId: string;
   occurredAtDevice: string;
@@ -63,6 +66,7 @@ type OutboxRow = {
   event_type: TimeEventType;
   break_type: BreakType | null;
   break_reason: import('@/domain/break-reason').BreakReason | null;
+  break_note: string | null;
   shift_id: string | null;
   location_id: string;
   occurred_at_device: string;
@@ -86,6 +90,7 @@ function toEvent(row: OutboxRow): OutboxEvent {
     eventType: row.event_type,
     breakType: row.break_type,
     breakReason: row.break_reason,
+    breakNote: row.break_note,
     shiftId: row.shift_id,
     locationId: row.location_id,
     occurredAtDevice: row.occurred_at_device,
@@ -149,6 +154,9 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     // El motivo entra en la firma: si no, seria el unico campo del evento que se
     // podria cambiar en el SQLite del dispositivo sin invalidarla.
     input.breakReason ?? '',
+    // Y la nota, por lo mismo y con mas razon: es texto libre escrito por una persona
+    // sobre por que se ausento, y es justo lo que alguien querria reescribir despues.
+    input.breakNote ?? '',
     input.shiftId ?? '',
     input.locationId,
     occurredAtDevice,
@@ -160,16 +168,17 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     await database.runAsync(
       `insert into outbox_time_events (
          idempotency_key, device_sequence, employee_opaque_id, event_type, break_type,
-         break_reason, shift_id, location_id, occurred_at_device, device_timezone,
-         device_offset_minutes, pin_version, photo_local_uri, signature, status, attempts,
-         created_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
+         break_reason, break_note, shift_id, location_id, occurred_at_device,
+         device_timezone, device_offset_minutes, pin_version, photo_local_uri, signature,
+         status, attempts, created_at
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
       idempotencyKey,
       deviceSequence,
       input.employeeOpaqueId,
       input.eventType,
       input.breakType ?? null,
       input.breakReason ?? null,
+      input.breakNote ?? null,
       input.shiftId,
       input.locationId,
       occurredAtDevice,

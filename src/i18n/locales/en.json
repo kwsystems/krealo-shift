@@ -18,7 +18,8 @@
     "minutes_one": "{{count}} minute",
     "minutes_other": "{{count}} minutes",
     "pendingRecords_one": "{{count}} record pending sync",
-    "pendingRecords_other": "{{count}} records pending sync"
+    "pendingRecords_other": "{{count}} records pending sync",
+    "continue": "Continue"
   },
   "boot": {
     "resolvingSession": "Getting your session ready",
@@ -169,7 +170,9 @@
     "reasonCountsAsWork": "Counts as worked",
     "reasonDoesNotCount": "Does not count as worked",
     "reasonNoteTitle": "What happened?",
-    "reasonNoteHint": "One line is enough. It saves your manager from asking later."
+    "reasonNoteHint": "One line is enough. It saves your manager from asking later.",
+    "reasonNotePlaceholder": "e.g. went to the clinic",
+    "reasonNoteRequired": "Write one line to continue"
   },
   "attendance": {
     "statusOffShift": "Off shift",

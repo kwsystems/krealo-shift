@@ -22,7 +22,7 @@
  *   npm run demo:export
  *   node scripts/kiosco-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import { servirExport, cargarPlaywright, sembrarKiosco } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -119,6 +119,109 @@ for (const [etiqueta, ancho, alto] of TAMANOS) {
       `holgura ${String(holgura).padStart(4)}px  ` +
       `botón ${medida.alto}px  ${cabe && tactil ? 'OK' : 'FALLA'}`,
   );
+
+  await ctx.close();
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * «Otro» no se puede elegir sin explicar qué pasó
+ * ---------------------------------------------------------------------------
+ *
+ * El servidor ya lo exige y hay pruebas SQL que lo comprueban. Esto comprueba la OTRA
+ * mitad, que es la que de verdad ve una persona: que el kiosco lo pida ANTES y no
+ * después. Sin esta comprobación, la regla podría vivir solo en el servidor y el
+ * síntoma sería que alguien elige «Otro», confirma, espera la cuenta atrás y recibe un
+ * error en la cara —con la cola detrás y sin saber qué hacer—.
+ *
+ * Se recorre a mano: PIN, entrada, pausa, «Otro». Es el único modo de comprobar que el
+ * botón de continuar empieza apagado y dice por qué, que un texto de solo espacios no
+ * lo enciende, y que escribir algo sí.
+ */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 834, height: 1112 } });
+  const pag = await ctx.newPage();
+  await sembrarKiosco(pag);
+  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+  await pag.waitForTimeout(2500);
+
+  // Hay DOS teclados en el DOM —el del PIN y el de la autorización del gerente—, así
+  // que se selecciona el visible o se espera para siempre por uno oculto.
+  const tecleaPin = async () => {
+    await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
+    for (const digito of ['1', '2', '3', '4', '5', '6']) {
+      await pag.locator(`[data-testid="keypad-${digito}"]:visible`).first().click();
+      await pag.waitForTimeout(180);
+    }
+    await pag.waitForTimeout(3000);
+  };
+
+  await tecleaPin();
+  // Entrar a trabajar: la pausa solo existe estando dentro. No hay botón de confirmar,
+  // hay una cuenta atrás de 3 s que se cierra sola.
+  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
+  await pag.waitForTimeout(5200);
+  const listo = pag.locator('[data-testid="kiosk-result-done"]');
+  if ((await listo.count()) > 0) {
+    await listo.click();
+    await pag.waitForTimeout(1500);
+  }
+  await tecleaPin();
+
+  const pausa = pag.locator('[data-testid="kiosk-action-break_start"]');
+  if ((await pausa.count()) === 0) {
+    problemas.push('nota de pausa: no se llegó al botón de iniciar descanso');
+  } else {
+    await pausa.click();
+    await pag.waitForTimeout(1200);
+    await pag.locator('[data-testid="break-reason-other"]').click();
+    await pag.waitForTimeout(1000);
+
+    const hoja = pag.locator('[data-testid="break-note-sheet"]');
+    if ((await hoja.count()) === 0) {
+      problemas.push(
+        'elegir «Otro» NO pide la nota: sin ella el motivo se vuelve el cajón donde cae todo',
+      );
+    } else {
+      const apagado = async () =>
+        (await pag.locator('[data-testid="break-note-submit"]').getAttribute('aria-disabled')) ===
+        'true';
+
+      if (!(await apagado())) {
+        problemas.push('el botón de continuar empieza encendido con la nota vacía');
+      }
+
+      const texto = ((await hoja.innerText()) || '').replace(/\s+/g, ' ');
+      if (!texto.includes('continuar') && !texto.includes('Continuar')) {
+        problemas.push('la hoja de la nota no dice qué hace falta para continuar');
+      }
+
+      // Solo espacios: es el hueco por el que se escapa cualquier campo obligatorio.
+      await pag.locator('[data-testid="break-note-input"]').fill('     ');
+      await pag.waitForTimeout(400);
+      if (!(await apagado())) {
+        problemas.push('una nota de solo espacios enciende el botón: eso no es una explicación');
+      }
+
+      await pag.locator('[data-testid="break-note-input"]').fill('Fui a la clínica');
+      await pag.waitForTimeout(400);
+      if (await apagado()) {
+        problemas.push('con la nota escrita el botón sigue apagado: no se puede pausar');
+      }
+
+      await pag.locator('[data-testid="break-note-submit"]').click();
+      await pag.waitForTimeout(1500);
+      const siguiente = ((await pag.evaluate(() => document.body.innerText)) || '').replace(
+        /\s+/g,
+        ' ',
+      );
+      if ((await pag.locator('[data-testid="break-note-sheet"]').count()) > 0) {
+        problemas.push('tras escribir la nota, la hoja no se cierra');
+      }
+      console.log(`  nota de «Otro»    pide explicación, y con ella continúa  OK`);
+      if (siguiente.length < 120) problemas.push('la pantalla tras la nota quedó vacía');
+    }
+  }
 
   await ctx.close();
 }

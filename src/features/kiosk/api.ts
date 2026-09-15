@@ -336,6 +336,8 @@ export async function submitTimeEvent(params: {
   breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
   /** Por qué se ausenta. Ver `src/domain/break-reason.ts`. */
   breakReason?: BreakReason;
+  /** Obligatoria cuando el motivo es «Otro»: sin ella el servidor rechaza el evento. */
+  breakNote?: string;
   shiftId: string | null;
   idempotencyKey: string;
   occurredAtDevice: string;

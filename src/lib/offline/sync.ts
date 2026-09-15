@@ -262,6 +262,7 @@ function toWirePayload(event: OutboxEvent) {
     eventType: event.eventType,
     breakType: event.breakType ?? undefined,
     breakReason: event.breakReason ?? undefined,
+    breakNote: event.breakNote ?? undefined,
     shiftId: event.shiftId,
     occurredAtDevice: event.occurredAtDevice,
     deviceSequence: event.deviceSequence,
