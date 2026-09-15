@@ -44,11 +44,28 @@ const domingo = new Date(lunes);
 domingo.setDate(domingo.getDate() + 6);
 
 describe('modo demostración', () => {
-  it('hay sesión desde el primer instante: entrar es el sentido del modo', async () => {
+  /**
+   * ANTES ESTA PRUEBA AFIRMABA LO CONTRARIO: que había sesión desde el primer instante.
+   * Era cierto y era un problema: con sesión desde el arranque, la pantalla de acceso
+   * no se veía NUNCA, y eso fue lo primero que Andree echó en falta al abrir la app.
+   *
+   * Ahora la demostración arranca fuera y se entra con un botón. Se comprueban las dos
+   * mitades, porque las dos pueden romperse por separado: que se empieza fuera —si no,
+   * vuelve a desaparecer el login— y que se entra —si no, la demostración no sirve—.
+   */
+  it('arranca SIN sesión, para que la pantalla de acceso se vea', async () => {
     const db = getSupabase();
     expect(db).not.toBeNull();
     const { data } = await db!.auth.getSession();
+    expect(data.session).toBeNull();
+  });
+
+  it('y entrar con cualquier credencial abre la sesión', async () => {
+    const db = getSupabase();
+    await db!.auth.signInWithPassword({ email: 'quien.sea@ejemplo.com', password: 'lo-que-sea' });
+    const { data } = await db!.auth.getSession();
     expect(data.session).not.toBeNull();
+    await db!.auth.signOut();
   });
 
   /**

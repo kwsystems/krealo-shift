@@ -59,7 +59,9 @@
     "resetNoCode": "Este enlace no trae el código de recuperación. Pide otro desde la pantalla de acceso.",
     "sessionTitle": "Tu sesión",
     "signOutEverywhereHint": "Cierra la sesión en tu teléfono y en cualquier otro dispositivo donde hayas entrado. No afecta a los relojes de las tiendas: esos usan su propia credencial.",
-    "signOutEverywhereConfirm": "Vas a salir de esta app y de todos los demás dispositivos donde hayas iniciado sesión. Tendrás que ingresar otra vez en cada uno."
+    "signOutEverywhereConfirm": "Vas a salir de esta app y de todos los demás dispositivos donde hayas iniciado sesión. Tendrás que ingresar otra vez en cada uno.",
+    "signInAsAdmin": "Entrar como administrador",
+    "demoHint": "Modo demostración: entra con el botón, o con cualquier correo y contraseña."
   },
   "kiosk": {
     "idleTitle": "Marca tu entrada o salida",

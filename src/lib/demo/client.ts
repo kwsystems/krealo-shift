@@ -53,8 +53,54 @@ function minutosEntre(desde: string, hasta: string): number {
   return Math.max(0, Math.round((Date.parse(hasta) - Date.parse(desde)) / 60000));
 }
 
+/**
+ * Dónde recuerda la demostración que ya entraste.
+ *
+ * LA SESIÓN TIENE QUE SOBREVIVIR A UN RECARGADO, y la primera versión no lo hacía:
+ * vivía solo en memoria, así que pulsar F5 —o abrir /team escribiendo la URL— devolvía
+ * a la pantalla de acceso. Lo cazó el arnés al recorrer las rutas: las seis mostraban
+ * el login. Y no es un problema del arnés: le habría pasado igual a cualquiera que
+ * recargue, y Supabase de verdad sí persiste la sesión, así que la demostración estaría
+ * mintiendo sobre cómo se comporta la app.
+ *
+ * Es `localStorage` a pelo y no `secureStorage` porque aquí hace falta LEER DE FORMA
+ * SÍNCRONA al construir el cliente, y `secureStorage` es asíncrono. No guarda nada
+ * sensible: es un sí o un no, en una demostración sin datos reales.
+ */
+const CLAVE_SESION = 'krealo-shift.demo.sesion';
+
+function haySesionGuardada(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(CLAVE_SESION) === '1';
+  } catch {
+    // Ventana privada o almacenamiento bloqueado: se empieza fuera, que es lo correcto.
+    return false;
+  }
+}
+
+function recordarSesion(entrada: boolean): void {
+  try {
+    if (entrada) globalThis.localStorage?.setItem(CLAVE_SESION, '1');
+    else globalThis.localStorage?.removeItem(CLAVE_SESION);
+  } catch {
+    // Si no se puede recordar, la demostración sigue siendo usable en esta pestaña.
+  }
+}
+
 function crearAuth(alCambiar: () => void) {
-  let sesion: ReturnType<typeof sesionDemo> | null = sesionDemo();
+  /*
+   * ARRANCA SIN SESION, y antes arrancaba con ella.
+   *
+   * La primera version entraba sola, porque el modo demostracion se hizo justo para
+   * saltarse la pared del inicio de sesion. Efecto secundario: LA PANTALLA DE ACCESO NO
+   * SE VEIA NUNCA. Andree levanto la app y dijo "no he visto nada de login" —con razon:
+   * no existia forma de llegar a ella salvo cerrar sesion, y para eso hay que estar
+   * dentro.
+   *
+   * Ahora se ve la pantalla real y se entra con un boton. Sigue siendo un solo clic, y
+   * ademas se ejercita el formulario de verdad: validacion, errores y navegacion.
+   */
+  let sesion: ReturnType<typeof sesionDemo> | null = haySesionGuardada() ? sesionDemo() : null;
   const suscriptores = new Set<Suscriptor>();
 
   const avisar = (evento: string) => {
@@ -82,11 +128,13 @@ function crearAuth(alCambiar: () => void) {
     },
     signInWithPassword: async (_credenciales: { email: string; password: string }) => {
       sesion = sesionDemo();
+      recordarSesion(true);
       avisar('SIGNED_IN');
       return sinError({ session: sesion, user: sesion.user });
     },
     signOut: async (_opciones?: { scope?: string }) => {
       sesion = null;
+      recordarSesion(false);
       // El almacén vuelve a su estado inicial: un experimento a medias no debe quedar
       // pegado al volver a entrar.
       alCambiar();
@@ -96,6 +144,7 @@ function crearAuth(alCambiar: () => void) {
     resetPasswordForEmail: async (_correo: string, _opciones?: unknown) => ({ error: null }),
     exchangeCodeForSession: async (_codigo: string) => {
       sesion = sesionDemo();
+      recordarSesion(true);
       avisar('SIGNED_IN');
       return sinError({ session: sesion });
     },

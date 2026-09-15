@@ -53,6 +53,29 @@ const pagina = await contexto.newPage();
 const problemas = [];
 const vistas = new Map();
 
+/**
+ * Entra por la pantalla de acceso, como lo haria una persona.
+ *
+ * La demostracion ya NO entra sola: arranca en el login, porque antes esa pantalla no
+ * se veia nunca y era justo lo que Andree echaba en falta. El arnes tiene que hacer lo
+ * mismo que un humano, y de paso comprueba que el boton de entrar funciona: si dejara
+ * de funcionar, las seis rutas mostrarian el login y este arnes lo cantaria por su
+ * comprobacion de "todas distintas".
+ */
+async function entrarComoAdministrador(pagina) {
+  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
+  await pagina.waitForTimeout(1500);
+  const boton = pagina.locator('[data-testid="sign-in-demo"]');
+  if ((await boton.count()) === 0) {
+    problemas.push('no aparece el boton de entrar como administrador en la demostracion');
+    return;
+  }
+  await boton.click();
+  await pagina.waitForTimeout(2500);
+}
+
+await entrarComoAdministrador(pagina);
+
 for (const [nombre, ruta] of RUTAS) {
   const errores = [];
   pagina.removeAllListeners('pageerror');
@@ -114,6 +137,22 @@ if (DIR_PROD !== undefined) {
   const erroresProd = [];
   pag.on('pageerror', (e) => erroresProd.push(String(e).slice(0, 200)));
 
+  /*
+   * Tambien se entra aqui. Que la pantalla de acceso pinte ya demuestra que el build
+   * publicado ARRANCA —que es el fallo que esta comprobacion vino a cazar—, pero
+   * quedarse ahi dejaria el panel sin comprobar en el unico build que se publica.
+   */
+  {
+    const url = baseProd + '/';
+    await pag.goto(url, { waitUntil: 'networkidle' });
+    await pag.waitForTimeout(1500);
+    const boton = pag.locator('[data-testid="sign-in-demo"]');
+    if ((await boton.count()) > 0) {
+      await boton.click();
+      await pag.waitForTimeout(2500);
+    }
+  }
+
   for (const [ruta, debeDecir] of [
     ['/', null],
     ['/kiosk', 'kiosk-unavailable-here'],
@@ -152,6 +191,7 @@ for (const [etiqueta, ancho, esperada] of [
 ]) {
   const ctx = await navegador.newContext({ viewport: { width: ancho, height: 900 } });
   const pag = await ctx.newPage();
+  await entrarComoAdministrador(pag);
   await pag.goto(base + '/', { waitUntil: 'networkidle' });
   await pag.waitForTimeout(1800);
   const hay = (await pag.locator('[data-testid="desktop-header"]').count()) > 0;

@@ -59,7 +59,9 @@
     "resetNoCode": "This link doesn't carry a recovery code. Ask for another from the sign-in screen.",
     "sessionTitle": "Your session",
     "signOutEverywhereHint": "Signs you out on your phone and any other device where you signed in. It does not affect the store clocks: those use their own credential.",
-    "signOutEverywhereConfirm": "You'll be signed out of this app and every other device where you signed in. You'll need to sign in again on each one."
+    "signOutEverywhereConfirm": "You'll be signed out of this app and every other device where you signed in. You'll need to sign in again on each one.",
+    "signInAsAdmin": "Sign in as administrator",
+    "demoHint": "Demo mode: use the button, or any email and password."
   },
   "kiosk": {
     "idleTitle": "Clock in or out",

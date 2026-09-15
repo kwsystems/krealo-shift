@@ -16,6 +16,8 @@ import {
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { sendPasswordReset } from '@/features/auth/password-reset';
+import { isDemoMode } from '@/lib/demo/config';
+import { DEMO_EMAIL } from '@/lib/demo/seed';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { getSupabase } from '@/lib/supabase/client';
 import { useSessionStore } from '@/stores/session-store';
@@ -104,7 +106,16 @@ export default function SignInScreen() {
     });
   };
 
-  const onSubmit = async (values: SignInValues) => {
+  /**
+   * EL CUERPO VA EN try/finally, igual que la activación del kiosco y por el mismo
+   * motivo: `setSubmitting(false)` estaba después del `await`, así que cualquier
+   * excepción —red que rechaza raro, almacenamiento que falla— dejaba el botón
+   * "Ingresar" girando para siempre, sin mensaje y sin forma de reintentar.
+   *
+   * No es hipotético: exactamente eso pasó en `app/kiosk/setup.tsx`, donde
+   * `expo-application` lanzaba en web. Aquí el riesgo es el mismo y la cura también.
+   */
+  const entrar = async (email: string, password: string) => {
     const supabase = getSupabase();
     if (supabase === null) {
       setServerError(t('errors.generic'));
@@ -114,21 +125,30 @@ export default function SignInScreen() {
     setSubmitting(true);
     setServerError(null);
 
-    const { error } = await supabase.auth.signInWithPassword({
-      email: values.email.trim(),
-      password: values.password,
-    });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    setSubmitting(false);
-
-    if (error !== null) {
-      // Nunca mostramos el mensaje crudo de Supabase (§20): un "Invalid login
-      // credentials" en inglés en medio de una app en español es un error técnico
-      // filtrado a la cara del usuario.
-      setServerError(t('auth.invalidCredentials'));
+      if (error !== null) {
+        // Nunca mostramos el mensaje crudo de Supabase (§20): un "Invalid login
+        // credentials" en inglés en medio de una app en español es un error técnico
+        // filtrado a la cara del usuario.
+        setServerError(t('auth.invalidCredentials'));
+      }
+      // El éxito no navega a mano: `onAuthStateChange` mueve la sesión y la ruta
+      // raíz redirige según rol.
+    } catch (error) {
+      console.warn('[krealo-shift] Falló el inicio de sesión:', error);
+      setServerError(t('errors.generic'));
+    } finally {
+      setSubmitting(false);
     }
-    // El éxito no navega a mano: `onAuthStateChange` mueve la sesión y la ruta
-    // raíz redirige según rol.
+  };
+
+  const onSubmit = async (values: SignInValues) => {
+    await entrar(values.email, values.password);
   };
 
   return (
@@ -224,6 +244,32 @@ export default function SignInScreen() {
               testID="sign-in-submit"
             />
 
+            {/*
+              ATAJO DE DEMOSTRACIÓN, y solo ahí: con la demostración apagada esto no
+              existe en la pantalla.
+
+              Va DEBAJO del botón de verdad y no encima, a propósito. La pantalla que
+              hay que poder mirar y criticar es la real; esto es una puerta de servicio
+              para no tener que inventarse un correo cada vez, no la forma principal de
+              entrar. Escribir cualquier correo y contraseña también funciona, y el
+              aviso lo dice: sin él, quien lo intente no sabe si escribió mal o si está
+              roto.
+            */}
+            {isDemoMode ? (
+              <Stack gap={spacing.xs}>
+                <SecondaryButton
+                  label={t('auth.signInAsAdmin')}
+                  onPress={() => {
+                    void entrar(DEMO_EMAIL, 'demostracion');
+                  }}
+                  testID="sign-in-demo"
+                />
+                <AppText variant="help" tone="subtle" style={styles.centerText}>
+                  {t('auth.demoHint')}
+                </AppText>
+              </Stack>
+            ) : null}
+
             <Row justify="space-between" wrap>
               <GhostButton
                 label={t('auth.forgotPassword')}
@@ -318,6 +364,7 @@ export function FormField({
 
 const styles = StyleSheet.create({
   field: { gap: spacing.xs },
+  centerText: { textAlign: 'center' },
   input: {
     minHeight: sizes.touchTargetPreferred,
     borderWidth: borderWidth.hairline,
