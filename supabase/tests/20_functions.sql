@@ -910,9 +910,41 @@ declare
   v_org     uuid := '11111111-1111-4111-8111-111111111111';
   v_con_noshow integer;
   v_sin_noshow integer;
+  v_loc     uuid;
+  v_emp     uuid;
+  v_role    uuid;
 begin
   insert into push_tokens (user_id, expo_token, platform)
     values (v_manager, 'ExponentPushToken[prueba-gerenta]', 'ios');
+
+  /*
+   * LA AUSENCIA SE FABRICA AQUI, no se toma prestada del seed.
+   *
+   * Antes esta prueba daba por hecho que entre los turnos que el seed crea para hoy
+   * habria alguno sin fichaje. Eso depende del DIA DE LA SEMANA: el seed reparte los
+   * turnos por dia —de lunes a viernes unos, de miercoles a domingo otros— asi que un
+   * LUNES no quedaba ninguno que produjera una ausencia y la prueba fallaba. Fallaba de
+   * verdad, con la suite entera en rojo, y no por culpa del codigo que dice comprobar.
+   *
+   * Una prueba que falla segun el calendario se acaba ignorando, que es peor que no
+   * tenerla: la proxima vez que se ponga roja nadie va a mirar si esta vez si es real.
+   *
+   * Asi que se inserta un turno que TERMINO HACE DOS HORAS y no tiene ninguna sesion.
+   * Eso es exactamente lo que `pending_manager_alerts` llama una ausencia, y no depende
+   * de que hoy sea martes.
+   */
+  select id into v_loc from locations where organization_id = v_org limit 1;
+  select id into v_role from job_roles where organization_id = v_org limit 1;
+
+  insert into employees (organization_id, full_name, status)
+    values (v_org, 'Ausente De Prueba', 'active')
+    returning id into v_emp;
+
+  insert into shifts (organization_id, location_id, employee_id, job_role_id,
+                      starts_at, ends_at, timezone, status, publication_version, published_at)
+    values (v_org, v_loc, v_emp, v_role,
+            now() - interval '10 hours', now() - interval '2 hours',
+            'America/Lima', 'published', 1, now() - interval '3 days');
 
   select count(*) into v_con_noshow from pending_manager_alerts(v_org)
     where alert_type = 'noShow';
