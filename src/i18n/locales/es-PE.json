@@ -211,6 +211,35 @@
     "shouldHaveEnteredLabel": "Debía entrar a las {{time}}",
     "tabReports": "Reportes"
   },
+  "home": {
+    "justSoYouKnow": "Para que lo sepas",
+    "allClearTitle": "No hay nada pendiente",
+    "allClearBody": "Nadie llegó tarde, nadie falta y no hay solicitudes ni fichajes por arreglar. Ahora mismo hay {{working}} trabajando y {{onBreak}} en pausa.",
+    "headline": {
+      "absent_one": "persona no llegó a su turno",
+      "absent_other": "personas no llegaron a su turno",
+      "late_one": "persona llegó tarde hoy",
+      "late_other": "personas llegaron tarde hoy",
+      "incomplete_one": "fichaje sin cerrar",
+      "incomplete_other": "fichajes sin cerrar",
+      "requests_one": "solicitud esperando tu respuesta",
+      "requests_other": "solicitudes esperando tu respuesta",
+      "pendingSync_one": "fichaje sin subir al servidor",
+      "pendingSync_other": "fichajes sin subir al servidor"
+    },
+    "action": {
+      "absent_one": "El turno está sin cubrir. Mira el horario para ver a quién le tocaba y llamar.",
+      "absent_other": "Esos turnos están sin cubrir. Mira el horario para ver a quiénes les tocaba y llamar.",
+      "late_one": "Ya fichó o está por llegar. Se revisa en el horario.",
+      "late_other": "Ya ficharon o están por llegar. Se revisa en el horario.",
+      "incomplete_one": "Una jornada sin cerrar no se puede pagar bien. Se arregla en Horas.",
+      "incomplete_other": "Una jornada sin cerrar no se puede pagar bien. Se arreglan en Horas.",
+      "requests_one": "Alguien está esperando por ti. Se contesta en Más.",
+      "requests_other": "Hay gente esperando por ti. Se contestan en Más.",
+      "pendingSync_one": "Se subirá solo cuando vuelva la conexión. Si sigue aquí mañana, avisa.",
+      "pendingSync_other": "Se subirán solos cuando vuelva la conexión. Si siguen aquí mañana, avisa."
+    }
+  },
   "team": {
     "title": "Equipo",
     "addEmployee": "Agregar empleado",

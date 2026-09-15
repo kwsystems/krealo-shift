@@ -1,4 +1,5 @@
 import { crearFrom, type Almacen, type Fila } from './postgrest';
+import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
 import { crearAlmacen, DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID } from './seed';
 import type { AppSupabaseClient } from '@/lib/supabase/client';
 
@@ -465,9 +466,18 @@ let instancia: AppSupabaseClient | null = null;
 export function getDemoClient(): AppSupabaseClient {
   if (instancia !== null) return instancia;
 
-  let almacen = crearAlmacen();
+  /*
+   * El escenario se lee de la URL UNA vez y se guarda: si se leyera en cada
+   * `reiniciar()`, cambiar de escenario obligaría a recargar dos veces, y peor, salir y
+   * volver a entrar dejaría la demostración en un escenario distinto del que dice la
+   * barra de direcciones.
+   */
+  const escenario = escenarioDeLaUrl();
+  const sembrar = () => aplicarEscenario(crearAlmacen(), escenario);
+
+  let almacen = sembrar();
   const reiniciar = () => {
-    almacen = crearAlmacen();
+    almacen = sembrar();
   };
 
   const cliente = {

@@ -28,7 +28,12 @@ export const DEMO_EMAIL = 'demo@krealoshift.app';
 export const DEMO_LOCATION_1 = '22222222-2222-4222-8222-222222222221';
 export const DEMO_LOCATION_2 = '22222222-2222-4222-8222-222222222222';
 
-const TZ = 'America/Lima';
+/**
+ * La zona de la organización de demostración. EXPORTADA porque los escenarios tienen
+ * que preguntar «¿esto es hoy?» con el mismo huso que usa la app, no con el del
+ * navegador: ver `escenarios.ts`.
+ */
+export const TZ = 'America/Lima';
 
 /** `uuid` estable a partir de un número, para que las relaciones casen entre tablas. */
 function id(prefijo: string, n: number): string {

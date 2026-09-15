@@ -211,6 +211,35 @@
     "shouldHaveEnteredLabel": "Was due at {{time}}",
     "tabReports": "Reports"
   },
+  "home": {
+    "justSoYouKnow": "Just so you know",
+    "allClearTitle": "Nothing needs you right now",
+    "allClearBody": "Nobody arrived late, nobody is missing, and there are no requests or entries to fix. Right now {{working}} are working and {{onBreak}} are on a break.",
+    "headline": {
+      "absent_one": "person didn't show up for their shift",
+      "absent_other": "people didn't show up for their shifts",
+      "late_one": "person arrived late today",
+      "late_other": "people arrived late today",
+      "incomplete_one": "unclosed entry",
+      "incomplete_other": "unclosed entries",
+      "requests_one": "request waiting on you",
+      "requests_other": "requests waiting on you",
+      "pendingSync_one": "entry not yet uploaded",
+      "pendingSync_other": "entries not yet uploaded"
+    },
+    "action": {
+      "absent_one": "That shift is uncovered. Open the schedule to see whose it was and call them.",
+      "absent_other": "Those shifts are uncovered. Open the schedule to see whose they were and call them.",
+      "late_one": "They've clocked in or are on their way. Check it in the schedule.",
+      "late_other": "They've clocked in or are on their way. Check it in the schedule.",
+      "incomplete_one": "An unclosed day can't be paid correctly. Fix it in Hours.",
+      "incomplete_other": "An unclosed day can't be paid correctly. Fix them in Hours.",
+      "requests_one": "Someone is waiting on you. Answer it under More.",
+      "requests_other": "People are waiting on you. Answer them under More.",
+      "pendingSync_one": "It will upload by itself once the connection is back. If it's still here tomorrow, flag it.",
+      "pendingSync_other": "They will upload by themselves once the connection is back. If they're still here tomorrow, flag it."
+    }
+  },
   "team": {
     "title": "Team",
     "addEmployee": "Add employee",

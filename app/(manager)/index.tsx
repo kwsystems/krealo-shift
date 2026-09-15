@@ -9,6 +9,8 @@ import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/u
 import { OfflineBanner, StatusBadge, SyncIndicator } from '@/components/ui/states';
 import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
+import { LoImportanteDeHoy } from '@/components/dashboard/lo-importante';
+import { prioridadDelDia } from '@/features/dashboard/prioridad';
 import { useManagerDashboard, type RightNowEntry } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -46,6 +48,20 @@ export default function ManagerHomeScreen() {
   });
 
   const names = useEmployeeNames(scope.organization?.id ?? null);
+
+  /*
+   * Los cinco conteos que piden una acción, ordenados por lo que cuesta ignorarlos.
+   * La regla vive en `prioridadDelDia`, aparte y probada: si estuviera aquí dentro, la
+   * única forma de comprobar que un día con ausentes se ve distinto de un día tranquilo
+   * sería montar la pantalla entera y mirarla.
+   */
+  const prioridad = prioridadDelDia({
+    absent: dashboard.absentCount,
+    late: dashboard.lateCount,
+    incomplete: dashboard.incompleteCount,
+    requests: dashboard.pendingRequestCount,
+    pendingSync: dashboard.pendingSyncCount,
+  });
 
   /**
    * `since` NO significa lo mismo en los cinco estados: es la entrada de quien está
@@ -120,66 +136,51 @@ export default function ManagerHomeScreen() {
               onRetry={dashboard.refetch}
             >
               <Stack gap={spacing.lg}>
-                <Row gap={spacing.sm} wrap align="flex-start">
-                  <StatTile
-                    label={t('admin.workingNow')}
-                    value={String(dashboard.workingCount)}
-                    tone="working"
-                    icon="checkmark-circle"
-                    testID="tile-working"
-                  />
-                  <StatTile
-                    label={t('admin.onBreakNow')}
-                    value={String(dashboard.onBreakCount)}
-                    tone="onBreak"
-                    icon="cafe-outline"
-                    testID="tile-on-break"
-                  />
-                  <StatTile
-                    label={t('admin.upcoming')}
-                    value={String(dashboard.upcomingCount)}
-                    tone="info"
-                    icon="log-in-outline"
-                    testID="tile-upcoming"
-                  />
-                  <StatTile
-                    label={t('admin.late')}
-                    value={String(dashboard.lateCount)}
-                    tone={dashboard.lateCount > 0 ? 'late' : 'offShift'}
-                    icon="alert-circle"
-                    testID="tile-late"
-                  />
-                  <StatTile
-                    label={t('admin.absent')}
-                    value={String(dashboard.absentCount)}
-                    tone={dashboard.absentCount > 0 ? 'late' : 'offShift'}
-                    icon="person-remove-outline"
-                    testID="tile-absent"
-                  />
-                  <StatTile
-                    label={t('admin.incompleteEntries')}
-                    value={String(dashboard.incompleteCount)}
-                    tone={dashboard.incompleteCount > 0 ? 'late' : 'offShift'}
-                    icon="help-circle-outline"
-                    onPress={() => router.push('/(manager)/hours')}
-                    testID="tile-incomplete"
-                  />
-                  <StatTile
-                    label={t('admin.pendingSync')}
-                    value={String(dashboard.pendingSyncCount)}
-                    tone={dashboard.pendingSyncCount > 0 ? 'onBreak' : 'offShift'}
-                    icon="cloud-offline-outline"
-                    testID="tile-pending-sync"
-                  />
-                  <StatTile
-                    label={t('admin.pendingRequests')}
-                    value={String(dashboard.pendingRequestCount)}
-                    tone={dashboard.pendingRequestCount > 0 ? 'info' : 'offShift'}
-                    icon="mail-unread-outline"
-                    onPress={() => router.push('/(manager)/more')}
-                    testID="tile-pending-requests"
-                  />
-                </Row>
+                {/*
+                  LO PRIMERO DE LA PANTALLA ES LO QUE DECIDE EL DÍA, y cambia según el
+                  día. Antes aquí había ocho casillas del mismo tamaño y en el mismo
+                  orden siempre: había que leerlas las ocho para saber si pasaba algo, y
+                  un «0 atrasados» ocupaba lo mismo que un «3 ausentes».
+                */}
+                <LoImportanteDeHoy
+                  prioridad={prioridad}
+                  trabajando={dashboard.workingCount}
+                  enDescanso={dashboard.onBreakCount}
+                />
+
+                {/*
+                  Y ESTO SOLO INFORMA, así que va debajo y en pequeño: quién está dentro
+                  y quién entra luego. No desaparece —es lo que se mira cuando no hay
+                  nada urgente— pero deja de competir con lo que sí pide una acción.
+                */}
+                <Stack gap={spacing.sm}>
+                  <AppText variant="label" tone="subtle" accessibilityRole="header">
+                    {t('home.justSoYouKnow')}
+                  </AppText>
+                  <Row gap={spacing.sm} wrap align="flex-start">
+                    <StatTile
+                      label={t('admin.workingNow')}
+                      value={String(dashboard.workingCount)}
+                      tone="working"
+                      icon="checkmark-circle"
+                      testID="tile-working"
+                    />
+                    <StatTile
+                      label={t('admin.onBreakNow')}
+                      value={String(dashboard.onBreakCount)}
+                      tone="onBreak"
+                      icon="cafe-outline"
+                      testID="tile-on-break"
+                    />
+                    <StatTile
+                      label={t('admin.upcoming')}
+                      value={String(dashboard.upcomingCount)}
+                      tone="info"
+                      icon="log-in-outline"
+                      testID="tile-upcoming"
+                    />
+                  </Row>
+                </Stack>
 
                 <Card>
                   <AppText variant="bodyStrong">{t('admin.scheduledVsWorked')}</AppText>
