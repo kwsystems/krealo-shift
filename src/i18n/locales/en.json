@@ -102,7 +102,7 @@
     "resultBreakStart": "Break started at {{time}}",
     "resultBreakEnd": "Break ended at {{time}}",
     "savedOffline": "Saved on this device. It will sync when the connection is back.",
-    "pinIncorrect": "That PIN isn't correct. Try again.",
+    "pinIncorrect": "That PIN isn't right. Try again — if you don't remember it, your manager can change it for you.",
     "pinChecking": "Checking your PIN…",
     "pinLocked": "Too many attempts. Wait {{minutes}} minutes or ask your manager for help.",
     "forgotToClock": "I forgot to clock",

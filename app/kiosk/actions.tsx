@@ -121,6 +121,16 @@ export default function KioskActionsScreen() {
   const [step, setStep] = useState<Step>({ name: 'identify' });
   const [sheet, setSheet] = useState<Sheet>({ name: 'none' });
   const [submitting, setSubmitting] = useState(false);
+  /**
+   * El estado que el SERVIDOR dice que tiene esta persona tras el último fichaje.
+   *
+   * `null` mientras no ha fichado nada en esta sesión de pantalla; entonces manda el de
+   * la verificación del PIN. Se limpia al volver a reposo, porque la siguiente persona
+   * que llegue no tiene nada que ver con esta.
+   */
+  const [estadoTrasFichar, setEstadoTrasFichar] = useState<
+    'OFF_SHIFT' | 'WORKING' | 'ON_BREAK' | null
+  >(null);
   const [error, setError] = useState<string | null>(null);
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [overrideChecking, setOverrideChecking] = useState(false);
@@ -162,7 +172,21 @@ export default function KioskActionsScreen() {
 
   if (verification === null) return null;
 
-  const state = verification.attendanceState;
+  /*
+   * EL ESTADO QUE SE ENSEÑA ARRIBA, Y POR QUÉ NO ES SIEMPRE EL DE LA VERIFICACIÓN
+   *
+   * Venía de `verification.attendanceState`, que se captura AL TECLEAR EL PIN y no se
+   * volvía a tocar. Resultado, medido en un teléfono: se marcaba la entrada, la tarjeta
+   * de abajo decía «Entrada registrada a las 21:49» y la de arriba seguía diciendo
+   * «Fuera de turno». La misma pantalla afirmando las dos cosas, en el único momento en
+   * que a la persona solo le importa una: si quedó registrado o no.
+   *
+   * El servidor devuelve el estado NUEVO en la respuesta del fichaje —lo tenía y no se
+   * usaba— así que se usa ese en cuanto llega. Es además la única fuente honesta: el
+   * cliente no debe deducir el estado resultante por su cuenta, que es como se acaba
+   * enseñando una cosa distinta de la que la base guardó.
+   */
+  const state = estadoTrasFichar ?? verification.attendanceState;
   const primary = primaryEvent(state);
   const secondary = secondaryEvent(state);
 
@@ -273,6 +297,17 @@ export default function KioskActionsScreen() {
       });
 
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      /*
+       * Sin red no hay respuesta del servidor, así que el estado nuevo lo da la máquina
+       * de estados —la MISMA tabla que decide qué botones se ofrecen, no una copia—.
+       * Sin esto, fichar sin red dejaba la cabecera diciendo el estado anterior y la
+       * confirmación el nuevo: la contradicción de siempre, justo cuando la persona
+       * menos margen tiene para dudar de si su fichaje quedó.
+       */
+      const siguiente = transition(state, event);
+      if (siguiente.allowed) setEstadoTrasFichar(siguiente.nextState);
+
       await refreshQueueIndicators();
       // Se intenta enviar de inmediato, sin bloquear la pantalla: si hay red,
       // sale ya; si no, queda en la cola con su backoff.
@@ -406,6 +441,7 @@ export default function KioskActionsScreen() {
         withPhoto: photo?.status === 'captured',
       });
 
+      setEstadoTrasFichar(result.data.attendanceState);
       setStep({
         name: 'result',
         event,

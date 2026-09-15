@@ -226,6 +226,59 @@ for (const [etiqueta, ancho, alto] of TAMANOS) {
   await ctx.close();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * La pantalla no puede contradecirse a sí misma al confirmar un fichaje
+ * ---------------------------------------------------------------------------
+ *
+ * Esto salió de recorrer el fichaje en un teléfono, no de leer el código. Al marcar la
+ * entrada, la tarjeta de abajo decía «Entrada registrada a las 21:49» y la de arriba
+ * seguía diciendo «Fuera de turno»: la misma pantalla afirmando las dos cosas, en el
+ * único momento en que a la persona solo le importa una —si quedó registrado o no—.
+ *
+ * La causa: el estado de la cabecera se capturaba al teclear el PIN y no se volvía a
+ * tocar, aunque el servidor devuelve el estado nuevo en la respuesta del fichaje.
+ *
+ * Se comprueba aquí y no en una prueba unitaria porque es una propiedad de LO QUE SE VE:
+ * las dos afirmaciones están en componentes distintos y cada uno, por separado, estaba
+ * bien.
+ */
+{
+  const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 } });
+  const pag = await ctx.newPage();
+  await sembrarKiosco(pag);
+  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+  await pag.waitForTimeout(2500);
+
+  await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
+  for (const digito of ['1', '2', '3', '4', '5', '6']) {
+    await pag.locator(`[data-testid="keypad-${digito}"]:visible`).first().click();
+    await pag.waitForTimeout(180);
+  }
+  await pag.waitForTimeout(3000);
+  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
+  await pag.waitForTimeout(5200);
+
+  const texto = ((await pag.evaluate(() => document.body.innerText)) || '').replace(/\s+/g, ' ');
+  const confirma = /registrada|registrado/i.test(texto);
+  const diceFuera = /Fuera de turno/i.test(texto);
+
+  if (!confirma) {
+    problemas.push('tras marcar entrada la pantalla no confirma que quedó registrada');
+  }
+  if (confirma && diceFuera) {
+    problemas.push(
+      'la pantalla dice «registrada» y «Fuera de turno» a la vez: se contradice justo ' +
+        'cuando la persona solo quiere saber si quedó',
+    );
+  }
+  console.log(
+    `  confirmación      ${confirma ? 'dice que quedó registrada' : 'NO confirma'}` +
+      `, estado ${diceFuera ? 'CONTRADICTORIO' : 'coherente'}`,
+  );
+  await ctx.close();
+}
+
 await navegador.close();
 await cerrar();
 

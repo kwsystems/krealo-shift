@@ -102,7 +102,7 @@
     "resultBreakStart": "Descanso iniciado a las {{time}}",
     "resultBreakEnd": "Descanso terminado a las {{time}}",
     "savedOffline": "Guardado en este dispositivo. Se sincronizará al recuperar conexión.",
-    "pinIncorrect": "Ese PIN no es correcto. Inténtalo nuevamente.",
+    "pinIncorrect": "Ese PIN no es correcto. Vuelve a intentarlo; si no lo recuerdas, tu gerente puede cambiártelo.",
     "pinChecking": "Comprobando tu PIN…",
     "pinLocked": "Demasiados intentos. Espera {{minutes}} minutos o pide ayuda a tu gerente.",
     "forgotToClock": "Olvidé marcar",
