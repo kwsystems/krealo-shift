@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import type { BreakReason } from '@/domain/break-reason';
 import { getSupabase } from '@/lib/supabase/client';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import type { KioskBinding } from '@/stores/kiosk-store';
@@ -333,6 +334,8 @@ export async function submitTimeEvent(params: {
   actionToken: string;
   eventType: TimeEventType;
   breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
+  /** Por qué se ausenta. Ver `src/domain/break-reason.ts`. */
+  breakReason?: BreakReason;
   shiftId: string | null;
   idempotencyKey: string;
   occurredAtDevice: string;

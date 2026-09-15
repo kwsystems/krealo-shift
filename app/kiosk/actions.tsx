@@ -1,3 +1,4 @@
+import { BREAK_REASONS, breakTypeForReason, type BreakReason } from '@/domain/break-reason';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
@@ -9,11 +10,10 @@ import { useTranslation } from 'react-i18next';
 import { PhotoCapture, type PhotoResult } from '@/features/kiosk/photo-capture';
 import { RequestUpdatesCard } from '@/components/attendance/request-updates';
 import {
-  BreakTypeSheet,
+  BreakReasonSheet,
   ManagerOverrideSheet,
   PhotoNotice,
   RequiredBreakSheet,
-  type BreakTypeOption,
   type RequiredBreakChoice,
 } from '@/components/attendance/kiosk-sheets';
 import { AppText } from '@/components/ui/app-text';
@@ -57,17 +57,28 @@ import { formatClockTime, formatShiftRange, minutesToHHmm } from '@/utils/time';
  * el caso mas frecuente en una tienda, y la distincion pagado/no pagado importa:
  * decide si esos minutos se restan del tiempo trabajado.
  */
-const BREAK_TYPE_OPTIONS: readonly BreakTypeOption[] = ['meal', 'unpaid', 'paid'] as const;
+/**
+ * Los seis motivos, en el orden en que se usan de verdad.
+ *
+ * Comida y descanso van primero porque son el 90% de las pausas de una tienda; «Otro»
+ * va el último a propósito, para que sea la salida y no el atajo.
+ */
+const OPCIONES_DE_MOTIVO = BREAK_REASONS;
 
 type Sheet =
   | { name: 'none' }
-  | { name: 'breakType' }
+  | { name: 'breakReason' }
   | { name: 'requiredBreak' }
   | { name: 'managerOverride' };
 
 type Step =
   | { name: 'identify' }
-  | { name: 'confirm'; event: TimeEventType; breakType?: 'paid' | 'unpaid' | 'meal' | 'other' }
+  | {
+      name: 'confirm';
+      event: TimeEventType;
+      breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
+      breakReason?: BreakReason;
+    }
   | {
       name: 'result';
       event: TimeEventType;
@@ -169,7 +180,7 @@ export default function KioskActionsScreen() {
     // Un descanso puede ser pagado o no, y eso cambia si esos minutos cuentan
     // como trabajados. Se pregunta en lugar de asumir (§9.3).
     if (event === 'break_start') {
-      setSheet({ name: 'breakType' });
+      setSheet({ name: 'breakReason' });
       return;
     }
 
@@ -244,6 +255,7 @@ export default function KioskActionsScreen() {
         employeeOpaqueId: verification.employee.opaqueId,
         eventType: event,
         breakType: step.name === 'confirm' ? step.breakType : undefined,
+        breakReason: step.name === 'confirm' ? step.breakReason : undefined,
         shiftId: selectedShift?.id ?? null,
         locationId: binding.locationId,
         pinVersion: verification.pinVersion,
@@ -331,6 +343,7 @@ export default function KioskActionsScreen() {
       actionToken,
       eventType: event,
       breakType: step.name === 'confirm' ? step.breakType : undefined,
+      breakReason: step.name === 'confirm' ? step.breakReason : undefined,
       shiftId: selectedShift?.id ?? null,
       idempotencyKey,
       occurredAtDevice: new Date().toISOString(),
@@ -698,12 +711,20 @@ export default function KioskActionsScreen() {
         </Stack>
       </ResponsiveContainer>
 
-      <BreakTypeSheet
-        visible={sheet.name === 'breakType'}
-        options={BREAK_TYPE_OPTIONS}
-        onSelect={(option) => {
+      <BreakReasonSheet
+        visible={sheet.name === 'breakReason'}
+        options={OPCIONES_DE_MOTIVO}
+        esPagado={(reason) => breakTypeForReason(reason, policies.paidBreakReasons) === 'paid'}
+        onSelect={(reason) => {
           setSheet({ name: 'none' });
-          setStep({ name: 'confirm', event: 'break_start', breakType: option });
+          setStep({
+            name: 'confirm',
+            event: 'break_start',
+            // El empleado eligió el MOTIVO; la consecuencia de nómina la pone la
+            // ubicación. Ver `src/domain/break-reason.ts`.
+            breakType: breakTypeForReason(reason, policies.paidBreakReasons),
+            breakReason: reason,
+          });
         }}
         onCancel={() => setSheet({ name: 'none' })}
       />

@@ -284,14 +284,111 @@ function crearRpc(almacen: Almacen) {
   };
 }
 
-function crearFunctions() {
+/**
+ * El estado de asistencia de la demostración, recordado entre llamadas.
+ *
+ * Sin esto, tras marcar entrada el siguiente PIN volvía a decir «fuera de turno» y las
+ * acciones ofrecidas no tenían nada que ver con lo que acababas de hacer. Vive en el
+ * almacén, igual que el resto de datos de la demostración.
+ */
+function estadoDeAsistenciaDemo(almacen: Almacen): 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK' {
+  const fila = (almacen.get('demo_estado_kiosco') ?? [])[0];
+  const valor = fila?.estado;
+  return valor === 'WORKING' || valor === 'ON_BREAK' ? valor : 'OFF_SHIFT';
+}
+
+function accionesPermitidasDemo(estado: 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK') {
+  if (estado === 'OFF_SHIFT') return ['clock_in'] as const;
+  if (estado === 'ON_BREAK') return ['break_end', 'clock_out'] as const;
+  return ['break_start', 'clock_out'] as const;
+}
+
+function estadoTrasEventoDemo(tipo: string): 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK' {
+  if (tipo === 'clock_in' || tipo === 'break_end') return 'WORKING';
+  if (tipo === 'break_start') return 'ON_BREAK';
+  return 'OFF_SHIFT';
+}
+
+function registrarEventoDemo(almacen: Almacen, tipo: string, motivo: unknown): void {
+  almacen.set('demo_estado_kiosco', [{ estado: estadoTrasEventoDemo(tipo) }]);
+  // El motivo se guarda para que la demostración pueda enseñarlo en los reportes.
+  if (tipo === 'break_start' && typeof motivo === 'string') {
+    almacen.set('demo_pausas', [
+      ...(almacen.get('demo_pausas') ?? []),
+      { break_reason: motivo, iniciada: new Date().toISOString() },
+    ]);
+  }
+}
+
+function crearFunctions(almacen: Almacen) {
   return {
     invoke: async (nombre: string, _opciones?: { body?: unknown }) => {
       switch (nombre) {
-        case 'verify-pin':
-          return sinError({ ok: true, employee: { id: DEMO_USER_ID, fullName: 'Demostración' } });
-        case 'submit-time-event':
-          return sinError({ ok: true });
+        /*
+         * EL PIN TIENE QUE FUNCIONAR, y con la primera versión no funcionaba.
+         *
+         * Devolvía `{ ok: true, employee: {...} }`, que no se parece en nada a lo que
+         * `verifyPinResponseSchema` valida. Zod lo rechazaba y la pantalla decía «No
+         * pudimos completar la acción»: o sea que en la demostración era IMPOSIBLE pasar
+         * del teclado. Nadie podía ver el fichaje, ni las pausas, ni el motivo. Se
+         * descubrió tecleando un PIN en el navegador, no leyendo el código: el arnés
+         * anterior solo comprobaba que la pantalla del reloj pintara.
+         *
+         * Ahora se devuelve la forma completa. Cualquier PIN entra: no hay a quién
+         * verificar, y el aviso de demostración ya avisa de que nada de esto es real.
+         */
+        case 'verify-pin': {
+          const estado = estadoDeAsistenciaDemo(almacen);
+          return sinError({
+            actionToken: 'demo-action-token-suficientemente-largo',
+            expiresAt: new Date(Date.now() + 90_000).toISOString(),
+            employee: {
+              opaqueId: 'demo-empleado-1',
+              displayName: 'Ana Quispe Lara',
+              initials: 'AQ',
+              jobRoleName: 'Cajero',
+              // Gerente a propósito: si no, el menú de salida del kiosco queda
+              // inalcanzable y no se puede volver al panel sin recargar.
+              canManageLocation: true,
+            },
+            attendanceState: estado,
+            allowedActions: accionesPermitidasDemo(estado),
+            eligibleShifts: [],
+            openSession:
+              estado === 'OFF_SHIFT'
+                ? null
+                : {
+                    startedAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
+                    shiftEndsAt: null,
+                    takenBreakMinutes: 0,
+                    requiredBreakMinutes: 0,
+                    openBreak:
+                      estado === 'ON_BREAK'
+                        ? {
+                            startedAt: new Date(Date.now() - 600_000).toISOString(),
+                            breakType: 'unpaid',
+                          }
+                        : null,
+                  },
+            earliestClockInAt: null,
+            requestUpdates: [],
+          });
+        }
+
+        case 'submit-time-event': {
+          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const tipo = String(cuerpo.eventType ?? '');
+          registrarEventoDemo(almacen, tipo, cuerpo.breakReason);
+          return sinError({
+            status: 'accepted',
+            eventId: '99999999-9999-4999-8999-999999999999',
+            attendanceState: estadoTrasEventoDemo(tipo),
+            occurredAt: new Date().toISOString(),
+            serverReceivedAt: new Date().toISOString(),
+            flags: [],
+            summary: { shiftEndsAt: null, netMinutesToday: 0 },
+          });
+        }
         case 'sync-offline-events':
           return sinError({ ok: true, accepted: 0, rejected: 0 });
         case 'refresh-kiosk-roster':
@@ -379,7 +476,7 @@ export function getDemoClient(): AppSupabaseClient {
     from: (nombre: string) => crearFrom(almacen)(nombre),
     rpc: (nombre: string, argumentos?: Record<string, unknown>) =>
       crearRpc(almacen)(nombre, argumentos),
-    functions: crearFunctions(),
+    functions: crearFunctions(almacen),
     storage: crearStorage(),
   };
 

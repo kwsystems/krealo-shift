@@ -7,6 +7,7 @@ import { NumericKeypad, PinDots } from './pin-pad';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
+import type { BreakReason } from '@/domain/break-reason';
 import { colors, radii, shadows, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -21,7 +22,10 @@ import { colors, radii, shadows, sizes, spacing } from '@/theme/tokens';
  *     un gerente y queda en auditoría, no es un botón que cualquiera pulsa.
  */
 
-export type BreakTypeOption = 'paid' | 'unpaid' | 'meal' | 'other';
+/**
+ * Ya no existe `BreakTypeOption`: el kiosco pregunta el MOTIVO, no el tratamiento de
+ * nómina. Ver `src/domain/break-reason.ts`.
+ */
 
 function Sheet({
   visible,
@@ -48,40 +52,57 @@ function Sheet({
   );
 }
 
-export function BreakTypeSheet({
+/**
+ * Elegir POR QUÉ te ausentas, no si te lo pagan.
+ *
+ * ANTES ESTA HOJA PREGUNTABA OTRA COSA: «¿qué descanso vas a tomar?», con las opciones
+ * «Descanso pagado», «Descanso no pagado», «Comida» y «Otro». Le estaba pidiendo al
+ * empleado que decidiera una cuestión de nómina que ni sabe ni le corresponde, delante
+ * de una cola, en cinco segundos. Y encima no registraba el dato que el negocio
+ * necesita, que es a dónde se fue ese rato.
+ *
+ * Ahora elige el motivo, que es una pregunta que cualquiera contesta sin pensar, y la
+ * app traduce a pagado o no pagado según lo que la empresa haya configurado para esta
+ * ubicación. La consecuencia de nómina se muestra debajo de cada opción —tiene derecho
+ * a saber qué implica lo que elige— pero no es lo que se le pide decidir.
+ */
+export function BreakReasonSheet({
   visible,
   options,
+  esPagado,
   onSelect,
   onCancel,
 }: {
   visible: boolean;
-  options: readonly BreakTypeOption[];
-  onSelect: (option: BreakTypeOption) => void;
+  options: readonly BreakReason[];
+  /** Si ese motivo cuenta como trabajado en esta ubicación. */
+  esPagado: (reason: BreakReason) => boolean;
+  onSelect: (reason: BreakReason) => void;
   onCancel: () => void;
 }) {
   const { t } = useTranslation();
 
-  const labels: Record<BreakTypeOption, string> = {
-    paid: t('kiosk.breakPaid'),
-    unpaid: t('kiosk.breakUnpaid'),
-    meal: t('kiosk.breakMeal'),
-    other: t('kiosk.breakOther'),
+  const labels: Record<BreakReason, string> = {
+    meal: t('kiosk.reasonMeal'),
+    rest: t('kiosk.reasonRest'),
+    permit: t('kiosk.reasonPermit'),
+    meeting: t('kiosk.reasonMeeting'),
+    training: t('kiosk.reasonTraining'),
+    other: t('kiosk.reasonOther'),
   };
 
   return (
-    <Sheet visible={visible} onClose={onCancel} testID="break-type-sheet">
+    <Sheet visible={visible} onClose={onCancel} testID="break-reason-sheet">
       <Stack gap={spacing.md}>
-        <AppText variant="section">{t('kiosk.chooseBreakType')}</AppText>
-        {options.map((option) => (
+        <AppText variant="section">{t('kiosk.chooseBreakReason')}</AppText>
+        {options.map((reason) => (
           <SecondaryButton
-            key={option}
-            label={labels[option]}
-            // Se dice explícitamente si esos minutos se pagan: el empleado tiene
-            // derecho a saber qué está eligiendo.
-            hint={option === 'paid' ? t('timesheet.regular') : t('timesheet.breaks')}
-            onPress={() => onSelect(option)}
+            key={reason}
+            label={labels[reason]}
+            hint={esPagado(reason) ? t('kiosk.reasonCountsAsWork') : t('kiosk.reasonDoesNotCount')}
+            onPress={() => onSelect(reason)}
             size="kiosk"
-            testID={`break-type-${option}`}
+            testID={`break-reason-${reason}`}
           />
         ))}
         <GhostButton label={t('common.cancel')} onPress={onCancel} />

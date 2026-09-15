@@ -158,7 +158,18 @@
     "privacyNot": "The camera does not record between clock-ins, and the app does not use your location or recognise your face: your PIN identifies you.",
     "unavailableHereTitle": "The time clock does not work in a browser",
     "unavailableHereBody": "Clocking in needs two things a browser cannot give: storing the device credential out of reach of any extension, and a local queue that survives a page reload. A lost entry is an unpaid hour, so we would rather say so than risk it. The admin panel does work here normally.",
-    "unavailableHereAction": "Go to the panel"
+    "unavailableHereAction": "Go to the panel",
+    "chooseBreakReason": "Why are you stepping away?",
+    "reasonMeal": "Meal",
+    "reasonRest": "Break",
+    "reasonPermit": "Personal time",
+    "reasonMeeting": "Meeting",
+    "reasonTraining": "Training",
+    "reasonOther": "Other",
+    "reasonCountsAsWork": "Counts as worked",
+    "reasonDoesNotCount": "Does not count as worked",
+    "reasonNoteTitle": "What happened?",
+    "reasonNoteHint": "One line is enough. It saves your manager from asking later."
   },
   "attendance": {
     "statusOffShift": "Off shift",

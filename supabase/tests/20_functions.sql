@@ -1398,3 +1398,104 @@ begin
 end
 $$;
 rollback;
+
+-- ---------------------------------------------------------------------------
+-- Motivo de las pausas (§ pedido de Andree, 2026-09-15)
+-- ---------------------------------------------------------------------------
+--
+-- Lo que de verdad hay que demostrar aqui son tres cosas, y ninguna es "la columna
+-- existe": que el motivo llega a la proyeccion de donde leen los reportes, que NO toca
+-- la matematica de nomina —que es lo que se paga— y que la vista agrega por motivo.
+
+begin;
+do $$
+declare
+  v_org     uuid := '11111111-1111-4111-8111-111111111111';
+  v_loc     uuid;
+  v_emp     uuid;
+  v_sesion  uuid;
+  v_ini     uuid;
+  v_fin     uuid;
+  v_reason  text;
+  v_no_pagados integer;
+  v_minutos integer;
+begin
+  select id into v_loc from locations where organization_id = v_org limit 1;
+
+  insert into employees (organization_id, full_name, status)
+    values (v_org, 'Pausa Con Motivo', 'active') returning id into v_emp;
+
+  -- La sesion se abre con un fichaje de entrada de verdad y no a mano: `work_sessions`
+  -- exige `clock_in_event_id`, porque una sesion sin el evento que la creo no se puede
+  -- auditar. Se deja que `apply_time_event` la construya, que es su trabajo.
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, occurred_at, idempotency_key)
+    values (v_org, v_emp, v_loc, 'clock_in', now() - interval '5 hours', gen_random_uuid())
+    returning id into v_ini;
+  perform apply_event_to_projection(v_ini);
+  select id into v_sesion from work_sessions where employee_id = v_emp and status = 'open';
+
+  -- Una reunion de 30 minutos, que la empresa cuenta como trabajada: break_type 'paid'.
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, break_type, break_reason, occurred_at, idempotency_key)
+    values (v_org, v_emp, v_loc, 'break_start', 'paid', 'meeting', now() - interval '2 hours', gen_random_uuid())
+    returning id into v_ini;
+  perform apply_event_to_projection(v_ini);
+
+  select break_reason::text into v_reason from break_intervals where start_event_id = v_ini;
+  perform test_assert(v_reason = 'meeting',
+    'El motivo llega a break_intervals, que es de donde leen los reportes — dio: ' ||
+    coalesce(v_reason, 'null'));
+
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, break_type, occurred_at, idempotency_key)
+    values (v_org, v_emp, v_loc, 'break_end', 'paid', now() - interval '90 minutes', gen_random_uuid())
+    returning id into v_fin;
+  perform apply_event_to_projection(v_fin);
+
+  -- LA COMPROBACION QUE MAS IMPORTA: el motivo no cambia lo que se paga. Una reunion
+  -- marcada como pagada NO puede acabar restandose de las horas netas.
+  select unpaid_break_minutes into v_no_pagados from work_sessions where id = v_sesion;
+  perform test_assert(v_no_pagados = 0,
+    'Una reunion pagada no se descuenta de las horas — no pagados: ' || v_no_pagados);
+
+  select minutes into v_minutos from break_time_by_reason
+    where employee_id = v_emp and break_reason = 'meeting';
+  perform test_assert(v_minutos = 30,
+    'La vista agrega los minutos por motivo — dio: ' || coalesce(v_minutos, -1));
+
+  -- Y un permiso NO pagado, que si se descuenta: los dos ejes son independientes.
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, break_type, break_reason,
+     occurred_at, idempotency_key)
+    values (v_org, v_emp, v_loc, 'break_start', 'unpaid', 'permit',
+            now() - interval '60 minutes', gen_random_uuid())
+    returning id into v_ini;
+  perform apply_event_to_projection(v_ini);
+
+  insert into time_events
+    (organization_id, employee_id, location_id, event_type, break_type, occurred_at, idempotency_key)
+    values (v_org, v_emp, v_loc, 'break_end', 'unpaid', now() - interval '40 minutes', gen_random_uuid())
+    returning id into v_fin;
+  perform apply_event_to_projection(v_fin);
+
+  select unpaid_break_minutes into v_no_pagados from work_sessions where id = v_sesion;
+  perform test_assert(v_no_pagados = 20,
+    'Un permiso no pagado SI se descuenta — no pagados: ' || v_no_pagados);
+
+  -- EL DISPARADOR: reconstruir la sesion no puede perder el motivo. Es lo que pasa
+  -- cada vez que un gerente corrige una hora, asi que si se perdiera aqui, se perderia
+  -- en el caso mas normal de todos.
+  perform rebuild_work_session_unchecked(v_sesion);
+  select bi.break_reason::text into v_reason
+    from break_intervals bi
+    join time_events te on te.id = bi.start_event_id
+    where bi.work_session_id = v_sesion and te.break_reason = 'meeting'
+    limit 1;
+  perform test_assert(v_reason = 'meeting',
+    'Reconstruir la sesion CONSERVA el motivo — dio: ' || coalesce(v_reason, 'null'));
+
+  raise notice '  --- pruebas de motivo de pausa completas ---';
+end
+$$;
+rollback;

@@ -125,6 +125,7 @@ create table if not exists outbox_time_events (
     event_type in ('clock_in', 'break_start', 'break_end', 'clock_out')
   ),
   break_type text,
+  break_reason text,
   shift_id text,
   location_id text not null,
   occurred_at_device text not null,

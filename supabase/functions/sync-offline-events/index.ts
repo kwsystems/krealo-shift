@@ -35,12 +35,14 @@ import { authenticateKiosk, serviceClient } from '../_shared/kiosk-auth.ts';
 const MAX_BATCH = 50;
 const EVENT_TYPES = ['clock_in', 'break_start', 'break_end', 'clock_out'] as const;
 const BREAK_TYPES = ['paid', 'unpaid', 'meal', 'other'] as const;
+const BREAK_REASONS = ['meal', 'rest', 'permit', 'meeting', 'training', 'other'] as const;
 
 type OfflineEvent = {
   idempotencyKey: string;
   employeeOpaqueId: string;
   eventType: (typeof EVENT_TYPES)[number];
   breakType?: (typeof BREAK_TYPES)[number];
+  breakReason?: (typeof BREAK_REASONS)[number];
   shiftId: string | null;
   occurredAtDevice: string;
   deviceSequence: number;
@@ -77,6 +79,11 @@ function validateEvent(value: unknown): OfflineEvent | null {
     idempotencyKey: v.idempotencyKey,
     employeeOpaqueId: v.employeeOpaqueId,
     eventType: v.eventType as OfflineEvent['eventType'],
+    // Igual que en submit-time-event: un motivo desconocido se descarta, no tumba el
+    // fichaje. Una cola sincronizada tras dias sin red puede traer valores viejos.
+    breakReason: BREAK_REASONS.includes(v.breakReason as OfflineEvent['breakReason'])
+      ? (v.breakReason as OfflineEvent['breakReason'])
+      : undefined,
     breakType: v.breakType as OfflineEvent['breakType'] | undefined,
     shiftId: isUuid(v.shiftId) ? v.shiftId : null,
     occurredAtDevice: v.occurredAtDevice,
@@ -150,6 +157,7 @@ Deno.serve(async (request) => {
       p_pin_version: event.pinVersion,
       p_shift_id: event.shiftId,
       p_break_type: event.breakType ?? null,
+      p_break_reason: event.breakReason ?? null,
       p_photo_path: event.photoPath,
     });
 

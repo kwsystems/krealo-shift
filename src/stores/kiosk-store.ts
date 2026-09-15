@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
+
 import { resetOfflineDatabase } from '@/lib/offline/database';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 
@@ -22,6 +24,15 @@ export type KioskPolicies = {
   allowUnscheduledShifts: boolean;
   timeFormat: '12h' | '24h';
   requiredBreakMinutes: number;
+  /**
+   * Qué motivos de pausa cuentan como trabajado en esta ubicación.
+   *
+   * Viaja en el binding y no se consulta al pausar: el kiosco tiene que poder decidirlo
+   * SIN RED, porque una pausa sin conexión se registra igual y necesita saber ya si
+   * esos minutos se descuentan. Los valores de fábrica están en
+   * `src/domain/break-reason.ts`; aquí solo llega lo que la ubicación haya cambiado.
+   */
+  paidBreakReasons?: Partial<Record<BreakReason, boolean>>;
 };
 
 export const DEFAULT_KIOSK_POLICIES: KioskPolicies = {
@@ -34,6 +45,7 @@ export const DEFAULT_KIOSK_POLICIES: KioskPolicies = {
   allowUnscheduledShifts: true,
   timeFormat: '24h',
   requiredBreakMinutes: 0,
+  paidBreakReasons: DEFAULT_PAID_REASONS,
 };
 
 export type KioskBinding = {

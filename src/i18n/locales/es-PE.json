@@ -158,7 +158,18 @@
     "privacyNot": "La cámara no graba entre fichajes, y la app no usa tu ubicación ni reconoce tu cara: te identifica tu PIN.",
     "unavailableHereTitle": "El reloj de fichaje no funciona en un navegador",
     "unavailableHereBody": "Para fichar hacen falta dos cosas que un navegador no puede dar: guardar la credencial del dispositivo fuera del alcance de cualquier extensión, y una cola local que no se borre al recargar la página. Un fichaje perdido es una hora no pagada, así que preferimos decirlo antes que arriesgarlo. El panel de administración sí funciona aquí con normalidad.",
-    "unavailableHereAction": "Ir al panel"
+    "unavailableHereAction": "Ir al panel",
+    "chooseBreakReason": "¿Por qué te ausentas?",
+    "reasonMeal": "Comida",
+    "reasonRest": "Descanso",
+    "reasonPermit": "Permiso",
+    "reasonMeeting": "Reunión o charla",
+    "reasonTraining": "Capacitación",
+    "reasonOther": "Otro",
+    "reasonCountsAsWork": "Cuenta como trabajado",
+    "reasonDoesNotCount": "No cuenta como trabajado",
+    "reasonNoteTitle": "¿Qué pasó?",
+    "reasonNoteHint": "Una línea basta. Sirve para que tu gerente no tenga que preguntarte después."
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

@@ -20,10 +20,14 @@ import type { TimeEventType } from '@/domain/attendance-state-machine';
 
 export type BreakType = 'paid' | 'unpaid' | 'meal' | 'other';
 
+/** El motivo viaja junto al evento: sin él, una pausa sincronizada pierde el porqué. */
+export type { BreakReason } from '@/domain/break-reason';
+
 export type OutboxEventInput = {
   employeeOpaqueId: string;
   eventType: TimeEventType;
   breakType?: BreakType;
+  breakReason?: import('@/domain/break-reason').BreakReason;
   shiftId: string | null;
   locationId: string;
   pinVersion: number;
@@ -36,6 +40,7 @@ export type OutboxEvent = {
   employeeOpaqueId: string;
   eventType: TimeEventType;
   breakType: BreakType | null;
+  breakReason: import('@/domain/break-reason').BreakReason | null;
   shiftId: string | null;
   locationId: string;
   occurredAtDevice: string;
@@ -57,6 +62,7 @@ type OutboxRow = {
   employee_opaque_id: string;
   event_type: TimeEventType;
   break_type: BreakType | null;
+  break_reason: import('@/domain/break-reason').BreakReason | null;
   shift_id: string | null;
   location_id: string;
   occurred_at_device: string;
@@ -79,6 +85,7 @@ function toEvent(row: OutboxRow): OutboxEvent {
     employeeOpaqueId: row.employee_opaque_id,
     eventType: row.event_type,
     breakType: row.break_type,
+    breakReason: row.break_reason,
     shiftId: row.shift_id,
     locationId: row.location_id,
     occurredAtDevice: row.occurred_at_device,
@@ -139,6 +146,9 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     input.employeeOpaqueId,
     input.eventType,
     input.breakType ?? '',
+    // El motivo entra en la firma: si no, seria el unico campo del evento que se
+    // podria cambiar en el SQLite del dispositivo sin invalidarla.
+    input.breakReason ?? '',
     input.shiftId ?? '',
     input.locationId,
     occurredAtDevice,
@@ -150,14 +160,16 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     await database.runAsync(
       `insert into outbox_time_events (
          idempotency_key, device_sequence, employee_opaque_id, event_type, break_type,
-         shift_id, location_id, occurred_at_device, device_timezone, device_offset_minutes,
-         pin_version, photo_local_uri, signature, status, attempts, created_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
+         break_reason, shift_id, location_id, occurred_at_device, device_timezone,
+         device_offset_minutes, pin_version, photo_local_uri, signature, status, attempts,
+         created_at
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
       idempotencyKey,
       deviceSequence,
       input.employeeOpaqueId,
       input.eventType,
       input.breakType ?? null,
+      input.breakReason ?? null,
       input.shiftId,
       input.locationId,
       occurredAtDevice,

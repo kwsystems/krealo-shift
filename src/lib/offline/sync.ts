@@ -261,6 +261,7 @@ function toWirePayload(event: OutboxEvent) {
     employeeOpaqueId: event.employeeOpaqueId,
     eventType: event.eventType,
     breakType: event.breakType ?? undefined,
+    breakReason: event.breakReason ?? undefined,
     shiftId: event.shiftId,
     occurredAtDevice: event.occurredAtDevice,
     deviceSequence: event.deviceSequence,

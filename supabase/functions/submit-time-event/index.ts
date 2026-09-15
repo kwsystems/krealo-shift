@@ -27,11 +27,18 @@ import {
 
 const EVENT_TYPES = ['clock_in', 'break_start', 'break_end', 'clock_out'] as const;
 const BREAK_TYPES = ['paid', 'unpaid', 'meal', 'other'] as const;
+/**
+ * El MOTIVO de la pausa. Distinto del tipo: el tipo dice si cuenta como trabajado —lo
+ * decide la empresa— y el motivo dice por que se ausento —lo dice quien se ausenta—.
+ * Ver `supabase/migrations/20260915000100_motivo_de_pausa.sql`.
+ */
+const BREAK_REASONS = ['meal', 'rest', 'permit', 'meeting', 'training', 'other'] as const;
 
 type Body = {
   actionToken: string;
   eventType: (typeof EVENT_TYPES)[number];
   breakType?: (typeof BREAK_TYPES)[number];
+  breakReason?: (typeof BREAK_REASONS)[number];
   shiftId: string | null;
   idempotencyKey: string;
   occurredAtDevice?: string;
@@ -51,11 +58,18 @@ function validate(value: unknown): Body | null {
   if (v.breakType !== undefined && !BREAK_TYPES.includes(v.breakType as Body['breakType'])) {
     return null;
   }
+  // Un motivo desconocido se DESCARTA en vez de rechazar el fichaje entero: entre
+  // perder una etiqueta y perder la hora a la que alguien entro a trabajar, se pierde
+  // la etiqueta. Pasa de verdad con una app vieja tras cambiar la lista de motivos.
+  const motivoValido =
+    typeof v.breakReason === 'string' &&
+    BREAK_REASONS.includes(v.breakReason as Body['breakReason']);
 
   return {
     actionToken: v.actionToken,
     eventType: v.eventType as Body['eventType'],
     breakType: v.breakType as Body['breakType'] | undefined,
+    breakReason: motivoValido ? (v.breakReason as Body['breakReason']) : undefined,
     shiftId: isUuid(v.shiftId) ? v.shiftId : null,
     idempotencyKey: v.idempotencyKey,
     occurredAtDevice: typeof v.occurredAtDevice === 'string' ? v.occurredAtDevice : undefined,
@@ -96,6 +110,7 @@ Deno.serve(async (request) => {
     p_idempotency_key: body.data.idempotencyKey,
     p_shift_id: body.data.shiftId,
     p_break_type: body.data.breakType ?? null,
+    p_break_reason: body.data.breakReason ?? null,
     p_occurred_at_device: body.data.occurredAtDevice ?? null,
     p_device_sequence: body.data.deviceSequence ?? null,
     p_is_offline: body.data.isOffline,
