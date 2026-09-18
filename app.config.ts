@@ -35,7 +35,12 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // El kiosco prioriza vertical en un iPad sobre pedestal, pero horizontal no debe romperse.
   orientation: 'default',
   icon: './assets/images/icon.png',
-  userInterfaceStyle: 'light',
+  /*
+   * `automatic` deja que el sistema diga si es claro u oscuro; con `'light'` la app
+   * estaba clavada en claro y `useColorScheme()` devolvía siempre lo mismo, así que la
+   * opción «Automático» del selector de tema no habría hecho nada.
+   */
+  userInterfaceStyle: 'automatic',
   assetBundlePatterns: ['**/*'],
 
   ios: {

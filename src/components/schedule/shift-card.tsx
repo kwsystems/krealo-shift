@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -7,7 +7,9 @@ import { Row } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
-import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
+import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 import { formatShiftRange, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 import { minutesBetween } from '@/utils/time';
 
@@ -42,6 +44,8 @@ export function ShiftCard({
   onPress?: (shift: ShiftRow) => void;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   const range = formatShiftRange(shift.starts_at, shift.ends_at, timezone, timeFormat);
@@ -171,6 +175,8 @@ export function EmptyShiftSlot({
   accessibilityLabel: string;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Pressable
       onPress={onPress}
@@ -184,7 +190,7 @@ export function EmptyShiftSlot({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   card: {
     gap: spacing.xs,
     backgroundColor: colors.surface,
@@ -206,4 +212,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-});
+}));

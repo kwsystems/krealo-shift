@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { StyleSheet } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -10,7 +9,9 @@ import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { submitTimeEditRequest } from '@/features/kiosk/api';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * "Olvidé marcar" (§10.3).
@@ -23,6 +24,8 @@ import { colors, spacing } from '@/theme/tokens';
 type RequestKind = 'forgot_clock_in' | 'forgot_break' | 'forgot_clock_out';
 
 export default function KioskForgotScreen() {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   const verification = useKioskVerificationStore((s) => s.verification);
   const clearVerification = useKioskVerificationStore((s) => s.clear);
@@ -172,8 +175,8 @@ export default function KioskForgotScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   selected: { borderColor: colors.primary500, borderWidth: 2 },
   centered: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
-});
+}));

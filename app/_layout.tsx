@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -23,7 +23,8 @@ import { useKioskStore } from '@/stores/kiosk-store';
 import { useSessionStore } from '@/stores/session-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
-import { colors } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 // i18n se inicializa antes del primer render para que ningún texto aparezca en
 // blanco durante el arranque.
@@ -57,6 +58,8 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
+  const { isDark } = useTheme();
+  const styles = useEstilos();
   const [ready, setReady] = useState(false);
   const hydratePreferences = usePreferencesStore((s) => s.hydrate);
   const hydrateKiosk = useKioskStore((s) => s.hydrate);
@@ -139,7 +142,12 @@ export default function RootLayout() {
   if (!isEnvConfigured) {
     return (
       <SafeAreaProvider>
-        <StatusBar style="dark" />
+        {/*
+          Aquí NO se puede usar el tema: esta rama es la de «faltan variables de
+          entorno», y se pinta antes de que nada esté en pie. `auto` deja que el sistema
+          elija, que es lo más cerca del acierto sin depender de nada.
+        */}
+        <StatusBar style="auto" />
         <MissingConfigScreen />
       </SafeAreaProvider>
     );
@@ -149,7 +157,11 @@ export default function RootLayout() {
     <GestureHandlerRootView style={styles.flex}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <StatusBar style="dark" />
+          {/*
+            La barra de estado sigue al tema. Estaba fija en «dark» —iconos oscuros—, y
+            sobre un fondo oscuro eso deja la hora y la batería del teléfono invisibles.
+          */}
+          <StatusBar style={isDark ? 'light' : 'dark'} />
           {/*
             El aviso de demostracion va ARRIBA DEL TODO y fuera del Stack, para que
             ninguna pantalla —incluido el kiosco a pantalla completa— pueda taparlo.
@@ -175,8 +187,8 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   flex: { flex: 1 },
   boot: { flex: 1, backgroundColor: colors.primary50 },
   content: { backgroundColor: colors.canvas },
-});
+}));

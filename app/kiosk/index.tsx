@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Image, Pressable, StyleSheet, View } from 'react-native';
+import { Image, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -20,7 +20,8 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
-import { colors, fontSize, sizes, spacing } from '@/theme/tokens';
+import { fontSize, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 import { formatClockTime, formatLongDate } from '@/utils/time';
 
 /**
@@ -38,6 +39,7 @@ import { formatClockTime, formatLongDate } from '@/utils/time';
 const EXIT_LONG_PRESS_MS = 3000;
 
 export default function KioskIdleScreen() {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const { scaleFont, scaleFontAlto, isWide, isCompact, isLandscape, isShort } = useResponsive();
   const now = useLiveClock('second');
@@ -512,7 +514,7 @@ function minutesUntil(isoDate: string): number {
   return Math.max(1, Math.ceil((target - Date.now()) / 60_000));
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   // 44 es el minimo de objetivo tactil de las guias de iOS y de §21.
   logoTarget: { minHeight: sizes.touchTargetMin, justifyContent: 'center' },
   // 48 de alto: suficiente para reconocer un logotipo y no tanto como para competir
@@ -532,4 +534,4 @@ const styles = StyleSheet.create({
   // de esta pantalla (§9.1).
   reviewNotice: { alignItems: 'center', gap: spacing.xs, paddingHorizontal: spacing.base },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-});
+}));

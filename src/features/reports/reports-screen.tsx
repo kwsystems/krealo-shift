@@ -43,6 +43,7 @@ import { compartirArchivo } from '@/lib/compartir/archivo';
 import { currentLanguage } from '@/i18n';
 import { breakReasonLabels } from '@/i18n/break-reason-labels';
 import { chart, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
 import { minutesToHHmm } from '@/utils/time';
 
 /**
@@ -68,6 +69,7 @@ import { minutesToHHmm } from '@/utils/time';
 type Señalado = { titulo: string; detalle: string } | null;
 
 export function ReportsScreen() {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const scope = useManagerScope();
   const language = currentLanguage();
@@ -170,7 +172,9 @@ export function ReportsScreen() {
     label: nombre(fila.employeeId),
     valueText: minutesToHHmm(fila.netMinutes),
     hint: t('reports.daysWorked', { count: fila.days }),
-    segments: [{ value: fila.netMinutes, color: chart.series1, label: t('reports.worked') }],
+    segments: [
+      { value: fila.netMinutes, color: chart(colors).series1, label: t('reports.worked') },
+    ],
   }));
   const maxRanking = ranking[0]?.netMinutes ?? 0;
 
@@ -183,8 +187,8 @@ export function ReportsScreen() {
     // Dos series de verdad —normales y extra— así que se apilan, con leyenda
     // obligatoria y un hueco de superficie entre las dos.
     segments: [
-      { value: fila.regularMinutes, color: chart.series1, label: t('reports.regular') },
-      { value: fila.overtimeMinutes, color: chart.series2, label: t('reports.overtime') },
+      { value: fila.regularMinutes, color: chart(colors).series1, label: t('reports.regular') },
+      { value: fila.overtimeMinutes, color: chart(colors).series2, label: t('reports.overtime') },
     ],
   }));
   const maxExtra = Math.max(...conExtra.map((fila) => fila.netMinutes), 0);
@@ -197,7 +201,9 @@ export function ReportsScreen() {
       label: nombre(fila.employeeId),
       valueText: String(fila.late),
       hint: t('reports.ofShifts', { count: fila.measured }),
-      segments: [{ value: fila.late, color: chart.attention, label: t('reports.lateArrivals') }],
+      segments: [
+        { value: fila.late, color: chart(colors).attention, label: t('reports.lateArrivals') },
+      ],
     }));
   const maxTardanza = Math.max(...filasTardanza.map((f) => f.segments[0]?.value ?? 0), 0);
 
@@ -208,7 +214,9 @@ export function ReportsScreen() {
     label: etiquetaMotivo[fila.reason],
     valueText: minutesToHHmm(fila.minutes),
     hint: t('reports.reasonShare', { percent: fila.sharePercent, count: fila.pauses }),
-    segments: [{ value: fila.minutes, color: chart.series1, label: t('reports.breakTime') }],
+    segments: [
+      { value: fila.minutes, color: chart(colors).series1, label: t('reports.breakTime') },
+    ],
   }));
   const maxMotivo = motivos[0]?.minutes ?? 0;
 
@@ -561,8 +569,8 @@ export function ReportsScreen() {
                 title={t('reports.overtimeTitle')}
                 subtitle={t('reports.overtimeHint')}
                 legend={[
-                  { color: chart.series1, label: t('reports.regular') },
-                  { color: chart.series2, label: t('reports.overtime') },
+                  { color: chart(colors).series1, label: t('reports.regular') },
+                  { color: chart(colors).series2, label: t('reports.overtime') },
                 ]}
                 readout={lectura('extra')}
                 footnote={t('reports.overtimeIsInformational')}

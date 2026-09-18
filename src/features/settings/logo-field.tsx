@@ -14,7 +14,8 @@ import { InlineNotice } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
-import { spacing, radii, colors } from '@/theme/tokens';
+import { spacing, radii } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Subir, reemplazar y quitar el logotipo de la organización (§11.6).
@@ -46,6 +47,7 @@ export function OrganizationLogoField({
   canEdit: boolean;
   onChanged: () => void;
 }) {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const [estado, setEstado] = useState<Estado>({ fase: 'reposo' });
 

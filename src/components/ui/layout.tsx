@@ -1,9 +1,12 @@
 import type { ReactNode } from 'react';
-import { ScrollView, StyleSheet, View, type ViewStyle } from 'react-native';
+import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, colors, radii, shadows, spacing } from '@/theme/tokens';
+import { borderWidth, radii, shadows, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
+import type { ColorSet } from '@/theme/tokens';
 
 /**
  * Contenedores base (§25).
@@ -24,11 +27,20 @@ type ScreenProps = {
   testID?: string;
 };
 
-const backgrounds = {
-  canvas: colors.canvas,
-  kiosk: colors.primary50,
-  surface: colors.surface,
-} as const;
+/**
+ * El fondo de cada tono, como FUNCIÓN del juego de color.
+ *
+ * Era un objeto constante de módulo, y ahí estaba congelado el color claro: se evaluaba
+ * al cargar el archivo y no volvía a mirarse. Es la misma trampa que `StyleSheet.create`,
+ * solo que sin StyleSheet, y por eso no la cazó la migración de hojas de estilo —la
+ * encontró un barrido aparte de usos de `colors` fuera de toda función—.
+ */
+const fondoDelTono = (colors: ColorSet) =>
+  ({
+    canvas: colors.canvas,
+    kiosk: colors.primary50,
+    surface: colors.surface,
+  }) as const;
 
 export function AppScreen({
   children,
@@ -38,6 +50,8 @@ export function AppScreen({
   style,
   testID,
 }: ScreenProps) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { isCompact } = useResponsive();
   const padding = padded ? (isCompact ? spacing.base : spacing.xl) : 0;
 
@@ -54,7 +68,10 @@ export function AppScreen({
   );
 
   return (
-    <SafeAreaView testID={testID} style={[styles.flex, { backgroundColor: backgrounds[tone] }]}>
+    <SafeAreaView
+      testID={testID}
+      style={[styles.flex, { backgroundColor: fondoDelTono(colors)[tone] }]}
+    >
       {content}
     </SafeAreaView>
   );
@@ -74,6 +91,7 @@ const maxWidths = {
 } as const;
 
 export function ResponsiveContainer({ children, width = 'content', style }: ContainerProps) {
+  const styles = useEstilos();
   return <View style={[styles.container, { maxWidth: maxWidths[width] }, style]}>{children}</View>;
 }
 
@@ -86,6 +104,7 @@ type CardProps = {
 };
 
 export function Card({ children, floating = false, style, testID }: CardProps) {
+  const styles = useEstilos();
   return (
     <View testID={testID} style={[styles.card, floating ? shadows.floating : shadows.card, style]}>
       {children}
@@ -131,6 +150,7 @@ export function Row({
   accessibilityLabel?: string;
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <View
       accessibilityLabel={accessibilityLabel}
@@ -146,7 +166,7 @@ export function Row({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   flex: { flex: 1 },
   container: { width: '100%', alignSelf: 'center' },
   card: {
@@ -158,4 +178,4 @@ const styles = StyleSheet.create({
     gap: spacing.md,
   },
   row: { flexDirection: 'row' },
-});
+}));

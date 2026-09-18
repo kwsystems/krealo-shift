@@ -9,15 +9,8 @@ import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
 import { ManagerScopeProvider } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
-import {
-  borderWidth,
-  colors,
-  fontFamily,
-  fontSize,
-  SIDEBAR_WIDTH,
-  sizes,
-  spacing,
-} from '@/theme/tokens';
+import { borderWidth, fontFamily, fontSize, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Navegación de propietario, gerente y administrador (§6.3).
@@ -59,6 +52,7 @@ import {
  * imposible que las dos rutas se redirijan la una a la otra en bucle.
  */
 export default function ManagerLayout() {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const { useSidebar } = useResponsive();
   const { destination, retry } = useBootResolution();
@@ -105,6 +99,20 @@ export default function ManagerLayout() {
       <Tabs
         screenOptions={{
           headerShown: false,
+          /*
+           * El fondo de la escena, del tema.
+           *
+           * React Navigation trae su PROPIO tema y pinta un `rgb(242,242,242)` de
+           * fábrica en sus contenedores. Ese color no aparece en ningún archivo del
+           * proyecto: lo encontró el arnés midiendo el fondo real en el navegador.
+           *
+           * HOY NO SE VE —medido: cero píxeles de ese gris en la captura, con esta
+           * línea y sin ella—, porque el contenido del Stack lo cubre entero. Se pone
+           * igualmente porque el fondo de la escena DEBE salir del tema, y depender de
+           * que otra capa siempre lo tape es depender de algo que nadie prometió. Lo que
+           * no se puede es afirmar que arregla un fallo visible, porque no lo hace.
+           */
+          sceneStyle: { backgroundColor: colors.canvas },
           tabBarActiveTintColor: colors.primary600,
           tabBarInactiveTintColor: colors.ink500,
           // Sidebar en iPad ancho, barra inferior en teléfono.

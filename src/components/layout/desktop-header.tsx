@@ -1,10 +1,11 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { borderWidth, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * Cabecera del panel en pantallas anchas.
@@ -27,6 +28,7 @@ import { borderWidth, colors, fontFamily, fontSize, spacing } from '@/theme/toke
  * sería dos caminos para lo mismo que hay que mantener sincronizados.
  */
 export function DesktopHeader() {
+  const estilos = useEstilos();
   const { t } = useTranslation();
   const { useSidebar } = useResponsive();
   const { organization, location } = useManagerScope();
@@ -52,7 +54,7 @@ export function DesktopHeader() {
   );
 }
 
-const estilos = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   barra: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -76,4 +78,4 @@ const estilos = StyleSheet.create({
   },
   separador: { color: colors.ink500, fontSize: fontSize.label },
   sede: { fontSize: fontSize.label, color: colors.ink500 },
-});
+}));

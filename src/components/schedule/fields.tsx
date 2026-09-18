@@ -1,13 +1,5 @@
 import type { ReactNode } from 'react';
-import {
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Switch,
-  View,
-  type ViewStyle,
-} from 'react-native';
+import { Modal, Pressable, ScrollView, Switch, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -17,14 +9,15 @@ import { Card, Row } from '@/components/ui/layout';
 import { useResponsive } from '@/hooks/use-responsive';
 import {
   borderWidth,
-  colors,
   radii,
   shadows,
   sizes,
   spacing,
-  statusPalette,
+  paletaDeEstado,
   type StatusTone,
 } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Controles compartidos del panel administrativo.
@@ -62,6 +55,7 @@ export function KeyValueRow({
   tone?: 'default' | 'muted' | 'danger' | 'success';
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <Row justify="space-between" gap={spacing.md} align="flex-start" style={styles.keyValue}>
       <AppText variant="help" tone="subtle" style={styles.keyValueLabel}>
@@ -99,7 +93,9 @@ export function StatTile({
   onPress?: () => void;
   testID?: string;
 }) {
-  const palette = statusPalette[tone];
+  const { colors } = useTheme();
+  const styles = useEstilos();
+  const palette = paletaDeEstado(colors)[tone];
   const content = (
     <View style={[styles.tile, { backgroundColor: palette.bg, borderColor: palette.border }]}>
       <Row gap={spacing.xs}>
@@ -150,6 +146,7 @@ export function SelectField<T extends string>({
   emptyLabel?: string;
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <View style={styles.field} testID={testID}>
       <AppText variant="label" tone="muted">
@@ -197,6 +194,7 @@ export function MultiSelectField<T extends string>({
   emptyLabel?: string;
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <View style={styles.field} testID={testID}>
       <AppText variant="label" tone="muted">
@@ -236,6 +234,8 @@ export function Chip({
   onPress: () => void;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Pressable
       onPress={onPress}
@@ -274,6 +274,8 @@ export function ToggleField({
   disabled?: boolean;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Row justify="space-between" gap={spacing.md} align="center" style={styles.toggleRow}>
       <View style={styles.toggleText}>
@@ -312,6 +314,7 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <View accessibilityLabel={label} style={styles.segmentWrapper} testID={testID}>
       {options.map((option) => {
@@ -356,6 +359,7 @@ export function AdminSheet({
   footer?: ReactNode;
   testID?: string;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const { isWide } = useResponsive();
 
@@ -411,7 +415,9 @@ export function InlineNotice({
   /** Los flujos de `e2e/` afirman sobre los avisos: hace falta poder señalarlos. */
   testID?: string;
 }) {
-  const palette = statusPalette[tone];
+  const { colors } = useTheme();
+  const styles = useEstilos();
+  const palette = paletaDeEstado(colors)[tone];
   const resolvedIcon: IconName = icon ?? 'information-circle-outline';
   // Con un solo texto se usa `bodyStrong`, que es como se veía antes el titular:
   // un aviso de una frase en tipografía de ayuda se pierde entre las filas.
@@ -457,6 +463,7 @@ export function LimitBar({
   valueLabel: string;
   testID?: string;
 }) {
+  const styles = useEstilos();
   const ratio = limit <= 0 ? 0 : Math.min(1, value / limit);
   const over = limit > 0 && value > limit;
 
@@ -513,7 +520,7 @@ export function FormCard({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   field: { gap: spacing.xs },
   keyValue: { minHeight: spacing.xl },
   keyValueLabel: { flexShrink: 1 },
@@ -607,4 +614,4 @@ const styles = StyleSheet.create({
   },
   barFill: { height: '100%', backgroundColor: colors.primary500 },
   barFillOver: { backgroundColor: colors.danger600 },
-});
+}));

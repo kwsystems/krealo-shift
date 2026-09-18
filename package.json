@@ -24,7 +24,8 @@
     "web:deploy": "npm run web:build && firebase deploy --only hosting",
     "kiosco:check": "node scripts/kiosco-check.mjs dist-demo",
     "reportes:check": "node scripts/reportes-check.mjs dist-demo",
-    "inicio:check": "node scripts/inicio-check.mjs dist-demo"
+    "inicio:check": "node scripts/inicio-check.mjs dist-demo",
+    "tema:check": "node scripts/tema-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

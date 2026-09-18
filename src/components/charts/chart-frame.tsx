@@ -1,9 +1,10 @@
 import type { ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { Card, Row, Stack } from '@/components/ui/layout';
-import { chart, colors, radii, spacing } from '@/theme/tokens';
+import { chart, radii, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * El marco común de todos los gráficos: título, lectura, leyenda y nota al pie.
@@ -43,6 +44,7 @@ export function ChartCard({
   children: ReactNode;
   testID?: string;
 }) {
+  const styles = useEstilos();
   const hayLeyenda = legend !== undefined && legend.length >= 2;
 
   return (
@@ -95,10 +97,11 @@ export function ChartCard({
 
 /** Línea base del gráfico: un pelo sólido, del color de la rejilla. Nunca punteada. */
 export function Baseline() {
+  const styles = useEstilos();
   return <View style={styles.baseline} />;
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   swatch: { width: 12, height: 12, borderRadius: radii.pill, backgroundColor: colors.border },
-  baseline: { height: 1, backgroundColor: chart.grid },
-});
+  baseline: { height: 1, backgroundColor: chart(colors).grid },
+}));

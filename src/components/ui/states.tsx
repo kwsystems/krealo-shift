@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ActivityIndicator, StyleSheet, View, type ViewStyle } from 'react-native';
+import { ActivityIndicator, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -8,13 +8,14 @@ import { SecondaryButton } from './buttons';
 import { Card, Row } from './layout';
 import {
   borderWidth,
-  colors,
   radii,
   sizes,
   spacing,
-  statusPalette,
+  paletaDeEstado,
   type StatusTone,
 } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Estados obligatorios en todas las pantallas (§20) y señales de estado (§5).
@@ -37,8 +38,10 @@ export function StatusBadge({
   icon?: IconName;
   compact?: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
-  const palette = statusPalette[tone];
+  const palette = paletaDeEstado(colors)[tone];
   const resolvedIcon: IconName = icon ?? defaultIcons[tone];
 
   return (
@@ -97,6 +100,8 @@ export function EmptyState({
   onAction?: () => void;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <View style={styles.centeredState} testID={testID}>
       <Ionicons name={icon} size={40} color={colors.ink500} style={styles.dimIcon} />
@@ -129,6 +134,8 @@ export function ErrorState({
   retryLabel?: string;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   return (
     <View style={styles.centeredState} testID={testID}>
@@ -152,6 +159,8 @@ export function ErrorState({
 
 /** Carga: skeleton o spinner con texto, nunca una pantalla en blanco (§20). */
 export function LoadingState({ label, testID }: { label?: string; testID?: string }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   return (
     <View style={styles.centeredState} testID={testID}>
@@ -173,6 +182,8 @@ export function OfflineBanner({
   pendingCount?: number;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   return (
     <View style={styles.offlineBanner} accessibilityRole="alert" testID={testID}>
@@ -196,6 +207,7 @@ export function SyncIndicator({
   pendingCount?: number;
   testID?: string;
 }) {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const tone = !online ? colors.warning600 : pendingCount > 0 ? colors.info600 : colors.success600;
 
@@ -239,6 +251,8 @@ export function PermissionExplainer({
   onAction: () => void;
   icon?: IconName;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Card>
       <Row gap={spacing.md} align="flex-start">
@@ -277,7 +291,7 @@ export function Section({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   badge: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -307,4 +321,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
   },
   flexOne: { flex: 1, gap: spacing.xs },
-});
+}));

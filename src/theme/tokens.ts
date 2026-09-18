@@ -36,6 +36,8 @@ export const lightColors = {
   warning50: '#FFF6E5',
   warning600: '#B56B00',
   danger50: '#FFF0F1',
+  /** Un paso más que `danger50`: el fondo de un botón de peligro PULSADO. */
+  danger100: '#FFE3E6',
   danger600: '#C43D4D',
   info50: '#EDF6FF',
   info600: '#2A6FA8',
@@ -100,6 +102,7 @@ export const darkColors = {
   warning50: '#2B2011',
   warning600: '#C4831F',
   danger50: '#2C1519',
+  danger100: '#3A1B21',
   danger600: '#DC5A70',
   info50: '#10202E',
   info600: '#6FB3E8',
@@ -234,14 +237,20 @@ export const shadows = {
     elevation: 0,
   },
   card: {
-    shadowColor: colors.ink900,
+    /*
+     * NEGRO, no `ink900`. `ink900` es «el texto principal», y en oscuro eso es CASI
+     * BLANCO: una sombra blanca es un halo, no una sombra. Una sombra es ausencia de
+     * luz en los dos temas, así que su color es literalmente negro y lo que cambia es
+     * cuánto se nota.
+     */
+    shadowColor: '#000000',
     shadowOpacity: 0.04,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   floating: {
-    shadowColor: colors.ink900,
+    shadowColor: '#000000',
     shadowOpacity: 0.08,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
@@ -292,23 +301,31 @@ export const SIDEBAR_WIDTH = 248;
 /**
  * Estados de asistencia y su color semántico. El color nunca es la única señal:
  * cada estado lleva además icono y texto (§5, §21).
+ *
+ * ES UNA FUNCIÓN, y era un objeto constante. Siendo constante, las insignias de estado
+ * de toda la app quedaban fijadas en claro al cargar este archivo, y el resultado se vio
+ * a la primera captura en oscuro: una pantalla oscura con las insignias en crema y verde
+ * pálido. Lo peor de este caso es que vivía DENTRO de `tokens.ts`, el único archivo que
+ * el barrido de colores congelados excluía por ser la fuente de los colores.
  */
-export const statusPalette = {
-  offShift: { bg: colors.canvas, fg: colors.ink700, border: colors.border },
-  working: { bg: colors.success50, fg: colors.success600, border: colors.success600 },
-  onBreak: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
-  late: { bg: colors.danger50, fg: colors.danger600, border: colors.danger600 },
-  info: { bg: colors.info50, fg: colors.info600, border: colors.info600 },
-  /**
-   * Advertencia que no es un estado de asistencia. Comparte el ámbar de `onBreak`
-   * a propósito —un solo ámbar en la app— pero se nombra aparte: usar `onBreak`
-   * para "el iPad no sincroniza" le dice al siguiente que lee el código que eso
-   * tiene algo que ver con un descanso, y no lo tiene.
-   */
-  warning: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
-} as const;
+export const paletaDeEstado = (colors: ColorSet) =>
+  ({
+    offShift: { bg: colors.canvas, fg: colors.ink700, border: colors.border },
+    working: { bg: colors.success50, fg: colors.success600, border: colors.success600 },
+    onBreak: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
+    late: { bg: colors.danger50, fg: colors.danger600, border: colors.danger600 },
+    info: { bg: colors.info50, fg: colors.info600, border: colors.info600 },
+    /**
+     * Advertencia que no es un estado de asistencia. Comparte el ámbar de `onBreak`
+     * a propósito —un solo ámbar en la app— pero se nombra aparte: usar `onBreak`
+     * para "el iPad no sincroniza" le dice al siguiente que lee el código que eso
+     * tiene algo que ver con un descanso, y no lo tiene.
+     */
+    warning: { bg: colors.warning50, fg: colors.warning600, border: colors.warning600 },
+  }) as const;
 
-export type StatusTone = keyof typeof statusPalette;
+/** Las claves salen del tipo de retorno: no hace falta una instancia solo para eso. */
+export type StatusTone = keyof ReturnType<typeof paletaDeEstado>;
 
 /**
  * Escala tipográfica del kiosco según el ancho disponible: interpola entre el
@@ -382,23 +399,24 @@ export function interpolateFontByHeight(height: number, min: number, max: number
  * Si alguien añade un color a esta lista, el paso obligatorio es volver a correr el
  * validador con la lista entera, no mirarla.
  */
-export const chart = {
-  /**
-   * Serie 1. Casi todos los gráficos son UNA serie —minutos— sobre categorías sin
-   * orden propio (personas, días, motivos), y ahí todas las barras van de este color.
-   * Pintar cada barra de un color distinto gastaría el canal de identidad en repetir
-   * lo que el largo de la barra ya dice.
-   */
-  series1: colors.primary600,
-  /** Serie 2. Solo se usa donde hay DOS series de verdad: normales y extra. */
-  series2: colors.warning600,
-  /** Lo que hay que mirar: tardanzas, tiempo no trabajado. Nunca "serie 3". */
-  attention: colors.danger600,
-  /** Pista sin rellenar de un medidor: un paso claro, no gris muerto. */
-  track: colors.primary100,
-  /** Rejilla y línea base: un paso por encima de la superficie, sólida y discreta. */
-  grid: colors.border,
-} as const;
+export const chart = (colors: ColorSet) =>
+  ({
+    /**
+     * Serie 1. Casi todos los gráficos son UNA serie —minutos— sobre categorías sin
+     * orden propio (personas, días, motivos), y ahí todas las barras van de este color.
+     * Pintar cada barra de un color distinto gastaría el canal de identidad en repetir
+     * lo que el largo de la barra ya dice.
+     */
+    series1: colors.primary600,
+    /** Serie 2. Solo se usa donde hay DOS series de verdad: normales y extra. */
+    series2: colors.warning600,
+    /** Lo que hay que mirar: tardanzas, tiempo no trabajado. Nunca "serie 3". */
+    attention: colors.danger600,
+    /** Pista sin rellenar de un medidor: un paso claro, no gris muerto. */
+    track: colors.primary100,
+    /** Rejilla y línea base: un paso por encima de la superficie, sólida y discreta. */
+    grid: colors.border,
+  }) as const;
 
 /**
  * Medidas fijas de las marcas. No se improvisan por gráfico: un proyecto donde cada

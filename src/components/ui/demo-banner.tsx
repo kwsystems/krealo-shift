@@ -1,9 +1,10 @@
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { isDemoMode } from '@/lib/demo/config';
-import { borderWidth, colors, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { borderWidth, fontFamily, fontSize, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * Aviso permanente de que los datos son inventados.
@@ -21,6 +22,7 @@ import { borderWidth, colors, fontFamily, fontSize, spacing } from '@/theme/toke
  * está en el árbol pero no existe en pantalla.
  */
 export function DemoBanner() {
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   if (!isDemoMode) return null;
@@ -32,7 +34,7 @@ export function DemoBanner() {
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   barra: {
     backgroundColor: colors.warning50,
     borderBottomColor: colors.warning600,
@@ -47,4 +49,4 @@ const styles = StyleSheet.create({
     fontSize: fontSize.label,
     textAlign: 'center',
   },
-});
+}));

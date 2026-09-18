@@ -91,7 +91,8 @@ export function DayColumns({
                   styles.barra,
                   {
                     height: alto,
-                    backgroundColor: day.key === pointedKey ? colors.primary700 : chart.series1,
+                    backgroundColor:
+                      day.key === pointedKey ? colors.primary700 : chart(colors).series1,
                   },
                 ]}
               />
@@ -122,8 +123,8 @@ export function DayColumns({
 }
 
 const styles = StyleSheet.create({
-  rejilla: { height: 1, backgroundColor: chart.grid },
-  base: { height: 1, backgroundColor: chart.grid },
+  rejilla: { height: 1, backgroundColor: chart(colors).grid },
+  base: { height: 1, backgroundColor: chart(colors).grid },
   plot: { height: chartMarks.columnPlotHeight + sizes.iconMobile },
   columna: { flex: 1, alignItems: 'center', justifyContent: 'flex-end' },
   // Altura fija para el número: reservada siempre, aunque esa columna no lo lleve.

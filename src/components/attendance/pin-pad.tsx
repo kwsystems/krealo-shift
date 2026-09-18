@@ -1,12 +1,14 @@
 import { useCallback } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, colors, sizes, spacing } from '@/theme/tokens';
+import { borderWidth, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Teclado y puntos de PIN del kiosco (§9.1).
@@ -34,6 +36,7 @@ export function PinDots({
   entered: number;
   error?: boolean;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   return (
@@ -70,6 +73,7 @@ export function NumericKeypad({
   size?: 'kiosk' | 'mobile';
   disabled?: boolean;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const { isCompact } = useResponsive();
 
@@ -153,6 +157,8 @@ function KeypadKey({
   disabled?: boolean;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Pressable
       testID={testID}
@@ -186,7 +192,7 @@ function KeypadKey({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   dotsRow: {
     flexDirection: 'row',
     gap: spacing.base,
@@ -220,4 +226,4 @@ const styles = StyleSheet.create({
   keyMuted: { backgroundColor: colors.canvas },
   keyPressed: { backgroundColor: colors.primary100, borderColor: colors.primary200 },
   keyDisabled: { opacity: 0.4 },
-});
+}));

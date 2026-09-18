@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, StyleSheet, View } from 'react-native';
+import { AccessibilityInfo, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from './app-text';
 import { SecondaryButton } from './buttons';
-import { borderWidth, colors, durations, radii, spacing } from '@/theme/tokens';
+import { borderWidth, durations, radii, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * Cuenta regresiva antes de una acción irreversible (§5, §9.4).
@@ -29,6 +30,7 @@ export function ActionCountdown({
   label?: string;
   testID?: string;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const [remaining, setRemaining] = useState(seconds);
   const [reduceMotion, setReduceMotion] = useState(false);
@@ -84,7 +86,7 @@ export function ActionCountdown({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   container: { alignItems: 'center', gap: spacing.base, alignSelf: 'stretch' },
   ring: {
     width: 96,
@@ -98,4 +100,4 @@ const styles = StyleSheet.create({
   },
   ringActive: { borderColor: colors.primary500, borderWidth: borderWidth.focus * 2 },
   centered: { textAlign: 'center' },
-});
+}));

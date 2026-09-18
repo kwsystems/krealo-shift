@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from './app-text';
 import { SUPPORTED_LANGUAGES, type SupportedLanguage } from '@/i18n';
 import { usePreferencesStore } from '@/stores/preferences-store';
-import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
+import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * Selector de idioma (§18).
@@ -44,6 +45,7 @@ export function LanguageSwitch({
   size?: 'compact' | 'full';
   testID?: string;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const language = usePreferencesStore((state) => state.language);
   const setLanguage = usePreferencesStore((state) => state.setLanguage);
@@ -98,7 +100,7 @@ export function LanguageSwitch({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   group: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center' },
   option: {
     minHeight: sizes.touchTargetMin,
@@ -114,4 +116,4 @@ const styles = StyleSheet.create({
   // Tres señales del estado activo, no una: fondo, borde y peso de letra.
   active: { backgroundColor: colors.primary50, borderColor: colors.primary500 },
   activeText: { fontWeight: '600' },
-});
+}));

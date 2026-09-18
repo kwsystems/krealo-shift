@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +7,9 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
-import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
+import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Foto opcional del fichaje (especificación §9.6).
@@ -35,6 +37,7 @@ export function PhotoCapture({
   onResult: (result: PhotoResult) => void;
   autoCapture?: boolean;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const cameraRef = useRef<CameraView | null>(null);
@@ -127,6 +130,8 @@ export function PhotoCapture({
  * error bloqueante: el mensaje informa y el fichaje continúa.
  */
 function PhotoFallback({ message }: { message: string }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   return (
     <Card>
       <Row gap={spacing.sm} align="flex-start">
@@ -139,7 +144,7 @@ function PhotoFallback({ message }: { message: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   frame: {
     height: 220,
     borderRadius: radii.card,
@@ -150,4 +155,4 @@ const styles = StyleSheet.create({
   },
   camera: { flex: 1 },
   flexOne: { flex: 1 },
-});
+}));

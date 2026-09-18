@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { EmptyShiftSlot, ShiftCard } from './shift-card';
@@ -8,7 +8,8 @@ import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import { formatDateKeyShort, formatDayColumn, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
-import { borderWidth, colors, radii, spacing } from '@/theme/tokens';
+import { borderWidth, radii, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 import { minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 
 /**
@@ -62,6 +63,7 @@ export function WeekGrid({
   onAddShift,
   readOnly = false,
 }: GridProps) {
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   return (
@@ -178,6 +180,7 @@ export function DayList({
   onAddShift,
   readOnly = false,
 }: DayListProps) {
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   return (
@@ -238,7 +241,7 @@ export function DayList({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   grid: { paddingBottom: spacing.sm },
   headerCell: {
     paddingVertical: spacing.sm,
@@ -264,4 +267,4 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     padding: spacing.base,
   },
-});
+}));

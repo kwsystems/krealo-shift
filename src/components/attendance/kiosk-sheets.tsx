@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Modal, Pressable, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -9,7 +9,9 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { Card, Row, Stack } from '@/components/ui/layout';
 import type { BreakReason } from '@/domain/break-reason';
 import { breakReasonLabels } from '@/i18n/break-reason-labels';
-import { colors, radii, shadows, sizes, spacing } from '@/theme/tokens';
+import { radii, shadows, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Hojas inferiores del kiosco (§9.3, §12).
@@ -39,6 +41,7 @@ function Sheet({
   children: React.ReactNode;
   testID?: string;
 }) {
+  const styles = useEstilos();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
@@ -87,6 +90,8 @@ export function BreakNoteSheet({
   onSubmit: (note: string) => void;
   onCancel: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   const [texto, setTexto] = useState('');
 
@@ -203,6 +208,8 @@ export function RequiredBreakSheet({
   requiredMinutes: number;
   onChoose: (choice: RequiredBreakChoice) => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
 
   return (
@@ -251,6 +258,7 @@ export function ManagerOverrideSheet({
   onSubmit: (pin: string) => void;
   onCancel: () => void;
 }) {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const [pin, setPin] = useState('');
 
@@ -349,6 +357,8 @@ export function ConfirmSheet({
 
 /** Aviso de foto: se explica el uso ANTES de tomarla, nunca después (§9.4). */
 export function PhotoNotice() {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   return (
     <Card>
@@ -362,7 +372,7 @@ export function PhotoNotice() {
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   // Alto de objetivo táctil de kiosco y texto grande: se escribe de pie, a un brazo de
   // distancia y a veces con la pantalla sucia.
   notaEntrada: {
@@ -390,4 +400,4 @@ const styles = StyleSheet.create({
   flexOne: { flex: 1 },
   centered: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
-});
+}));

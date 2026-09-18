@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { StyleSheet, TextInput, View } from 'react-native';
+import { TextInput, View } from 'react-native';
 import { Link } from 'expo-router';
 import { Controller, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,7 +21,9 @@ import { DEMO_EMAIL } from '@/lib/demo/seed';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { getSupabase } from '@/lib/supabase/client';
 import { useSessionStore } from '@/stores/session-store';
-import { borderWidth, colors, radii, sizes, spacing } from '@/theme/tokens';
+import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Acceso administrativo (§8). Los empleados no entran por aquí: fichan con su PIN
@@ -41,6 +43,7 @@ const signInSchema = z.object({
 type SignInValues = z.infer<typeof signInSchema>;
 
 export default function SignInScreen() {
+  const styles = useEstilos();
   const { t } = useTranslation();
   const [submitting, setSubmitting] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -326,6 +329,8 @@ export function FormField({
   error?: string;
   testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const [focused, setFocused] = useState(false);
 
   return (
@@ -362,7 +367,7 @@ export function FormField({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   field: { gap: spacing.xs },
   centerText: { textAlign: 'center' },
   input: {
@@ -378,4 +383,4 @@ const styles = StyleSheet.create({
   // El foco visible no se quita nunca (§21).
   inputFocused: { borderColor: colors.primary500, borderWidth: borderWidth.focus },
   inputError: { borderColor: colors.danger600 },
-});
+}));

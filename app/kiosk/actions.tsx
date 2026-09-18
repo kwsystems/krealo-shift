@@ -5,7 +5,7 @@ import {
   type BreakReason,
 } from '@/domain/break-reason';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
@@ -43,7 +43,9 @@ import {
 import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
-import { colors, durations, sizes, spacing } from '@/theme/tokens';
+import { durations, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 import { formatClockTime, formatShiftRange, minutesToHHmm } from '@/utils/time';
 
 /**
@@ -106,6 +108,8 @@ type Step =
     };
 
 export default function KioskActionsScreen() {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   const now = useLiveClock('minute');
 
@@ -881,7 +885,7 @@ function resultKey(
 /** Se exporta para las pruebas del formateo de duración en curso. */
 export const formatLiveDuration = minutesToHHmm;
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   avatar: {
     width: sizes.avatarLg,
     height: sizes.avatarLg,
@@ -894,4 +898,4 @@ const styles = StyleSheet.create({
   selected: { borderColor: colors.primary500, borderWidth: 2 },
   centered: { alignItems: 'center' },
   centerText: { textAlign: 'center' },
-});
+}));

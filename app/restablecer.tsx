@@ -14,7 +14,8 @@ import {
   updatePassword,
   type ResetErrorKind,
 } from '@/features/auth/password-reset';
-import { colors, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Contraseña nueva desde el enlace del correo (§8).
@@ -30,6 +31,7 @@ import { colors, spacing } from '@/theme/tokens';
  * dos caminos acaban igual: con sesión de recuperación o con un enlace caducado.
  */
 export default function ResetPasswordScreen() {
+  const { colors } = useTheme();
   const { t } = useTranslation();
   const params = useLocalSearchParams<{ code?: string }>();
 

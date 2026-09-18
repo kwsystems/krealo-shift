@@ -1,10 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { Baseline } from './chart-frame';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import { useResponsive } from '@/hooks/use-responsive';
-import { chart, chartMarks, colors, spacing } from '@/theme/tokens';
+import { chartMarks, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * Ranking de barras horizontales: la forma para «quién más» y «en qué se va».
@@ -58,6 +59,7 @@ export function RankingBars({
   selectedId?: string | null;
   testID?: string;
 }) {
+  const styles = useEstilos();
   const { isCompact, isWide } = useResponsive();
   // Con `max` a cero todas las barras valen cero: se dividiría por cero y saldría NaN,
   // que en React Native no es una barra vacía sino un ancho inválido.
@@ -163,7 +165,7 @@ export function RankingBars({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   fila: {
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.xs,
@@ -185,7 +187,11 @@ const styles = StyleSheet.create({
   plot: { flex: 1, justifyContent: 'center', minHeight: chartMarks.barThickness },
   bar: { flexDirection: 'row', height: chartMarks.barThickness, minWidth: 2 },
   segment: { height: chartMarks.barThickness, flexBasis: 0 },
-});
+}));
 
-/** El color de la serie única: aquí para no repetirlo en cada pantalla. */
-export const SERIE_UNICA = chart.series1;
+/*
+ * Aquí había un `export const SERIE_UNICA = chart.series1`. Se borra por dos razones:
+ * no lo usaba nadie —ni un solo sitio en todo el proyecto— y era color congelado, que
+ * es justo lo que esta tarea vino a quitar. Quien necesite ese color lo pide con
+ * `chart(colors).series1`, que sabe en qué tema está.
+ */

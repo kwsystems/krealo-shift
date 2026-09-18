@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
@@ -9,14 +9,15 @@ import { useResponsive } from '@/hooks/use-responsive';
 import type { ClaveAccionable, PrioridadDelDia } from '@/features/dashboard/prioridad';
 import {
   borderWidth,
-  colors,
   fontSize,
   radii,
   sizes,
   spacing,
-  statusPalette,
+  paletaDeEstado,
   type StatusTone,
 } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
+import { estilosDelTema } from '@/theme/estilos';
 
 /**
  * La franja de arriba de Inicio: lo que decide el día, en grande.
@@ -68,6 +69,8 @@ export function LoImportanteDeHoy({
   trabajando: number;
   enDescanso: number;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
   const router = useRouter();
   const { isCompact } = useResponsive();
@@ -82,11 +85,11 @@ export function LoImportanteDeHoy({
     return (
       <Card testID="hoy-todo-en-orden" style={styles.tarjetaTranquila}>
         <Row gap={spacing.md} align="center">
-          <View style={[styles.icono, { backgroundColor: statusPalette.working.bg }]}>
+          <View style={[styles.icono, { backgroundColor: paletaDeEstado(colors).working.bg }]}>
             <Ionicons
               name="checkmark-circle"
               size={sizes.iconMobile}
-              color={statusPalette.working.fg}
+              color={paletaDeEstado(colors).working.fg}
             />
           </View>
           <Stack gap={spacing.xs} style={styles.crece}>
@@ -142,8 +145,10 @@ function Titular({
   onPress?: () => void;
   compacto: boolean;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
-  const paleta = statusPalette[TONO[destacado.clave]];
+  const paleta = paletaDeEstado(colors)[TONO[destacado.clave]];
   const etiqueta = t(`home.headline.${destacado.clave}`, { count: destacado.count });
   const queHacer = t(`home.action.${destacado.clave}`, { count: destacado.count });
 
@@ -207,8 +212,10 @@ function Secundario({
   destacado: PrioridadDelDia['resto'][number];
   onPress?: () => void;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const { t } = useTranslation();
-  const paleta = statusPalette[TONO[destacado.clave]];
+  const paleta = paletaDeEstado(colors)[TONO[destacado.clave]];
   const etiqueta = t(`home.headline.${destacado.clave}`, { count: destacado.count });
 
   const contenido = (
@@ -246,9 +253,9 @@ function Secundario({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   crece: { flex: 1 },
-  tarjetaTranquila: { borderColor: statusPalette.working.border },
+  tarjetaTranquila: { borderColor: paletaDeEstado(colors).working.border },
   icono: {
     width: sizes.avatarMd,
     height: sizes.avatarMd,
@@ -270,4 +277,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.base,
   },
-});
+}));
