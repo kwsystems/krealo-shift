@@ -138,17 +138,24 @@ export const darkColors = {
   white: '#FFFFFF',
 } as const satisfies ColorSet;
 
-/**
- * El juego CLARO, tal cual, para todo lo que todavía no sabe de temas.
+/*
+ * AQUÍ VIVÍA `export const colors = lightColors`, y se borra.
  *
- * Se mantiene a propósito mientras dura la migración: 54 archivos importan `colors` y
- * cambiarlos todos en un solo golpe sería un diff imposible de revisar y una tarde
- * entera sin poder compilar. Así la app sigue viéndose exactamente igual hoy, y cada
- * pantalla se pasa al tema en la tarea 2/5.
+ * Era el alias de la migración: mientras 54 archivos importaban `colors`, servía para no
+ * tener que cambiarlos todos de un golpe. Cumplió su función y se convirtió en lo que
+ * cualquier andamio que se queda puesto: una trampa. Importar `colors` COMPILA, se ve
+ * perfecto en claro, y pinta el tema claro para siempre sin avisar.
  *
- * Cuando no quede ningún uso, este alias se borra.
+ * No es hipotético: `day-columns.tsx` se quedó así después de la tarea 2/5. En oscuro,
+ * las siete columnas de la semana y las dos líneas de su rejilla seguían pintándose con
+ * los valores del tema claro. El compilador estaba conforme, la pantalla no se rompía y
+ * la revisión del diff no lo veía, porque el archivo SÍ aparecía tocado. Lo encontró
+ * medir los colores de verdad de las marcas en el navegador.
+ *
+ * Borrado el alias, ese error deja de ser posible: no hay ningún `colors` que importar,
+ * así que la única forma de obtener un color es pedírselo al tema y el compilador lo
+ * exige. Quien necesite el juego claro de propósito pide `lightColors` por su nombre.
  */
-export const colors = lightColors;
 
 /** Escala base de espaciado (§5). Todo margen y padding sale de aquí. */
 export const spacing = {
@@ -423,7 +430,47 @@ export function interpolateFontByHeight(height: number, min: number, max: number
  *     una pista neutra, con el número al lado.
  *
  * Si alguien añade un color a esta lista, el paso obligatorio es volver a correr el
- * validador con la lista entera, no mirarla.
+ * validador, no mirarla.
+ *
+ * ------------------------------------------------------------------------------------
+ * EL TEMA OSCURO, VALIDADO OTRA VEZ Y NO INVERTIDO (tarea 4/5)
+ * ------------------------------------------------------------------------------------
+ *
+ * Volver a medir no era ceremonia: el validador comprueba el CONTRASTE CONTRA LA
+ * SUPERFICIE, y la superficie deja de ser blanca. Y la banda de luminosidad aceptable es
+ * distinta —y más ESTRECHA— en oscuro: 0,48–0,67 frente a 0,43–0,77. O sea que «aclarar
+ * el color del claro» es justo la trampa: se sale por arriba.
+ *
+ * Salida del validador sobre la superficie oscura (#1C1A24):
+ *
+ *   #8A72F0 + #C4831F  (series1 + series2, el par que SÍ se toca)
+ *     banda de luminosidad PASA · suelo de croma PASA
+ *     separación CVD PASA — peor par ΔE 30,2 con protanopia, 17,4 con tritanopia
+ *     suelo de visión normal PASA — ΔE 29,9
+ *     contraste contra la superficie PASA — los dos ≥ 3:1
+ *     → TODO PASA
+ *
+ *   #DC5A70  (attention, que va SOLO)
+ *     banda PASA · croma PASA · contraste contra la superficie PASA
+ *     → TODO PASA
+ *
+ * SE VALIDAN LOS PARES QUE SE TOCAN, NO LA LISTA ENTERA, y es la misma regla con la que
+ * se validó el claro. Correr los tres juntos como si fueran una escala categórica da
+ * FALLO en el suelo de visión normal por el par ámbar↔rojo (ΔE 15,0)... pero ese par no
+ * existe en ningún gráfico: `series2` solo aparece apilado con `series1` en las horas
+ * extra, y `attention` es siempre una serie sola. Validar la lista entera sería validar
+ * un gráfico que no hay.
+ *
+ * Y el dato que lo cierra: ese mismo par en el tema CLARO está a ΔE 13,0, o sea PEOR, y
+ * lleva así desde el primer día. El oscuro no empeoró nada; si algún día ese par importa,
+ * importa en los dos temas y es una decisión aparte.
+ *
+ * Medido también lo que el validador no mira, contra la tarjeta de cada tema:
+ *   rejilla y línea base → 1,27 en claro · 1,32 en oscuro (recesiva en los dos, y en
+ *     oscuro un pelo MÁS visible, que es lo que hacía falta: un gris que funcionaba
+ *     sobre blanco se desvanece sobre negro)
+ *   marcas de dato → series1 6,72/4,70 · series2 4,14/5,41 · attention 5,09/4,69.
+ *     Todas por encima de 3:1 en los dos temas.
  */
 export const chart = (colors: ColorSet) =>
   ({
@@ -438,8 +485,14 @@ export const chart = (colors: ColorSet) =>
     series2: colors.warning600,
     /** Lo que hay que mirar: tardanzas, tiempo no trabajado. Nunca "serie 3". */
     attention: colors.danger600,
-    /** Pista sin rellenar de un medidor: un paso claro, no gris muerto. */
-    track: colors.primary100,
+    /*
+     * Aquí había un `track: colors.primary100`, la pista sin rellenar de un medidor. Se
+     * borra porque NO HAY NINGÚN MEDIDOR: ni un solo uso en todo el proyecto. Se fue a
+     * medir su contraste para esta tarea y resultó que no pintaba nada en ninguna
+     * pantalla. Es el mismo caso que el `SERIE_UNICA` que se borró en la tarea 2/5: un
+     * color que nadie pide es un color que nadie mantiene, y el día que se necesite un
+     * medidor su pista habrá que validarla igual.
+     */
     /** Rejilla y línea base: un paso por encima de la superficie, sólida y discreta. */
     grid: colors.border,
   }) as const;

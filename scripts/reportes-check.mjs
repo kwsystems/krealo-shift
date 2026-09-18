@@ -315,6 +315,96 @@ function soloHoras(texto) {
   await contexto.close();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * NINGUNA MARCA DE GRÁFICO PUEDE VALER LO MISMO EN LOS DOS TEMAS
+ * ---------------------------------------------------------------------------
+ *
+ * EL FALLO QUE CAZA, Y QUE PASÓ.
+ * `day-columns.tsx` se quedó importando el alias `colors` del tema claro. En oscuro,
+ * las siete columnas de la semana y las dos líneas de su rejilla seguían pintándose con
+ * los valores del claro. Compilaba, no lanzaba nada, y en la captura se veía un morado
+ * que pasaba por bueno porque el morado del claro y el del oscuro se parecen. Lo
+ * encontró medir los colores de verdad; leer el código no.
+ *
+ * CÓMO SE MIDE, Y POR QUÉ ASÍ.
+ * No se comparan los colores contra una lista: copiar aquí las dos paletas sería tener
+ * los tokens en dos sitios, y el día que cambien, este arnés miente. Se usa la FIRMA del
+ * fallo: un color de gráfico que sale IGUAL en claro y en oscuro está congelado, porque
+ * los dos juegos no comparten ni un solo valor de dato.
+ *
+ * Así el arnés no sabe nada de qué morado toca —ni falta— y sigue valiendo cuando la
+ * paleta cambie. Si algún día un color de dato tiene que ser el mismo en los dos temas,
+ * esto falla y habrá que justificarlo aquí, que es exactamente lo que debe pasar.
+ */
+{
+  const colorDeMarcas = async (tema) => {
+    const contexto = await navegador.newContext({
+      viewport: { width: 1280, height: 1000 },
+      colorScheme: tema,
+    });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await pagina.goto(base + '/reports', { waitUntil: 'networkidle' });
+    await pagina.waitForTimeout(3000);
+
+    const encontrado = await pagina.evaluate(() => {
+      const marcas = new Set();
+      const lineas = new Set();
+      // Los cinco gráficos. `ranking-late` es el único que usa `attention`, así que sin
+      // él ese color se quedaría sin mirar.
+      for (const id of [
+        'ranking-hours',
+        'ranking-reasons',
+        'ranking-overtime',
+        'ranking-late',
+        'week-columns',
+      ]) {
+        const raiz = document.querySelector(`[data-testid="${id}"]`);
+        if (raiz === null) continue;
+        for (const el of raiz.querySelectorAll('div')) {
+          if (el.children.length > 0) continue;
+          const fondo = getComputedStyle(el).backgroundColor;
+          if (fondo === 'rgba(0, 0, 0, 0)' || fondo === 'transparent') continue;
+          const caja = el.getBoundingClientRect();
+          if (caja.width < 1 || caja.height < 1) continue;
+          // Rejilla y línea base miden 1 px de alto: son cromo, y también se les mira
+          // el color, porque el mismo fallo las alcanzó.
+          if (caja.height <= 2 && caja.width > 50) lineas.add(fondo);
+          else if (caja.width > 2 && caja.height > 2) marcas.add(fondo);
+        }
+      }
+      return { marcas: [...marcas], lineas: [...lineas] };
+    });
+    await contexto.close();
+    return encontrado;
+  };
+
+  const claro = await colorDeMarcas('light');
+  const oscuro = await colorDeMarcas('dark');
+
+  for (const [qué, enClaro, enOscuro] of [
+    ['marcas de datos', claro.marcas, oscuro.marcas],
+    ['rejilla y línea base', claro.lineas, oscuro.lineas],
+  ]) {
+    if (enClaro.length === 0 || enOscuro.length === 0) {
+      problemas.push(`no se midió ningún color de ${qué}: el arnés no está viendo los gráficos`);
+      continue;
+    }
+    const congelados = enClaro.filter((c) => enOscuro.includes(c));
+    if (congelados.length > 0) {
+      problemas.push(
+        `${qué}: ${congelados.join(', ')} sale igual en los dos temas. Está congelado: ` +
+          'ese color no se pidió al tema activo.',
+      );
+    }
+    console.log(
+      `  ${qué.padEnd(20)} ${enClaro.length} en claro, ${enOscuro.length} en oscuro, ` +
+        `${congelados.length === 0 ? 'ninguno repetido' : `${congelados.length} CONGELADO(S)`}`,
+    );
+  }
+}
+
 await navegador.close();
 await cerrar();
 

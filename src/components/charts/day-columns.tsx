@@ -1,9 +1,11 @@
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import { useResponsive } from '@/hooks/use-responsive';
-import { chart, chartMarks, colors, sizes, spacing } from '@/theme/tokens';
+import { chart, chartMarks, sizes, spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 
 /**
  * Las siete columnas de la semana: una por día, una sola serie.
@@ -45,6 +47,8 @@ export function DayColumns({
   testID?: string;
 }) {
   const { isCompact } = useResponsive();
+  const { colors } = useTheme();
+  const styles = useEstilos();
   const max = Math.max(...days.map((day) => day.value), 0);
   const escala = max > 0 ? max : 1;
   // Solo el máximo lleva número fijo; si empatan, el primero, para no rotular dos.
@@ -122,7 +126,7 @@ export function DayColumns({
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   rejilla: { height: 1, backgroundColor: chart(colors).grid },
   base: { height: 1, backgroundColor: chart(colors).grid },
   plot: { height: chartMarks.columnPlotHeight + sizes.iconMobile },
@@ -138,4 +142,4 @@ const styles = StyleSheet.create({
   },
   etiqueta: { flex: 1, alignItems: 'center' },
   hoy: { textDecorationLine: 'underline' },
-});
+}));
