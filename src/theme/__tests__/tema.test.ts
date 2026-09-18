@@ -1,5 +1,8 @@
 import { darkColors, lightColors, type ColorToken } from '../tokens';
 import { colorsFor, resolveScheme, THEME_PREFERENCES } from '../use-theme';
+import { CLAVE_DE_ETIQUETA } from '@/components/ui/theme-switch';
+import en from '@/i18n/locales/en.json';
+import esPE from '@/i18n/locales/es-PE.json';
 
 /**
  * La maquinaria del tema, y sobre todo LO QUE NO SE PUEDE DESALINEAR.
@@ -272,5 +275,58 @@ describe('contraste del kiosco', () => {
     const claro = contraste(lightColors[tinta], lightColors[fondo]);
     const oscuro = contraste(darkColors[tinta], darkColors[fondo]);
     expect(oscuro).toBeGreaterThanOrEqual(claro - 0.5);
+  });
+});
+
+/**
+ * EL SELECTOR DE APARIENCIA, POR EL LADO QUE UNA PRUEBA PUEDE SUJETAR.
+ *
+ * Que el interruptor cambia el tema al instante y que sobrevive a recargar se comprueba
+ * en el navegador, que es donde eso significa algo. Lo que sí se puede fijar aquí es lo
+ * que se rompe en silencio: añadir una cuarta preferencia y olvidarse de su etiqueta.
+ * Compila, pinta, y lo que sale en pantalla es la clave cruda «settings.themeLoQueSea».
+ */
+describe('el selector de apariencia', () => {
+  it('tiene una etiqueta para cada preferencia, y ninguna de sobra', () => {
+    expect(Object.keys(CLAVE_DE_ETIQUETA).sort()).toEqual([...THEME_PREFERENCES].sort());
+  });
+
+  /**
+   * Busca «settings.themeDark» dentro del diccionario. No se tipa el JSON como
+   * `Record<string, Record<string, string>>`: los diccionarios tienen niveles más
+   * profundos —los plurales de `home.headline`, por ejemplo— y ese tipo es mentira, así
+   * que `tsc` la rechaza con razón. Se recorre la ruta y se comprueba al final que lo
+   * encontrado es un texto.
+   */
+  const buscar = (diccionario: unknown, ruta: string): string | null => {
+    let nodo: unknown = diccionario;
+    for (const parte of ruta.split('.')) {
+      if (typeof nodo !== 'object' || nodo === null) return null;
+      nodo = (nodo as Record<string, unknown>)[parte];
+    }
+    return typeof nodo === 'string' ? nodo : null;
+  };
+
+  it.each(THEME_PREFERENCES)('la etiqueta de «%s» existe en los dos idiomas', (preferencia) => {
+    const ruta = CLAVE_DE_ETIQUETA[preferencia];
+    for (const [idioma, diccionario] of [
+      ['es-PE', esPE],
+      ['en', en],
+    ] as const) {
+      const texto = buscar(diccionario, ruta);
+      // El idioma va en el mensaje para que, si falla, se sepa CUÁL de los dos falta
+      // sin tener que ir a mirarlo.
+      expect(`${idioma} → ${ruta}: ${texto ?? 'NO EXISTE'}`).not.toContain('NO EXISTE');
+      expect((texto ?? '').trim()).not.toBe('');
+    }
+  });
+
+  /**
+   * «Automático» PRIMERO, y no es cosmética: es el valor de fábrica, y en una lista de
+   * opciones excluyentes la primera es la que se lee como "lo normal". Ponerla en medio
+   * o al final convierte el ajuste en «elige claro u oscuro, o esta tercera cosa rara».
+   */
+  it('ofrece automático como primera opción', () => {
+    expect(THEME_PREFERENCES[0]).toBe('system');
   });
 });

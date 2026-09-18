@@ -134,3 +134,112 @@ export async function sembrarKiosco(page, binding = BINDING_KIOSCO) {
     localStorage.setItem(P + 'kiosk.deviceKey', 'a'.repeat(64));
   }, binding);
 }
+
+/**
+ * El contraste REAL de cada texto de la pantalla contra el fondo REAL que tiene detrás.
+ *
+ * NO SE MIDEN TOKENS, SE MIDE LO PINTADO. Un par de tokens que en la paleta da 6:1 puede
+ * acabar en 2:1 en pantalla porque el texto cayó encima de otra superficie, o porque un
+ * ancestro lleva `opacity`. Medir la paleta comprueba la paleta; esto comprueba la app.
+ *
+ * QUÉ ES «EL FONDO DE DETRÁS». El primer ancestro —empezando por el propio elemento— con
+ * un fondo opaco. Es lo que se ve por detrás de las letras. Un fondo translúcido se
+ * salta: encima de él sigue viéndose el de más atrás, y mezclarlos sería inventar un
+ * color que no existe en la pantalla.
+ *
+ * VIVE AQUÍ Y NO EN UN ARNÉS porque la usan dos: `kiosco-check` para el reloj de fichaje
+ * y `contraste-check` para las pantallas del panel. Con dos copias, el día que se afine
+ * el cálculo —qué cuenta como texto grande, qué se exime— una de las dos se queda vieja
+ * y empieza a decir OK sobre algo que la otra suspende.
+ *
+ * Devuelve `{ fallos, medidos, saltados }`. `medidos` importa tanto como `fallos`: cero
+ * medidos con cero fallos NO es una pantalla legible, es un arnés que no está viendo
+ * nada, y quien llama tiene que tratarlo como error.
+ */
+export async function medirContraste(pagina, { minimo, minimoGrande, tamanoGrande }) {
+  return pagina.evaluate(
+    ({ minimo, minimoGrande, tamanoGrande }) => {
+      const canal = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      const partes = (css) => {
+        const n = (css || '').match(/\d+(\.\d+)?/g);
+        return n === null || n.length < 3 ? null : n.map(Number.parseFloat);
+      };
+      const luz = (css) => {
+        const n = partes(css);
+        if (n === null) return null;
+        const [r, g, b] = n.slice(0, 3).map((v) => canal(v / 255));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const opaco = (css) => {
+        const n = partes(css);
+        return n !== null && (n.length < 4 || n[3] >= 0.99);
+      };
+      const razon = (a, b) => {
+        const [alto, bajo] = [a, b].sort((x, y) => y - x);
+        return (alto + 0.05) / (bajo + 0.05);
+      };
+
+      const fallos = [];
+      let medidos = 0;
+      let saltados = 0;
+
+      for (const el of document.querySelectorAll('*')) {
+        if (el.children.length > 0) continue;
+        const texto = (el.textContent ?? '').trim();
+        if (texto === '') continue;
+        const caja = el.getBoundingClientRect();
+        if (caja.width < 1 || caja.height < 1) continue;
+
+        const estilo = getComputedStyle(el);
+        if (estilo.visibility === 'hidden' || estilo.display === 'none') continue;
+
+        /*
+         * Un control DESACTIVADO está exento de 1.4.3, y aquí lo hay de verdad: las
+         * teclas se apagan con `opacity: 0.4` mientras se valida el PIN. Medirlas daría
+         * un fallo por algo que la norma no pide y que además es la señal de "espera".
+         */
+        let transparente = false;
+        for (let n = el; n !== null; n = n.parentElement) {
+          if (Number.parseFloat(getComputedStyle(n).opacity) < 0.99) {
+            transparente = true;
+            break;
+          }
+        }
+        if (transparente) {
+          saltados += 1;
+          continue;
+        }
+
+        const tinta = luz(estilo.color);
+        if (tinta === null) continue;
+
+        let fondo = null;
+        for (let n = el; n !== null; n = n.parentElement) {
+          const css = getComputedStyle(n).backgroundColor;
+          if (opaco(css)) {
+            fondo = { luz: luz(css), css };
+            break;
+          }
+        }
+        if (fondo === null || fondo.luz === null) continue;
+
+        const px = Number.parseFloat(estilo.fontSize);
+        const exigido = px >= tamanoGrande ? minimoGrande : minimo;
+        const r = razon(tinta, fondo.luz);
+        medidos += 1;
+        if (r < exigido) {
+          fallos.push({
+            texto: texto.slice(0, 32),
+            px: Math.round(px),
+            razon: Number(r.toFixed(2)),
+            exigido,
+            tinta: estilo.color,
+            fondo: fondo.css,
+          });
+        }
+      }
+      return { fallos, medidos, saltados };
+    },
+    { minimo, minimoGrande, tamanoGrande },
+  );
+}

@@ -37,6 +37,7 @@ import {
   type ManagerOrganization,
 } from '@/hooks/use-manager-scope';
 import { LanguageSwitch } from '@/components/ui/language-switch';
+import { ThemeSwitch } from '@/components/ui/theme-switch';
 import { env } from '@/lib/env';
 import { useSessionStore } from '@/stores/session-store';
 import { SUPPORTED_LANGUAGES } from '@/i18n';
@@ -73,6 +74,7 @@ export function SettingsPanel() {
         {scope.organization !== null ? (
           <Stack gap={spacing.lg}>
             <AppLanguageCard />
+            <AppThemeCard />
             <OrganizationCard
               key={scope.organization.id}
               organization={scope.organization}
@@ -108,6 +110,25 @@ function AppLanguageCard() {
         distinto: aqui es un componente y el estado sale del mismo store.
       */}
       <LanguageSwitch size="full" testID="app-language" />
+    </FormCard>
+  );
+}
+
+/**
+ * Apariencia de esta app en este dispositivo: cambia al instante, sin reiniciar.
+ *
+ * VA JUNTO AL IDIOMA Y ANTES QUE LOS AJUSTES DE LA ORGANIZACIÓN, porque es la misma
+ * clase de cosa: una preferencia de ESTE aparato, que no viaja a la cuenta ni la ve
+ * nadie más. Los ajustes de abajo —nombre, zona horaria, sedes— son de la empresa y los
+ * cambia un administrador para todos. Mezclarlos invita a creer que poner la app en
+ * oscuro se lo pone oscuro al equipo entero.
+ */
+function AppThemeCard() {
+  const { t } = useTranslation();
+
+  return (
+    <FormCard title={t('settings.appTheme')} description={t('settings.appThemeHint')}>
+      <ThemeSwitch testID="app-theme" />
     </FormCard>
   );
 }
