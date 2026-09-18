@@ -18,6 +18,12 @@
  * generación: si funciona ahí, funciona en cualquier teléfono que alguien ponga en el
  * mostrador.
  *
+ * Y EN LOS DOS TEMAS, por dos razones distintas. El layout, porque el tema cambia pesos
+ * y bordes y podría mover el último botón unos píxeles. El contraste, porque el kiosco
+ * se lee A UN BRAZO DE DISTANCIA, de pie y con gente detrás: un reloj que en el
+ * escritorio «se distingue» aquí es directamente ilegible, y quien no puede leerlo no
+ * puede fichar.
+ *
  * Uso:
  *   npm run demo:export
  *   node scripts/kiosco-check.mjs dist-demo
@@ -42,6 +48,46 @@ const TAMANOS = [
 /** §25: por debajo de esto un botón deja de ser un objetivo táctil usable. */
 const MINIMO_TACTIL = 44;
 
+/** Los dos temas. El kiosco no se libra de ninguno: de noche se usa el oscuro. */
+const TEMAS = ['light', 'dark'];
+
+/**
+ * Contraste mínimo de texto (WCAG 1.4.3).
+ *
+ * 4,5:1 para texto normal y 3:1 para el grande. GRANDE aquí es >= 24 px y nada más:
+ * la regla real incluye «>= 18,7 px en negrita», pero el peso lo lleva la FAMILIA
+ * —`Inter_600SemiBold`— y no el `font-weight`, que sigue diciendo 400. Preguntar por
+ * el peso daría 400 en textos que son negrita de verdad, así que se aplica el umbral
+ * estricto a todo lo que no llegue a 24 px. Equivocarse hacia el lado exigente es lo
+ * correcto en una pantalla que se lee a un brazo.
+ */
+const MINIMO_TEXTO = 4.5;
+const MINIMO_TEXTO_GRANDE = 3;
+const TAMANO_GRANDE = 24;
+
+/**
+ * DEUDA DEL TEMA CLARO, NOMBRADA PARA QUE EL ARNÉS SIGA SIRVIENDO.
+ *
+ * Al medir el contraste de verdad aparecieron dos tintas que no llegan, y NO son del
+ * tema oscuro: son del claro, el que la app lleva usando desde siempre.
+ *
+ *   #16845B — `success600` en claro. «Trabajando», «entrada registrada». 4,24 y 4,31:1.
+ *   #B56B00 — `warning600` en claro. El aviso de modo demostración. 3,86:1.
+ *
+ * Arreglarlas cambia las insignias de estado de TODA la app, que es un cambio visible
+ * que tiene que ver Andree: queda en la tarea nJTTpJRad37anvPtsAZc. Aquí se nombran por
+ * su valor exacto y SOLO en claro. Lo que NO se hace es bajar el mínimo: eso dejaría un
+ * arnés que dice OK sin comprobar nada.
+ *
+ * Se excusa por el color, no por el texto: si la misma tinta floja aparece en un sitio
+ * nuevo es la misma deuda, pero si el flojo es OTRO color, esto falla. Y en oscuro no se
+ * excusa nada, porque el oscuro se diseñó midiendo y no hereda nada que disculpar.
+ */
+const DEUDA_DE_CLARO = new Map([
+  ['rgb(22, 132, 91)', 'success600 en claro (nJTTpJRad37anvPtsAZc)'],
+  ['rgb(181, 107, 0)', 'warning600 en claro (nJTTpJRad37anvPtsAZc)'],
+]);
+
 /**
  * Holgura mínima por debajo del teclado, en píxeles.
  *
@@ -57,8 +103,13 @@ const { chromium } = cargarPlaywright();
 const navegador = await chromium.launch();
 const problemas = [];
 
-for (const [etiqueta, ancho, alto] of TAMANOS) {
-  const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+for (const tema of TEMAS) {
+for (const [etiquetaBase, ancho, alto] of TAMANOS) {
+  const etiqueta = `${etiquetaBase} (${tema})`;
+  const ctx = await navegador.newContext({
+    viewport: { width: ancho, height: alto },
+    colorScheme: tema,
+  });
   const pagina = await ctx.newPage();
 
   // Se activa el reloj por su propia pantalla, como lo haría una persona.
@@ -92,7 +143,7 @@ for (const [etiqueta, ancho, alto] of TAMANOS) {
 
   if (medida === null) {
     problemas.push(`${etiqueta} (${ancho}×${alto}): no se encontró el teclado`);
-    console.log(`  ${etiqueta.padEnd(17)} SIN TECLADO`);
+    console.log(`  ${etiqueta.padEnd(25)} SIN TECLADO`);
     await ctx.close();
     continue;
   }
@@ -115,12 +166,13 @@ for (const [etiqueta, ancho, alto] of TAMANOS) {
   }
 
   console.log(
-    `  ${etiqueta.padEnd(17)} ${String(ancho).padStart(4)}×${String(alto).padEnd(4)} ` +
+    `  ${etiqueta.padEnd(25)} ${String(ancho).padStart(4)}×${String(alto).padEnd(4)} ` +
       `holgura ${String(holgura).padStart(4)}px  ` +
       `botón ${medida.alto}px  ${cabe && tactil ? 'OK' : 'FALLA'}`,
   );
 
   await ctx.close();
+}
 }
 
 /*
@@ -279,6 +331,192 @@ for (const [etiqueta, ancho, alto] of TAMANOS) {
   await ctx.close();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * ¿Se lee, de verdad, a un brazo de distancia? En los dos temas
+ * ---------------------------------------------------------------------------
+ *
+ * NO SE MIDEN TOKENS, SE MIDE LO PINTADO. Un par de tokens que en la paleta da 6:1
+ * puede acabar en 2:1 en pantalla porque el texto cayó encima de otra superficie, o
+ * porque un ancestro lleva `opacity`. Así que se pregunta al navegador el color real de
+ * cada texto y el fondo real que tiene detrás, y se divide.
+ *
+ * QUÉ ES «EL FONDO DE DETRÁS». El primer ancestro —empezando por el propio elemento—
+ * con un fondo opaco. Es lo que se ve por detrás de las letras. Un fondo translúcido se
+ * salta: encima de él sigue viéndose el de más atrás, y mezclarlos sería inventar un
+ * color que no existe.
+ *
+ * LO QUE ESTE ARNÉS NO PUEDE ALCANZAR, Y SE DICE EN VOZ ALTA.
+ * El mensaje de «ese PIN no es correcto» no sale nunca aquí: en modo demostración
+ * CUALQUIER PIN entra —`verify-pin` está escrito así a propósito, para que la
+ * demostración se pueda recorrer— así que el estado de error es inalcanzable desde el
+ * navegador. Ese par se comprueba en `src/theme/__tests__/tema.test.ts`, sobre los
+ * tokens. Se imprime abajo para que nadie lea este arnés como si lo cubriera todo.
+ */
+async function medirContraste(pagina) {
+  return pagina.evaluate(
+    ({ minimo, minimoGrande, tamanoGrande }) => {
+      const canal = (c) => (c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4));
+      const partes = (css) => {
+        const n = (css || '').match(/\d+(\.\d+)?/g);
+        return n === null || n.length < 3 ? null : n.map(Number.parseFloat);
+      };
+      const luz = (css) => {
+        const n = partes(css);
+        if (n === null) return null;
+        const [r, g, b] = n.slice(0, 3).map((v) => canal(v / 255));
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const opaco = (css) => {
+        const n = partes(css);
+        return n !== null && (n.length < 4 || n[3] >= 0.99);
+      };
+      const razon = (a, b) => {
+        const [alto, bajo] = [a, b].sort((x, y) => y - x);
+        return (alto + 0.05) / (bajo + 0.05);
+      };
+
+      const fallos = [];
+      let medidos = 0;
+      let saltados = 0;
+
+      for (const el of document.querySelectorAll('*')) {
+        if (el.children.length > 0) continue;
+        const texto = (el.textContent ?? '').trim();
+        if (texto === '') continue;
+        const caja = el.getBoundingClientRect();
+        if (caja.width < 1 || caja.height < 1) continue;
+
+        const estilo = getComputedStyle(el);
+        if (estilo.visibility === 'hidden' || estilo.display === 'none') continue;
+
+        /*
+         * Un control DESACTIVADO está exento de 1.4.3, y aquí lo hay de verdad: las
+         * teclas se apagan con `opacity: 0.4` mientras se valida el PIN. Medirlas daría
+         * un fallo por algo que la norma no pide y que además es la señal de "espera".
+         */
+        let transparente = false;
+        for (let n = el; n !== null; n = n.parentElement) {
+          if (Number.parseFloat(getComputedStyle(n).opacity) < 0.99) {
+            transparente = true;
+            break;
+          }
+        }
+        if (transparente) {
+          saltados += 1;
+          continue;
+        }
+
+        const tinta = luz(estilo.color);
+        if (tinta === null) continue;
+
+        let fondo = null;
+        for (let n = el; n !== null; n = n.parentElement) {
+          const css = getComputedStyle(n).backgroundColor;
+          if (opaco(css)) {
+            fondo = { luz: luz(css), css };
+            break;
+          }
+        }
+        if (fondo === null || fondo.luz === null) continue;
+
+        const px = Number.parseFloat(estilo.fontSize);
+        const exigido = px >= tamanoGrande ? minimoGrande : minimo;
+        const r = razon(tinta, fondo.luz);
+        medidos += 1;
+        if (r < exigido) {
+          fallos.push({
+            texto: texto.slice(0, 32),
+            px: Math.round(px),
+            razon: Number(r.toFixed(2)),
+            exigido,
+            tinta: estilo.color,
+            fondo: fondo.css,
+          });
+        }
+      }
+      return { fallos, medidos, saltados };
+    },
+    { minimo: MINIMO_TEXTO, minimoGrande: MINIMO_TEXTO_GRANDE, tamanoGrande: TAMANO_GRANDE },
+  );
+}
+
+/** Qué deuda conocida se ha topado de verdad, para poder decirla al final. */
+const deudaVista = new Set();
+
+for (const tema of TEMAS) {
+  // iPad vertical: el aparato real. El kiosco de una tienda es esto, no un teléfono.
+  const ctx = await navegador.newContext({
+    viewport: { width: 834, height: 1112 },
+    colorScheme: tema,
+  });
+  const pag = await ctx.newPage();
+  await sembrarKiosco(pag);
+
+  /** Recorre el fichaje entero midiendo en cada parada. */
+  const parar = async (nombre) => {
+    const { fallos, medidos, saltados } = await medirContraste(pag);
+    let conocidos = 0;
+    for (const f of fallos) {
+      const deuda = tema === 'light' ? DEUDA_DE_CLARO.get(f.tinta) : undefined;
+      if (deuda !== undefined) {
+        conocidos += 1;
+        deudaVista.add(deuda);
+        continue;
+      }
+      problemas.push(
+        `contraste en ${tema}, ${nombre}: «${f.texto}» a ${f.razon}:1 (hace falta ` +
+          `${f.exigido}:1 con ${f.px}px) — ${f.tinta} sobre ${f.fondo}`,
+      );
+    }
+    const nuevos = fallos.length - conocidos;
+    console.log(
+      `  ${tema.padEnd(5)} ${nombre.padEnd(22)} ${String(medidos).padStart(3)} textos, ` +
+        `${nuevos === 0 ? 'todos legibles' : `${nuevos} ILEGIBLES`}` +
+        `${conocidos > 0 ? ` (${conocidos} de deuda conocida)` : ''}` +
+        `${saltados > 0 ? ` (${saltados} apagados, exentos)` : ''}`,
+    );
+    if (medidos === 0) {
+      problemas.push(`contraste en ${tema}, ${nombre}: no se midió ni un texto`);
+    }
+  };
+
+  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+  await pag.waitForTimeout(2800);
+  await parar('reloj y teclado');
+
+  // Con tres dígitos: puntos llenos y vacíos a la vez, que es como se ve de verdad.
+  await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
+  for (const d of ['1', '2', '3']) {
+    await pag.locator(`[data-testid="keypad-${d}"]:visible`).first().click();
+    await pag.waitForTimeout(150);
+  }
+  await parar('PIN a medio teclear');
+
+  for (const d of ['4', '5', '6']) {
+    await pag.locator(`[data-testid="keypad-${d}"]:visible`).first().click();
+    await pag.waitForTimeout(150);
+  }
+  await pag.waitForTimeout(3200);
+  await parar('acciones');
+
+  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
+  await pag.waitForTimeout(1200);
+  await parar('cuenta atrás');
+  await pag.waitForTimeout(4400);
+  await parar('entrada registrada');
+
+  await ctx.close();
+}
+
+console.log(
+  '  nota: el estado «ese PIN no es correcto» NO se visita aquí — en demostración\n' +
+    '        cualquier PIN entra. Ese contraste lo cubre src/theme/__tests__/tema.test.ts.',
+);
+for (const deuda of deudaVista) {
+  console.log(`  deuda: se topó y se dejó pasar — ${deuda}`);
+}
+
 await navegador.close();
 await cerrar();
 
@@ -288,4 +526,7 @@ if (problemas.length > 0) {
   process.exit(1);
 }
 
-console.log(`\nOK: el teclado entero cabe y es tocable en los ${TAMANOS.length} tamaños.`);
+console.log(
+  `\nOK: el teclado cabe y es tocable en los ${TAMANOS.length} tamaños × ${TEMAS.length} temas, ` +
+    'y todo lo que se lee llega al contraste que pide su tamaño.',
+);

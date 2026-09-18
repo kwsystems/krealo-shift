@@ -79,18 +79,6 @@ for (const tema of ['light', 'dark']) {
        * UN FONDO TAPADO NO SE VE, Y POR TANTO NO ES UN FALLO.
        *
        * React Navigation trae su propio tema y pinta un `rgb(242,242,242)` en la raíz
-       * del navegador. No se puede cambiar desde aquí —el paquete no es dependencia
-       * directa del proyecto, viene dentro de expo-router— pero el contenido del Stack,
-       * que sí sigue el tema, lo cubre entero: cero píxeles de ese gris en la captura.
-       *
-       * Se comprueba, no se da por bueno: un elemento solo se perdona si tiene un hijo
-       * OPACO que lo cubre por completo. Meterlo en una lista blanca por su color sería
-       * ocultar el día que deje de estar tapado.
-       */
-      /*
-       * UN FONDO TAPADO NO SE VE, Y POR TANTO NO ES UN FALLO.
-       *
-       * React Navigation trae su propio tema y pinta un `rgb(242,242,242)` en la raíz
        * del navegador. No se puede cambiar desde aquí: el paquete no es dependencia
        * directa del proyecto —viene dentro de expo-router— así que no hay forma de
        * importar su `ThemeProvider`. Pero el contenido del Stack, que sí sigue el tema,

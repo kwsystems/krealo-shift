@@ -78,8 +78,34 @@ export type ColorSet = Readonly<Record<ColorToken, string>>;
  * neutro al lado de un acento morado se lee como un gris que nadie eligió.
  */
 export const darkColors = {
-  // Fondos teñidos: lo que en claro era un lavanda pálido, aquí es un morado muy oscuro.
-  primary50: '#211C33',
+  /*
+   * Fondos teñidos: lo que en claro era un lavanda pálido, aquí es un morado muy oscuro.
+   *
+   * `primary50` VALÍA #211C33 Y ESTABA MAL, por una razón que no se ve leyendo el color
+   * sino midiendo lo que se pinta encima. El fondo del kiosco es este token, y el resto
+   * del tema oscuro se afinó contra `surface`. #211C33 era MÁS CLARO que `surface`
+   * —0,0139 contra 0,0111 de luminancia—, así que todo lo que llegaba justo a 4,5:1
+   * sobre la tarjeta se quedaba en 4,49:1 sobre el fondo del kiosco. El arnés lo
+   * encontró en cinco sitios a la vez: el nombre del negocio, el cambio de idioma,
+   * «Ayuda y accesibilidad», «Olvidé marcar» y «Cancelar». Y el mensaje de PIN
+   * incorrecto, que el arnés no alcanza.
+   *
+   * Un centésimo no se ve. Lo que importa es que eran CINCO SITIOS CON LA MISMA CAUSA:
+   * el primer arreglo fue aclarar el rojo del mensaje de error, y estaba persiguiendo
+   * el síntoma. La causa es el fondo, y arreglado ahí se arreglan todos.
+   *
+   * ADEMÁS ERA LA JERARQUÍA AL REVÉS. En claro, `primary50` (#F5F2FF) es más OSCURO que
+   * la tarjeta: es el telón del fondo y las tarjetas se le ponen encima. En oscuro había
+   * quedado más claro que la tarjeta, o sea el telón por delante de lo que sostiene.
+   *
+   * #1B1235 es más oscuro Y más morado. Lo segundo importa tanto como lo primero: este
+   * token también es la fila elegida y el botón pulsado, que se distinguen de la tarjeta
+   * por el tinte, no por la luz. Esa separación perceptual SUBE con el cambio —ΔE 3,1 →
+   * 4,7 en OKLab, cuando el mismo par en claro es 3,7—, así que el kiosco se lee mejor
+   * y la selección se ve mejor. Sobre este fondo: acento 4,85:1, peligro 4,85:1,
+   * texto apagado 5,44:1.
+   */
+  primary50: '#1B1235',
   primary100: '#2A2342',
   primary200: '#363053',
   // El acento sube de luminosidad para sobrevivir al fondo oscuro. `primary700` es el

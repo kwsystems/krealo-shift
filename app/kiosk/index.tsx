@@ -34,6 +34,36 @@ import { formatClockTime, formatLongDate } from '@/utils/time';
  * - el logotipo con pulsación larga de 3 segundos es la única salida del kiosco,
  *   y existe alternativa administrativa, así que no es un gesto oculto
  *   imprescindible para tareas normales (§21).
+ *
+ * ----------------------------------------------------------------------------------
+ * EL TEMA DEL KIOSCO: SIGUE LA PREFERENCIA GENERAL. NO TIENE LA SUYA.
+ * ----------------------------------------------------------------------------------
+ *
+ * La pregunta era razonable —un iPad atornillado a la pared de una tienda y el celular
+ * del gerente no son el mismo aparato ni el mismo uso—, pero la respuesta es que no hace
+ * falta un ajuste aparte, por tres razones que se comprobaron antes de decidir:
+ *
+ * 1. LA PREFERENCIA YA ES POR APARATO. No vive en la cuenta: vive en el almacén del
+ *    dispositivo (`preferences-store` → `secure-storage`, que es SecureStore en el móvil
+ *    y `localStorage` en web). El iPad de la pared y el celular del gerente NUNCA
+ *    comparten este valor aunque sea "la misma" preferencia. El problema que un ajuste
+ *    propio del kiosco vendría a resolver ya está resuelto.
+ *
+ * 2. DE FÁBRICA ES `system`, Y EN UN IPAD ESO ES EL HORARIO DE APARIENCIA DE IPADOS.
+ *    O sea: claro de día y oscuro de noche, sin que nadie toque nada y sin código
+ *    nuestro. Que es exactamente lo que se quería para la tienda que cierra: una
+ *    pantalla blanca a pleno brillo en un local cerrado es una linterna.
+ *
+ * 3. Y CUANDO EL HORARIO NO SIRVE, LAS OPCIONES FIJAS YA ESTÁN. Una tienda con las luces
+ *    encendidas hasta el cierre no quiere que el iPad se ponga oscuro porque se puso el
+ *    sol. Para eso están «Claro» y «Oscuro» fijos en Ajustes, que se aplican también
+ *    aquí por ser la misma preferencia, y se dejan puestos al vincular el aparato —que
+ *    es justo cuando un gerente tiene el iPad en la mano—.
+ *
+ * Lo que se descarta con esto es un ajuste más: una pantalla propia, alcanzable solo
+ * desde el aparato ya vinculado, para hacer peor lo que el sistema operativo ya hace por
+ * horario. Si algún día hace falta de verdad, la señal será concreta —una tienda que
+ * pida el kiosco oscuro con el resto claro en el mismo aparato— y no una hipótesis.
  */
 
 const EXIT_LONG_PRESS_MS = 3000;
