@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import { DEFAULT_LANGUAGE, changeLanguage, type SupportedLanguage } from '@/i18n';
+import type { ThemePreference } from '@/theme/use-theme';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import type { TimeFormatPreference } from '@/utils/time';
 
@@ -14,6 +15,8 @@ import type { TimeFormatPreference } from '@/utils/time';
 type PersistedPreferences = {
   language: SupportedLanguage;
   timeFormat: TimeFormatPreference;
+  /** Claro, oscuro o seguir al sistema. Ver `@/theme/use-theme`. */
+  theme: ThemePreference;
 };
 
 type PreferencesState = PersistedPreferences & {
@@ -22,12 +25,20 @@ type PreferencesState = PersistedPreferences & {
   setLanguage: (language: SupportedLanguage) => Promise<void>;
   toggleLanguage: () => Promise<void>;
   setTimeFormat: (format: TimeFormatPreference) => Promise<void>;
+  setTheme: (theme: ThemePreference) => Promise<void>;
 };
 
 /** es-PE arranca en 24 horas (§2). */
 const DEFAULTS: PersistedPreferences = {
   language: DEFAULT_LANGUAGE,
   timeFormat: '24h',
+  /*
+   * AUTOMÁTICO de fábrica, y aquí sí se sigue al dispositivo —al revés que el idioma.
+   * No es incoherente: el idioma de un equipo peruano es una decisión del negocio que un
+   * iPad configurado en inglés no debe cambiar, mientras que claro u oscuro es una
+   * preferencia personal de quien mira la pantalla, y esa ya la expresó en su sistema.
+   */
+  theme: 'system',
 };
 
 async function persist(next: PersistedPreferences): Promise<void> {
@@ -55,15 +66,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     // guarda. Adivinar a partir del locale es lo que producia el problema.
     const language = stored?.language ?? DEFAULT_LANGUAGE;
     const timeFormat = stored?.timeFormat ?? DEFAULTS.timeFormat;
+    const theme = stored?.theme ?? DEFAULTS.theme;
 
     await changeLanguage(language);
-    set({ language, timeFormat, hydrated: true });
+    set({ language, timeFormat, theme, hydrated: true });
   },
 
   setLanguage: async (language) => {
     await changeLanguage(language);
     set({ language });
-    await persist({ language, timeFormat: get().timeFormat });
+    await persist({ language, timeFormat: get().timeFormat, theme: get().theme });
   },
 
   toggleLanguage: async () => {
@@ -73,6 +85,14 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setTimeFormat: async (timeFormat) => {
     set({ timeFormat });
-    await persist({ language: get().language, timeFormat });
+    await persist({ language: get().language, timeFormat, theme: get().theme });
+  },
+
+  setTheme: async (theme) => {
+    // Se aplica ANTES de guardar: el cambio de tema tiene que verse en el instante en
+    // que se toca, no cuando el almacenamiento conteste. Si guardar falla, lo que se
+    // pierde es que se recuerde mañana, no que funcione hoy.
+    set({ theme });
+    await persist({ language: get().language, timeFormat: get().timeFormat, theme });
   },
 }));

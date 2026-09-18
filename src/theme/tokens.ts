@@ -4,9 +4,21 @@
  * Ningún componente define colores, tamaños de fuente, radios ni espaciado por su
  * cuenta: todo sale de aquí. Si Krealo Media entrega su paleta oficial definitiva,
  * basta con cambiar los valores de este archivo.
+ *
+ * DOS JUEGOS DE COLOR, LAS MISMAS CLAVES
+ * `claro` y `oscuro` tienen exactamente los mismos nombres, y el tipo lo OBLIGA: si
+ * alguien añade un color a uno y se olvida del otro, no compila. Es la única forma de
+ * que 54 archivos puedan escribir `surface` sin saber en qué tema están.
+ *
+ * LOS NOMBRES SON PAPELES, NO COLORES. `surface` no significa «blanco», significa «el
+ * fondo de una tarjeta»; en oscuro es casi negro. `ink900` no es «casi negro», es «el
+ * texto principal»; en oscuro es casi blanco. Leerlos como colores literales es lo que
+ * lleva a escribir `colors.white` donde se quería decir «el texto que va encima del
+ * acento», y eso es justo lo que se rompe al cambiar de tema.
  */
 
-export const colors = {
+/** El juego claro: el de siempre, sin tocar un solo valor. */
+export const lightColors = {
   primary50: '#F5F2FF',
   primary100: '#ECE6FF',
   primary200: '#D9CDFF',
@@ -27,11 +39,87 @@ export const colors = {
   danger600: '#C43D4D',
   info50: '#EDF6FF',
   info600: '#2A6FA8',
+  /**
+   * El texto que va ENCIMA del acento (un botón primario relleno).
+   *
+   * Existe como token propio y no como `white` literal porque en oscuro NO es blanco:
+   * el acento se aclara para verse sobre fondo oscuro, y blanco sobre ese morado claro
+   * da 3,65:1 —insuficiente para texto—. Con tinta oscura da 4,87:1. Medido, no supuesto.
+   */
+  onPrimary: '#FFFFFF',
   black: '#000000',
   white: '#FFFFFF',
 } as const;
 
-export type ColorToken = keyof typeof colors;
+export type ColorToken = keyof typeof lightColors;
+export type ColorSet = Readonly<Record<ColorToken, string>>;
+
+/**
+ * El juego oscuro.
+ *
+ * NO ES UNA INVERSIÓN DE LA PALETA CLARA. Invertir produce grises lavados y acentos que
+ * se apagan: un morado que se lee sobre blanco se pierde sobre negro. Cada valor se
+ * eligió por su papel y se COMPROBÓ con dos herramientas, no con el ojo:
+ *
+ *   - Los tres colores que se usan como marcas de gráfico pasaron
+ *     `validate_palette.js --mode dark` contra la superficie oscura: banda de
+ *     luminosidad, suelo de croma, separación bajo protanopia y deuteranopia, suelo de
+ *     visión normal y contraste. Las primeras propuestas —#F0A93C y #F4788A— FALLARON
+ *     la banda de luminosidad del modo oscuro (0,785 y 0,671 frente a un techo de
+ *     0,67): en oscuro la banda aceptable es más estrecha que en claro, así que
+ *     «aclarar el color de claro» es exactamente el error.
+ *   - Cada par de texto sobre su fondo se calculó con la fórmula de contraste WCAG.
+ *     Los diez pares dan 4,7:1 o más; el texto apagado sobre tarjeta, que es el peor,
+ *     da 5,27:1.
+ *
+ * El neutro tiene un sesgo hacia el morado de la marca en vez de ser gris puro: un gris
+ * neutro al lado de un acento morado se lee como un gris que nadie eligió.
+ */
+export const darkColors = {
+  // Fondos teñidos: lo que en claro era un lavanda pálido, aquí es un morado muy oscuro.
+  primary50: '#211C33',
+  primary100: '#2A2342',
+  primary200: '#363053',
+  // El acento sube de luminosidad para sobrevivir al fondo oscuro. `primary700` es el
+  // estado REFORZADO (pulsado, señalado), así que en oscuro es más CLARO que el 600,
+  // no más oscuro: sobre negro, «más fuerte» significa más luz.
+  primary500: '#9B86F5',
+  primary600: '#8A72F0',
+  primary700: '#A997F7',
+  // La tinta se invierte de papel: 900 sigue siendo el texto principal.
+  ink900: '#F2F0F7',
+  ink700: '#C0BCCC',
+  ink500: '#918C9E',
+  // La tarjeta es MÁS CLARA que el lienzo, igual que en claro es más clara que el gris
+  // de fondo. La jerarquía se conserva aunque los valores se den la vuelta.
+  surface: '#1C1A24',
+  canvas: '#131118',
+  border: '#332F3D',
+  success50: '#12261D',
+  success600: '#4ADE9B',
+  warning50: '#2B2011',
+  warning600: '#C4831F',
+  danger50: '#2C1519',
+  danger600: '#DC5A70',
+  info50: '#10202E',
+  info600: '#6FB3E8',
+  // Tinta oscura sobre el acento claro: 4,87:1. Blanco daría 3,65:1 y no llega.
+  onPrimary: '#1A1526',
+  black: '#000000',
+  white: '#FFFFFF',
+} as const satisfies ColorSet;
+
+/**
+ * El juego CLARO, tal cual, para todo lo que todavía no sabe de temas.
+ *
+ * Se mantiene a propósito mientras dura la migración: 54 archivos importan `colors` y
+ * cambiarlos todos en un solo golpe sería un diff imposible de revisar y una tarde
+ * entera sin poder compilar. Así la app sigue viéndose exactamente igual hoy, y cada
+ * pantalla se pasa al tema en la tarea 2/5.
+ *
+ * Cuando no quede ningún uso, este alias se borra.
+ */
+export const colors = lightColors;
 
 /** Escala base de espaciado (§5). Todo margen y padding sale de aquí. */
 export const spacing = {
