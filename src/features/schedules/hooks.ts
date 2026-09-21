@@ -39,32 +39,42 @@ export const scheduleKeys = {
 };
 
 export function useWeekShifts(params: {
+  organizationId: string | null;
   locationId: string | null;
   weekStart: string;
   timezone: string;
 }) {
-  const { locationId, weekStart, timezone } = params;
+  const { organizationId, locationId, weekStart, timezone } = params;
   const range = useMemo(() => weekRangeInstants(weekStart, timezone), [weekStart, timezone]);
 
   return useQuery({
     queryKey: scheduleKeys.week(locationId ?? 'none', weekStart),
     queryFn: () =>
       fetchWeekShifts({
+        organizationId: organizationId ?? '',
         locationId: locationId ?? '',
         fromISO: range.fromISO,
         toISO: range.toISO,
       }),
-    enabled: locationId !== null,
+    enabled: locationId !== null && organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 }
 
-export function usePublications(params: { locationId: string | null; weekStart: string }) {
+export function usePublications(params: {
+  organizationId: string | null;
+  locationId: string | null;
+  weekStart: string;
+}) {
   return useQuery({
     queryKey: scheduleKeys.publications(params.locationId ?? 'none', params.weekStart),
     queryFn: () =>
-      fetchPublications({ locationId: params.locationId ?? '', weekStart: params.weekStart }),
-    enabled: params.locationId !== null,
+      fetchPublications({
+        organizationId: params.organizationId ?? '',
+        locationId: params.locationId ?? '',
+        weekStart: params.weekStart,
+      }),
+    enabled: params.locationId !== null && params.organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 }

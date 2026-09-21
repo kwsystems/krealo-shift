@@ -54,7 +54,23 @@ export type ShiftPublication = z.infer<typeof publicationSchema>;
 const SHIFT_COLUMNS =
   'id, employee_id, location_id, job_role_id, starts_at, ends_at, timezone, planned_unpaid_break_minutes, employee_note, manager_note, status, publication_version, published_at, updated_at';
 
+/**
+ * TODA CONSULTA ACOTA POR ORGANIZACIÓN, Y NO ES REDUNDANTE.
+ *
+ * Una regla de Firestore NO es un filtro. Para una consulta, Firestore tiene que poder
+ * DEMOSTRAR —solo con los filtros de la consulta— que todos los resultados están
+ * permitidos; si la regla mira un campo que la consulta no acota, deniega la consulta
+ * ENTERA en vez de devolver menos filas.
+ *
+ * Estas consultas filtraban solo por `location_id` y la regla mira `organization_id`,
+ * así que daban 403 con la membresía correcta. El panel decía «Falta un permiso» en
+ * Horario, Horas e Inicio, mientras Equipo y Ajustes funcionaban — porque esas sí
+ * filtraban por organización. El discriminador fue lanzar las diez consultas del panel
+ * con el token real del usuario: las que acotaban por organización daban 200 y las tres
+ * que acotaban solo por sede daban 403.
+ */
 export async function fetchWeekShifts(params: {
+  organizationId: string;
   locationId: string;
   fromISO: string;
   toISO: string;
@@ -63,6 +79,7 @@ export async function fetchWeekShifts(params: {
     db
       .from(TABLES.shifts)
       .select(SHIFT_COLUMNS)
+      .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
       .gte('starts_at', params.fromISO)
       .lt('starts_at', params.toISO)
@@ -215,6 +232,7 @@ export async function copyPreviousWeek(params: {
 
   const source = (
     await fetchWeekShifts({
+      organizationId,
       locationId,
       fromISO: range.fromISO,
       toISO: range.toISO,
@@ -283,7 +301,7 @@ export async function publishShifts(params: {
       .eq('status', 'draft'),
   );
 
-  const previous = await fetchPublications({ locationId, weekStart });
+  const previous = await fetchPublications({ organizationId, locationId, weekStart });
   const nextVersion = (previous[0]?.publication_version ?? 0) + 1;
 
   await execute((db) =>
@@ -299,6 +317,7 @@ export async function publishShifts(params: {
 }
 
 export async function fetchPublications(params: {
+  organizationId: string;
   locationId: string;
   weekStart: string;
 }): Promise<ShiftPublication[]> {
@@ -306,6 +325,7 @@ export async function fetchPublications(params: {
     db
       .from(TABLES.shiftPublications)
       .select('id, publication_version, published_at, changed_shift_ids')
+      .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
       .eq('week_starts_on', params.weekStart)
       .order('publication_version', { ascending: false }),

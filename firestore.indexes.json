@@ -64,40 +64,6 @@
       ]
     },
     {
-      "//": "Horario semanal de una tienda. La consulta mas usada de la app.",
-      "collectionGroup": "shifts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "location_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "starts_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "//": "Turnos de una persona. `status` va como IN de dos valores y no como != porque con dos desigualdades (status y starts_at) Firestore obliga a ordenar primero por ellas, y el orden que la pantalla necesita es por hora de inicio.",
-      "collectionGroup": "shifts",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "employee_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "status",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "starts_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
@@ -108,25 +74,6 @@
         {
           "fieldPath": "starts_at",
           "order": "ASCENDING"
-        }
-      ]
-    },
-    {
-      "//": "Ultima version publicada de la semana de una tienda.",
-      "collectionGroup": "shift_publications",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "location_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "week_starts_on",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "publication_version",
-          "order": "DESCENDING"
         }
       ]
     },
@@ -175,21 +122,6 @@
         {
           "fieldPath": "occurred_at",
           "order": "DESCENDING"
-        }
-      ]
-    },
-    {
-      "//": "Sesiones de trabajo de una tienda en la semana.",
-      "collectionGroup": "work_sessions",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "location_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "starts_at",
-          "order": "ASCENDING"
         }
       ]
     },
@@ -305,6 +237,90 @@
         },
         {
           "fieldPath": "occurred_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Horario semanal de una tienda. Lleva `organization_id` DELANTE porque la regla lo exige: una consulta que no acota por el campo que la regla mira se deniega entera, no devuelve menos filas. Sustituye al indice sin organizacion, que servia una consulta que Firestore rechazaba de todas formas.",
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Proximos turnos de una persona. Lleva `organization_id` DELANTE porque la regla lo exige: una consulta que no acota por el campo que la regla mira se deniega entera, no devuelve menos filas. Sustituye al indice sin organizacion, que servia una consulta que Firestore rechazaba de todas formas.",
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Ultima version publicada de la semana de una tienda. Lleva `organization_id` DELANTE porque la regla lo exige: una consulta que no acota por el campo que la regla mira se deniega entera, no devuelve menos filas. Sustituye al indice sin organizacion, que servia una consulta que Firestore rechazaba de todas formas.",
+      "collectionGroup": "shift_publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "week_starts_on",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publication_version",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Sesiones de trabajo de una tienda en la semana. Lleva `organization_id` DELANTE porque la regla lo exige: una consulta que no acota por el campo que la regla mira se deniega entera, no devuelve menos filas. Sustituye al indice sin organizacion, que servia una consulta que Firestore rechazaba de todas formas.",
+      "collectionGroup": "work_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
           "order": "ASCENDING"
         }
       ]

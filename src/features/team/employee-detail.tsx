@@ -22,6 +22,7 @@ import { formatShiftRange, minutesToHHmm, type TimeFormatPreference } from '@/ut
  * generar uno nuevo, que se muestra una única vez.
  */
 export function EmployeeDetailSheet({
+  organizationId,
   member,
   locationNames,
   jobRoleNames,
@@ -38,6 +39,13 @@ export function EmployeeDetailSheet({
   onResetPin,
   onClose,
 }: {
+  /**
+   * Va como prop y no sale de `member` porque `TeamMember` no trae la organización:
+   * la lista de equipo ya viene acotada a una, así que la fila no repite el dato. Lo
+   * necesita `useUpcomingShifts` para poder acotar su consulta —una consulta que no
+   * acota por organización la deniegan las reglas entera—.
+   */
+  organizationId: string | null;
   member: TeamMember;
   locationNames: Map<string, string>;
   jobRoleNames: Map<string, string>;
@@ -56,7 +64,7 @@ export function EmployeeDetailSheet({
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const upcoming = useUpcomingShifts(member.id);
+  const upcoming = useUpcomingShifts(organizationId, member.id);
 
   const statusLabel =
     member.status === 'active'

@@ -102,11 +102,16 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const readOnly = position === 'past' && !scope.isAdmin;
 
   const shiftsQuery = useWeekShifts({
+    organizationId: scope.organization?.id ?? null,
     locationId: scope.locationId,
     weekStart,
     timezone: scope.timezone,
   });
-  const publications = usePublications({ locationId: scope.locationId, weekStart });
+  const publications = usePublications({
+    organizationId: scope.organization?.id ?? null,
+    locationId: scope.locationId,
+    weekStart,
+  });
   const names = useEmployeeNames(scope.organization?.id ?? null);
   const jobRolesQuery = useJobRoles(scope.organization?.id ?? null);
   const team = useTeam({

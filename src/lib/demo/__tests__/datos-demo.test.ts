@@ -104,6 +104,7 @@ describe('modo demostración', () => {
 
   it('Horario tiene turnos de esta semana y una publicación', async () => {
     const turnos = await fetchWeekShifts({
+      organizationId: DEMO_ORG_ID,
       locationId: DEMO_LOCATION_1,
       fromISO: lunes.toISOString(),
       toISO: domingo.toISOString(),
@@ -111,6 +112,7 @@ describe('modo demostración', () => {
     expect(turnos.length).toBeGreaterThan(0);
 
     const publicaciones = await fetchPublications({
+      organizationId: DEMO_ORG_ID,
       locationId: DEMO_LOCATION_1,
       weekStart: clave(lunes),
     });
@@ -119,6 +121,7 @@ describe('modo demostración', () => {
 
   it('Horas tiene sesiones y el período de esta semana', async () => {
     const sesiones = await fetchWorkSessions({
+      organizationId: DEMO_ORG_ID,
       locationId: DEMO_LOCATION_1,
       fromISO: new Date(lunes.getTime() - 7 * 86400000).toISOString(),
       toISO: domingo.toISOString(),

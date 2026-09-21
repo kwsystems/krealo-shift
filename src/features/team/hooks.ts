@@ -169,12 +169,16 @@ export function useTeamMutations(organizationId: string | null) {
   return { create, update, changeStatus, resetPin };
 }
 
-export function useUpcomingShifts(employeeId: string | null) {
+export function useUpcomingShifts(organizationId: string | null, employeeId: string | null) {
   return useQuery({
     queryKey: teamKeys.upcomingShifts(employeeId ?? 'none'),
     queryFn: () =>
-      fetchUpcomingShifts({ employeeId: employeeId ?? '', fromISO: new Date().toISOString() }),
-    enabled: employeeId !== null,
+      fetchUpcomingShifts({
+        organizationId: organizationId ?? '',
+        employeeId: employeeId ?? '',
+        fromISO: new Date().toISOString(),
+      }),
+    enabled: employeeId !== null && organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 }

@@ -121,6 +121,7 @@ export async function fetchDailySummaries(params: {
 }
 
 export async function fetchWorkSessions(params: {
+  organizationId: string;
   locationId: string;
   fromISO: string;
   toISO: string;
@@ -131,6 +132,7 @@ export async function fetchWorkSessions(params: {
       .select(
         'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, updated_at',
       )
+      .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
       .gte('starts_at', params.fromISO)
       .lt('starts_at', params.toISO)

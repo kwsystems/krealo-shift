@@ -301,6 +301,7 @@ export function TeamScreen() {
       {selected !== null ? (
         <EmployeeDetailSheet
           key={selected.id}
+          organizationId={scope.organization?.id ?? null}
           member={selected}
           locationNames={locationNames}
           jobRoleNames={jobRoleNames}

@@ -101,6 +101,7 @@ export function ReportsScreen() {
   const organizationId = scope.organization?.id ?? null;
   const summaries = useDailySummaries({ locationId: scope.locationId, from, to });
   const sessions = useWorkSessions({
+    organizationId: scope.organization?.id ?? null,
     locationId: scope.locationId,
     fromISO: range.fromISO,
     toISO: range.toISO,

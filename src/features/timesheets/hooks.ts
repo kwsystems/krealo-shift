@@ -48,6 +48,7 @@ export function useDailySummaries(params: { locationId: string | null; from: str
 }
 
 export function useWorkSessions(params: {
+  organizationId: string | null;
   locationId: string | null;
   fromISO: string;
   toISO: string;
@@ -61,6 +62,7 @@ export function useWorkSessions(params: {
     ),
     queryFn: () =>
       fetchWorkSessions({
+        organizationId: params.organizationId ?? '',
         locationId: params.locationId ?? '',
         fromISO: params.fromISO,
         toISO: params.toISO,

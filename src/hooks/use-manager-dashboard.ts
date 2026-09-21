@@ -117,6 +117,7 @@ export function useManagerDashboard(params: {
     queryKey: dashboardKeys.weekShifts(locationId ?? 'none', weekStart),
     queryFn: () =>
       fetchWeekShifts({
+        organizationId: organizationId ?? '',
         locationId: locationId ?? '',
         fromISO: weekRange.fromISO,
         toISO: weekRange.toISO,
@@ -130,6 +131,7 @@ export function useManagerDashboard(params: {
     queryKey: dashboardKeys.weekSessions(locationId ?? 'none', weekStart),
     queryFn: () =>
       fetchWorkSessions({
+        organizationId: organizationId ?? '',
         locationId: locationId ?? '',
         fromISO: weekRange.fromISO,
         toISO: weekRange.toISO,

@@ -363,6 +363,57 @@ class MutationBuilder implements PromiseLike<{ error: DataError | null }> {
       return { error: null };
     }
 
+    /**
+     * VARIOS IDS CONOCIDOS: SE LEEN UNO A UNO, NO CON UNA CONSULTA.
+     *
+     * Publicar un horario es `update(...).in('id', ids).eq('status','draft')`, y la
+     * version anterior resolvia eso con un `getDocs` — o sea una CONSULTA de lista.
+     * Las reglas de `shifts` miran `organization_id`, que esa consulta no acota, asi
+     * que Firestore la denegaba entera y publicar fallaba con «Falta un permiso»
+     * aunque quien publicaba administrara la tienda.
+     *
+     * Leer cada documento por su id es otra cosa: en un `get`, Firestore evalua la
+     * regla contra el documento real y SI puede mirar su `organization_id`. Lo que
+     * estaba prohibido era preguntar por un conjunto sin acotarlo, no leer un
+     * documento concreto.
+     *
+     * Los filtros que sobran se aplican sobre lo leido. Son pocos documentos por
+     * definicion —los ids salen de una seleccion en pantalla— asi que cuesta lo mismo.
+     */
+    const primero = this.filters[0];
+    if (
+      soloFiltro === undefined &&
+      primero !== undefined &&
+      primero.field === 'id' &&
+      primero.op === 'in' &&
+      Array.isArray(primero.value)
+    ) {
+      const resto = this.filters.slice(1);
+      const batch = writeBatch(this.db);
+      let alguno = false;
+
+      for (const id of primero.value as string[]) {
+        const ref = doc(this.db, this.table, id);
+        const encontrado = await getDoc(ref);
+        if (!encontrado.exists()) continue;
+
+        const datos = encontrado.data();
+        const cumple = resto.every((f) =>
+          f.op === 'in'
+            ? (f.value as unknown[]).includes(datos[f.field])
+            : datos[f.field] === f.value,
+        );
+        if (!cumple) continue;
+
+        alguno = true;
+        if (this.kind === 'delete') batch.delete(ref);
+        else batch.update(ref, { ...this.patch, updated_at: serverTimestamp() });
+      }
+
+      if (alguno) await batch.commit();
+      return { error: null };
+    }
+
     const snapshot = await getDocs(
       query(
         collection(this.db, this.table),

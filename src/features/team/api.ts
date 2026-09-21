@@ -256,6 +256,7 @@ const upcomingShiftSchema = z.object({
 export type UpcomingShift = z.infer<typeof upcomingShiftSchema>;
 
 export async function fetchUpcomingShifts(params: {
+  organizationId: string;
   employeeId: string;
   fromISO: string;
   limit?: number;
@@ -264,6 +265,7 @@ export async function fetchUpcomingShifts(params: {
     db
       .from(TABLES.shifts)
       .select('id, starts_at, ends_at, location_id, job_role_id, status')
+      .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)
       .neq('status', 'cancelled')
       .gte('starts_at', params.fromISO)
