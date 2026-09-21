@@ -44,6 +44,14 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # LAS DE `functions/` VAN AQUÍ, y estaban al final del todo. El lint de la raíz
+      # alcanza `functions/src`, así que `import/no-unresolved` intenta resolver
+      # `firebase-admin` y `firebase-functions` antes de que exista su `node_modules`:
+      # 23 errores y el CI en rojo. En local no se ve, porque quien toca las funciones
+      # ya las tiene instaladas.
+      - name: Instalar dependencias de las Cloud Functions
+        run: npm ci --prefix functions
+
       # Sin variables EXPO_PUBLIC_* a propósito: la app debe poder construirse y
       # probarse sin configuración, mostrando qué falta en vez de reventar (§30).
       - name: Lint
@@ -137,7 +145,7 @@ jobs:
       # Node, no en React Native. Sin este paso, un error de tipos del servidor solo
       # aparece al desplegar, que es el peor momento para enterarse.
       - name: Compilar las Cloud Functions
-        run: npm ci --prefix functions && npx tsc -p functions --noEmit
+        run: npx tsc -p functions --noEmit
 
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
