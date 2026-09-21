@@ -38,6 +38,8 @@ export {
 
 export { claimInvitation, inviteMember } from './invitations';
 
+export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './members';
+
 export {
   activateKiosk,
   refreshKioskRoster,

@@ -22,6 +22,7 @@ import {
   SelectField,
   ToggleField,
 } from '@/components/schedule/fields';
+import { MembersCard } from './members-card';
 import { OrganizationLogoField } from './logo-field';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
@@ -87,6 +88,12 @@ export function SettingsPanel() {
                 canEdit={scope.isAdmin}
               />
             ) : null}
+            {/*
+              Va DESPUÉS de organización y ubicación y ANTES de relojes, a propósito:
+              es el orden en que se monta una tienda. Primero qué es la empresa, luego
+              dónde está, luego quién entra, y al final con qué aparato se ficha.
+            */}
+            <MembersCard />
             <KiosksCard />
             <NotificationsCard key={`notifications-${scope.organization.id}`} />
             <SessionCard canSignOutEverywhere={scope.isAdmin} />

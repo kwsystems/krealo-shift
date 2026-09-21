@@ -1,5 +1,8 @@
 import { httpsCallable, type HttpsCallableResult } from 'firebase/functions';
 
+import { getDemoClient } from '@/lib/demo/client';
+import { isDemoMode } from '@/lib/demo/config';
+
 import { getFirebaseFunctions } from './client';
 
 /**
@@ -27,6 +30,29 @@ export async function callFunction<T>(
   name: string,
   payload?: unknown,
 ): Promise<{ data: T | null; error: CallableError | null }> {
+  /**
+   * EL DESVIO DE LA DEMOSTRACION VA PRIMERO, igual que en el acceso a datos. En ese
+   * modo no hay proyecto de Firebase al que llamar, y sin esta linea cada pantalla
+   * que use una funcion —quien tiene acceso, las vistas de informes— saldria con
+   * «falta configurar la conexion» en la demostracion. Esa pantalla es correcta
+   * cuando de verdad falta configuracion, y mentira cuando lo que hay es una
+   * demostracion que si tiene datos que ensenar.
+   */
+  if (isDemoMode) {
+    const demo = getDemoClient() as unknown as {
+      functions: { invoke: (n: string, o?: { body?: unknown }) => Promise<unknown> };
+    };
+    try {
+      const resultado = (await demo.functions.invoke(name, { body: payload })) as {
+        data?: unknown;
+        error?: unknown;
+      };
+      return { data: (resultado?.data ?? null) as T | null, error: null };
+    } catch (error) {
+      return { data: null, error: { code: 'internal', message: String(error) } };
+    }
+  }
+
   const functions = getFirebaseFunctions();
   if (functions === null) {
     return {

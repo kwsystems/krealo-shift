@@ -436,6 +436,52 @@ function crearFunctions(almacen: Almacen) {
               requiredBreakMinutes: 0,
             },
           });
+        /*
+         * QUIEN TIENE ACCESO, en la demostración.
+         *
+         * Se simula con nombres inventados y NO con los correos de nadie real: esta
+         * pantalla es la que se enseña, y un correo de verdad en una demostración es
+         * un dato de una persona expuesto en la pantalla de un comercial.
+         *
+         * Las mutaciones contestan que sí y no cambian nada. En la demostración no
+         * hay a quién invitar ni sesión que revocar, y fingir que el listado cambia
+         * haría creer que se puede repartir acceso desde aquí.
+         */
+        case 'listMembers':
+          return sinError({
+            members: [
+              {
+                userId: 'demo-propietaria',
+                email: 'propietaria@demostracion.pe',
+                displayName: 'Propietaria (demostración)',
+                role: 'owner',
+                status: 'active',
+                isSelf: true,
+              },
+              {
+                userId: 'demo-gerenta',
+                email: 'gerenta@demostracion.pe',
+                displayName: 'Gerenta (demostración)',
+                role: 'manager',
+                status: 'active',
+                isSelf: false,
+              },
+            ],
+            invitations: [
+              {
+                email: 'nueva.encargada@demostracion.pe',
+                role: 'manager',
+                createdAt: new Date().toISOString(),
+              },
+            ],
+          });
+
+        case 'inviteMember':
+        case 'setMemberRole':
+        case 'revokeMember':
+        case 'cancelInvitation':
+          return sinError({ ok: true });
+
         default:
           return {
             data: null,

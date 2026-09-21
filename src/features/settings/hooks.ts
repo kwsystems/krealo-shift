@@ -11,6 +11,14 @@ import {
   type NotificationPreferences,
   type OrganizationPatch,
 } from './api';
+import {
+  cancelInvitation,
+  fetchMembers,
+  inviteMember,
+  revokeMember,
+  setMemberRole,
+  type AppRoleName,
+} from './members';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import type { LocationSettings } from '@/hooks/use-manager-scope';
 import { useSessionStore } from '@/stores/session-store';
@@ -21,6 +29,7 @@ export const settingsKeys = {
   kiosks: (organizationId: string) => ['settings', 'kiosks', organizationId] as const,
   notifications: (organizationId: string, userId: string) =>
     ['settings', 'notifications', organizationId, userId] as const,
+  members: (organizationId: string) => ['settings', 'members', organizationId] as const,
 };
 
 export function useKioskDevices(organizationId: string | null) {
@@ -101,4 +110,55 @@ export function useSettingsMutations(organizationId: string | null) {
   });
 
   return { saveOrganization, saveLocation, generateCode, revokeKiosk, saveNotifications };
+}
+
+/**
+ * Quién tiene acceso a la organización (§7).
+ *
+ * `retry: false` por el mismo motivo que los kioscos: sin permiso el error es
+ * estable, y reintentar tres veces solo retrasa el mensaje que explica por qué.
+ */
+export function useMembers(organizationId: string | null) {
+  return useQuery({
+    queryKey: settingsKeys.members(organizationId ?? 'none'),
+    queryFn: () => fetchMembers(organizationId ?? ''),
+    enabled: organizationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+    retry: false,
+  });
+}
+
+export function useMemberMutations(organizationId: string | null) {
+  const queryClient = useQueryClient();
+  const invalidar = () => {
+    void queryClient.invalidateQueries({
+      queryKey: settingsKeys.members(organizationId ?? 'none'),
+    });
+  };
+
+  const invite = useMutation({
+    mutationFn: (params: { email: string; role: AppRoleName }) =>
+      inviteMember({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  const changeRole = useMutation({
+    mutationFn: (params: { userId: string; role: AppRoleName }) =>
+      setMemberRole({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  const revoke = useMutation({
+    mutationFn: (params: { userId: string }) =>
+      revokeMember({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  const cancelInvite = useMutation({
+    mutationFn: (params: { email: string }) =>
+      cancelInvitation({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  return { invite, changeRole, revoke, cancelInvite };
 }
