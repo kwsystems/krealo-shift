@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Modal, Pressable, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -7,6 +7,7 @@ import { NumericKeypad, PinDots } from './pin-pad';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
+import { useResponsive } from '@/hooks/use-responsive';
 import type { BreakReason } from '@/domain/break-reason';
 import { breakReasonLabels } from '@/i18n/break-reason-labels';
 import { radii, shadows, sizes, spacing } from '@/theme/tokens';
@@ -30,6 +31,18 @@ import { useTheme } from '@/theme/use-theme';
  * nómina. Ver `src/domain/break-reason.ts`.
  */
 
+/**
+ * El armazón de todas las hojas del kiosco. Es el mismo que `AdminSheet`, y las dos
+ * arrastraban el mismo defecto: el fondo tocable era un hermano `flex: 1` de la hoja,
+ * así que se quedaba con el alto sobrante en vez de estar detrás. El porqué completo
+ * está en `backdropTouchable`, en `fields.tsx`.
+ *
+ * EN PANTALLA ANCHA DEJA DE SER UNA HOJA INFERIOR y pasa a ser un diálogo centrado. Una
+ * hoja pegada al borde de abajo es lo correcto donde el pulgar llega justo ahí; en un
+ * iPad apaisado o en una ventana de escritorio, esa misma hoja se estira de lado a lado
+ * y deja una pregunta de dos líneas escrita a lo ancho de toda la pantalla, lejos de
+ * donde estaba mirando quien la abrió.
+ */
 function Sheet({
   visible,
   onClose,
@@ -42,14 +55,23 @@ function Sheet({
   testID?: string;
 }) {
   const styles = useEstilos();
+  const { isWide } = useResponsive();
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View style={styles.backdrop}>
+      <View style={[styles.backdrop, isWide ? styles.backdropCentered : null]}>
         {/* Tocar el fondo cierra, pero la hoja no se cierra sola: una acción de
             fichaje a medias no debe desaparecer por un roce accidental. */}
         <Pressable style={styles.backdropTouchable} onPress={onClose} accessibilityLabel="" />
-        <View style={styles.sheet} testID={testID}>
-          {children}
+        <View style={[styles.sheet, isWide ? styles.sheetWide : null]} testID={testID}>
+          {/*
+            CON SCROLL, porque ahora la hoja no pasa del 90% de la pantalla. Sin tope,
+            el teclado del PIN de gerente se salía por abajo en un teléfono bajo y las
+            últimas teclas quedaban fuera del cristal; con tope pero sin scroll
+            quedarían igual de inalcanzables, solo que recortadas en vez de fuera.
+          */}
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
+            {children}
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -387,15 +409,26 @@ const useEstilos = estilosDelTema((colors) => ({
     backgroundColor: colors.surface,
   },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25, 23, 42, 0.35)' },
-  backdropTouchable: { flex: 1 },
+  backdropCentered: { justifyContent: 'center', alignItems: 'center' },
+  backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.card,
     borderTopRightRadius: radii.card,
-    padding: spacing.xl,
+    maxHeight: '90%',
+    ...shadows.floating,
+  },
+  sheetWide: { borderRadius: radii.card, width: 560, maxWidth: '92%' },
+  // El relleno vertical vive en el contenido y no en la hoja: dentro de un `ScrollView`,
+  // el `padding` del contenedor recorta el área desplazable en vez de separar el texto.
+  // El relleno vive en el contenido y no en la hoja: dentro de un `ScrollView`, el
+  // relleno del contenedor recorta el área desplazable y deja la barra flotando dentro
+  // del margen en vez de rozando el borde.
+  sheetBody: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.xl,
     paddingBottom: spacing.xxl,
     gap: spacing.md,
-    ...shadows.floating,
   },
   flexOne: { flex: 1 },
   centered: { alignItems: 'center' },

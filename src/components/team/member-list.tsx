@@ -65,7 +65,6 @@ export function MemberList({
       testID={testID}
       // Sin esto, teclear en el filtro cierra el teclado en cada pulsación.
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
     />
   );
 }

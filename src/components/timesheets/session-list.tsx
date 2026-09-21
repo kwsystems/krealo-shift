@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, type ReactElement } from 'react';
 import { FlatList, StyleSheet } from 'react-native';
 
 import { SessionRow } from './session-row';
@@ -29,6 +29,17 @@ export type SessionListProps = {
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   onSelect: (session: WorkSession) => void;
+  /**
+   * Lo que va ENCIMA de las filas, dentro de la propia lista.
+   *
+   * Existe para que la pantalla tenga UN SOLO contenedor que se desplaza. Con la
+   * cabecera fuera, la lista solo recibía el alto que sobrara, y cuando la cabecera
+   * medía más que la pantalla no sobraba nada: la lista quedaba entera por debajo del
+   * cristal y no había forma de bajar a ella. Ver el comentario en `timesheets-screen`.
+   */
+  header?: ReactElement;
+  /** Qué enseñar cuando no hay filas: cargando, error o vacío de verdad. */
+  empty?: ReactElement;
   testID?: string;
 };
 
@@ -41,6 +52,8 @@ export function SessionList({
   timeFormat,
   language,
   onSelect,
+  header,
+  empty,
   testID = 'timesheet-session-list',
 }: SessionListProps) {
   const renderItem = useCallback(
@@ -72,11 +85,12 @@ export function SessionList({
       data={sessions}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
+      ListHeaderComponent={header}
+      ListEmptyComponent={empty}
       style={styles.lista}
       contentContainerStyle={styles.contenido}
       testID={testID}
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
     />
   );
 }

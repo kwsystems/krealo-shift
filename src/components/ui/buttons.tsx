@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, View, type ViewStyle } from '
 import * as Haptics from 'expo-haptics';
 
 import { AppText } from './app-text';
-import { radii, sizes, spacing, type ColorSet } from '@/theme/tokens';
+import { borderWidth, radii, sizes, spacing, type ColorSet } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -10,10 +10,22 @@ import { useTheme } from '@/theme/use-theme';
  *
  * Reglas que impone este componente:
  * - un solo botón primario visualmente dominante por vista (§33);
- * - alto mínimo 52 en móvil y 64 en kiosco (§5);
+ * - alto EXACTO 52 en móvil y 64 en kiosco (§5);
  * - el nombre de la acción va completo en el botón, nunca solo un icono (§21);
  * - "Marcar salida" usa la variante `danger`, que no puede confundirse con
  *   "Iniciar descanso" (§33).
+ *
+ * EL ALTO ES FIJO, Y ANTES ERA MÍNIMO. La diferencia es la que hacía que una fila de
+ * botones nunca estuviera alineada: `hint` se pintaba DENTRO del recuadro, así que
+ * "Reiniciar PIN / Se muestra una sola vez" medía dos líneas y "Editar", al lado, una.
+ * Tres botones juntos daban tres alturas, y el conjunto se leía como tres controles de
+ * tres sitios distintos en vez de tres opciones de la misma decisión.
+ *
+ * Ahora la pista va DEBAJO del recuadro, como texto de ayuda. No es solo alineación:
+ * una explicación metida dentro de un botón compite con su propia etiqueta justo en el
+ * momento en que hay que leerla —el nombre de la acción deja de ser lo primero que se
+ * ve—. Fuera, el botón dice qué hace y la línea de abajo matiza, que es el orden en que
+ * se lee de verdad.
  */
 
 export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
@@ -71,55 +83,97 @@ export function AppButton({
   const isKiosk = size === 'kiosk';
   const inactive = disabled || loading;
 
+  /**
+   * APAGADO NO ES «LO MISMO PERO DESVAÍDO», y eso es lo que había: un `opacity: 0.45`
+   * sobre el botón entero. Atenuar a la vez el fondo y el texto no baja el contraste
+   * entre ellos a la mitad, lo DESTRUYE, porque los dos se acercan al mismo fondo de la
+   * página. En «Enviar invitación» —tinta oscura sobre morado claro en tema oscuro— el
+   * texto y su fondo quedaban a 1,5:1: un rectángulo morado liso, sin nada escrito.
+   * Medido en el navegador, y el botón está apagado casi todo el rato, porque solo se
+   * enciende cuando el correo es válido.
+   *
+   * Un control apagado pierde su color de acento —eso es lo que comunica que no se
+   * puede pulsar— pero conserva su contraste: lienzo con borde y tinta apagada, 5,77:1
+   * en oscuro y 4,70:1 en claro. Los dos pasan el mínimo de 4,5:1.
+   *
+   * `loading` NO entra aquí: no es un botón apagado, es un botón trabajando, y tiene que
+   * seguir pareciendo el que se acaba de pulsar.
+   */
+  const apagado = disabled && !loading;
+
   const handlePress = () => {
     if (inactive) return;
     if (haptic) void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     onPress();
   };
 
-  return (
+  const boton = (
     <Pressable
       testID={testID}
       onPress={handlePress}
       disabled={inactive}
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityHint={accessibilityHint}
+      // La pista pasa a ser la ayuda de accesibilidad cuando no hay otra: quien navega
+      // con lector de pantalla oía las dos líneas seguidas y no puede perderlas ahora
+      // que están en dos nodos distintos.
+      accessibilityHint={accessibilityHint ?? hint}
       accessibilityState={{ disabled: inactive, busy: loading }}
       style={({ pressed }) => [
         styles.base,
         {
-          minHeight: isKiosk ? sizes.buttonKiosk : sizes.buttonMobile,
+          height: isKiosk ? sizes.buttonKiosk : sizes.buttonMobile,
           borderRadius: isKiosk ? radii.kioskButton : radii.button,
           paddingHorizontal: isKiosk ? spacing.xl : spacing.lg,
         },
         variantStyles[variant].container,
-        fullWidth ? styles.fullWidth : styles.autoWidth,
         pressed && !inactive ? variantStyles[variant].pressed : null,
-        inactive ? styles.inactive : null,
+        apagado
+          ? {
+              backgroundColor: colors.canvas,
+              borderWidth: borderWidth.hairline,
+              borderColor: colors.border,
+            }
+          : null,
+        // El estilo del llamante va al RECUADRO y no al envoltorio: es donde se
+        // escribía antes, cuando el recuadro era la raíz del componente.
         style,
       ]}
     >
       {loading ? (
         <ActivityIndicator color={variantStyles[variant].spinnerColor} />
       ) : (
-        <View style={styles.labels}>
-          <AppText
-            variant={isKiosk ? 'section' : 'bodyStrong'}
-            tone={variantStyles[variant].tone}
-            numberOfLines={2}
-            style={styles.centered}
-          >
-            {label}
-          </AppText>
-          {hint ? (
-            <AppText variant="help" tone={variantStyles[variant].hintTone} style={styles.centered}>
-              {hint}
-            </AppText>
-          ) : null}
-        </View>
+        <AppText
+          variant={isKiosk ? 'section' : 'bodyStrong'}
+          tone={apagado ? 'subtle' : variantStyles[variant].tone}
+          // UNA LÍNEA, porque con alto fijo la segunda se cortaría por la mitad y eso
+          // se lee como un fallo de pintado. Recortada con puntos suspensivos se lee
+          // como lo que es: un nombre que no cabe, y que hay que acortar en el texto.
+          numberOfLines={1}
+          style={styles.centered}
+        >
+          {label}
+        </AppText>
       )}
     </Pressable>
+  );
+
+  /**
+   * SIEMPRE ENVUELTO, tenga pista o no, y no por simetría: dentro de un `Row` el
+   * alineado vertical lo decide el padre (`alignItems: 'center'` por omisión), así que
+   * un botón con pista y otro sin ella se centrarían cada uno por su cuenta y los
+   * recuadros quedarían a distinta altura otra vez. Con el envoltorio en `flex-start`
+   * lo que se alinea es la parte de arriba, que es la que se compara al mirar.
+   */
+  return (
+    <View style={fullWidth ? styles.fullWidth : styles.autoWidth}>
+      {boton}
+      {hint ? (
+        <AppText variant="help" tone="subtle" style={[styles.centered, styles.hint]}>
+          {hint}
+        </AppText>
+      ) : null}
+    </View>
   );
 }
 
@@ -154,7 +208,6 @@ const estiloDeVariante = (colors: ColorSet) =>
       container: { backgroundColor: colors.primary500, borderWidth: 0 },
       pressed: { backgroundColor: colors.primary600 },
       tone: 'onPrimary' as const,
-      hintTone: 'onPrimary' as const,
       // El aspa de carga va del mismo color que el texto de encima, no blanco fijo: en
       // oscuro el acento se aclara y un aspa blanca encima casi no se ve.
       spinnerColor: colors.onPrimary,
@@ -163,7 +216,6 @@ const estiloDeVariante = (colors: ColorSet) =>
       container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
       pressed: { backgroundColor: colors.primary50 },
       tone: 'default' as const,
-      hintTone: 'subtle' as const,
       spinnerColor: colors.primary600,
     },
     danger: {
@@ -174,14 +226,12 @@ const estiloDeVariante = (colors: ColorSet) =>
       },
       pressed: { backgroundColor: colors.danger100 },
       tone: 'danger' as const,
-      hintTone: 'danger' as const,
       spinnerColor: colors.danger600,
     },
     ghost: {
       container: { backgroundColor: 'transparent', borderWidth: 0 },
       pressed: { backgroundColor: colors.primary50 },
       tone: 'primary' as const,
-      hintTone: 'subtle' as const,
       spinnerColor: colors.primary600,
     },
   }) as const;
@@ -190,11 +240,10 @@ const styles = StyleSheet.create({
   base: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: spacing.md,
+    alignSelf: 'stretch',
   },
   fullWidth: { alignSelf: 'stretch' },
   autoWidth: { alignSelf: 'flex-start' },
-  labels: { alignItems: 'center', gap: spacing.xs },
   centered: { textAlign: 'center' },
-  inactive: { opacity: 0.45 },
+  hint: { marginTop: spacing.xs },
 });

@@ -56,10 +56,19 @@ export function AppScreen({
   const padding = padded ? (isCompact ? spacing.base : spacing.xl) : 0;
 
   const content = scroll ? (
+    /*
+     * AQUÍ HABÍA UN `showsVerticalScrollIndicator={false}`, y se quita. En el teléfono
+     * no se notaba —el indicador nativo aparece al arrastrar y se va solo—, pero la web
+     * es desde septiembre la superficie principal, y en un navegador esa línea es lo
+     * único que dice que una pantalla sigue hacia abajo. Sin ella, Horas y Ajustes
+     * parecían terminar donde terminaba la ventana.
+     *
+     * El aspecto de la barra se define en `app/+html.tsx`, porque no hay forma de
+     * pintarla desde React Native.
+     */
     <ScrollView
       contentContainerStyle={[{ padding, gap: spacing.base }, style]}
       keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
     >
       {children}
     </ScrollView>

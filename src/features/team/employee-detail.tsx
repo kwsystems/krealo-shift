@@ -1,3 +1,4 @@
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { useUpcomingShifts, type TeamMember } from './hooks';
@@ -90,29 +91,34 @@ export function EmployeeDetailSheet({
             loading={busy}
             testID="employee-reset-pin"
           />
-          <Row gap={spacing.sm} wrap>
-            <SecondaryButton
-              label={t('common.edit')}
-              onPress={onEdit}
-              fullWidth={false}
-              testID="employee-edit"
-            />
-            {member.status === 'active' ? (
-              <DangerButton
-                label={t('team.deactivate')}
-                hint={t('team.deactivateHint')}
-                onPress={onToggleStatus}
-                fullWidth={false}
-                testID="employee-deactivate"
-              />
-            ) : (
-              <SecondaryButton
-                label={t('team.activate')}
-                onPress={onToggleStatus}
-                fullWidth={false}
-                testID="employee-activate"
-              />
-            )}
+          {/*
+            A MEDIAS IGUALES, y antes cada uno medía lo que medía su palabra: «Editar»
+            salía a 87 px y «Desactivar» a 139, debajo de un «Reiniciar PIN» de 512.
+            Tres botones de tres anchos distintos en un pie de nueve centímetros no se
+            leen como tres opciones de la misma decisión, se leen como tres controles
+            que acabaron ahí por casualidad. El primario sigue midiendo el doble que
+            cada uno de estos dos, que es la jerarquía que sí hay que ver.
+          */}
+          <Row gap={spacing.sm} align="flex-start">
+            <View style={estilos.mitad}>
+              <SecondaryButton label={t('common.edit')} onPress={onEdit} testID="employee-edit" />
+            </View>
+            <View style={estilos.mitad}>
+              {member.status === 'active' ? (
+                <DangerButton
+                  label={t('team.deactivate')}
+                  hint={t('team.deactivateHint')}
+                  onPress={onToggleStatus}
+                  testID="employee-deactivate"
+                />
+              ) : (
+                <SecondaryButton
+                  label={t('team.activate')}
+                  onPress={onToggleStatus}
+                  testID="employee-activate"
+                />
+              )}
+            </View>
           </Row>
         </Stack>
       }
@@ -263,3 +269,7 @@ export function TemporaryPinSheet({
     </AdminSheet>
   );
 }
+
+const estilos = StyleSheet.create({
+  mitad: { flex: 1 },
+});

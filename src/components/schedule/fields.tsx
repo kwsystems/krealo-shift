@@ -150,7 +150,12 @@ export function StatTile({
 
   if (onPress === undefined) {
     return (
-      <View accessible accessibilityLabel={`${label}: ${value}`} testID={testID}>
+      <View
+        style={styles.tileWrap}
+        accessible
+        accessibilityLabel={`${label}: ${value}`}
+        testID={testID}
+      >
         {content}
       </View>
     );
@@ -158,6 +163,7 @@ export function StatTile({
 
   return (
     <Pressable
+      style={styles.tileWrap}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}`}
       onPress={onPress}
@@ -195,11 +201,7 @@ export function SelectField<T extends string>({
           {emptyLabel}
         </AppText>
       ) : (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipRow}
-        >
+        <ScrollView horizontal contentContainerStyle={styles.chipRow}>
           {options.map((option) => (
             <Chip
               key={option.value}
@@ -410,21 +412,30 @@ export function AdminSheet({
           accessibilityRole="button"
           accessibilityLabel={t('common.close')}
         />
+        {/*
+          EL RELLENO LATERAL LO PONE CADA FRANJA, NO LA HOJA, y ese detalle es justo lo
+          que hacía que la barra de desplazamiento pareciera pegada de adorno: con el
+          relleno en la hoja, el `ScrollView` empezaba 24 px hacia dentro y su barra
+          quedaba flotando en mitad del margen, sin borde al que agarrarse. Puesta en el
+          contenido, la barra roza el borde de la hoja —que es donde el ojo la busca— y
+          el texto conserva su margen igual.
+        */}
         <View style={[styles.sheet, isWide ? styles.sheetWide : null]} testID={testID}>
-          <Row justify="space-between" align="center">
+          <Row justify="space-between" align="center" style={styles.sheetHeader}>
             <AppText variant="section" style={styles.sheetTitle}>
               {title}
             </AppText>
             <GhostButton label={t('common.close')} onPress={onClose} fullWidth={false} />
           </Row>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.sheetBody}
-          >
+          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetBody}>
             {children}
           </ScrollView>
-          {footer}
+          {/*
+            La línea de arriba solo aparece cuando hay pie. No es decoración: el cuerpo
+            se desplaza POR DEBAJO del pie, y sin nada que marque el corte, la última
+            fila visible parece la última que hay.
+          */}
+          {footer === undefined ? null : <View style={styles.sheetFooter}>{footer}</View>}
         </View>
       </View>
     </Modal>
@@ -563,8 +574,22 @@ const useEstilos = estilosDelTema((colors) => ({
   keyValue: { minHeight: spacing.xl },
   keyValueLabel: { flexShrink: 1 },
   keyValueValue: { flexShrink: 1, textAlign: 'right' },
+  /*
+   * LAS TARJETAS CRECEN PARA LLENAR SU FILA, y antes medían 132 fijos.
+   *
+   * Con un ancho fijo dentro de una fila que envuelve, el sobrante se quedaba al final
+   * de cada línea: en Horas, cinco tarjetas daban tres arriba y dos abajo, y la quinta
+   * —«Necesita revisión», justo la única que pide acción— se quedaba sola y descolgada,
+   * como si se hubiera caído de la fila. No era un fallo suyo: era el hueco de al lado.
+   *
+   * `flexBasis` manda dónde se parte la fila (sigue partiendo a los 132, o sea igual que
+   * antes) y `flexGrow` reparte lo que sobra entre las que hayan caído en esa línea. El
+   * borde derecho queda recto, que es lo que hace que se lean como una sola fila de
+   * cifras y no como tarjetas sueltas.
+   */
+  tileWrap: { flexGrow: 1, flexBasis: 132, minWidth: 132 },
   tile: {
-    minWidth: 132,
+    flex: 1,
     minHeight: sizes.touchTargetPreferred + spacing.lg,
     gap: spacing.xs,
     borderRadius: radii.card,
@@ -617,14 +642,27 @@ const useEstilos = estilosDelTema((colors) => ({
   },
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25, 23, 42, 0.35)' },
   backdropCentered: { justifyContent: 'center', alignItems: 'center' },
-  backdropTouchable: { flex: 1 },
+  /*
+   * ABSOLUTO, Y ERA `flex: 1`. Ahí estaba la hoja descolocada.
+   *
+   * El fondo y la hoja eran dos hermanos en una columna. Mientras la columna alineaba
+   * a lo ancho por omisión (`stretch`), el hermano de arriba medía todo el ancho y
+   * hacía de zona de cierre. Pero en pantalla ancha la columna pasa a
+   * `alignItems: 'center'`, y entonces un hijo sin contenido ni ancho propio se encoge
+   * a CERO: la zona de cierre desaparecía —tocar fuera no cerraba— y, como seguía con
+   * `flex: 1`, se quedaba con todo el alto sobrante y empujaba la hoja contra el borde
+   * de abajo. Centrar no centraba nada.
+   *
+   * Fuera del flujo no compite por espacio: cubre el modal entero para cerrar al tocar
+   * y deja que la hoja se coloque donde diga la columna. La hoja va DESPUÉS en el
+   * árbol, así que queda por encima sin necesidad de z-index.
+   */
+  backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   sheet: {
     backgroundColor: colors.surface,
     borderTopLeftRadius: radii.card,
     borderTopRightRadius: radii.card,
-    padding: spacing.xl,
-    paddingBottom: spacing.xxl,
-    gap: spacing.md,
+    paddingTop: spacing.base,
     maxHeight: '85%',
     ...shadows.floating,
   },
@@ -634,8 +672,16 @@ const useEstilos = estilosDelTema((colors) => ({
     maxWidth: '92%',
     marginBottom: 0,
   },
+  sheetHeader: { paddingHorizontal: spacing.xl, paddingBottom: spacing.sm },
   sheetTitle: { flexShrink: 1 },
-  sheetBody: { gap: spacing.base, paddingBottom: spacing.base },
+  sheetBody: { gap: spacing.base, paddingHorizontal: spacing.xl, paddingBottom: spacing.base },
+  sheetFooter: {
+    paddingHorizontal: spacing.xl,
+    paddingTop: spacing.base,
+    paddingBottom: spacing.xxl,
+    borderTopWidth: borderWidth.hairline,
+    borderTopColor: colors.border,
+  },
   notice: {
     borderRadius: radii.card,
     borderWidth: borderWidth.hairline,
