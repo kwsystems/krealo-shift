@@ -29,6 +29,7 @@ import { getDataClient } from '@/lib/firebase/query';
 import { authSource } from '@/lib/firebase/session';
 import { DEMO_LOCATION_1, DEMO_ORG_ID } from '@/lib/demo/seed';
 import { TABLES } from '@/lib/firebase/tables';
+import { submitTimeEditRequest } from '@/features/kiosk/api';
 import { BREAK_REASONS } from '@/domain/break-reason';
 
 const lunes = (() => {
@@ -161,6 +162,41 @@ describe('modo demostración', () => {
       locationId: DEMO_LOCATION_1,
     });
     expect(solicitudes.length).toBeGreaterThan(0);
+  });
+
+  /**
+   * «OLVIDÉ MARCAR» DESDE EL KIOSCO, DE PUNTA A PUNTA EN LA DEMO.
+   *
+   * La demo devolvía `{ ok: true }` y el cliente exige `{ requestId, status }`: la
+   * persona rellenaba el formulario y recibía «No pudimos completar la acción». Es la
+   * segunda vez que una respuesta inventada de la demo no se parece a la que valida
+   * Zod (la primera fue `verify-pin`), y las dos se encontraron recorriendo la app en
+   * el navegador. Esta prueba llama a la MISMA función que llama la pantalla —con su
+   * validación Zod dentro— y exige además que la solicitud llegue a la bandeja: si la
+   * demo vuelve a decir «enviado» sin guardar nada, esto lo caza.
+   *
+   * Y CAZÓ UN SEGUNDO FALLO NADA MÁS NACER: pasaba sola y fallaba detrás de la prueba
+   * que cierra sesión. `functions` se construía una vez y se quedaba con el almacén
+   * viejo cuando `reiniciar()` sembraba uno nuevo; `from()` sí leía el nuevo. Así que
+   * el kiosco «registraba» en un sitio y Horas miraba en otro. Por eso esta prueba va
+   * DESPUÉS de la que cierra sesión, a propósito: el orden es parte de lo que prueba.
+   */
+  it('«olvidé marcar» se envía y aparece en la bandeja', async () => {
+    const antes = (
+      await fetchRequests({ organizationId: DEMO_ORG_ID, locationId: DEMO_LOCATION_1 })
+    ).length;
+    const resultado = await submitTimeEditRequest({
+      actionToken: 'demo-action-token-suficientemente-largo',
+      kind: 'forgot_clock_out',
+      proposedAt: new Date().toISOString(),
+      reason: 'Salí corriendo y no marqué.',
+    });
+    expect(resultado.ok).toBe(true);
+    if (resultado.ok) expect(resultado.data.status).toBe('pending');
+    const despues = (
+      await fetchRequests({ organizationId: DEMO_ORG_ID, locationId: DEMO_LOCATION_1 })
+    ).length;
+    expect(despues).toBe(antes + 1);
   });
 
   /**

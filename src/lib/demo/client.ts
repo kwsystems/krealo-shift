@@ -1,6 +1,6 @@
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
-import { crearAlmacen, DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID } from './seed';
+import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
 import type { DataClient } from '@/lib/firebase/query';
 
 /**
@@ -390,8 +390,48 @@ function crearFunctions(almacen: Almacen) {
           return sinError({ ok: true, accepted: 0, rejected: 0 });
         case 'refresh-kiosk-roster':
           return sinError({ ok: true, employees: [] });
-        case 'submit-time-edit-request':
-          return sinError({ ok: true });
+        /*
+         * «OLVIDÉ MARCAR» TIENE QUE FUNCIONAR EN LA DEMO, y no funcionaba.
+         *
+         * Devolvía `{ ok: true }`, y el cliente valida `{ requestId, status: 'pending' }`
+         * con Zod. Resultado: la persona rellenaba el formulario entero, pulsaba Guardar
+         * y recibía «No pudimos completar la acción». Es EXACTAMENTE el mismo fallo que
+         * ya tuvo `verify-pin` aquí arriba —una forma inventada que no se parece a la
+         * que el cliente espera—, y se descubrió igual: recorriendo el flujo en el
+         * navegador para enseñárselo a Andree, no leyendo el código. En el servidor de
+         * verdad la función devuelve la forma correcta; solo la demo mentía.
+         *
+         * Además la solicitud se GUARDA, para que aparezca en la Bandeja del gerente
+         * como pasaría de verdad. Sin eso, la demo diría «enviamos tu solicitud» y la
+         * bandeja seguiría igual: otra contradicción silenciosa.
+         */
+        case 'submit-time-edit-request': {
+          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const empleada = (almacen.get('employees') ?? [])[0];
+          const kind = String(cuerpo.kind ?? 'forgot_clock_out');
+          const proposedAt = String(cuerpo.proposedAt ?? new Date().toISOString());
+          const requestId = `demo-solicitud-${Date.now()}`;
+          almacen.set('time_edit_requests', [
+            ...(almacen.get('time_edit_requests') ?? []),
+            {
+              id: requestId,
+              organization_id: DEMO_ORG_ID,
+              employee_id: empleada?.id ?? 'demo-empleado-1',
+              location_id: DEMO_LOCATION_1,
+              work_session_id: null,
+              target_date: proposedAt.slice(0, 10),
+              kind,
+              proposed_value:
+                kind === 'forgot_clock_in' ? { startsAt: proposedAt } : { endsAt: proposedAt },
+              reason: String(cuerpo.reason ?? ''),
+              status: 'pending',
+              reviewer_comment: null,
+              reviewed_at: null,
+              created_at: new Date().toISOString(),
+            },
+          ]);
+          return sinError({ requestId, status: 'pending' });
+        }
         case 'attach-photo':
           return sinError({ ok: true });
         /*
@@ -528,7 +568,20 @@ export function getDemoClient(): DataClient {
     from: (nombre: string) => crearFrom(almacen)(nombre),
     rpc: (nombre: string, argumentos?: Record<string, unknown>) =>
       crearRpc(almacen)(nombre, argumentos),
-    functions: crearFunctions(almacen),
+    /*
+     * IGUAL QUE `from` Y `rpc`: AL USAR, NO AL CONSTRUIR. `functions` era la única que
+     * se construía una vez, y capturaba el almacén con el que nació. Tras cerrar sesión
+     * —que llama a `reiniciar()` y siembra un almacén nuevo— cada `invoke` del kiosco
+     * (verificar PIN, fichar, «olvidé marcar») seguía escribiendo en el VIEJO mientras
+     * `from()` leía el nuevo: el reloj decía «entrada registrada» y Horas no la veía.
+     *
+     * Lo cazó una prueba que envía «olvidé marcar» y espera verla en la bandeja: pasaba
+     * sola y fallaba detrás de la prueba que cierra sesión. Dos almacenes, una app.
+     */
+    functions: {
+      invoke: (nombre: string, opciones?: { body?: unknown }) =>
+        crearFunctions(almacen).invoke(nombre, opciones),
+    },
     storage: crearStorage(),
   };
 
