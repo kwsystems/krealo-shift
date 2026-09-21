@@ -640,7 +640,19 @@ const useEstilos = estilosDelTema((colors) => ({
     borderWidth: borderWidth.hairline,
     borderColor: colors.primary200,
   },
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25, 23, 42, 0.35)' },
+  /*
+   * NEGRO, Y ERA `rgba(25, 23, 42, 0.35)`. Ese valor es `ink900` del tema CLARO escrito
+   * a mano, y por eso el velo no velaba nada en oscuro: el lienzo oscuro es #131118, o
+   * sea MÁS OSCURO que el propio velo, así que en vez de atenuar el fondo lo ACLARABA un
+   * poco. Se ve en cuanto se abre cualquier confirmación en tema oscuro: el panel de
+   * detrás se sigue leyendo entero y el diálogo no separa de nada.
+   *
+   * Una sombra es ausencia de luz en los dos temas —el mismo razonamiento que hay en
+   * `shadows.card`—, así que el velo es negro literal y lo que cambia es cuánto se nota
+   * sobre lo que haya debajo. Con 0,45 el fondo queda legible pero claramente detrás,
+   * que es lo que pide una tarea modal: atenuar para enfocar, no tapar.
+   */
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.45)' },
   backdropCentered: { justifyContent: 'center', alignItems: 'center' },
   /*
    * ABSOLUTO, Y ERA `flex: 1`. Ahí estaba la hoja descolocada.

@@ -408,7 +408,8 @@ const useEstilos = estilosDelTema((colors) => ({
     color: colors.ink900,
     backgroundColor: colors.surface,
   },
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25, 23, 42, 0.35)' },
+  // Negro literal y no el `ink900` claro que había: el porqué, en `fields.tsx`.
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.45)' },
   backdropCentered: { justifyContent: 'center', alignItems: 'center' },
   backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   sheet: {
