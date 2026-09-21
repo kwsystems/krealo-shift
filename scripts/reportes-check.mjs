@@ -34,8 +34,15 @@ if (DIR === undefined) {
   process.exit(2);
 }
 
-/** Etiquetas de las seis pestañas, en el orden en que las pinta el layout. */
-const PESTANAS = ['Inicio', 'Equipo', 'Horario', 'Horas', 'Reportes', 'Más'];
+/**
+ * Etiquetas de las SIETE pestañas, en el orden en que las pinta el layout.
+ *
+ * Eran seis con «Más»; al partirlo en Bandeja y Ajustes son siete, y en un teléfono
+ * de 390 px tocan a ~55 px cada una. El layout encoge la etiqueta a 10 px justo por
+ * eso, y esta lista es lo que comprueba que ninguna se corta. Si alguien añade una
+ * octava, esto es lo que se lo va a decir.
+ */
+const PESTANAS = ['Inicio', 'Equipo', 'Horario', 'Horas', 'Reportes', 'Bandeja', 'Ajustes'];
 
 const problemas = [];
 const { base, cerrar } = await servirExport(DIR, 8125);
@@ -110,6 +117,26 @@ function soloHoras(texto) {
    * denunciaba un fallo que no existía mientras dejaba sin mirar el alto, que es donde
    * ahí vive el dato. Un arnés que mide lo que no varía no comprueba nada.
    */
+  /*
+   * SE MIDE LA SEMANA ANTERIOR, no la actual, y no es por comodidad.
+   *
+   * La actual depende del día: un lunes tiene un solo día de datos, así que «semana
+   * por días» tiene una columna, nadie ha hecho horas extra y no hay pausas que
+   * repartir por motivo. Los tres gráficos salían «vacíos» y el arnés acusaba a la app
+   * de un fallo que era del calendario. Se vio el lunes 2026-09-21.
+   *
+   * Lo que este bloque comprueba es que LOS GRÁFICOS TIENEN ESCALA —que pintan marcas
+   * y que no miden todas lo mismo—, y eso es una propiedad del código del gráfico, no
+   * de la semana. Cualquier semana con datos lo demuestra, y la anterior siempre los
+   * tiene: la semilla la siembra entera. De paso, es el único sitio que pulsa
+   * «Semana anterior», que antes no ejercitaba nadie.
+   *
+   * El bloque 1 (Reportes contra Horas) se queda en la semana actual a propósito: ahí
+   * lo que importa es que las DOS pantallas digan lo mismo, y las dos abren en hoy.
+   */
+  await pagina.locator('[data-testid="week-previous"]').click();
+  await pagina.waitForTimeout(2000);
+
   for (const [nombre, testId, eje] of [
     ['quién más horas', 'ranking-hours', 'width'],
     ['motivos de pausa', 'ranking-reasons', 'width'],
@@ -212,7 +239,21 @@ function soloHoras(texto) {
       .slice(1)
       .map((linea) => Number.parseFloat(linea.split(',').slice(-6)[0] ?? '0'))
       .reduce((a, b) => a + b, 0);
-    const [hh = '0', mm = '0'] = (reporteNeto ?? '0:0').split(':');
+    /*
+     * EL TOTAL SE LEE AHORA, no se reutiliza el del bloque 1. Aquel se tomó en la
+     * semana actual; el bloque 3 navegó a la anterior, y el CSV exporta LA SEMANA QUE
+     * SE VE. La primera versión de este cambio comparaba el CSV de la semana anterior
+     * (189,70 h) con el total viejo de la actual (17,23 h) y acusaba a la app de no
+     * cuadrar, cuando la app había hecho justo lo correcto.
+     *
+     * Leerlo aquí convierte la comparación en lo que el comentario de arriba promete
+     * —«lo exportado es el mismo periodo que lo mirado»— y de paso comprueba algo que
+     * antes nadie comprobaba: que exportar desde otra semana exporta ESA semana y no la
+     * de hoy. Si alguien vuelve a colgar el exportador de `thisWeekStart` en vez de
+     * `weekStart`, esto lo caza.
+     */
+    const netoEnPantalla = soloHoras(await leerCasilla(pagina, 'report-total'));
+    const [hh = '0', mm = '0'] = (netoEnPantalla ?? '0:0').split(':');
     const pantalla = Number.parseInt(hh, 10) + Number.parseInt(mm, 10) / 60;
     const desvio = Math.abs(suma - pantalla);
     console.log(
@@ -236,7 +277,7 @@ function soloHoras(texto) {
   await contexto.close();
 }
 
-// ------------------------------------- 2. las seis pestañas en un teléfono
+// ------------------------------------ 2. las siete pestañas en un teléfono
 {
   const contexto = await navegador.newContext({ viewport: { width: 390, height: 844 } });
   const pagina = await contexto.newPage();
@@ -415,5 +456,5 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  '\nOK: Reportes cuadra con Horas, los gráficos tienen escala y las seis pestañas caben.',
+  '\nOK: Reportes cuadra con Horas, los gráficos tienen escala y las siete pestañas caben.',
 );

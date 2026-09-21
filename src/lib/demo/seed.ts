@@ -191,12 +191,33 @@ export function crearAlmacen(): Almacen {
   }));
 
   // ---------------------------------------------------------------- turnos
+  /*
+   * DOS SEMANAS, NO UNA: la anterior entera y la actual hasta hoy.
+   *
+   * La semilla sembraba solo la semana en curso, y los fichajes solo de sus días ya
+   * transcurridos. Un LUNES eso es cero: cero fichajes, cero pausas, cero horas extra,
+   * una sola columna en «Cómo va la semana». Consecuencias, todas vistas el lunes
+   * 2026-09-21: `datos-demo.test.ts` fallaba —el CI entero en rojo un día de cada
+   * siete—, `reportes:check` denunciaba tres gráficos vacíos, y las solicitudes de
+   * abajo apuntaban a `sesionId(2)` y `sesionId(3)`, que ese día no existían.
+   *
+   * Nadie lo había visto porque nadie había pusheado un lunes. Con la semana anterior
+   * sembrada entera (seis días, publicada), cualquier día de la semana tiene datos con
+   * los que comparar, «Semana anterior» en Reportes lleva a algo, y esas dos sesiones
+   * existen siempre.
+   *
+   * `dia` va de -7 (lunes de la semana pasada) a 6. La rotación de personas usa el día
+   * de la semana y no el índice, para que la semana actual quede EXACTAMENTE como
+   * estaba —los arneses comparan sus totales— y la anterior repita el mismo patrón.
+   */
+  const esDomingo = (dia: number) => ((dia % 7) + 7) % 7 === 6;
   const turnos: Fila[] = [];
   let contadorTurno = 0;
-  for (let dia = 0; dia < 7; dia += 1) {
+  for (let dia = -7; dia < 7; dia += 1) {
     const fecha = sumarDias(lunes, dia);
     // Domingo cerrado: una semana con siete días idénticos no se parece a ninguna tienda.
-    if (dia === 6) continue;
+    if (esDomingo(dia)) continue;
+    const diaDeLaSemana = ((dia % 7) + 7) % 7;
     const plantilla = [
       { desde: 8, hasta: 14 },
       { desde: 14, hasta: 20 },
@@ -204,7 +225,7 @@ export function crearAlmacen(): Almacen {
     plantilla.forEach((tramo, tramoIndice) => {
       for (let puesto = 0; puesto < 3; puesto += 1) {
         contadorTurno += 1;
-        const indiceEmpleado = (dia + tramoIndice * 3 + puesto) % (PERSONAS.length - 1);
+        const indiceEmpleado = (diaDeLaSemana + tramoIndice * 3 + puesto) % (PERSONAS.length - 1);
         const enBorrador = dia >= 5;
         turnos.push({
           id: turnoId(contadorTurno),
@@ -220,8 +241,9 @@ export function crearAlmacen(): Almacen {
           manager_note: puesto === 0 && dia === 2 ? 'Entrega de proveedor a las 9.' : null,
           status: enBorrador ? 'draft' : 'published',
           publication_version: enBorrador ? 0 : 7,
-          published_at: enBorrador ? null : aISO(sumarDias(lunes, -2)),
-          updated_at: aISO(sumarDias(lunes, -2)),
+          // La semana pasada se publicó el sábado anterior a ella; esta, el sábado pasado.
+          published_at: enBorrador ? null : aISO(sumarDias(lunes, dia < 0 ? -9 : -2)),
+          updated_at: aISO(sumarDias(lunes, dia < 0 ? -9 : -2)),
         });
       }
     });
@@ -251,10 +273,21 @@ export function crearAlmacen(): Almacen {
   let contadorSesion = 0;
   let contadorEvento = 0;
 
-  // Días cerrados: de lunes hasta ayer.
-  for (let dia = 0; dia < diaSemana; dia += 1) {
+  // Días cerrados: del lunes de la semana ANTERIOR hasta ayer, saltando domingos. Ver
+  // el porqué de las dos semanas en el bloque de turnos.
+  for (let dia = -7; dia < diaSemana; dia += 1) {
+    if (esDomingo(dia)) continue;
     const fecha = sumarDias(lunes, dia);
-    for (let persona = 0; persona < 6; persona += 1) {
+    /*
+     * LA SEMANA ANTERIOR NO ES PLANA. Con seis personas idénticas cada día, sus seis
+     * columnas en «Cómo va la semana» medían exactamente lo mismo, y `reportes:check`
+     * lo denunció como «la escala no se está aplicando». Tenía razón en el síntoma y no
+     * en la causa: la escala funcionaba, los datos eran los que no variaban. Una tienda
+     * no tiene la misma plantilla todos los días, así que la semana pasada tampoco:
+     * seis personas los días fuertes, cuatro el jueves. La actual no se toca.
+     */
+    const plantilla = dia < 0 ? ([6, 5, 6, 4, 6, 5][((dia % 7) + 7) % 7] ?? 6) : 6;
+    for (let persona = 0; persona < plantilla; persona += 1) {
       contadorSesion += 1;
       const entrada = conHora(fecha, 8, persona % 2 === 0 ? 0 : 9);
       /*
