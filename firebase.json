@@ -26,6 +26,29 @@
     ],
     "headers": [
       {
+        "//": "EL ORDEN ES LO QUE HACE QUE ESTO FUNCIONE, y la version anterior lo tenia al reves. Firebase casa las cabeceras contra la ruta PEDIDA, no contra la reescrita: la regla `/index.html` no casaba ni con `/` ni con `/team`, asi que el documento que apunta a todos los demas se servia con `max-age=3600`. Se vio pidiendo la URL publicada, no leyendo este archivo. Por eso el `no-cache` va en el comodin, y las dos reglas de un ano van DESPUES para ganarle en los archivos con hash.",
+        "source": "**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          },
+          {
+            "key": "X-Content-Type-Options",
+            "value": "nosniff"
+          },
+          {
+            "key": "Referrer-Policy",
+            "value": "strict-origin-when-cross-origin"
+          },
+          {
+            "key": "X-Frame-Options",
+            "value": "DENY"
+          }
+        ]
+      },
+      {
+        "//": "Estos llevan un hash en el nombre: si cambia el contenido, cambia el nombre. Por eso se cachean un ano sin riesgo.",
         "source": "/_expo/**",
         "headers": [
           {
@@ -42,33 +65,19 @@
             "value": "public, max-age=31536000, immutable"
           }
         ]
-      },
-      {
-        "source": "/index.html",
-        "headers": [
-          {
-            "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
-          }
-        ]
-      },
-      {
-        "source": "**",
-        "headers": [
-          {
-            "key": "X-Content-Type-Options",
-            "value": "nosniff"
-          },
-          {
-            "key": "Referrer-Policy",
-            "value": "strict-origin-when-cross-origin"
-          },
-          {
-            "key": "X-Frame-Options",
-            "value": "DENY"
-          }
-        ]
       }
     ]
+  },
+  "emulators": {
+    "//": "Puerto propio y no el 8080 por defecto: en una maquina de trabajo ese puerto lo tiene casi siempre otra cosa, y el emulador no arranca con un mensaje que habla de puertos y no de este proyecto.",
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8099
+    },
+    "singleProjectMode": true,
+    "hub": {
+      "host": "127.0.0.1",
+      "port": 4401
+    }
   }
 }

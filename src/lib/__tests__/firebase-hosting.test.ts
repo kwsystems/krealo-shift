@@ -16,9 +16,16 @@ import { join } from 'node:path';
  *    publicación, a veces durante días, y no hay nada que puedas decirles que lo
  *    arregle.
  *
- * Se comprueba el archivo de configuración y no un despliegue de verdad porque
- * desplegar necesita la cuenta de Firebase de Andree. Esto cubre lo que sí se puede
- * cubrir desde aquí: que la configuración siga diciendo lo que tiene que decir.
+ * ESTA PRUEBA PASABA CON LA CONFIGURACIÓN ROTA, y vale saber por qué. Comprobaba que
+ * existiera una entrada con `source: '/index.html'` y `no-cache`. Existía. Pero
+ * Firebase casa las cabeceras contra la ruta PEDIDA, no contra la reescrita: nadie
+ * pide `/index.html` —piden `/` o `/team`—, así que esa regla no se aplicaba nunca y
+ * el documento se servía con `max-age=3600`. Se descubrió pidiendo la URL publicada
+ * con `fetch` y mirando la cabecera de verdad, no leyendo este archivo.
+ *
+ * Por eso ahora se comprueba el ORDEN y no la existencia: el `no-cache` tiene que
+ * estar en el comodín —la única regla que casa con lo que la gente pide— y las de un
+ * año tienen que ir DESPUÉS para ganarle solo en los archivos con hash.
  */
 
 type ConfiguracionHosting = {
@@ -43,10 +50,10 @@ describe('firebase.json', () => {
     expect(configuracion.hosting.public).toBe('dist');
   });
 
-  it('index.html no se cachea: si no, nadie ve la versión nueva', () => {
+  it('el no-cache va en el COMODÍN, que es lo único que casa con lo que se pide', () => {
     const cabeceras = configuracion.hosting.headers ?? [];
-    const deIndex = cabeceras.find((entrada) => entrada.source === '/index.html');
-    const cacheControl = deIndex?.headers.find((h) => h.key === 'Cache-Control');
+    const comodin = cabeceras.find((entrada) => entrada.source === '**');
+    const cacheControl = comodin?.headers.find((h) => h.key === 'Cache-Control');
 
     expect(cacheControl?.value).toMatch(/no-cache|no-store|max-age=0/);
   });
@@ -57,6 +64,16 @@ describe('firebase.json', () => {
     const cacheControl = deExpo?.headers.find((h) => h.key === 'Cache-Control');
 
     expect(cacheControl?.value).toContain('max-age=31536000');
+  });
+
+  it('y van DESPUÉS del comodín, o el no-cache les ganaría a ellos', () => {
+    // El orden es la mitad del arreglo. Con las reglas de un año antes del comodín,
+    // el `no-cache` se aplicaría también a los bundles con hash y se volverían a
+    // descargar 6 MB en cada visita.
+    const fuentes = (configuracion.hosting.headers ?? []).map((entrada) => entrada.source);
+
+    expect(fuentes.indexOf('**')).toBeLessThan(fuentes.indexOf('/_expo/**'));
+    expect(fuentes.indexOf('**')).toBeLessThan(fuentes.indexOf('/assets/**'));
   });
 
   it('el panel no se puede incrustar en un iframe de otro sitio', () => {

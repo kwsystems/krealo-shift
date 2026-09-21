@@ -174,6 +174,8 @@ const OPERATORS: Record<string, WhereFilterOp> = {
 
 class SelectBuilder<T = DocumentData[]> implements PromiseLike<Outcome<T>> {
   private readonly constraints: QueryConstraint[] = [];
+  /** Los mismos filtros en claro: un `QueryConstraint` ya montado no se puede leer. */
+  private readonly filtros: { field: string; op: string; value: unknown }[] = [];
   private singleRow = false;
   private requireRow = false;
   /** `in` con lista vacia: no hay nada que consultar y no se toca la red. */
@@ -188,6 +190,7 @@ class SelectBuilder<T = DocumentData[]> implements PromiseLike<Outcome<T>> {
     const operator = OPERATORS[op];
     if (operator === undefined) throw new Error(`Operador no soportado: ${op}`);
     this.constraints.push(where(field, operator, value));
+    this.filtros.push({ field, op, value });
     return this;
   }
 
@@ -251,9 +254,48 @@ class SelectBuilder<T = DocumentData[]> implements PromiseLike<Outcome<T>> {
     return this as unknown as SelectBuilder<DocumentData | null>;
   }
 
+  /**
+   * `.eq('id', X)` a secas es UNA LECTURA DE DOCUMENTO, no una consulta.
+   *
+   * ESTO NO ES UNA OPTIMIZACION, ERA UN FALLO. La regla de `organizations` dice
+   * `allow read: if isMember(orgId)`, donde `orgId` es el id del DOCUMENTO. Pedirlo
+   * con `where('id', '==', ...)` convierte la lectura en una consulta sobre un campo,
+   * y ahi esa regla no se resuelve igual: Firestore devolvia
+   * `PERMISSION_DENIED` sobre un documento que el mismo usuario si podia leer
+   * directamente. El panel entero decia «Falta un permiso» con la membresia correcta
+   * en la base.
+   *
+   * Se encontro pidiendo las tres consultas del arranque con el token real del
+   * usuario: membresias 200, ubicaciones 200, organizacion 403. Las otras dos filtran
+   * por un CAMPO (`user_id`, `organization_id`) y por eso nunca fallaron.
+   *
+   * Ademas sale mas barato: una lectura en vez de una consulta, y sin indice.
+   */
+  private idDirecto(): string | null {
+    if (this.filtros.length !== 1) return null;
+    const unico = this.filtros[0];
+    if (unico === undefined || unico.field !== 'id' || unico.op !== 'eq') return null;
+    return typeof unico.value === 'string' && unico.value !== '' ? unico.value : null;
+  }
+
   private async run(): Promise<Outcome<T>> {
     if (this.matchesNothing) {
       return { data: (this.singleRow ? null : []) as T, error: null };
+    }
+
+    const porId = this.idDirecto();
+    if (porId !== null) {
+      const snapshot = await getDoc(doc(this.db, this.table, porId));
+      const fila = snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null;
+
+      if (!this.singleRow) return { data: (fila === null ? [] : [fila]) as T, error: null };
+      if (fila === null && this.requireRow) {
+        return {
+          data: null as T,
+          error: { code: 'not-found', message: 'No se encontro ninguna fila.' },
+        };
+      }
+      return { data: fila as T, error: null };
     }
 
     const snapshot = await getDocs(query(collection(this.db, this.table), ...this.constraints));
