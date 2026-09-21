@@ -397,8 +397,25 @@ export function crearAlmacen(): Almacen {
     const entrada = new Date(ahora.getTime() - (8 * 60 + persona * 7) * 60000);
     const salida = new Date(ahora.getTime() - (2 * 60 + persona * 5) * 60000);
     const brutos = Math.round((salida.getTime() - entrada.getTime()) / 60000);
-    const descansoNoPagado = 30;
+    /*
+     * EL DESCANSO SE DERIVA IGUAL QUE ARRIBA, y aquí estaba escrito a mano: «30 minutos
+     * no pagados», sin motivo y sin intervalo que lo respaldara. La sesión afirmaba una
+     * pausa que no existía en ninguna tabla.
+     *
+     * Un lunes eso dejaba `break_intervals` VACÍA —el bucle de días cerrados no corre
+     * ningún día— así que Reportes enseñaba «en qué se va el tiempo» en blanco mientras
+     * las filas de Horas decían que sí hubo descansos. La demostración se contradecía a
+     * sí misma un día de cada siete, y con ella la prueba que lo vigila.
+     */
+    const motivo = MOTIVOS_DEMO[persona % MOTIVOS_DEMO.length] ?? 'meal';
+    const minutosPausa = MINUTOS_POR_MOTIVO[motivo];
+    const pagada = DEFAULT_PAID_REASONS[motivo];
+    const tipoPausa = pagada ? 'paid' : 'unpaid';
+    const descansoPagado = pagada ? minutosPausa : 0;
+    const descansoNoPagado = pagada ? 0 : minutosPausa;
     const netos = brutos - descansoNoPagado;
+    const inicioPausa = new Date(entrada.getTime() + 3 * 60 * 60000);
+    const finPausa = new Date(inicioPausa.getTime() + minutosPausa * 60000);
     const ubicacion = persona % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1;
     const revisar = persona === 7;
     /*
@@ -419,7 +436,7 @@ export function crearAlmacen(): Almacen {
       starts_at: aISO(entrada),
       ends_at: aISO(salida),
       gross_minutes: brutos,
-      paid_break_minutes: 0,
+      paid_break_minutes: descansoPagado,
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
       status: revisar ? 'needs_review' : 'complete',
@@ -433,16 +450,43 @@ export function crearAlmacen(): Almacen {
       work_date: fechaClave(hoy),
       sessions: 1,
       gross_minutes: brutos,
-      paid_break_minutes: 0,
+      paid_break_minutes: descansoPagado,
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
       needs_review: revisar,
       flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
     });
 
-    for (const [tipo, cuando] of [
-      ['clock_in', entrada],
-      ['clock_out', salida],
+    intervalos.push({
+      id: pausaId(contadorSesion),
+      work_session_id: sesionId(contadorSesion),
+      organization_id: DEMO_ORG_ID,
+      employee_id: empleadoId(persona + 1),
+      starts_at: aISO(inicioPausa),
+      ends_at: aISO(finPausa),
+      duration_minutes: minutosPausa,
+      break_type: tipoPausa,
+      break_reason: motivo,
+    });
+
+    // Del MISMO intervalo, por lo mismo que arriba: el gráfico de motivos no puede
+    // discrepar de las pausas que lo alimentan.
+    pausasPorMotivo.push({
+      organization_id: DEMO_ORG_ID,
+      location_id: ubicacion,
+      employee_id: empleadoId(persona + 1),
+      work_date: fechaClave(hoy),
+      break_reason: motivo,
+      break_type: tipoPausa,
+      pauses: 1,
+      minutes: minutosPausa,
+    });
+
+    for (const [tipo, cuando, descanso] of [
+      ['clock_in', entrada, null],
+      ['break_start', inicioPausa, tipoPausa],
+      ['break_end', finPausa, tipoPausa],
+      ['clock_out', salida, null],
     ] as const) {
       contadorEvento += 1;
       eventos.push({
@@ -451,7 +495,7 @@ export function crearAlmacen(): Almacen {
         employee_id: empleadoId(persona + 1),
         location_id: ubicacion,
         event_type: tipo,
-        break_type: null,
+        break_type: descanso,
         occurred_at: aISO(cuando),
         source: 'kiosk',
         is_offline: false,
