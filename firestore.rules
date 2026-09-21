@@ -13,10 +13,13 @@ rules_version = '2';
 //    lleva su `where` de organizacion o de ubicacion: el discriminador cuando algo
 //    falla es que el documento suelto SI se lee y la lista no.
 //
-// 2. CADA `get()` SE PAGA Y SE CUENTA. Se lee UN solo documento de membresia por
-//    evaluacion, con id determinista `{orgId}_{uid}`, y de ahi salen rol, estado,
-//    ubicaciones gestionadas y el empleado vinculado. Denormalizar esos cuatro datos
-//    en la membresia es lo que evita encadenar tres lecturas en cada regla.
+// 2. CADA LECTURA SE PAGA Y SE CUENTA, Y EL TECHO SON DIEZ POR PETICION. En una
+//    consulta la regla se evalua por cada documento devuelto, asi que una regla que
+//    lee dos documentos revienta cualquier lista de mas de cinco filas. Aqui se lee
+//    UN solo documento de membresia, siempre el mismo —id determinista
+//    `{orgId}_{uid}`—, y Firestore lo cachea dentro de la peticion: una llamada para
+//    toda la consulta. De ese documento salen rol, estado, ubicaciones gestionadas y
+//    el empleado vinculado; denormalizarlos ahi es lo que evita encadenar lecturas.
 //
 // 3. LO QUE ERA `security definer` AHORA ES CLOUD FUNCTION. Fichajes, PIN,
 //    credenciales de kiosco y proyecciones de sesion NO son escribibles por el
@@ -33,13 +36,34 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    /**
+     * UNA SOLA LECTURA, Y NUNCA `exists()`. Esto no es estilo: es lo que decide si una
+     * lista de ocho filas se puede leer o no.
+     *
+     * Firestore limita a DIEZ las lecturas de documento por peticion, y en una
+     * consulta la regla se evalua por cada documento devuelto. La version anterior
+     * usaba `exists()` + `get()` sobre la MISMA ruta, que cuentan como dos llamadas
+     * distintas: ocho empleados x 2 = 16, por encima del techo, y la lista entera se
+     * denegaba. El sintoma era «Falta un permiso» en un panel cuyo propietario tenia
+     * la membresia correcta — y las pantallas con pocas filas funcionaban, que es lo
+     * que hacia el fallo tan confuso.
+     *
+     * Con una sola `get()` y siempre a la misma ruta, Firestore la cachea dentro de la
+     * peticion: UNA llamada para toda la consulta, lea ocho documentos o quinientos.
+     *
+     * `get()` sobre un documento que no existe devuelve `null`, asi que comprobar
+     * `!= null` sustituye a `exists()` sin perder nada.
+     */
+    function membershipDoc(orgId) {
+      return get(/databases/$(database)/documents/organization_memberships/$(orgId + '_' + request.auth.uid));
+    }
+
     function membership(orgId) {
-      return get(/databases/$(database)/documents/organization_memberships/$(orgId + '_' + request.auth.uid)).data;
+      return membershipDoc(orgId).data;
     }
 
     function membershipExists(orgId) {
-      return signedIn()
-        && exists(/databases/$(database)/documents/organization_memberships/$(orgId + '_' + request.auth.uid));
+      return signedIn() && membershipDoc(orgId) != null;
     }
 
     // Una membresia 'invited' o 'suspended' NO es miembro. Era `status = 'active'` en

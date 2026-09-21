@@ -17,7 +17,8 @@
   ],
   "hosting": {
     "public": "dist",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "//ignore": "NO PONER `**/node_modules/**` AQUI. Parece higiene y borra las fuentes: Expo publica Inter y los iconos en `assets/node_modules/@expo-google-fonts/...`, y ese comodin casa con esa ruta. El sintoma no es un error sino algo peor: la reescritura SPA tapa el archivo que falta devolviendo index.html con un 200, asi que el navegador recibe HTML donde espera una fuente, se queda en serif y pinta los iconos como cuadrados vacios. Y como `/assets/**` va con `immutable` un anio, esa respuesta equivocada se queda cacheada. En local no pasa porque `serve` no aplica esta lista.",
+    "ignore": ["firebase.json", "**/.*"],
     "rewrites": [
       {
         "source": "**",
