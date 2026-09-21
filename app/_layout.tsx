@@ -131,8 +131,8 @@ export default function RootLayout() {
   // EL GUARDIÁN DE CONFIGURACIÓN VA AQUÍ Y NO EN UNA PANTALLA.
   //
   // Estaba solo en `app/index.tsx`, o sea en la ruta `/`, y cualquier otra ruta lo
-  // saltaba entera: abrir `/kiosk` directamente en una app sin credenciales de
-  // Supabase pintaba el kiosco completo y al teclear el PIN respondía "No pudimos
+  // saltaba entera: abrir `/kiosk` directamente en una app sin configuración de
+  // Firebase pintaba el kiosco completo y al teclear el PIN respondía "No pudimos
   // completar la acción. Inténtalo otra vez.", que es un consejo imposible.
   //
   // Sin credenciales no funciona NADA —ni fichar, ni el panel, ni el acceso—, así que

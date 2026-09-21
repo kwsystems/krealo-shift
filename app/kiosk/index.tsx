@@ -76,8 +76,8 @@ export default function KioskIdleScreen() {
 
   const binding = useKioskStore((s) => s.binding);
   // Se compone al pintar y no se guarda: una URL guardada queda inservible si el
-  // proyecto de Supabase cambia de dominio, que es lo que pasa al pasar de un
-  // proyecto de pruebas a uno de verdad.
+  // proyecto de Firebase cambia, que es lo que pasa al pasar de uno de pruebas a
+  // uno de verdad.
   const logoUrl = logoPublicUrl(binding?.organizationLogoPath ?? null);
   const revoked = useKioskStore((s) => s.revoked);
   const markRevoked = useKioskStore((s) => s.markRevoked);
