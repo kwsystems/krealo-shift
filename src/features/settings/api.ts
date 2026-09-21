@@ -230,13 +230,23 @@ export async function fetchNotificationPreferences(params: {
   userId: string;
   organizationId: string;
 }): Promise<NotificationPreferences> {
+  /**
+   * SE LEE POR EL ID DEL DOCUMENTO, no con una consulta, y aquí es obligatorio.
+   *
+   * La regla de esta colección comprueba `prefId.split('_')[0] == request.auth.uid`:
+   * se apoya en el ID, no en un campo. Una consulta de lista no puede demostrar eso
+   * —Firestore no sabe qué ids va a devolver antes de ejecutarla— así que la denegaba
+   * entera, y Ajustes mostraba «Falta un permiso» en la tarjeta de notificaciones.
+   *
+   * El id es determinista por construcción (`{usuario}_{organización}`, en
+   * `COMPOSITE_IDS`), así que pedirlo directamente es además una lectura en vez de
+   * una consulta.
+   */
   const rows = await selectRows(z.array(preferencesRowSchema), (db) =>
     db
       .from(TABLES.notificationPreferences)
       .select('preferences')
-      .eq('user_id', params.userId)
-      .eq('organization_id', params.organizationId)
-      .limit(1),
+      .eq('id', `${params.userId}_${params.organizationId}`),
   );
   return rows[0]?.preferences ?? DEFAULT_NOTIFICATION_PREFERENCES;
 }

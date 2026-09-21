@@ -151,7 +151,19 @@ export default function ManagerLayout() {
           },
           tabBarLabelStyle: {
             fontFamily: fontFamily.medium,
-            fontSize: fontSize.label,
+            /*
+             * LA ETIQUETA ENCOGE EN LA BARRA INFERIOR, y es por aritmética, no por
+             * gusto. Al partir «Más» en Solicitudes y Configuración son SIETE
+             * destinos: en un teléfono de 375 px tocan a 53 px cada uno, y con el
+             * tamaño de etiqueta normal se truncaban tres —«Repo…», «Solici…»,
+             * «Confi…»—. Una etiqueta cortada es peor que ninguna: obliga a abrir
+             * para saber qué hay dentro, que es justo lo que se quería quitar
+             * al deshacerse de «Más».
+             *
+             * En la barra lateral no aplica: ahí sobra ancho y encoger solo haría
+             * el texto más difícil de leer.
+             */
+            fontSize: useSidebar ? fontSize.label : 10,
           },
         }}
       >
@@ -200,12 +212,38 @@ export default function ManagerLayout() {
             ),
           }}
         />
+        {/*
+          «MÁS» SE PARTIÓ EN DOS, y no es solo renombrar.
+          Un destino llamado «Más» no dice qué hay dentro: para responder una
+          solicitud había que abrir un cajón y, una vez dentro, elegir en un
+          segmentado entre dos secciones. Dos clics y una adivinanza para llegar a una
+          bandeja con cosas que esperan respuesta.
+          Ahora son dos destinos con su nombre y su icono, y desde la barra se ve
+          dónde está cada cosa sin entrar a mirar.
+        */}
         <Tabs.Screen
-          name="more"
+          name="requests"
           options={{
-            title: t('admin.tabMore'),
+            /*
+             * ETIQUETA CORTA EN LA BARRA, título largo en la página.
+             * «Solicitudes» y «Configuración» no caben en 53 px y se cortaban a
+             * «Solicit…» y «Config…». Una etiqueta cortada obliga a abrir para saber
+             * qué hay dentro, que es exactamente lo que se quería quitar al
+             * deshacerse de «Más». «Bandeja» es además como la llama la propia
+             * pantalla cuando está vacía.
+             */
+            title: t('admin.tabRequests'),
             tabBarIcon: ({ color }) => (
-              <Ionicons name="ellipsis-horizontal" size={sizes.iconMobile} color={color} />
+              <Ionicons name="file-tray-outline" size={sizes.iconMobile} color={color} />
+            ),
+          }}
+        />
+        <Tabs.Screen
+          name="settings"
+          options={{
+            title: t('admin.tabSettings'),
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="settings-outline" size={sizes.iconMobile} color={color} />
             ),
           }}
         />

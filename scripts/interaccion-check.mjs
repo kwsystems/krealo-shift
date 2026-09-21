@@ -349,7 +349,7 @@ await conPagina('/kiosk/setup', async (page, errores) => {
 // El chequeo de render no lo veia porque captura al instante: una pantalla de carga
 // recien pintada es indistinguible de una colgada. Lo que distingue las dos es
 // ESPERAR.
-for (const ruta of ['/team', '/more']) {
+for (const ruta of ['/team', '/settings']) {
   await conPagina(
     ruta,
     async (page, errores) => {

@@ -171,7 +171,6 @@
     "tabTeam": "Team",
     "tabSchedule": "Schedule",
     "tabHours": "Hours",
-    "tabMore": "More",
     "homeTitle": "Home",
     "workingNow": "Working now",
     "onBreakNow": "On break",
@@ -188,7 +187,9 @@
     "sinceBreakLabel": "On break since {{time}}",
     "dueAtLabel": "Starts at {{time}}",
     "shouldHaveEnteredLabel": "Was due at {{time}}",
-    "tabReports": "Reports"
+    "tabReports": "Reports",
+    "tabRequests": "Inbox",
+    "tabSettings": "Settings"
   },
   "home": {
     "justSoYouKnow": "Just so you know",
@@ -509,7 +510,6 @@
     "rejected": "Request rejected."
   },
   "settings": {
-    "title": "More",
     "organization": "Organization",
     "orgName": "Name",
     "defaultLocale": "Default language",

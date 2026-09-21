@@ -71,7 +71,8 @@ const RUTAS = [
   ['horario', '/schedule'],
   ['horas', '/hours'],
   ['reportes', '/reports'],
-  ['mas', '/more'],
+  ['solicitudes', '/requests'],
+  ['ajustes', '/settings'],
 ];
 
 /**
@@ -87,7 +88,9 @@ const RUTAS = [
  * cuenta de textos de «mas» con la de las demás pantallas: 27 contra 277 no era que
  * «Más» fuera corta, era que estaba medio cerrada.
  */
-const PESTANAS = [['ajustes', 'more-section-settings']];
+// «Más» se partió en dos rutas propias, así que ya no hay segmentado que pulsar
+// para llegar a Ajustes: es un destino de la barra.
+const PESTANAS = [];
 
 /**
  * DEUDA DEL TEMA CLARO, NOMBRADA PARA QUE ESTE ARNÉS SIGA SIRVIENDO.

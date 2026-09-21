@@ -36,7 +36,8 @@ const RUTAS = [
   ['horario', '/schedule'],
   ['horas', '/hours'],
   ['reportes', '/reports'],
-  ['mas', '/more'],
+  ['solicitudes', '/requests'],
+  ['ajustes', '/settings'],
 ];
 
 /** Una superficie por debajo de esto es un detalle, no el fondo de nada. */

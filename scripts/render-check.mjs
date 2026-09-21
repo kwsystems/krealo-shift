@@ -61,7 +61,8 @@ const RUTAS = [
   ['panel-equipo', '/team'],
   ['panel-horario', '/schedule'],
   ['panel-horas', '/hours'],
-  ['panel-mas', '/more'],
+  ['panel-solicitudes', '/requests'],
+  ['panel-ajustes', '/settings'],
 ];
 
 const { cerrar: cerrarServidor } = await servirExport(RAIZ, PUERTO);

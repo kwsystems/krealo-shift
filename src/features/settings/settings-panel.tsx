@@ -61,7 +61,7 @@ export function SettingsPanel() {
   return (
     <Stack gap={spacing.lg}>
       <AppText variant="section" accessibilityRole="header">
-        {t('settings.title')}
+        {t('settings.configuration')}
       </AppText>
 
       <AsyncSection
