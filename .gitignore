@@ -58,3 +58,6 @@ functions/lib/
 # Pruebas
 coverage/
 e2e/artifacts/
+
+# Cache del CLI de Firebase: lista de archivos ya subidos a Hosting.
+.firebase/
