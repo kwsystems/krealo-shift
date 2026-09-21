@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual as nodeTimingSafeEqual } from 'node:crypto';
 
 import bcrypt from 'bcryptjs';
+import { defineSecret } from 'firebase-functions/params';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import { COLLECTIONS, db, nowISO } from './admin';
@@ -31,6 +32,21 @@ import { COLLECTIONS, db, nowISO } from './admin';
 
 const ACTION_TOKEN_TTL_SECONDS = 90;
 
+/**
+ * El secreto que firma los tokens de accion.
+ *
+ * VA CON `defineSecret` Y NO COMO CADENA EN `secrets: ['KIOSK_TOKEN_SECRET']`, y la
+ * diferencia no es de estilo. Con la cadena suelta el CLI no lo detecta al analizar
+ * el modulo, despliega sin enlazar nada al servicio de Cloud Run, y la funcion lee
+ * `undefined` en ejecucion. Se desplego asi y el sintoma fue `FAILED_PRECONDITION:
+ * KIOSK_TOKEN_SECRET falta o tiene menos de 32 caracteres` en la primera llamada
+ * real a `verifyPin` — con el secreto perfectamente creado en Secret Manager.
+ *
+ * Lo encontro la prueba de extremo a extremo del circuito de fichaje, no el
+ * typecheck ni el despliegue: los dos dieron verde.
+ */
+export const KIOSK_TOKEN_SECRET = defineSecret('KIOSK_TOKEN_SECRET');
+
 export type KioskContext = {
   deviceId: string;
   organizationId: string;
@@ -40,7 +56,7 @@ export type KioskContext = {
 export type KioskAuth = { credential?: unknown; devicePublicId?: unknown };
 
 function tokenSecret(): string {
-  const secret = process.env.KIOSK_TOKEN_SECRET;
+  const secret = KIOSK_TOKEN_SECRET.value();
   if (secret === undefined || secret.length < 32) {
     throw new HttpsError(
       'failed-precondition',

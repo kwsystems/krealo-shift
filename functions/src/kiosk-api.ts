@@ -16,6 +16,7 @@ import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
 import {
   authenticateKiosk,
   issueActionToken,
+  KIOSK_TOKEN_SECRET,
   recordKioskRejection,
   verifyActionToken,
   type KioskContext,
@@ -43,7 +44,7 @@ const BCRYPT_ROUNDS = 10;
  * seria mas comodo y peor: cada funcion que lo declara puede leerlo, y `activateKiosk`
  * —la unica que atiende sin credencial previa— no tiene por que poder.
  */
-const OPCIONES_CON_SECRETO = { secrets: ['KIOSK_TOKEN_SECRET'] };
+const OPCIONES_CON_SECRETO = { secrets: [KIOSK_TOKEN_SECRET] };
 const POLITICAS_POR_DEFECTO = {
   pinLength: 6,
   photoEnabled: false,
