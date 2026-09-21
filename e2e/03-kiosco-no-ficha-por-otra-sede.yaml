@@ -46,5 +46,5 @@ tags:
 
 # La otra mitad de este flujo —enviar un evento con la credencial de este iPad
 # pero el `locationId` de Sucursal Demo— no se puede provocar desde la interfaz.
-# Se cubre en las pruebas SQL (`supabase/tests/20_functions.sql`) y con la llamada
+# Se cubre en el servidor (`functions/src/shared/kiosk.ts`) y con la llamada
 # directa a la Edge Function documentada en e2e/README.md.

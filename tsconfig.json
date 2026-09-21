@@ -19,8 +19,10 @@
     "dist",
     ".expo",
     "e2e/artifacts",
-    // Las Edge Functions corren en Deno con su propio deno.json: usan globals
-    // de Deno e imports jsr: que este tsconfig no puede resolver.
-    "supabase/functions"
+    // Las Cloud Functions tienen su propio tsconfig: corren en Node, no en React
+    // Native, y compilan a `functions/lib`. Incluirlas aqui haria que `tsc` del
+    // proyecto intentara resolver `firebase-admin` contra las dependencias de la app,
+    // donde no esta.
+    "functions"
   ]
 }

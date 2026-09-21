@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { adjustWorkSession } from '@/features/timesheets/api';
 import { execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
@@ -36,10 +38,10 @@ const proposedValueSchema = z
   .catch({});
 
 const requestSchema = z.object({
-  id: z.string().uuid(),
-  employee_id: z.string().uuid(),
-  location_id: z.string().uuid(),
-  work_session_id: z.string().uuid().nullable(),
+  id: docId(),
+  employee_id: docId(),
+  location_id: docId(),
+  work_session_id: docId().nullable(),
   target_date: z.string().nullable(),
   kind: z.enum(requestKindValues),
   proposed_value: proposedValueSchema,
@@ -82,7 +84,7 @@ export async function countPendingRequests(params: {
   organizationId: string;
   locationId: string;
 }): Promise<number> {
-  const rows = await selectRows(z.array(z.object({ id: z.string().uuid() })), (db) =>
+  const rows = await selectRows(z.array(z.object({ id: docId() })), (db) =>
     db
       .from(TABLES.timeEditRequests)
       .select('id')

@@ -5,7 +5,7 @@
 # Se teclean sus 4 dígitos y dos más para llegar a los 6 que este kiosco exige y
 # forzar la validación. El resultado esperado es un error, no una identificación.
 #
-# Valores de demostración de `supabase/seed.sql`.
+# Valores de demostración de `functions/scripts/sembrar.mjs`.
 - tapOn:
     id: "keypad-7"
 - tapOn:

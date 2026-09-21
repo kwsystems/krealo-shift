@@ -1,6 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
 import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
@@ -18,8 +20,8 @@ import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
  */
 
 const dailySummarySchema = z.object({
-  employee_id: z.string().uuid(),
-  location_id: z.string().uuid(),
+  employee_id: docId(),
+  location_id: docId(),
   work_date: z.string(),
   sessions: z.coerce.number().int(),
   gross_minutes: z.coerce.number().int(),
@@ -36,10 +38,10 @@ export const workSessionStatusValues = ['open', 'complete', 'needs_review', 'app
 export type WorkSessionStatus = (typeof workSessionStatusValues)[number];
 
 const workSessionSchema = z.object({
-  id: z.string().uuid(),
-  employee_id: z.string().uuid(),
-  location_id: z.string().uuid(),
-  shift_id: z.string().uuid().nullable(),
+  id: docId(),
+  employee_id: docId(),
+  location_id: docId(),
+  shift_id: docId().nullable(),
   starts_at: z.string(),
   ends_at: z.string().nullable(),
   gross_minutes: z.number().int().nullable(),
@@ -54,8 +56,8 @@ const workSessionSchema = z.object({
 export type WorkSession = z.infer<typeof workSessionSchema>;
 
 const timeEventSchema = z.object({
-  id: z.string().uuid(),
-  employee_id: z.string().uuid(),
+  id: docId(),
+  employee_id: docId(),
   event_type: z.enum(['clock_in', 'break_start', 'break_end', 'clock_out']),
   break_type: z.enum(['paid', 'unpaid', 'meal', 'other']).nullable(),
   occurred_at: z.string(),
@@ -66,8 +68,8 @@ const timeEventSchema = z.object({
 export type TimeEvent = z.infer<typeof timeEventSchema>;
 
 const adjustmentSchema = z.object({
-  id: z.string().uuid(),
-  work_session_id: z.string().uuid().nullable(),
+  id: docId(),
+  work_session_id: docId().nullable(),
   target_type: z.string(),
   before_value: z.unknown(),
   after_value: z.unknown(),
@@ -90,8 +92,8 @@ export const periodStatusValues = ['open', 'approved', 'reopened'] as const;
 export type PeriodStatus = (typeof periodStatusValues)[number];
 
 const periodSchema = z.object({
-  id: z.string().uuid(),
-  location_id: z.string().uuid().nullable(),
+  id: docId(),
+  location_id: docId().nullable(),
   starts_on: z.string(),
   ends_on: z.string(),
   status: z.enum(periodStatusValues),
@@ -301,9 +303,9 @@ export async function fetchExportRows(params: {
 }
 
 const manualEventRowSchema = z.object({
-  event_id: z.string().uuid(),
+  event_id: docId(),
   // Un descanso no abre ni cierra sesion, asi que puede volver sin sesion asociada.
-  work_session_id: z.string().uuid().nullable(),
+  work_session_id: docId().nullable(),
 });
 
 export const manualEntryKinds = ['forgot_clock_in', 'forgot_clock_out', 'correction'] as const;

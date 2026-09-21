@@ -63,7 +63,7 @@ tags:
 # proyecto es no inventarlos: quedan pedidos en e2e/README.md.
 #
 # Lo que la corrección auditada SÍ tiene verificado hoy: las comprobaciones SQL
-# de `supabase/tests/20_functions.sql`, que prueban que `time_events` es
+# de `functions/src/shared/attendance.ts`, donde `time_events` sigue siendo
 # append-only y que una corrección crea una fila en `time_adjustments` con valor
 # anterior, autor y motivo.
 # ---------------------------------------------------------------------------

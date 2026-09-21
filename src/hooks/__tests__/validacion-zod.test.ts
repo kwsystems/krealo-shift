@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { AdminError, adminErrorKind, selectRows } from '../use-admin-query';
 
 const mockGetSupabase = jest.fn();
@@ -29,7 +31,7 @@ const clienteFalso = { from: () => undefined };
 const respuesta = (data: unknown) => Promise.resolve({ data, error: null });
 
 const sesionSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   net_minutes: z.number().int(),
   employee_name: z.string(),
 });

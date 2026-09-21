@@ -17,7 +17,7 @@
  *   - deja una captura por ruta para revisarlas a ojo.
  *
  * USO
- *   EXPO_PUBLIC_SUPABASE_URL=... EXPO_PUBLIC_SUPABASE_ANON_KEY=... \
+ *   EXPO_PUBLIC_FIREBASE_API_KEY=... EXPO_PUBLIC_FIREBASE_PROJECT_ID=... \
  *     npx expo export --platform web --clear --output-dir /tmp/ks-web
  *   node scripts/render-check.mjs /tmp/ks-web
  *
@@ -52,7 +52,6 @@ const RUTAS = [
   ['acceso', '/sign-in'],
   // Sin `code` en la URL: el caso del enlace roto o pegado a medias, que es el que
   // se puede probar sin un correo de verdad.
-  ['restablecer', '/restablecer'],
   ['kiosco-olvide', '/kiosk/forgot'],
   ['kiosco', '/kiosk'],
   ['kiosco-setup', '/kiosk/setup'],

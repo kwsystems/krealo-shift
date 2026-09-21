@@ -12,7 +12,7 @@
  * Eso es lo que mide esto. El sitio donde vive un estado colgado es siempre el mismo:
  * un manejador asíncrono que no limpia su bandera de carga en todos los caminos.
  *
- * NO HAY SERVIDOR SUPABASE en este entorno, y eso no es una limitación: es el caso
+ * NO HAY BACKEND en este entorno, y eso no es una limitación: es el caso
  * que hay que comprobar. Sin red, el kiosco tiene que caer en su camino sin conexión
  * y DECIR ALGO. Un botón que se queda girando porque el servidor no responde es
  * exactamente el fallo que se busca.

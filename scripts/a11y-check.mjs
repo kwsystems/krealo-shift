@@ -12,7 +12,7 @@
  * Esto cubre lo medible, que es la mayor parte y la que se rompe sin avisar.
  *
  * USO
- *   EXPO_PUBLIC_SUPABASE_URL=... EXPO_PUBLIC_SUPABASE_ANON_KEY=... \
+ *   EXPO_PUBLIC_FIREBASE_API_KEY=... EXPO_PUBLIC_FIREBASE_PROJECT_ID=... \
  *     npx expo export --platform web --clear --output-dir /tmp/ks-web
  *   node scripts/a11y-check.mjs /tmp/ks-web
  *
@@ -47,7 +47,6 @@ const RUTAS = [
   ['kiosco-salida', '/kiosk/exit'],
   ['kiosco-setup', '/kiosk/setup'],
   ['acceso', '/sign-in'],
-  ['restablecer', '/restablecer'],
 ];
 
 // ---- Contraste WCAG: relacion de luminancia relativa ----

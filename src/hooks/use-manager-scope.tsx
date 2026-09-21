@@ -2,6 +2,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { track } from '@/lib/analytics';
 import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
 import { getDataClient } from '@/lib/firebase/query';
@@ -116,7 +118,7 @@ const locationSettingsSchema = z
   .catch(DEFAULT_LOCATION_SETTINGS);
 
 const locationSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   name: z.string(),
   address: z.string().default(''),
   timezone: z.string(),
@@ -127,12 +129,12 @@ const locationSchema = z.object({
 export type ManagerLocation = z.infer<typeof locationSchema>;
 
 const membershipSchema = z.object({
-  organization_id: z.string().uuid(),
+  organization_id: docId(),
   role: z.enum(['owner', 'admin', 'manager', 'employee']),
 });
 
 const organizationSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   name: z.string(),
   default_locale: z.string(),
   default_timezone: z.string(),

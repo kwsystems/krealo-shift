@@ -1,0 +1,20 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "es2023",
+    "lib": ["es2023"],
+    "outDir": "lib",
+    // `rootDir` sube un nivel A PROPOSITO: la maquina de estados de asistencia vive
+    // en `src/domain/` y la comparten la app y el servidor. Duplicarla seria la unica
+    // alternativa, y duplicar la regla que decide si un fichaje es valido es como se
+    // consigue que el iPad y el servidor discrepen sobre si alguien esta trabajando.
+    "rootDir": "..",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "sourceMap": true
+  },
+  "include": ["src/**/*.ts", "../src/domain/**/*.ts"],
+  "exclude": ["../src/domain/__tests__/**"]
+}

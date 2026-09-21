@@ -35,7 +35,15 @@ describe('parseAlertData', () => {
     expect(parseAlertData({})).toBeNull();
     expect(parseAlertData('late')).toBeNull();
     expect(parseAlertData({ alertType: 'inventada' })).toBeNull();
-    expect(parseAlertData({ alertType: 'late', locationId: 'no-es-uuid' })).toBeNull();
+    /*
+     * ANTES SE COMPROBABA QUE 'no-es-uuid' SE RECHAZABA, y ya no: los identificadores
+     * de Firestore no tienen forma de UUID, así que esa cadena es un id perfectamente
+     * plausible y rechazarla sería rechazar datos válidos. Lo que sigue importando
+     * —y es lo que esta línea protege— es que el campo no sea de otro tipo ni venga
+     * vacío: eso sí delata un `data` que no es nuestro.
+     */
+    expect(parseAlertData({ alertType: 'late', locationId: '' })).toBeNull();
+    expect(parseAlertData({ alertType: 'late', locationId: 42 })).toBeNull();
   });
 });
 

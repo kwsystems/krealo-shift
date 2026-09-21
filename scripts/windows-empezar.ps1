@@ -6,7 +6,7 @@
   Un solo comando: comprueba Node, instala dependencias y arranca la web.
 
   QUE ARRANCA, Y POR QUE
-  Si hay un .env con credenciales de verdad, arranca contra tu Supabase. Si no, usa
+  Si hay un .env con credenciales de verdad, arranca contra tu Firebase. Si no, usa
   el MODO DEMOSTRACION, que trae datos incorporados: se entra sin cuenta y se recorre
   la app entera.
 
@@ -80,8 +80,8 @@ $hayEnvReal = $false
 if (Test-Path '.env') {
   # El .env NUNCA se toca: puede tener credenciales de verdad.
   $contenido = Get-Content '.env' -Raw
-  $hayEnvReal = ($contenido -notmatch 'ejemplo\.supabase\.co') -and
-                ($contenido -match 'EXPO_PUBLIC_SUPABASE_URL=\S')
+  $hayEnvReal = ($contenido -notmatch 'EXPO_PUBLIC_FIREBASE_PROJECT_ID=ejemplo') -and
+                ($contenido -match 'EXPO_PUBLIC_FIREBASE_PROJECT_ID=\S')
   if ($hayEnvReal) {
     Escribir ".env con credenciales propias — bien" 'Green'
   } else {
@@ -92,7 +92,7 @@ if (Test-Path '.env') {
 if ($Real -and -not $hayEnvReal) {
   Escribir "`nPediste -Real y no hay credenciales en .env." 'Red'
   Escribir "  Copia .env.example a .env y pon la URL y la anon key de tu proyecto"
-  Escribir "  de Supabase. Las dos son publicas; la service_role NO va en ese archivo."
+  Escribir "  de Firebase. Son publicas por diseno; la clave de servicio NO va ahi."
   exit 1
 }
 
@@ -100,7 +100,7 @@ if ($Real -and -not $hayEnvReal) {
 # --- 4. Arrancar -------------------------------------------------------------
 Escribir "`n----------------------------------------------------------------"
 if ($hayEnvReal) {
-  Escribir "Arrancando con TUS credenciales de Supabase: datos de verdad." 'Green'
+  Escribir "Arrancando con TU proyecto de Firebase: datos de verdad." 'Green'
 } else {
   Escribir "Arrancando en MODO DEMOSTRACION. Entras solo, sin cuenta ni claves." 'Yellow'
   Escribir "  - el panel completo: inicio, equipo, horario, horas y solicitudes"

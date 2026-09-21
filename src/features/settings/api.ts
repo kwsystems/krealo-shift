@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import type { LocationSettings } from '@/hooks/use-manager-scope';
 import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
@@ -47,9 +49,9 @@ export async function updateLocation(params: {
 }
 
 const kioskDeviceSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   display_name: z.string(),
-  location_id: z.string().uuid(),
+  location_id: docId(),
   location_name: z.string(),
   device_public_id: z.string(),
   status: z.enum(['active', 'revoked']),

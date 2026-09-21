@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import type { BreakReason } from '@/domain/break-reason';
 import { getDataClient } from '@/lib/firebase/query';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
@@ -52,12 +54,12 @@ const activateResponseSchema = z.object({
   credential: z.string().min(20),
   deviceKey: z.string().min(20),
   device: z.object({
-    id: z.string().uuid(),
+    id: docId(),
     publicId: z.string().min(1),
     displayName: z.string().min(1),
   }),
   organization: z.object({
-    id: z.string().uuid(),
+    id: docId(),
     name: z.string().min(1),
     // Ruta dentro del bucket público de logotipos, no una URL: la URL se compone al
     // pintar. `nullable` porque la mayoría de las organizaciones no tendrán logotipo
@@ -65,7 +67,7 @@ const activateResponseSchema = z.object({
     logoPath: z.string().nullable().default(null),
   }),
   location: z.object({
-    id: z.string().uuid(),
+    id: docId(),
     name: z.string().min(1),
     timezone: z.string().min(1),
   }),
@@ -83,7 +85,7 @@ const activateResponseSchema = z.object({
  * "Aprobada" a secas no dice de qué cuando alguien tiene tres solicitudes.
  */
 const requestUpdateSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   kind: z.enum([
     'forgot_clock_in',
     'forgot_break',
@@ -113,7 +115,7 @@ const verifyPinResponseSchema = z.object({
   allowedActions: z.array(z.enum(['clock_in', 'break_start', 'break_end', 'clock_out'])),
   eligibleShifts: z.array(
     z.object({
-      id: z.string().uuid(),
+      id: docId(),
       startsAt: z.string(),
       endsAt: z.string(),
       jobRoleName: z.string().nullable(),
@@ -151,7 +153,7 @@ const submitEventResponseSchema = z.object({
   status: z.enum(['accepted', 'duplicate', 'needs_review', 'rejected']),
   // Identificador del evento en el servidor: hace falta para adjuntarle la foto
   // despues. Opcional porque un `duplicate` puede volver sin el.
-  eventId: z.string().uuid().nullable().optional(),
+  eventId: docId().nullable().optional(),
   attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']),
   occurredAt: z.string(),
   serverReceivedAt: z.string(),
@@ -314,7 +316,7 @@ export async function verifyPin(params: {
 }
 
 const timeEditRequestResponseSchema = z.object({
-  requestId: z.string().uuid(),
+  requestId: docId(),
   status: z.literal('pending'),
 });
 
@@ -382,11 +384,11 @@ export async function attachPhoto(params: {
 const syncResultSchema = z.object({
   results: z.array(
     z.object({
-      idempotencyKey: z.string().uuid(),
+      idempotencyKey: docId(),
       status: z.enum(['accepted', 'duplicate', 'needs_review', 'rejected']),
       reason: z.string().optional(),
       attendanceState: z.enum(['OFF_SHIFT', 'WORKING', 'ON_BREAK']).optional(),
-      eventId: z.string().uuid().optional(),
+      eventId: docId().optional(),
     }),
   ),
   accepted: z.number().int().min(0),
@@ -418,7 +420,7 @@ export async function syncOfflineEvents(params: {
 
 const rosterSchema = z.object({
   location: z.object({
-    id: z.string().uuid(),
+    id: docId(),
     name: z.string(),
     timezone: z.string(),
   }),
@@ -441,7 +443,7 @@ const rosterSchema = z.object({
   ),
   shifts: z.array(
     z.object({
-      id: z.string().uuid(),
+      id: docId(),
       employeeOpaqueId: z.string().min(1),
       startsAt: z.string(),
       endsAt: z.string(),

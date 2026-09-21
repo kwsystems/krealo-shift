@@ -49,6 +49,6 @@ tags:
 #   6. comprobar que los turnos cambiados quedan marcados como "Cambiado".
 #
 # Reglas del backend que este flujo debe respetar y que ya están verificadas en
-# `supabase/tests/20_functions.sql`: un turno publicado no se puede solapar ni
+# las reglas de `firestore.rules`: un turno publicado no se puede solapar ni
 # borrar, y publicar sella versión y fecha.
 # ---------------------------------------------------------------------------

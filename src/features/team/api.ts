@@ -1,6 +1,8 @@
 import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { generatePin } from './pin';
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
@@ -23,21 +25,21 @@ export const employeeStatusValues = ['invited', 'active', 'inactive'] as const;
 export type EmployeeStatus = (typeof employeeStatusValues)[number];
 
 const employeeSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   full_name: z.string(),
   preferred_name: z.string().nullable(),
   email: z.string().nullable(),
   employee_number: z.string().nullable(),
   status: z.enum(employeeStatusValues),
   hire_date: z.string().nullable(),
-  user_id: z.string().uuid().nullable(),
+  user_id: docId().nullable(),
 });
 
 export type Employee = z.infer<typeof employeeSchema>;
 
 const assignmentSchema = z.object({
-  employee_id: z.string().uuid(),
-  location_id: z.string().uuid(),
+  employee_id: docId(),
+  location_id: docId(),
   can_manage: z.boolean(),
   is_primary: z.boolean(),
 });
@@ -45,15 +47,15 @@ const assignmentSchema = z.object({
 export type LocationAssignment = z.infer<typeof assignmentSchema>;
 
 const employeeJobRoleSchema = z.object({
-  employee_id: z.string().uuid(),
-  job_role_id: z.string().uuid(),
+  employee_id: docId(),
+  job_role_id: docId(),
   is_primary: z.boolean(),
 });
 
 export type EmployeeJobRole = z.infer<typeof employeeJobRoleSchema>;
 
 const jobRoleSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   name: z.string(),
   color: z.string(),
   is_active: z.boolean(),
@@ -117,7 +119,7 @@ export type EmployeeDraft = {
   jobRoleIds: string[];
 };
 
-const insertedIdSchema = z.object({ id: z.string().uuid() });
+const insertedIdSchema = z.object({ id: docId() });
 
 async function replaceAssignments(params: {
   employeeId: string;
@@ -243,11 +245,11 @@ export async function resetEmployeePin(params: {
 }
 
 const upcomingShiftSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   starts_at: z.string(),
   ends_at: z.string(),
-  location_id: z.string().uuid(),
-  job_role_id: z.string().uuid().nullable(),
+  location_id: docId(),
+  job_role_id: docId().nullable(),
   status: z.enum(['draft', 'published', 'cancelled']),
 });
 

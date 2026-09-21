@@ -19,7 +19,7 @@
  * QUE SE PUEDE CAPTURAR SIN SERVIDOR, Y QUE NO
  * El kiosco y el acceso, si: el kiosco se abre sembrando su credencial en localStorage,
  * igual que el chequeo de interaccion. El PANEL ADMINISTRATIVO no, porque necesita una
- * sesion real contra un Supabase real.
+ * sesion real contra el proyecto de Firebase.
  *
  * Por eso el script acepta credenciales por entorno y, si estan, entra y captura tambien
  * el panel:
@@ -29,7 +29,7 @@
  * el producto.
  *
  * USO
- *   EXPO_PUBLIC_SUPABASE_URL=... EXPO_PUBLIC_SUPABASE_ANON_KEY=... \
+ *   EXPO_PUBLIC_FIREBASE_API_KEY=... EXPO_PUBLIC_FIREBASE_PROJECT_ID=... \
  *     npx expo export --platform web --clear --output-dir /tmp/ks-web
  *   node scripts/capturas-store.mjs /tmp/ks-web [--salida DIR]
  */
@@ -190,7 +190,7 @@ for (const formato of FORMATOS) {
 
 if (!conPanel) {
   console.log(
-    '\nFALTAN las del panel administrativo: necesita una sesion real. Con un Supabase\n' +
+    '\nFALTAN las del panel administrativo: necesita una sesion real. Con Firebase\n' +
       'configurado y una cuenta:\n' +
       '  KS_SHOT_EMAIL=tu@correo KS_SHOT_PASSWORD=... node scripts/capturas-store.mjs <export>',
   );

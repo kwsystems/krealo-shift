@@ -7,7 +7,59 @@ lugar de escondidas en un commit.
 
 Formato de cada entrada: la decisión, el motivo, el costo aceptado y dónde vive.
 
-Última actualización: 2026-08-27.
+Última actualización: 2026-09-21.
+
+> **LAS RUTAS DE LAS ENTRADAS ANTERIORES A 2026-09-21 APUNTAN A ARCHIVOS BORRADOS.**
+> Casi todas dicen `supabase/migrations/…` o `supabase/functions/…`, y ese directorio
+> ya no existe. No se han corregido una por una a propósito: cada entrada dice qué se
+> decidió **en su momento y con qué información**, y reescribirle la ruta a una
+> decisión de agosto para que apunte a código de septiembre convierte un registro
+> histórico en una ficción ordenada. Lo que se decidió sigue siendo cierto; dónde
+> vive, no. La entrada de abajo explica el traslado.
+
+---
+
+## Backend
+
+### Todo el backend pasa de Supabase a Firebase (2026-09-21)
+
+**Decisión.** Por indicación de Joseph, el backend deja de ser Supabase y pasa a ser
+Firebase en el proyecto `krealo-shift`: Firestore en `southamerica-east1`, Auth con
+Google y 21 Cloud Functions. Se borró `supabase/` entero — 22 migraciones, 8 Edge
+Functions y 5 archivos de pruebas SQL.
+
+**Qué se conservó, y no por comodidad.** Los nombres de las colecciones y de los
+campos son EXACTAMENTE los de las tablas y columnas de Postgres. Eso dejó intactos
+los esquemas Zod, las pruebas y los 62 puntos de llamada, y concentró todo el riesgo
+del cambio en un solo archivo (`src/lib/firebase/query.ts`). Se pudo hacer porque las
+consultas de esta app son planas: se comprobó que no hay ni un `select` anidado de
+PostgREST en el repositorio antes de decidirlo.
+
+La máquina de estados de asistencia tampoco se reescribió: `functions/` la importa de
+`src/domain/`, la misma que usa el iPad. Antes había dos copias —una en SQL y otra en
+TypeScript— con una prueba de paridad vigilándolas; ahora no hay dos cosas que puedan
+desalinearse.
+
+**Costo aceptado, y es real.**
+
+1. **Las 265 aserciones de RLS desaparecieron.** Se probaban contra un Postgres local
+   impersonando usuarios. Su equivalente —`@firebase/rules-unit-testing` sobre el
+   emulador— no está escrito. Las reglas están razonadas y desplegadas, pero nada las
+   vigila contra una edición futura. Es la deuda más grande que deja el traslado.
+2. **`sendManagerAlerts` no se portó.** Son unas 600 líneas entre cálculo,
+   deduplicación y reclamo por lotes. Sin ella las alertas no salen. No rompe la app:
+   nadie la llamaba desde el cliente.
+3. **Se acabó «olvidé mi contraseña».** Con Google no hay contraseña nuestra que
+   recuperar, así que `password-reset.ts` y `/restablecer` se borraron en lugar de
+   quedarse como botones muertos.
+4. **`z.string().uuid()` pasó a `docId()`.** Los id deterministas —`{orgId}_{uid}`
+   para una membresía, `{orgId}_{clave}` para un fichaje— son lo que permite que una
+   regla resuelva permisos con UN `get()` y que reintentar un fichaje no lo duplique.
+   Eso es incompatible con la forma de UUID, y se eligió la idempotencia. No se pierde
+   ninguna defensa: `.uuid()` era una comprobación de forma, no un control.
+
+**Dónde:** `firestore.rules`, `firestore.indexes.json`, `storage.rules`,
+`functions/`, `src/lib/firebase/`.
 
 ---
 

@@ -1,11 +1,14 @@
 # Publicar la web en Firebase Hosting
 
-Decidido con Andree el 2026-09-14: **la web se aloja en Firebase Hosting y el backend
-sigue en Supabase.** No se mueve la base de datos ni el inicio de sesión.
+Decidido con Andree el 2026-09-14: la web se aloja en Firebase Hosting. En su momento
+se decidió **conservar Supabase como backend**, para no rehacer los permisos por fila
+como reglas de Firestore, que es donde más fácil se cuelan agujeros.
 
-Eso conserva lo que ya está construido y probado —cinco migraciones, RLS, funciones
-seguras y 77 comprobaciones SQL en verde— y evita rehacer los permisos por fila como
-reglas de Firestore, que es donde más fácil se cuelan agujeros.
+**Eso cambió el 2026-09-21**, por indicación de Joseph: todo el backend es Firebase.
+Firestore, Auth con Google y Cloud Functions, en el proyecto `krealo-shift`. El aviso
+de arriba se conserva porque explica el riesgo que se aceptó al mover los permisos, y
+ese riesgo sigue siendo real: las reglas están razonadas y desplegadas, pero las 265
+aserciones que las vigilaban eran SQL y todavía no se han reescrito.
 
 ---
 
@@ -17,12 +20,15 @@ reglas de Firestore, que es donde más fácil se cuelan agujeros.
 
 ## Lo que hace falta de Andree, y no puedo hacer yo
 
-1. Un proyecto de Firebase (o el nombre de uno que ya exista).
-2. Ejecutar `firebase login` una vez en tu máquina.
-3. Ejecutar `firebase use --add` y elegir ese proyecto. Eso crea `.firebaserc`, que
-   guarda a qué proyecto apunta el repositorio.
+Ya no hace falta elegir proyecto: `.firebaserc` existe y apunta a `krealo-shift`.
+Queda una sola cosa, y son tres clics en la consola:
 
-No hay forma de que yo cree o elija un proyecto de Firebase de tu cuenta.
+**Habilitar el proveedor de Google en Authentication.** No hay API pública que lo
+haga; al activarlo, Firebase crea solo el cliente OAuth de web que usa
+`signInWithPopup`. Hasta entonces nadie puede entrar: el botón está y la ventana de
+Google contesta que el proveedor está deshabilitado.
+
+[console.firebase.google.com/project/krealo-shift/authentication/providers](https://console.firebase.google.com/project/krealo-shift/authentication/providers)
 
 ---
 
@@ -33,17 +39,16 @@ En PowerShell, dentro de la carpeta del proyecto:
 ```powershell
 npm install -g firebase-tools    # una sola vez
 firebase login                   # una sola vez
-firebase use --add               # una sola vez: elige el proyecto
 
 npm run web:deploy
 ```
 
 Al terminar, la consola imprime la URL (`https://<proyecto>.web.app`).
 
-### Publicar la demostración, sin Supabase
+### Publicar la demostración, sin backend
 
-Si todavía no hay proyecto de Supabase, se puede publicar igualmente una versión con
-datos de mentira para enseñarla:
+Se puede publicar una versión con datos de mentira para enseñarla, sin tocar
+Firestore ni necesitar que nadie entre con Google:
 
 ```powershell
 npm run demo:export:prod
@@ -90,15 +95,17 @@ es como se montan los ataques de clickjacking sobre paneles de administración.
 
 ## Sobre las claves
 
-La `EXPO_PUBLIC_SUPABASE_ANON_KEY` **viaja dentro del paquete web, y está bien**: es
-pública por diseño, va en la URL de cada petición y lo que protege los datos es RLS en
-el servidor, no el secreto de esa clave.
+La configuración de Firebase **viaja dentro del paquete web, y está bien**: `apiKey`
+no es una credencial sino el identificador del proyecto ante la API, y lo que protege
+los datos son las reglas de Firestore y las Cloud Functions, no el secreto de esa
+cadena.
 
-La `service_role` **NUNCA** entra aquí. Vive solo en los secretos de las Edge Functions.
-Antes de publicar por primera vez conviene comprobarlo sobre el paquete ya compilado:
+La clave de cuenta de servicio **NUNCA** entra aquí, y con Firebase ni siquiera hace
+falta que exista: las funciones se autentican solas dentro de Google. Antes de
+publicar por primera vez conviene comprobarlo sobre el paquete ya compilado:
 
 ```powershell
-Select-String -Path dist\_expo\static\js\web\*.js -Pattern "service_role" -SimpleMatch
+Select-String -Path dist\_expo\static\js\web\*.js -Pattern "private_key" -SimpleMatch
 ```
 
 Si eso devuelve algo, **no publiques** y avísame.

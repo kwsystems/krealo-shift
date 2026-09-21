@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { selectRows } from '@/hooks/use-admin-query';
 import { VIEWS } from '@/lib/firebase/tables';
 
@@ -14,7 +16,7 @@ import { VIEWS } from '@/lib/firebase/tables';
  */
 
 const breakRowSchema = z.object({
-  employee_id: z.string().uuid(),
+  employee_id: docId(),
   work_date: z.string(),
   break_reason: z.string(),
   break_type: z.string().nullable(),

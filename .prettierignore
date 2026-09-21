@@ -24,7 +24,7 @@ docs/reference/
 # El instalador generado: lo escribe scripts/generar-instalacion.py concatenando
 # migraciones, y `--verificar` compara byte a byte contra ellas. Formatearlo lo
 # desincronizaria de su propio generador.
-supabase/instalar-todo.sql
+functions/lib/
 
 # Capturas y binarios
 *.png

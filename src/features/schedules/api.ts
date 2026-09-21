@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
 import { AdminError, execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
@@ -22,10 +24,10 @@ import { TABLES } from '@/lib/firebase/tables';
 export const shiftStatusValues = ['draft', 'published', 'cancelled'] as const;
 
 const shiftRowSchema = z.object({
-  id: z.string().uuid(),
-  employee_id: z.string().uuid(),
-  location_id: z.string().uuid(),
-  job_role_id: z.string().uuid().nullable(),
+  id: docId(),
+  employee_id: docId(),
+  location_id: docId(),
+  job_role_id: docId().nullable(),
   starts_at: z.string(),
   ends_at: z.string(),
   timezone: z.string(),
@@ -41,10 +43,10 @@ const shiftRowSchema = z.object({
 export type ShiftRow = z.infer<typeof shiftRowSchema>;
 
 const publicationSchema = z.object({
-  id: z.string().uuid(),
+  id: docId(),
   publication_version: z.number().int(),
   published_at: z.string(),
-  changed_shift_ids: z.array(z.string().uuid()),
+  changed_shift_ids: z.array(docId()),
 });
 
 export type ShiftPublication = z.infer<typeof publicationSchema>;

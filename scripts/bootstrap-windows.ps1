@@ -154,10 +154,14 @@ if (Test-Path '.env') {
     '# servidor, asi que el PIN no valida y el panel administrativo no carga.',
     '#',
     '# Para que funcione de verdad, reemplaza las dos siguientes por las de tu',
-    '# proyecto de Supabase (Project Settings > API). Las dos son publicas.',
+    '# proyecto de Firebase. Son publicas por diseno: van dentro del paquete web.',
     'EXPO_PUBLIC_APP_ENV=development',
-    'EXPO_PUBLIC_SUPABASE_URL=https://ejemplo.supabase.co',
-    'EXPO_PUBLIC_SUPABASE_ANON_KEY=clave-de-relleno-solo-para-ver-la-interfaz',
+    'EXPO_PUBLIC_FIREBASE_API_KEY=clave-de-relleno-solo-para-ver-la-interfaz',
+    'EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=ejemplo.firebaseapp.com',
+    'EXPO_PUBLIC_FIREBASE_PROJECT_ID=ejemplo',
+    'EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=ejemplo.firebasestorage.app',
+    'EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=000000000000',
+    'EXPO_PUBLIC_FIREBASE_APP_ID=1:000000000000:web:ejemplo',
     'EXPO_PUBLIC_SUPPORT_EMAIL=soporte@krealomedia.com',
     'EXPO_PUBLIC_PRIVACY_URL=https://krealomedia.com/privacidad'
   )
@@ -171,7 +175,7 @@ Write-Host "----------------------------------------------------------------"
 Write-Host "Cuando termine de compilar, abre en el navegador:" -ForegroundColor Cyan
 Write-Host "    http://localhost:8081/kiosk" -ForegroundColor White
 Write-Host ""
-Write-Host "Sin credenciales de Supabase veras el kiosco completo: reloj, teclado,"
+Write-Host "Sin credenciales de Firebase veras el kiosco completo: reloj, teclado,"
 Write-Host "ayuda, cambio de idioma. El panel administrativo se queda en"
 Write-Host "'Preparando tu sesion', y eso es correcto: necesita servidor."
 Write-Host ""

@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 /**
  * Tipos de alerta administrativa y a dónde lleva cada una al tocarla (§19).
  *
@@ -36,7 +38,7 @@ export type ManagerAlertType = (typeof managerAlertTypes)[number];
  */
 export const alertDataSchema = z.object({
   alertType: z.enum(managerAlertTypes),
-  locationId: z.string().uuid().optional(),
+  locationId: docId().optional(),
 });
 
 export type AlertData = z.infer<typeof alertDataSchema>;

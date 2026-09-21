@@ -1,6 +1,6 @@
 # Verificación continua de Krealo Shift (especificación §4).
 #
-# Regla de diseño: NO requiere ningún secreto. Ni credenciales de Supabase, ni
+# Regla de diseño: NO requiere ningún secreto. Ni credenciales de Firebase, ni
 # token de Expo, ni claves de Apple. Se puede ejecutar en un fork y en un
 # repositorio recién clonado, y una persona nueva ve exactamente lo mismo que
 # corriendo los comandos en su máquina.
@@ -74,14 +74,22 @@ jobs:
       - name: Empaquetar para web
         run: npx expo export --platform web --output-dir /tmp/export-web
         env:
-          EXPO_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ejemplo-solo-para-empaquetar
+          EXPO_PUBLIC_FIREBASE_API_KEY: clave-de-ejemplo-solo-para-empaquetar
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ejemplo.firebaseapp.com
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: ejemplo
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ejemplo.firebasestorage.app
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+          EXPO_PUBLIC_FIREBASE_APP_ID: '1:000000000000:web:ejemplo'
 
       - name: Empaquetar para iOS
         run: npx expo export --platform ios --output-dir /tmp/export-ios
         env:
-          EXPO_PUBLIC_SUPABASE_URL: https://ejemplo.supabase.co
-          EXPO_PUBLIC_SUPABASE_ANON_KEY: clave-de-ejemplo-solo-para-empaquetar
+          EXPO_PUBLIC_FIREBASE_API_KEY: clave-de-ejemplo-solo-para-empaquetar
+          EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: ejemplo.firebaseapp.com
+          EXPO_PUBLIC_FIREBASE_PROJECT_ID: ejemplo
+          EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: ejemplo.firebasestorage.app
+          EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '000000000000'
+          EXPO_PUBLIC_FIREBASE_APP_ID: '1:000000000000:web:ejemplo'
 
       # ABRIR LA APP DE VERDAD. Empaquetar prueba que el grafo de modulos se
       # construye; no prueba que la app arranque. Una pantalla en blanco por un
@@ -125,12 +133,11 @@ jobs:
       - name: Comprobar coherencia (i18n huerfana, controles muertos)
         run: node scripts/coherencia-check.mjs
 
-      # supabase/instalar-todo.sql es una copia de 230 KB de las migraciones, para
-      # poder crear el esquema pegando un solo archivo en el editor SQL de Supabase.
-      # Una copia que nadie comprueba se queda vieja en silencio, y el sintoma es un
-      # proyecto nuevo con un esquema que ya no es el del repositorio.
-      - name: Comprobar que el instalador SQL esta al dia
-        run: python3 scripts/generar-instalacion.py --verificar
+      # Las Cloud Functions compilan aparte: tienen su propio tsconfig y corren en
+      # Node, no en React Native. Sin este paso, un error de tipos del servidor solo
+      # aparece al desplegar, que es el peor momento para enterarse.
+      - name: Compilar las Cloud Functions
+        run: npm ci --prefix functions && npx tsc -p functions --noEmit
 
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro

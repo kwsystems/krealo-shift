@@ -2,6 +2,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { docId } from '@/lib/firebase/ids';
+
 import { countPendingRequests } from '@/features/requests/api';
 import { fetchWeekShifts } from '@/features/schedules/api';
 import { currentWeekStart, dateKeyOf, weekRangeInstants } from '@/features/schedules/week';
@@ -22,12 +24,12 @@ import { VIEWS } from '@/lib/firebase/tables';
  */
 
 const workingNowSchema = z.object({
-  work_session_id: z.string().uuid(),
-  employee_id: z.string().uuid(),
+  work_session_id: docId(),
+  employee_id: docId(),
   full_name: z.string(),
   preferred_name: z.string().nullable(),
   starts_at: z.string(),
-  shift_id: z.string().uuid().nullable(),
+  shift_id: docId().nullable(),
   break_started_at: z.string().nullable(),
   attendance_state: z.enum(['WORKING', 'ON_BREAK']),
 });

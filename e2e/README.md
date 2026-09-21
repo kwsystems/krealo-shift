@@ -55,7 +55,7 @@ confirmación, se corrige en un solo lugar.
    `app.config.ts` —y hay que cambiarlo si está tomado, ver el README raíz— hay
    que cambiarlo también en los ocho archivos.
 
-4. **Backend con datos demo.** Migraciones aplicadas, `supabase/seed.sql`
+4. **Backend con datos demo.** Colecciones creadas con `functions/scripts/sembrar.mjs`
    aplicado y usuarios demo creados con `scripts/seed-demo-users.mjs`. Los pasos
    completos están en el README raíz.
 
@@ -94,7 +94,7 @@ reiniciar es volver a aplicar los datos demo, que son idempotentes y recalculan
 los turnos relativos a la hora actual:
 
 ```bash
-psql "<cadena de conexión>" -f supabase/seed.sql
+node functions/scripts/sembrar.mjs
 ```
 
 Consultas y llamadas que los flujos piden como paso manual:
@@ -120,8 +120,8 @@ Para la mitad de los flujos 03 y 04 que no pasa por la interfaz —enviar un eve
 con la credencial del kiosco pero la ubicación de otra tienda, o con una
 credencial revocada— se llama directamente a la Edge Function con `curl`,
 enviando las cabeceras `x-kiosk-credential` y `x-kiosk-device`. El contrato está
-en `supabase/functions/README.md`. La credencial del kiosco demo es un valor
-conocido definido en `supabase/seed.sql`, y sirve solo para el proyecto de
+en `functions/src/kiosk-api.ts`. La credencial del kiosco de pruebas la emite
+`activateKiosk` al canjear un código, y sirve solo para el proyecto de
 desarrollo.
 
 ## testID: reconciliado el 2026-08-27

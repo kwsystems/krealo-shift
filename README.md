@@ -6,7 +6,8 @@ regreso y salida con un PIN personal. Gerentes y administradores usan la misma
 app —o su previsualización web— para ver el equipo, armar el horario semanal y
 revisar horas.
 
-Aplicación única para iPhone y iPad, hecha con Expo (React Native) y Supabase.
+Aplicación única para iPhone y iPad, hecha con Expo (React Native) y Firebase
+(Firestore, Auth con Google y Cloud Functions).
 
 ## Alcance real de P0/P1
 
@@ -36,16 +37,17 @@ y `SECURITY.md` para el modelo de seguridad.
 
 ## Requisitos
 
-| Herramienta            | Versión                             | Notas                                  |
-| ---------------------- | ----------------------------------- | -------------------------------------- |
-| Node.js                | 20 LTS o superior                   | `node --version`                       |
-| npm                    | 10 o superior                       | viene con Node                         |
-| Git                    | cualquiera reciente                 |                                        |
-| Cuenta Supabase        | plan gratuito sirve para desarrollo |                                        |
-| Supabase CLI           | 2.x                                 | solo para migraciones y Edge Functions |
-| Cuenta Expo (EAS)      | gratuita para empezar               | solo para generar builds               |
-| Cuenta Apple Developer | del propietario                     | solo para TestFlight                   |
-| iPad con iPadOS 16.4+  |                                     | el mínimo lo fija Expo SDK 57          |
+| Herramienta            | Versión                               | Notas                                |
+| ---------------------- | ------------------------------------- | ------------------------------------ |
+| Node.js                | 20 LTS o superior                     | `node --version`                     |
+| npm                    | 10 o superior                         | viene con Node                       |
+| Git                    | cualquiera reciente                   |                                      |
+| Cuenta Google          | con acceso al proyecto `krealo-shift` |                                      |
+| Firebase CLI           | 14 o superior                         | `npm i -g firebase-tools`            |
+| gcloud CLI             | cualquiera reciente                   | solo para Firestore y Secret Manager |
+| Cuenta Expo (EAS)      | gratuita para empezar                 | solo para generar builds             |
+| Cuenta Apple Developer | del propietario                       | solo para TestFlight                 |
+| iPad con iPadOS 16.4+  |                                       | el mínimo lo fija Expo SDK 57        |
 
 No hace falta macOS: los builds de iOS se generan en la nube con EAS Build. Sí
 hace falta un iPhone o iPad real para verificar cámara, notificaciones,
@@ -77,13 +79,13 @@ enumera qué claves faltan (`src/lib/env.ts`).
 npm install                                             # dependencias
 npm run web:demo                                        # LA WEB CON DATOS DE DEMOSTRACIÓN (sin backend)
 npx expo start                                          # servidor de desarrollo (nativo)
-npm run web                                             # la web contra tu Supabase (necesita .env)
+npm run web                                             # la web contra Firebase (necesita .env)
 npx expo-doctor                                         # revisa el proyecto Expo
 npx tsc --noEmit                                        # typecheck (TypeScript strict)
 npm test                                                # pruebas Jest
 npx eslint .                                            # lint
 npx prettier --check .                                  # formato (npm run format lo arregla)
-./scripts/db-test.sh                                    # pruebas SQL sobre Postgres local
+npx tsc -p functions --noEmit                           # tipos del servidor
 
 node scripts/generar-iconos.mjs                         # regenera icono, splash y favicon
 node scripts/render-check.mjs <dir-export>               # ¿pinta cada ruta sin errores de consola?
@@ -92,7 +94,7 @@ node scripts/a11y-check.mjs <dir-export>                # contraste, nombres, ob
 node scripts/e2e-ids-check.mjs                          # testIDs referenciados que ya no existen
 node scripts/coherencia-check.mjs                       # claves i18n huérfanas y controles que no hacen nada
 node scripts/capturas-store.mjs <dir-export>            # capturas para la App Store, en los tamaños exactos
-python3 scripts/generar-instalacion.py                  # regenera supabase/instalar-todo.sql
+node functions/scripts/sembrar.mjs                      # crea las colecciones de Firestore
 
 npm run demo:export                                     # compila la demostración a dist-demo/
 npm run demo:check                                      # la recorre en Chromium: ¿hay contenido y son distintas?
@@ -160,7 +162,7 @@ Cuando abra, añade `/kiosk` a la URL para ver el reloj de fichaje:
 
 ### Con datos de verdad
 
-Cuando exista el proyecto de Supabase (ver «Configurar Supabase paso a paso»):
+Con el proyecto de Firebase configurado (ver «Configurar Firebase paso a paso»):
 
 ```powershell
 Copy-Item .env.example .env
@@ -193,7 +195,7 @@ Los comandos de arriba funcionan siempre y no dependen de esa política.
 Con `npm run web:demo` se recorre **todo**: las cinco pestañas del panel con datos, el
 kiosco y los dos idiomas. Lo único que no hace es hablar con un servidor de verdad.
 
-| Funciona con `web:demo`                                      | Sigue necesitando Supabase                       |
+| Funciona con `web:demo`                                      | Sigue necesitando Firebase                       |
 | ------------------------------------------------------------ | ------------------------------------------------ |
 | El panel entero: inicio, equipo, horario, horas, solicitudes | Datos reales de tu negocio                       |
 | El kiosco: reloj, teclado de PIN, ayuda, activación          | Validar un PIN de verdad contra la base          |
@@ -248,7 +250,7 @@ development con EAS (`eas build --profile development`) instalado en el iPad, y
 
 ## Publicar la web
 
-La web se aloja en **Firebase Hosting** y el backend sigue en Supabase (decidido con
+La web se aloja en **Firebase Hosting** y el backend también es Firebase (decidido con
 Andree el 2026-09-14). La configuración está en `firebase.json` y el paso a paso, con
 lo que hace falta de tu parte, en **[`docs/FIREBASE-HOSTING.md`](docs/FIREBASE-HOSTING.md)**.
 
@@ -281,8 +283,12 @@ cp .env.example .env
 
 ```dotenv
 EXPO_PUBLIC_APP_ENV=development
-EXPO_PUBLIC_SUPABASE_URL=
-EXPO_PUBLIC_SUPABASE_ANON_KEY=
+EXPO_PUBLIC_FIREBASE_API_KEY=
+EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=
+EXPO_PUBLIC_FIREBASE_PROJECT_ID=
+EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=
+EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+EXPO_PUBLIC_FIREBASE_APP_ID=
 EXPO_PUBLIC_SUPPORT_EMAIL=
 EXPO_PUBLIC_PRIVACY_URL=
 ```
@@ -295,7 +301,7 @@ Reglas, no sugerencias:
   puede saltarse las políticas;
 - **la `service_role` NUNCA va en la app**, ni con prefijo, ni sin prefijo, ni
   "solo para probar". Vive en dos sitios: los secretos de las Edge Functions en
-  Supabase, y tu terminal cuando corres `scripts/seed-demo-users.mjs`;
+  Firebase, y tu terminal cuando corres los scripts de `functions/scripts/`;
 - `.env` está en `.gitignore`. `.env.example` es la única versión que se commitea,
   y va vacía;
 - las variables se validan con Zod al arrancar (`src/lib/env.ts`). En desarrollo
@@ -306,237 +312,100 @@ configuran en el proyecto de EAS y `eas.json` selecciona el entorno
 (`development`, `preview`, `production`) en cada perfil.
 
 ```bash
-eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_URL --value "https://<ref>.supabase.co"
-eas env:create --environment preview --name EXPO_PUBLIC_SUPABASE_ANON_KEY --value "<anon key>"
+eas env:create --environment preview --name EXPO_PUBLIC_FIREBASE_PROJECT_ID --value "krealo-shift"
+eas env:create --environment preview --name EXPO_PUBLIC_FIREBASE_API_KEY --value "<api key>"
 ```
 
 Repetir para `production`. También se pueden gestionar desde el panel de
 expo.dev. Aun siendo públicas, no se commitean.
 
-## Configurar Supabase paso a paso
+## Configurar Firebase paso a paso
 
-Hay dos rutas. La corta no necesita instalar nada y es la que sirve para ver la app
-funcionando hoy; la larga usa el CLI de Supabase y es la que se usa para trabajar el
-proyecto a diario.
+El proyecto `krealo-shift` ya existe y está configurado: Firestore en
+`southamerica-east1`, reglas e índices desplegados, 21 Cloud Functions vivas y las
+28 colecciones creadas. Esta sección es para saber qué hay y cómo repetirlo, no un
+trámite pendiente.
 
-### Ruta corta: sin CLI, pegando dos archivos en el panel
+### Lo que ya está hecho
 
-Cinco pasos, el último opcional. No hace falta la `service_role key` en ningún
-momento: todo pasa dentro del propio panel de Supabase.
+| Pieza                    | Estado                                                               |
+| ------------------------ | -------------------------------------------------------------------- |
+| Base Firestore           | `southamerica-east1`, modo nativo. **La región no se puede cambiar** |
+| `firestore.rules`        | desplegadas — las políticas RLS traducidas                           |
+| `firestore.indexes.json` | 16 índices compuestos, uno por consulta real de la app               |
+| `storage.rules`          | desplegadas — fotos cerradas, logo público                           |
+| Cloud Functions          | 21, en `southamerica-east1`                                          |
+| Colecciones              | 28, creadas por `functions/scripts/sembrar.mjs`                      |
+| `KIOSK_TOKEN_SECRET`     | en Secret Manager, declarado en las 4 funciones que lo usan          |
 
-1. **Crear el proyecto.** En [supabase.com](https://supabase.com) → _New project_. El
-   plan gratuito alcanza. Guarda la contraseña de base de datos que te pida, aunque
-   para esto no la vas a usar.
+### Lo que falta y solo puede hacer el dueño de la cuenta
 
-2. **Crear el esquema.** Menú lateral → **SQL Editor** → _New query_ → pega TODO
-   `supabase/instalar-todo.sql` → **Run**. Son las 22 migraciones y los datos de
-   demostración en un solo archivo. Al terminar dice _Success. No rows returned_.
+**Habilitar el proveedor de Google en Firebase Auth.** Son tres clics y no hay API
+pública que los haga: al activarlo, Firebase crea solo el cliente OAuth de web.
 
-3. **Crear tu usuario.** Menú lateral → **Authentication** → **Users** → _Add user_ →
-   _Create new user_:
-   - tu correo y una contraseña;
-   - marca **Auto Confirm User**. Sin eso el usuario queda sin confirmar y el acceso
-     falla sin decir por qué.
+1. [console.firebase.google.com/project/krealo-shift/authentication/providers](https://console.firebase.google.com/project/krealo-shift/authentication/providers)
+2. **Google** → activar → elegir correo de soporte → **Guardar**.
 
-   Después, otra vez en **SQL Editor**, pega `supabase/crear-mi-usuario.sql` —
-   cambiando el correo de la primera línea por el tuyo — y **Run**. Eso te hace
-   propietario de la organización de demostración y te da una ficha de empleado con
-   PIN `246810`, para poder probar también el kiosco.
+Hasta que eso pase, nadie puede entrar: el botón está y la ventana de Google
+responde que el proveedor está deshabilitado.
 
-   El usuario se crea en el panel y no por SQL a propósito: una cuenta que pueda
-   iniciar sesión necesita filas exactas en `auth.users` y en `auth.identities`, con
-   el formato que espera la versión de GoTrue que corra tu proyecto. Desde el panel
-   sale bien siempre.
+Para entrar con Google **en iPad** hace falta además un cliente OAuth de iOS, y su
+identificador va en `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`. Sin él la app lo dice en
+pantalla en vez de abrir un navegador que acabaría en un error de Google.
 
-4. **Apuntar la app al proyecto.** _Project Settings_ → _API_. Copia **Project URL** y
-   **anon public** al `.env` del repositorio:
-
-   ```
-   EXPO_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
-   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon public key>
-   ```
-
-   Y reinicia la previsualización con la caché limpia, porque esos valores se leen al
-   empaquetar:
-
-   ```powershell
-   npx expo start --web --clear
-   ```
-
-5. **Habilitar el enlace de recuperación de contraseña** (opcional, un minuto).
-   _Authentication_ → _URL Configuration_ → _Redirect URLs_ → _Add URL_, y agrega las
-   dos:
-
-   ```
-   krealoshift://restablecer
-   http://localhost:8081/restablecer
-   ```
-
-   La primera es la app en el iPad; la segunda, la previsualización web. Sin esto
-   «Olvidé mi contraseña» **sí envía el correo**, pero el enlace lleva al _Site URL_
-   del proyecto en vez de abrir la app, así que la pantalla para escribir la
-   contraseña nueva no aparece. Es configuración del proyecto, no código: la app ya
-   pide `krealoshift://restablecer` como URL de retorno.
-
-Con eso el acceso ya funciona con tu correo y tu contraseña. Lo que sigue sin
-funcionar en la web es el kiosco de verdad: necesita un dispositivo activado, y eso
-va en el iPad (ver «Lo que NO se puede verificar en la web»).
-
-`instalar-todo.sql` es un archivo **generado**. Si cambia una migración se regenera
-con `python3 scripts/generar-instalacion.py`, y CI comprueba que no se haya quedado
-viejo. No se edita a mano.
-
-### Ruta larga: con el CLI de Supabase
-
-### 1. Crear el proyecto
-
-En [supabase.com](https://supabase.com) crea un proyecto. Anota:
-
-- **Project URL** → `EXPO_PUBLIC_SUPABASE_URL`;
-- **anon public key** → `EXPO_PUBLIC_SUPABASE_ANON_KEY`;
-- **service_role key** → NO va en la app. Solo la usarás en tu terminal.
-
-Fija la zona horaria mental del negocio en las ubicaciones, no en el proyecto:
-cada `location` guarda su propio `timezone`.
-
-### 2. Instalar y vincular el CLI
+### Arrancar desde cero en otro proyecto
 
 ```bash
-npm install -g supabase          # o: npx supabase@latest <comando>
-supabase login
-supabase link --project-ref <ref-del-proyecto>
+gcloud auth application-default login
+firebase login
+
+gcloud firestore databases create --location=southamerica-east1 --type=firestore-native
+firebase deploy --only firestore,storage
+npm --prefix functions ci && firebase deploy --only functions
+
+node functions/scripts/sembrar.mjs
 ```
 
-El `<ref>` es el subdominio de la Project URL.
+`sembrar.mjs` es idempotente: usa identificadores fijos y escribe con `merge`, así
+que se puede volver a lanzar sin duplicar nada. Con `--solo-ver` dice qué haría sin
+escribir.
 
-### 3. Aplicar las migraciones
+### Darte acceso a ti mismo
+
+La membresía se identifica por el `uid` que Firebase asigna al entrar con Google, y
+ese `uid` **no existe hasta que entras por primera vez**. Así que el orden es:
+
+1. entra en la app con Google;
+2. después, desde tu máquina:
 
 ```bash
-supabase db push
+node functions/scripts/vincular-propietario.mjs tu@correo.com
 ```
 
-Aplica, en orden, los archivos de `supabase/migrations/`:
+Eso crea la membresía `owner` y tu perfil. Si intentas lanzarlo antes de haber
+entrado, el script lo dice y para: no crea cuentas.
 
-| Migración                                   | Qué crea                                                                                                                                          |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `…000100_initial_schema.sql`                | 25 tablas, enums, restricciones, índices; `time_events` y `audit_logs` son _append-only_                                                          |
-| `…000200_rls.sql`                           | Row Level Security en todas las tablas expuestas                                                                                                  |
-| `…000300_functions.sql`                     | funciones `security definer`: PIN, kioscos, registro de eventos, correcciones, exportación                                                        |
-| `…000400_guards.sql`                        | guardas que la interfaz no puede garantizar (no quedarse sin propietario, turnos que no se solapan, publicación sellada)                          |
-| `…000500_kiosk_context.sql`                 | `kiosk_employee_context`, lo que ve la pantalla del empleado tras el PIN                                                                          |
-| `…000600_offline_pin.sql`                   | verificador de PIN para uso sin conexión, su reparto por dispositivo y el registro de eventos offline                                             |
-| `…000700_offline_verifier_device_key.sql`   | `offline_key` por dispositivo: el verificador que se reparte va atado al iPad que lo pidió                                                        |
-| `…000800_attendance_photos.sql`             | bucket privado de fotos de fichaje, ruta firmada y purga por caducidad                                                                            |
-| `…000900_scheduled_jobs.sql`                | la purga anterior como tarea de `pg_cron`; si la extensión no está, no rompe nada                                                                 |
-| `…001000_kiosk_devices_admin.sql`           | vista de inventario de kioscos para el panel, sin exponer las credenciales                                                                        |
-| `…001100_manager_alerts.sql`                | los siete hechos que generan alerta al encargado, con deduplicación y reclamo por lotes                                                           |
-| `…001200_organization_logo.sql`             | bucket de logo de la organización, de lectura pública y escritura solo del administrador                                                          |
-| `…001300_manager_add_time_event.sql`        | que un encargado pueda añadir un fichaje que faltó, idempotente y auditado                                                                        |
-| `…001400_function_privileges.sql`           | quita `execute` a `public`, `anon` y `authenticated` de TODAS las funciones y lo devuelve por lista blanca                                        |
-| `…001500_authorize_rpc.sql`                 | la comprobación de rol dentro de los RPC: conceder `execute` no es conceder permiso                                                               |
-| `…001600_close_direct_writes.sql`           | cierra las dos políticas que permitían escribir horas y auditoría sin pasar por el camino auditable                                               |
-| `…001700_notification_preferences_real.sql` | deja seis interruptores de notificación, uno por alerta que existe: dos de los ocho anteriores no controlaban nada                                |
-| `…001800_kiosk_request_updates.sql`         | el kiosco devuelve el resultado de las solicitudes de esa persona: sin esto el empleado no se enteraba de en qué quedó lo que reportó             |
-| `…001900_alertas_1106.sql`                  | implementa las dos alertas que §11.6 pide y §19 omite (entrada temprana, cambio de horario): nueve alertas, ocho interruptores                    |
-| `…002000_aviso_ultimo_contacto.sql`         | el aviso de «reloj sin sincronizar» mide el último contacto y no la última vez que se vació la cola: antes disparaba a diario en kioscos sanos    |
-| `…002100_truncar_minutos.sql`               | los segundos sueltos se truncan igual que en TypeScript: SQL redondeaba y había hasta un minuto de diferencia en lo que se paga                   |
-| `…002200_autor_de_correcciones.sql`         | §11.4 exige conservar el AUTOR de cada corrección y no había forma de mostrarlo: `created_by` apunta a `auth.users`, que el cliente no puede leer |
+### El secreto del token de kiosco
 
-La lista puede crecer: la fuente de verdad es el directorio, y `supabase db push`
-aplica lo que falte en orden de nombre.
-
-Alternativa sin CLI: `supabase/instalar-todo.sql`, que es exactamente estos
-archivos concatenados en orden — ver la ruta corta más arriba.
-
-### 4. Crear los usuarios demo
-
-`supabase/seed.sql` no puede crear usuarios con contraseña —eso pasa por la Auth
-API— así que va antes este script. **La contraseña se lee del entorno, nunca del
-repositorio.**
+`KIOSK_TOKEN_SECRET` firma los tokens de acción de 90 segundos que emite `verifyPin`
+y consumen las funciones que escriben fichajes. Ya está en Secret Manager. Para
+rotarlo:
 
 ```bash
-SUPABASE_URL="https://<ref>.supabase.co" \
-SUPABASE_SERVICE_ROLE_KEY="<service_role>" \
-DEMO_PASSWORD="<una contraseña larga que elijas tú>" \
-node scripts/seed-demo-users.mjs
+openssl rand -hex 32 | gcloud secrets versions add KIOSK_TOKEN_SECRET --data-file=-
+firebase deploy --only functions
 ```
 
-En PowerShell:
+Rotarlo invalida los tokens de acción en vuelo, o sea que quien esté con el teclado
+del PIN abierto en ese instante tiene que volver a marcarlo. Dura 90 segundos.
 
-```powershell
-$env:SUPABASE_URL="https://<ref>.supabase.co"
-$env:SUPABASE_SERVICE_ROLE_KEY="<service_role>"
-$env:DEMO_PASSWORD="<una contraseña larga que elijas tú>"
-node scripts/seed-demo-users.mjs
-```
-
-`DEMO_PASSWORD` exige 12 caracteres como mínimo. El script es idempotente: si un
-usuario ya existe, lo informa y sigue. Crea tres cuentas con correos en el TLD
-reservado `.invalid` (propietaria, gerenta y una empleada con cuenta), para que
-un demo no pueda escribirle a una persona real.
-
-### 5. Aplicar los datos demo
+### Comprobar que quedó bien
 
 ```bash
-psql "<cadena de conexión de Supabase>" -f supabase/seed.sql
+gcloud firestore indexes composite list --project krealo-shift     # 16, en READY
+firebase functions:list --project krealo-shift                      # 21
+node functions/scripts/sembrar.mjs --solo-ver                       # 28 colecciones
 ```
-
-La cadena de conexión está en el panel: _Project Settings → Database → Connection
-string_. También se puede pegar el archivo en el SQL Editor.
-
-El seed es idempotente y crea la organización Krealo Media Demo, dos ubicaciones
-con políticas distintas (largo de PIN, formato de hora, tolerancias), cinco
-empleados ficticios —uno trabajando, uno en descanso, uno atrasado y uno sin
-turno—, dos semanas de turnos, un kiosco de demostración y una segunda
-organización que existe solo para probar el aislamiento.
-
-Los PIN y la credencial del kiosco demo son valores obvios definidos dentro de
-`supabase/seed.sql`, marcados ahí como de demostración. **No sirven para
-producción y no deben copiarse a un proyecto real.**
-
-### 6. Desplegar las Edge Functions
-
-```bash
-supabase functions deploy activate-kiosk refresh-kiosk-roster verify-pin \
-  submit-time-event sync-offline-events submit-time-edit-request
-```
-
-Son la única puerta entre la app y la base: la app nunca inserta en
-`time_events`. El detalle de cada una está en `supabase/functions/README.md`.
-
-### 7. Fijar el secreto `KIOSK_TOKEN_SECRET`
-
-Firma los tokens de acción de 90 segundos que autorizan cada fichaje. Sin él las
-funciones que escriben no arrancan.
-
-```bash
-supabase secrets set KIOSK_TOKEN_SECRET="$(openssl rand -hex 32)"
-```
-
-En PowerShell, sin `openssl`:
-
-```powershell
-$bytes = New-Object byte[] 32
-[Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
-$secret = -join ($bytes | ForEach-Object { $_.ToString("x2") })
-supabase secrets set KIOSK_TOKEN_SECRET="$secret"
-```
-
-`SUPABASE_URL` y `SUPABASE_SERVICE_ROLE_KEY` ya existen en el entorno de las
-Edge Functions; no hay que configurarlas. Ninguno de estos secretos lleva prefijo
-`EXPO_PUBLIC_` ni entra en el repositorio.
-
-### 8. Comprobar que quedó bien
-
-- en la app, el acceso administrativo con la cuenta `demo-owner@…` y la
-  `DEMO_PASSWORD` que elegiste debe entrar al panel;
-- _Table Editor → `employee_pin_credentials`_ debe mostrar hashes bcrypt, nunca
-  PIN legibles;
-- _Authentication → Policies_ debe mostrar RLS activo en todas las tablas;
-- para activar el iPad como kiosco hace falta un código de activación emitido
-  desde el panel administrativo (pantalla pendiente, ver
-  [Qué falta](#qué-falta)); mientras tanto se puede emitir llamando a la función
-  de activación desde el SQL Editor.
 
 ## Pruebas
 
@@ -551,36 +420,26 @@ Cubren la máquina de estados de asistencia, las utilidades de tiempo (turnos qu
 cruzan medianoche, zonas horarias), la paridad de claves entre es-PE e inglés y
 los componentes del teclado de PIN y la cuenta regresiva.
 
-### Pruebas de base de datos (SQL)
+### Pruebas de las reglas de seguridad
 
 ```bash
-./scripts/db-test.sh              # esquema + datos demo + comprobaciones
-./scripts/db-test.sh --schema     # solo aplicar las migraciones
+firebase emulators:exec --only firestore "npx jest --ci"
 ```
 
-El script levanta las migraciones sobre un **Postgres local**, sin nube y sin
-Supabase CLI. Para lograrlo aplica primero `supabase/tests/00_supabase_shim.sql`,
-un _shim_ que reproduce lo mínimo del esquema `auth` de Supabase que usan las
-migraciones: la tabla `auth.users`, las funciones `auth.uid()` y `auth.role()`
-—que leen la misma variable de sesión `request.jwt.claims` que usa Supabase— y
-los roles `anon`, `authenticated` y `service_role`. Eso permite impersonar
-usuarios reales y probar de verdad las políticas RLS. El shim **no** se aplica en
-producción: en Supabase todo eso ya existe.
+**AQUÍ HABÍA 265 ASERCIONES SQL Y AHORA NO HAY NINGUNA, y conviene no fingir lo
+contrario.** Las políticas RLS se probaban contra un Postgres local con
+`scripts/db-test.sh`: se impersonaba a un usuario real y se comprobaba fila por fila
+qué podía ver. Ese arnés se fue con Postgres.
 
-Después recrea la base `krealo_test`, aplica todas las migraciones en orden, aplica
-`supabase/seed.sql` y corre `supabase/tests/10_rls.sql` y
-`supabase/tests/20_functions.sql`.
+Su equivalente es `@firebase/rules-unit-testing` sobre el emulador de Firestore, que
+hace exactamente lo mismo —abrir una sesión falsa con un `uid` concreto y ver qué le
+deja hacer `firestore.rules`—. **No está escrito todavía**, y es la deuda más grande
+que deja la migración: las reglas están razonadas y desplegadas, pero nada las
+vigila contra una edición futura.
 
-Requisitos, porque el script **no** crea ni arranca el servidor:
-
-- Linux (o WSL en Windows) con `su postgres` disponible, es decir se corre como
-  root;
-- PostgreSQL 16 instalado, con un clúster ya inicializado y **escuchando**;
-- por defecto espera los binarios en `/usr/lib/postgresql/16/bin`, el directorio
-  de datos en `/var/lib/postgresql/ks-test` y el socket en
-  `/var/lib/postgresql/ks-test/run`, puerto `55432`.
-
-Se puede reapuntar con variables de entorno: `KS_PGBIN`, `KS_PGDIR`, `KS_PGPORT`.
+Mientras tanto, lo que sí hay: `npm test` cubre la máquina de estados, las utilidades
+de tiempo, la paridad de idiomas y los componentes; y `npx tsc -p functions` cubre
+que el servidor compile.
 
 ### Pruebas de flujo (Maestro)
 
@@ -677,8 +536,8 @@ archivo. Cambiar el esquema rompe los enlaces profundos existentes.
 - [ ] cambiar IDs y URLs temporales: bundle identifier verificado,
       `EXPO_PUBLIC_PRIVACY_URL` y `EXPO_PUBLIC_SUPPORT_EMAIL` reales;
 - [ ] cargar los secretos y variables en EAS (`eas env:create` por entorno);
-- [ ] vincular el Supabase **productivo**, distinto del de desarrollo;
-- [ ] aplicar las migraciones en ese proyecto (`supabase db push`);
+- [ ] crear el proyecto de Firebase **productivo**, distinto del de desarrollo;
+- [ ] desplegar reglas, índices y funciones en ese proyecto, y sembrar sus colecciones;
 - [ ] probar RLS: que un gerente no vea otra ubicación y que una organización no
       vea a la otra;
 - [ ] verificar en dispositivo real la **cámara opcional** y las
@@ -686,7 +545,7 @@ archivo. Cambiar el esquema rompe los enlaces profundos existentes.
 - [ ] revisar las traducciones es-PE / en de punta a punta, incluidos errores y
       estados vacíos;
 - [ ] revisar la política de privacidad y el Privacy Manifest frente a lo que la
-      app realmente recoge (no declarar "no recopila datos" si Supabase procesa
+      app realmente recoge (no declarar "no recopila datos" si Firebase procesa
       identificadores y fotos);
 - [ ] generar capturas de pantalla originales —nunca de otra app— e icono
       1024×1024 propio;
@@ -712,7 +571,7 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
 - **disparador de las alertas**: `send-manager-alerts` está escrita y probada, pero
   hay que llamarla cada 15 minutos desde fuera (documentado en
-  `supabase/functions/README.md`). Sin eso las alertas se calculan y no se envían:
+  abajo). Sin eso las alertas no se calculan ni se envían:
   no se pierden, pero nadie se entera;
 - **`EAS_PROJECT_ID`**: sin él la app no puede pedir token de push, y el panel lo
   dice con un aviso honesto en vez de un botón que fallaría;
@@ -724,7 +583,7 @@ y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
   genera 24 capturas —kiosco y acceso, en los tres tamaños que pide App Store Connect y
   en los dos idiomas— y comprueba el tamaño de cada PNG leyendo su cabecera, porque
   Apple rechaza una captura de un píxel de más. Las del panel necesitan una sesión real
-  contra un Supabase real, así que el script las hace solo con credenciales:
+  contra Firebase, así que el script las hace solo con credenciales:
   `KS_SHOT_EMAIL=... KS_SHOT_PASSWORD=... node scripts/capturas-store.mjs <export>`;
 - **revisar el icono con Andree**: hay uno propio, generado por
   `scripts/generar-iconos.mjs` a partir de los tokens de color de la app, y ya no es
@@ -783,8 +642,8 @@ Nada de esto se puede hacer sin las credenciales de Andree:
 ```text
 app/            rutas de Expo Router: kiosco, acceso y panel administrativo
 src/            componentes, dominio, i18n, stores, tema y utilidades
-supabase/       migraciones, Edge Functions, seed y pruebas SQL
-scripts/        db-test.sh (pruebas SQL) y seed-demo-users.mjs (usuarios demo)
+functions/      Cloud Functions, reglas de negocio del servidor y scripts de arranque
+scripts/        comprobaciones del paquete web (render, a11y, contraste, interaccion)
 e2e/            flujos críticos como especificaciones de Maestro
 docs/           DECISIONES.md y referencias de diseño de solo lectura
 assets/         iconos, splash y fuentes
@@ -794,11 +653,11 @@ eas.json        perfiles development, preview y production
 
 ## Documentos relacionados
 
-| Archivo                        | Qué contiene                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------ |
-| `SECURITY.md`                  | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
-| `docs/DECISIONES.md`           | decisiones técnicas y desviaciones, con su motivo                              |
-| `supabase/functions/README.md` | contrato de las Edge Functions y la decisión offline pendiente                 |
-| `e2e/README.md`                | cómo correr los flujos de Maestro y qué falta para que pasen                   |
-| `docs/reference/`              | referencias de diseño traídas del Publisher, de solo lectura                   |
-| `CLAUDE.md`                    | reglas del proyecto y de gestión de tareas para agentes                        |
+| Archivo              | Qué contiene                                                                   |
+| -------------------- | ------------------------------------------------------------------------------ |
+| `SECURITY.md`        | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
+| `docs/DECISIONES.md` | decisiones técnicas y desviaciones, con su motivo                              |
+| `firestore.rules`    | el modelo de permisos, y las tres diferencias con RLS que importan             |
+| `e2e/README.md`      | cómo correr los flujos de Maestro y qué falta para que pasen                   |
+| `docs/reference/`    | referencias de diseño traídas del Publisher, de solo lectura                   |
+| `CLAUDE.md`          | reglas del proyecto y de gestión de tareas para agentes                        |

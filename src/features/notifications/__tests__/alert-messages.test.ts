@@ -6,7 +6,7 @@ import {
   composeAlert,
   managerAlertTypes,
   resolveAlertLocale,
-} from '../../../../supabase/functions/_shared/alert-messages';
+} from '../../../../functions/src/shared/alert-messages';
 
 /**
  * POR QUÉ ESTA PRUEBA VIVE AQUÍ Y NO JUNTO AL CÓDIGO QUE PRUEBA

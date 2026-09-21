@@ -5,7 +5,7 @@ protegido no es un bug estético: es una hora que alguien cobra o deja de cobrar
 Este documento explica qué protegemos, de quién, con qué mecanismos, y qué
 decisiones quedaron tomadas con su costo a la vista.
 
-Alcance: este repositorio (app Expo, migraciones y Edge Functions de Supabase).
+Alcance: este repositorio (app Expo, reglas de Firestore y Cloud Functions).
 
 ## Modelo de amenazas
 
@@ -30,7 +30,7 @@ Contra quién:
 | Persona con acceso al repositorio   | encontrar secretos                                                  | no hay secretos en Git: solo `.env.example` vacío                                                                                                                 |
 
 Fuera de alcance en P0/P1: fichaje desde teléfonos personales (no existe),
-geolocalización (no existe) y ataques a la infraestructura de Supabase o Apple.
+geolocalización (no existe) y ataques a la infraestructura de Google o Apple.
 
 ## Manejo de secretos
 
@@ -42,9 +42,11 @@ geolocalización (no existe) y ataques a la infraestructura de Supabase o Apple.
 - **La `service_role` nunca entra en la app.** Vive en los secretos de las Edge
   Functions y, temporalmente, en la terminal de quien corre
   `scripts/seed-demo-users.mjs`. Si aparece dentro de `app/`, `src/` o de una
-  variable `EXPO_PUBLIC_*`, es un incidente: hay que rotarla en Supabase.
+  variable `EXPO_PUBLIC_*`, es un incidente: hay que rotar esa credencial.
+  La configuración de Firebase (`apiKey`, `appId`) NO entra en esa categoría: es
+  pública por diseño y lo que protege los datos son las reglas y las funciones.
 - **`KIOSK_TOKEN_SECRET`** (32+ bytes aleatorios) firma los tokens de acción. Se
-  fija con `supabase secrets set` y se rota cuando haga falta; rotarlo invalida
+  vive en Secret Manager y se rota cuando haga falta; rotarlo invalida
   los tokens en vuelo, que duran 90 segundos, así que el impacto es nulo.
 - **Las contraseñas de demo se leen del entorno** (`DEMO_PASSWORD`), nunca del
   repositorio, y los usuarios demo usan correos en el TLD reservado `.invalid`
@@ -68,15 +70,15 @@ geolocalización (no existe) y ataques a la infraestructura de Supabase o Apple.
 ### Por qué bcrypt y no Argon2id
 
 La especificación pide Argon2id "o un mecanismo robusto disponible en la función
-segura". **Argon2 no existe en PostgreSQL ni en pgcrypto**, y Supabase no permite
-instalar extensiones arbitrarias. Las opciones eran:
+segura". La razón original era que **Argon2 no existe en PostgreSQL ni en
+pgcrypto**; al pasar a Cloud Functions esa razón desapareció —en Node se puede usar
+Argon2— y la decisión **se mantiene igualmente**, ahora por otro motivo:
 
-1. bcrypt coste 12 dentro de la base — un solo lugar donde vive el hash;
-2. Argon2id en una Edge Function — algoritmo más fuerte, pero la validación del
-   PIN se partiría entre la base y la función, y el hash dejaría de estar bajo la
-   misma transacción que el contador de intentos y el bloqueo.
+1. cambiar de algoritmo obliga a que todos los PIN existentes se vuelvan a fijar
+   uno por uno, porque un hash bcrypt no se convierte en uno Argon2;
+2. para un secreto de 4–6 dígitos, el algoritmo no es lo que decide.
 
-Se eligió bcrypt coste 12. Para un secreto de 4–6 dígitos, el límite de intentos y
+Se mantiene bcrypt. Para un secreto de 4–6 dígitos, el límite de intentos y
 el bloqueo pesan mucho más que el algoritmo: con 5 intentos por 15 minutos, la
 fuerza bruta online no llega a ninguna parte, y contra un volcado de la base
 bcrypt coste 12 ya es lento. Queda documentado como desviación consciente en
@@ -102,7 +104,7 @@ Demo: la ubicación viene de la credencial, no del cuerpo de la petición.
 
 La app **nunca** inserta en `time_events`. Todo pasa por las Edge Functions, que a
 su vez delegan las reglas a funciones SQL `security definer` con `search_path`
-fijo. Ver `supabase/functions/README.md`.
+fijo. Ver `functions/src/shared/kiosk.ts`.
 
 ## Validación del PIN sin conexión
 
@@ -122,8 +124,7 @@ dispositivo sin conocer el PIN en claro**. Las salidas que se consideraron:
    dispositivo**, sin el hash.
 
 **Decisión tomada: la opción 4**, implementada en
-`supabase/migrations/20260827000700_offline_verifier_device_key.sql`,
-`src/lib/offline/pin.ts` y `supabase/functions/refresh-kiosk-roster/`.
+`functions/src/kiosk-api.ts` (`refreshKioskRoster`) y `src/lib/offline/pin.ts`.
 
 Cómo funciona: al activarse, el iPad recibe una clave aleatoria de 32 bytes que
 guarda en el Keychain, separada de la credencial con la que hace peticiones. En
@@ -167,7 +168,7 @@ revocado no recibe ninguno.
 
 Que las dos puntas calculan exactamente lo mismo está fijado con un vector de
 prueba real en `src/lib/offline/__tests__/pin-derivation.test.ts` y con
-aserciones en `supabase/tests/20_functions.sql`, entre ellas que el hash bcrypt
+aserciones SQL que se fueron con Postgres, entre ellas que el hash bcrypt
 completo **nunca** sale de la base.
 
 **Un iPad activado antes de este cambio** no tiene clave de derivación. Sigue
@@ -194,7 +195,8 @@ La autorización no vive en la interfaz. Vive en la base:
   `canManageLocation`, y la autorización de entrada temprana exige además que la
   persona que autoriza sea distinta de la que ficha. Dejárselo deducir al cliente
   habría convertido cualquier PIN en un PIN de gerente.
-- Las pruebas de aislamiento viven en `supabase/tests/10_rls.sql` y se corren con
+- Las pruebas de aislamiento vivían en SQL y **todavía no se han reescrito** contra
+  el emulador de Firestore; era parte de
   `./scripts/db-test.sh`.
 
 ## Revocación de kioscos y rotación
@@ -268,9 +270,10 @@ a una lista.
 **Programada** a diario a las 03:15 UTC (22:15 en Lima, fuera del horario de
 cualquier tienda) por `20260827000900_scheduled_jobs.sql`, con `pg_cron`.
 
-Si el plan de Supabase no trae `pg_cron`, la migración **no falla**: avisa por
+Con Firestore no hay `pg_cron` ni equivalente dentro de la base: la purga **no está
+programada todavía** y hay que llamarla desde fuera. Antes avisaba por
 `notice` y deja escrito que hay que llamar a la función a diario desde fuera (un
-Scheduled Function de Supabase, o cron propio con la `service_role`). **Conviene
+Cloud Scheduler, o cron propio). **Conviene
 comprobarlo en el despliegue:** lo que se olvida aquí son fotos de las caras de las
 personas guardadas indefinidamente.
 
@@ -314,6 +317,18 @@ versiones que nadie va a limpiar.
 
 **Encontrado y cerrado el 2026-08-27.** Vale contarlo entero porque el motivo por el
 que no se veía es más instructivo que el arreglo.
+
+> **HISTÓRICO, y se conserva a propósito.** Lo que sigue describe Postgres y
+> Supabase, que ya no son el backend. No se reescribe porque un informe de incidente
+> reescrito deja de ser una prueba de nada, y porque la lección sobrevive intacta al
+> cambio de motor: **el entorno de pruebas era más permisivo que producción, así que
+> todo daba verde**.
+>
+> Su equivalente exacto hoy es el Admin SDK. Una Cloud Function no evalúa
+> `firestore.rules` —las ignora por diseño, igual que `security definer` ignoraba la
+> RLS—, así que cada función tiene que comprobar por dentro quién llama. Una que se
+> olvide es esta misma tabla otra vez. Por eso `functions/src/shared/caller.ts`
+> existe y por eso todas empiezan llamándolo.
 
 Todas las migraciones protegían sus funciones con `revoke all on function … from
 public`. Eso **no alcanza en Supabase**:
@@ -382,17 +397,15 @@ y lo que lo impide es la prueba, no la buena voluntad.
 
 ### Lo que lo sostiene
 
-`supabase/tests/40_privilegios.sql` enumera todas las funciones de `public` y falla
-si alguna fuera de la lista blanca es ejecutable, y comprueba también lo contrario
-—que las que la app necesita sí lo son—, porque una prueba que solo verifica que
-nada es ejecutable pasaría con la base cerrada y la app rota. Más las de
-autorización: no se puede fijar el PIN de otra empresa, ni de una tienda ajena, ni
-leer el estado de personal que no administras, ni desactivar el token de otra
-persona.
+Lo sostenía `40_privilegios.sql`, que enumeraba todas las funciones y fallaba si
+alguna fuera de la lista blanca era ejecutable.
 
-El shim de pruebas ahora incluye los privilegios por defecto de Supabase, así que
-esta clase de fallo ya no puede esconderse detrás de un entorno de pruebas más
-permisivo que producción.
+**ESA PRUEBA NO SE HA REESCRITO, y es la deuda que deja la migración.** Su
+equivalente sería un arnés con `@firebase/rules-unit-testing` sobre el emulador, que
+abra sesiones falsas y compruebe qué deja hacer cada regla, más una prueba por Cloud
+Function que verifique que rechaza a quien no debe pasar. Hoy lo único que lo
+sostiene es que todas las funciones empiezan por `requireUid` y `membershipOf`, y eso
+lo garantiza la disciplina, no una prueba.
 
 ## Escrituras directas que saltaban la auditoría
 
@@ -429,11 +442,16 @@ cerrar todo: se trata de cerrar lo que nadie usa y permite mentir.
 
 ### Estado de las tablas
 
-Las 27 tablas de `public` tienen RLS activada y **`anon` no tiene ningún privilegio
-sobre ninguna**. Se comprueba en `supabase/tests/40_privilegios.sql`, que falla si
-una tabla nueva aparece sin RLS: con RLS apagada, el `grant` a `authenticated` deja la
-tabla legible por cualquier sesión de cualquier empresa, porque no hay nada que filtre
-filas.
+Las 28 colecciones están cubiertas por `firestore.rules`, y el archivo termina con
+
+```
+match /{document=**} { allow read, write: if false; }
+```
+
+que es el equivalente de «ninguna tabla nueva sin RLS»: **una colección que alguien
+cree mañana nace cerrada**, y hay que abrirla a mano para que se lea. Es la
+diferencia importante con Postgres, donde una tabla nueva nacía abierta y había que
+acordarse de cerrarla.
 
 ## Qué NO se registra
 
@@ -449,7 +467,7 @@ Ni en logs, ni en auditoría, ni en telemetría, ni en mensajes de error:
 
 `audit_logs` guarda actor, acción, entidad, valor anterior y posterior, y un
 **hash** de IP — no la IP. En la app, los mensajes de error son textos traducidos
-del catálogo i18n: nunca se muestra al usuario la respuesta cruda de Supabase.
+del catálogo i18n: nunca se muestra al usuario la respuesta cruda del servidor.
 
 Si algún día se agrega un proveedor de crashes o analítica, debe entrar con la
 misma regla y sin bloquear el desarrollo cuando la clave no exista.
@@ -489,7 +507,7 @@ envía quiere.
 
 1. **Rotar primero, investigar después.** `service_role` y `anon key` se
    regeneran en _Project Settings → API_; `KIOSK_TOKEN_SECRET` con
-   `supabase secrets set`.
+   `gcloud secrets versions add`.
 2. Revocar los kioscos activos si la credencial pudo quedar expuesta.
 3. Revisar `audit_logs` y `time_events` del periodo sospechoso: son append-only,
    así que el rastro sigue ahí.
