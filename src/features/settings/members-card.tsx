@@ -32,7 +32,20 @@ import { spacing } from '@/theme/tokens';
  * qué. Un control que desaparece deja a quien lo buscaba pensando que se rompió algo.
  */
 
-const ROLES_INVITABLES: AppRoleName[] = ['admin', 'manager', 'employee'];
+/**
+ * Que roles puede repartir quien esta mirando.
+ *
+ * Se calcula por rango y no con una lista fija: un owner puede nombrar a otro owner,
+ * un admin no. La barrera de verdad esta en el servidor —`inviteMember` y
+ * `setMemberRole` comparan el mismo rango— y esto solo evita ofrecer una opcion que
+ * va a ser rechazada, que es peor que no ofrecerla.
+ */
+const RANGO: Record<AppRoleName, number> = { employee: 0, manager: 1, admin: 2, owner: 3 };
+
+function rolesQuePuedeDar(propio: AppRoleName | null): AppRoleName[] {
+  const techo = propio === null ? 0 : RANGO[propio];
+  return appRoles.filter((r) => RANGO[r] <= techo);
+}
 
 export function MembersCard() {
   const { t } = useTranslation();
@@ -47,6 +60,7 @@ export function MembersCard() {
   const [aRetirar, setARetirar] = useState<Member | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
+  const repartibles = rolesQuePuedeDar(scope.role);
   const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const ocupado = invite.isPending || changeRole.isPending || revoke.isPending;
 
@@ -108,7 +122,7 @@ export function MembersCard() {
                     <SelectField
                       label={t('settings.memberRole')}
                       value={member.role}
-                      options={appRoles.map((r) => ({ value: r, label: t(`roles.${r}`) }))}
+                      options={repartibles.map((r) => ({ value: r, label: t(`roles.${r}`) }))}
                       onChange={(nuevo) => {
                         setAviso(null);
                         changeRole.mutate({ userId: member.userId, role: nuevo });
@@ -187,7 +201,7 @@ export function MembersCard() {
             <SelectField
               label={t('settings.inviteRole')}
               value={role}
-              options={ROLES_INVITABLES.map((r) => ({ value: r, label: t(`roles.${r}`) }))}
+              options={repartibles.map((r) => ({ value: r, label: t(`roles.${r}`) }))}
               onChange={setRole}
               testID="invite-role"
             />

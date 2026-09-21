@@ -141,6 +141,7 @@ export async function fetchWorkSessions(params: {
 }
 
 export async function fetchTimeEvents(params: {
+  organizationId: string;
   employeeId: string;
   fromISO: string;
   toISO: string;
@@ -149,6 +150,7 @@ export async function fetchTimeEvents(params: {
     db
       .from(TABLES.timeEvents)
       .select('id, employee_id, event_type, break_type, occurred_at, source, is_offline')
+      .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)
       .gte('occurred_at', params.fromISO)
       .lt('occurred_at', params.toISO)

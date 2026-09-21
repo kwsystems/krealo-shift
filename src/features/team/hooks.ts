@@ -64,8 +64,8 @@ export function useTeam(params: { organizationId: string | null; locationIds: st
 
   const assignments = useQuery({
     queryKey: teamKeys.assignments(locationIds),
-    queryFn: () => fetchLocationAssignments(locationIds),
-    enabled: locationIds.length > 0,
+    queryFn: () => fetchLocationAssignments({ organizationId: organizationId ?? '', locationIds }),
+    enabled: locationIds.length > 0 && organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 
@@ -76,7 +76,7 @@ export function useTeam(params: { organizationId: string | null; locationIds: st
 
   const employeeRoles = useQuery({
     queryKey: teamKeys.employeeJobRoles(organizationId ?? 'none'),
-    queryFn: () => fetchEmployeeJobRoles(employeeIds),
+    queryFn: () => fetchEmployeeJobRoles({ organizationId: organizationId ?? '', employeeIds }),
     enabled: employeeIds.length > 0,
     staleTime: ADMIN_LIST_STALE_MS,
   });

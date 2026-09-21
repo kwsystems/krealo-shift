@@ -164,15 +164,25 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
   const db = getDataClient();
   const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
 
-  const memberships = await selectRows(z.array(membershipSchema), (client) => {
-    const query = client
+  /**
+   * SIN USUARIO NO SE CONSULTA, y antes se consultaba igual sin acotar por él.
+   *
+   * La regla de `organization_memberships` solo deja leer la tuya, así que una
+   * consulta sin `user_id` no se puede demostrar y Firestore la deniega ENTERA. El
+   * resultado era un «Falta un permiso» en el arranque cuando la sesión aún no había
+   * resuelto, en vez de lo que de verdad pasa: que todavía no se sabe quién eres.
+   */
+  if (userId === null) throw new AdminError('forbidden', 'NO_SESSION');
+
+  const memberships = await selectRows(z.array(membershipSchema), (client) =>
+    client
       .from(TABLES.organizationMemberships)
       .select('organization_id, role')
+      .eq('user_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: true })
-      .limit(1);
-    return userId === null ? query : query.eq('user_id', userId);
-  });
+      .limit(1),
+  );
 
   let membership = memberships[0];
 

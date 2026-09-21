@@ -73,6 +73,7 @@ export function useWorkSessions(params: {
 }
 
 export function useTimeEvents(params: {
+  organizationId: string | null;
   employeeId: string | null;
   fromISO: string;
   toISO: string;
@@ -82,11 +83,12 @@ export function useTimeEvents(params: {
     queryKey: timesheetKeys.events(params.employeeId ?? 'none', params.cacheKey, params.cacheKey),
     queryFn: () =>
       fetchTimeEvents({
+        organizationId: params.organizationId ?? '',
         employeeId: params.employeeId ?? '',
         fromISO: params.fromISO,
         toISO: params.toISO,
       }),
-    enabled: params.employeeId !== null,
+    enabled: params.employeeId !== null && params.organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 }

@@ -98,7 +98,10 @@ describe('modo demostración', () => {
     const puestos = await fetchJobRoles(DEMO_ORG_ID);
     expect(puestos.length).toBeGreaterThan(0);
 
-    const asignaciones = await fetchLocationAssignments([DEMO_LOCATION_1]);
+    const asignaciones = await fetchLocationAssignments({
+      organizationId: DEMO_ORG_ID,
+      locationIds: [DEMO_LOCATION_1],
+    });
     expect(asignaciones.length).toBeGreaterThan(0);
   });
 

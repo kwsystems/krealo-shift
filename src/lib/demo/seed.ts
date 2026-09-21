@@ -166,7 +166,17 @@ export function crearAlmacen(): Almacen {
     is_active: true,
   }));
 
+  /*
+   * `organization_id` EN CADA FILA, aunque la demostración solo tenga una empresa.
+   *
+   * No es decoración: las consultas de la app acotan por organización porque las
+   * reglas de Firestore lo exigen —una consulta que no acota por el campo que la
+   * regla mira se deniega entera—. Si la semilla no trae el campo, la demostración
+   * devuelve cero filas donde la app real devuelve datos, y entonces deja de servir
+   * para lo único que sirve: enseñar lo mismo que se ve en producción.
+   */
   const asignaciones: Fila[] = PERSONAS.map((_, indice) => ({
+    organization_id: DEMO_ORG_ID,
     employee_id: empleadoId(indice + 1),
     location_id: indice % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1,
     can_manage: indice === 3 || indice === 7,
@@ -174,6 +184,7 @@ export function crearAlmacen(): Almacen {
   }));
 
   const puestosDeEmpleado: Fila[] = PERSONAS.map((persona, indice) => ({
+    organization_id: DEMO_ORG_ID,
     employee_id: empleadoId(indice + 1),
     job_role_id: puestoId(persona.puesto),
     is_primary: true,

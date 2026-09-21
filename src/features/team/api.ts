@@ -77,25 +77,31 @@ export async function fetchEmployees(organizationId: string): Promise<Employee[]
  * Asignaciones de ubicación. La tabla no lleva `organization_id`, así que se
  * filtra por las ubicaciones visibles y RLS hace el resto.
  */
-export async function fetchLocationAssignments(
-  locationIds: string[],
-): Promise<LocationAssignment[]> {
-  if (locationIds.length === 0) return [];
+export async function fetchLocationAssignments(params: {
+  organizationId: string;
+  locationIds: string[];
+}): Promise<LocationAssignment[]> {
+  if (params.locationIds.length === 0) return [];
   return selectRows(z.array(assignmentSchema), (db) =>
     db
       .from(TABLES.employeeLocationAssignments)
       .select('employee_id, location_id, can_manage, is_primary')
-      .in('location_id', locationIds),
+      .eq('organization_id', params.organizationId)
+      .in('location_id', params.locationIds),
   );
 }
 
-export async function fetchEmployeeJobRoles(employeeIds: string[]): Promise<EmployeeJobRole[]> {
-  if (employeeIds.length === 0) return [];
+export async function fetchEmployeeJobRoles(params: {
+  organizationId: string;
+  employeeIds: string[];
+}): Promise<EmployeeJobRole[]> {
+  if (params.employeeIds.length === 0) return [];
   return selectRows(z.array(employeeJobRoleSchema), (db) =>
     db
       .from(TABLES.employeeJobRoles)
       .select('employee_id, job_role_id, is_primary')
-      .in('employee_id', employeeIds),
+      .eq('organization_id', params.organizationId)
+      .in('employee_id', params.employeeIds),
   );
 }
 

@@ -117,6 +117,7 @@ export function TimesheetsScreen() {
   }, [selected, scope.timezone, range.fromISO, range.toISO]);
 
   const events = useTimeEvents({
+    organizationId: scope.organization?.id ?? null,
     employeeId: selected?.employee_id ?? null,
     fromISO: selectedDayRange.fromISO,
     toISO: selectedDayRange.toISO,

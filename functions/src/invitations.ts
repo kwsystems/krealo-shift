@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { COLLECTIONS, db, nowISO } from './shared/admin';
-import { audit, membershipOf, requireRole, requireUid } from './shared/caller';
+import { audit, membershipOf, requireRole, requireUid, type AppRole } from './shared/caller';
 
 /**
  * Invitaciones por correo (§7, estado `invited` de `membership_status`).
@@ -142,12 +142,21 @@ export const claimInvitation = onCall(async (request) => {
   return { claimed: true, organizationId, role: rol };
 });
 
+const RANGO: Record<AppRole, number> = { employee: 0, manager: 1, admin: 2, owner: 3 };
+
 /**
  * Invita a alguien por correo. Solo owner o admin, y solo a su organizacion.
  *
- * NO SE PUEDE INVITAR POR ENCIMA DE UNO MISMO: un admin no crea owners. Sin esa
- * linea, cualquier admin podria fabricarse un owner y escalar, que es la forma mas
- * comun de que un sistema de permisos por roles se rompa.
+ * NO SE PUEDE INVITAR POR ENCIMA DE UNO MISMO, y ahora se comprueba POR RANGO y no
+ * con una lista fija de roles. La version anterior prohibia `owner` a secas, lo que
+ * cerraba el agujero —un admin no puede fabricarse un owner— pero de paso impedia
+ * que un OWNER invitara a otro owner, que es legitimo y necesario: sin eso, sumar un
+ * segundo propietario solo se podia por terminal, justo lo que esta pantalla vino a
+ * quitar.
+ *
+ * `setMemberRole` ya comparaba por rango; esto lo alinea con aquello. Dos reglas
+ * distintas para la misma decision es como se acaban abriendo agujeros: alguien
+ * arregla una y no sabe que hay otra.
  */
 export const inviteMember = onCall(async (request) => {
   const uid = requireUid(request);
@@ -158,12 +167,16 @@ export const inviteMember = onCall(async (request) => {
   if (!correo.includes('@')) {
     throw new HttpsError('invalid-argument', 'Ese correo no parece válido.');
   }
-  if (!['admin', 'manager', 'employee'].includes(rol)) {
+  if (!['owner', 'admin', 'manager', 'employee'].includes(rol)) {
     throw new HttpsError('invalid-argument', 'Rol no válido para una invitación.');
   }
 
   const membership = await membershipOf(uid, organizationId);
   requireRole(membership, ['owner', 'admin']);
+
+  if (RANGO[rol as AppRole] > RANGO[membership.role]) {
+    throw new HttpsError('permission-denied', 'No puedes invitar con un rol superior al tuyo.');
+  }
 
   const id = idDeInvitacion(organizationId, correo);
   await db.collection(COLLECTIONS.invitations).doc(id).set(

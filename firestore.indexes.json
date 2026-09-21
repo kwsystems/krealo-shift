@@ -78,21 +78,6 @@
       ]
     },
     {
-      "//": "Fichajes de una persona en un rango de fechas (hoja de horas).",
-      "collectionGroup": "time_events",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "employee_id",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "occurred_at",
-          "order": "ASCENDING"
-        }
-      ]
-    },
-    {
       "//": "Estado de asistencia actual: el ultimo evento de la persona. `seq` desempata cuando dos comparten instante, igual que en Postgres.",
       "collectionGroup": "time_events",
       "queryScope": "COLLECTION",
@@ -321,6 +306,25 @@
         },
         {
           "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Fichajes de una persona en un rango. Lleva `organization_id` delante porque la regla lo exige; sustituye al de (employee_id, occurred_at), que servia una consulta que Firestore rechazaba.",
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
           "order": "ASCENDING"
         }
       ]
