@@ -647,7 +647,16 @@
     "inviteRole": "Role they will get",
     "inviteSend": "Send invitation",
     "inviteSent": "{{email}} will join with that role the first time they sign in with Google.",
-    "inviteExplainer": "No account is created: the invitation is claimed by whoever signs in with Google using that same email."
+    "inviteExplainer": "No account is created: the invitation is claimed by whoever signs in with Google using that same email.",
+    "pins": "Clock-in PIN",
+    "pinsHint": "The code each person uses to clock in at the store clock.",
+    "pinsOnlyAdmin": "Only the owner and admins can reset a PIN.",
+    "pinLengthLabel": "PIN digits at {{location}}",
+    "pinLengthFixed": "Not editable here: lowering it would stop the whole store from clocking in until every person gets a new PIN, one by one.",
+    "pinSearch": "Find whose PIN to reset",
+    "pinTypeToSearch": "Type a name or an employee number to find them.",
+    "pinNoMatches": "Nobody matches that search.",
+    "pinResetFailed": "Could not reset the PIN"
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",

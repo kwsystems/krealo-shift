@@ -69,7 +69,7 @@ export function MembersCard() {
 
   if (!scope.isAdmin) {
     return (
-      <FormCard title={t('settings.members')} description={t('settings.membersHint')}>
+      <FormCard collapsible title={t('settings.members')} description={t('settings.membersHint')}>
         <InlineNotice
           tone="info"
           icon="lock-closed-outline"
@@ -81,7 +81,7 @@ export function MembersCard() {
   }
 
   return (
-    <FormCard title={t('settings.members')} description={t('settings.membersHint')}>
+    <FormCard collapsible title={t('settings.members')} description={t('settings.membersHint')}>
       <AsyncSection
         isPending={members.isPending}
         error={members.error}

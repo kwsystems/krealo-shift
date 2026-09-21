@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Modal, Pressable, ScrollView, Switch, View, type ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
@@ -544,27 +544,106 @@ export function LimitBar({
   );
 }
 
-/** Tarjeta con título y contenido, para agrupar formularios. */
+/**
+ * Tarjeta con título y contenido, para agrupar formularios.
+ *
+ * PUEDE PLEGARSE, y en Ajustes se pliega. Esa pantalla son nueve tarjetas seguidas
+ * —idioma, tema, empresa, sede, accesos, PIN, relojes, avisos, sesión y «acerca de»—
+ * en un scroll de más de 1.800 px: encontrar «tolerancia de tardanza» era bajar a ojo
+ * leyendo títulos. Plegadas, la pantalla entera cabe de un vistazo y se abre lo que se
+ * busca, que es lo que uno hace de todas formas.
+ *
+ * EL CONTENIDO NO SE MONTA HASTA QUE SE ABRE, y una vez abierto YA NO SE DESMONTA. Las
+ * dos mitades importan y por motivos distintos. No montarlo de entrada evita que
+ * Ajustes lance a la vez todas las consultas de todas sus secciones —quién tiene
+ * acceso, los relojes, los avisos— para enseñar ocho de ellas cerradas. Y no
+ * desmontarlo al cerrar evita perder lo escrito: quien está editando el nombre de la
+ * empresa, pliega la tarjeta para mirar otra cosa y vuelve, encuentra su texto.
+ *
+ * SIN ANIMACIÓN DE ALTURA, a propósito. Animarla en React Native exige medir el
+ * contenido, y en web `LayoutAnimation` no hace nada, que es justo donde se usa esto.
+ * Una apertura instantánea no es una carencia: es la respuesta más rápida posible a un
+ * toque, y lo que de verdad se nota es el retardo, no la falta de transición.
+ */
 export function FormCard({
   title,
   description,
   children,
   style,
+  collapsible = false,
+  defaultOpen = false,
+  testID,
 }: {
   title: string;
   description?: string;
   children: ReactNode;
   style?: ViewStyle;
+  collapsible?: boolean;
+  /** Solo la primera sección de una lista debería abrir de entrada. */
+  defaultOpen?: boolean;
+  testID?: string;
 }) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
+  const [abierta, setAbierta] = useState(defaultOpen);
+  const [montada, setMontada] = useState(defaultOpen);
+
+  if (!collapsible) {
+    return (
+      <Card style={style} testID={testID}>
+        <AppText variant="bodyStrong">{title}</AppText>
+        {description !== undefined ? (
+          <AppText variant="help" tone="subtle">
+            {description}
+          </AppText>
+        ) : null}
+        {children}
+      </Card>
+    );
+  }
+
   return (
-    <Card style={style}>
-      <AppText variant="bodyStrong">{title}</AppText>
-      {description !== undefined ? (
-        <AppText variant="help" tone="subtle">
-          {description}
-        </AppText>
+    <Card style={style} testID={testID}>
+      <Pressable
+        onPress={() => {
+          setMontada(true);
+          setAbierta((v) => !v);
+        }}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        // `expanded` es lo que hace que un lector de pantalla lo anuncie como algo que
+        // se abre y no como un botón cualquiera. Sin esto, la pantalla se puede usar
+        // pero no se entiende: nada dice que haya contenido detrás del título.
+        accessibilityState={{ expanded: abierta }}
+        testID={testID === undefined ? undefined : `${testID}-toggle`}
+        style={({ pressed }) => [styles.cabeceraPlegable, pressed ? styles.cabeceraPulsada : null]}
+      >
+        <View style={styles.noticeText}>
+          <AppText variant="bodyStrong">{title}</AppText>
+          {description !== undefined ? (
+            <AppText variant="help" tone="subtle">
+              {description}
+            </AppText>
+          ) : null}
+        </View>
+        <Ionicons
+          name={abierta ? 'chevron-up' : 'chevron-down'}
+          size={sizes.iconMobile}
+          color={colors.ink500}
+        />
+      </Pressable>
+
+      {/*
+        Oculto con `display: 'none'` y no quitado del árbol: así conserva lo escrito y
+        además no deja hueco, porque un hijo sin display no cuenta para el `gap` de la
+        tarjeta. Quitarlo del árbol haría las dos cosas mal.
+
+        El `gap` se repite aquí porque los hijos dejan de ser hijos directos de `Card`,
+        que es quien lo ponía.
+      */}
+      {montada ? (
+        <View style={[styles.cuerpoPlegable, abierta ? null : styles.oculto]}>{children}</View>
       ) : null}
-      {children}
     </Card>
   );
 }
@@ -700,6 +779,16 @@ const useEstilos = estilosDelTema((colors) => ({
     padding: spacing.md,
   },
   noticeText: { flex: 1, gap: spacing.xs },
+  cabeceraPlegable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    minHeight: sizes.touchTargetMin,
+  },
+  cabeceraPulsada: { opacity: 0.6 },
+  cuerpoPlegable: { gap: spacing.md },
+  oculto: { display: 'none' },
   barTrack: {
     height: spacing.sm,
     borderRadius: radii.pill,

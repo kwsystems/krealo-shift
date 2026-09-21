@@ -23,6 +23,7 @@ import {
   ToggleField,
 } from '@/components/schedule/fields';
 import { MembersCard } from './members-card';
+import { PinsCard } from './pins-card';
 import { OrganizationLogoField } from './logo-field';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
@@ -94,6 +95,14 @@ export function SettingsPanel() {
               dónde está, luego quién entra, y al final con qué aparato se ficha.
             */}
             <MembersCard />
+            {/*
+              El PIN va DESPUÉS de los accesos y ANTES de los relojes, siguiendo el
+              mismo orden con el que se monta una tienda que ya ordenaba esta lista:
+              qué es la empresa, dónde está, quién administra, con qué ficha la gente y
+              en qué aparato. El PIN es lo que la persona teclea; el reloj es donde lo
+              teclea, así que va antes.
+            */}
+            <PinsCard />
             <KiosksCard />
             <NotificationsCard key={`notifications-${scope.organization.id}`} />
             <SessionCard canSignOutEverywhere={scope.isAdmin} />
@@ -110,7 +119,12 @@ function AppLanguageCard() {
   const { t } = useTranslation();
 
   return (
-    <FormCard title={t('common.language')} description={t('settings.appLanguageHint')}>
+    <FormCard
+      collapsible
+      defaultOpen
+      title={t('common.language')}
+      description={t('settings.appLanguageHint')}
+    >
       {/*
         El MISMO control que el kiosco y el acceso, en su variante de nombre completo.
         Tres pantallas con tres selectores distintos era pedir que se comportaran
@@ -134,7 +148,7 @@ function AppThemeCard() {
   const { t } = useTranslation();
 
   return (
-    <FormCard title={t('settings.appTheme')} description={t('settings.appThemeHint')}>
+    <FormCard collapsible title={t('settings.appTheme')} description={t('settings.appThemeHint')}>
       <ThemeSwitch testID="app-theme" />
     </FormCard>
   );
@@ -172,7 +186,7 @@ function OrganizationCard({
   const nameValid = patch.name.length > 1;
 
   return (
-    <FormCard title={t('settings.organization')}>
+    <FormCard collapsible title={t('settings.organization')}>
       <FormField
         label={t('settings.orgName')}
         value={name}
@@ -357,7 +371,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
   });
 
   return (
-    <FormCard title={t('settings.locations')} description={location.name}>
+    <FormCard collapsible title={t('settings.locations')} description={location.name}>
       <FormField
         label={t('settings.locationName')}
         value={name}
@@ -496,7 +510,7 @@ function SessionCard({ canSignOutEverywhere }: { canSignOutEverywhere: boolean }
   };
 
   return (
-    <FormCard title={t('auth.sessionTitle')} description={email ?? undefined}>
+    <FormCard collapsible title={t('auth.sessionTitle')} description={email ?? undefined}>
       <Stack gap={spacing.md}>
         {role !== null ? <KeyValueRow label={t('roles.label')} value={t(`roles.${role}`)} /> : null}
 
@@ -555,7 +569,7 @@ function AboutCard() {
   const { t } = useTranslation();
 
   return (
-    <FormCard title={t('settings.aboutTitle')}>
+    <FormCard collapsible title={t('settings.aboutTitle')}>
       <Stack gap={spacing.md}>
         <KeyValueRow
           label={t('settings.appVersion')}
@@ -598,7 +612,7 @@ function KiosksCard() {
     DEFAULT_LOCATION_SETTINGS.kioskSyncStaleMinutes;
 
   return (
-    <FormCard title={t('settings.kiosks')} description={t('settings.kiosksHint')}>
+    <FormCard collapsible title={t('settings.kiosks')} description={t('settings.kiosksHint')}>
       <AsyncSection
         isPending={devices.isPending}
         error={devices.error}
@@ -752,7 +766,11 @@ function NotificationsCard() {
   const values = draft ?? stored.data ?? null;
 
   return (
-    <FormCard title={t('settings.notifications')} description={t('settings.notificationsHint')}>
+    <FormCard
+      collapsible
+      title={t('settings.notifications')}
+      description={t('settings.notificationsHint')}
+    >
       {/*
         El estado del dispositivo va antes de los interruptores: si el permiso del
         sistema esta denegado, elegir que avisos quieres recibir no sirve de nada y

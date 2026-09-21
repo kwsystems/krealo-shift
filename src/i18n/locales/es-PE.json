@@ -647,7 +647,16 @@
     "inviteRole": "Rol que tendrá",
     "inviteSend": "Enviar invitación",
     "inviteSent": "Listo. {{email}} entrará con ese rol la primera vez que acceda con Google.",
-    "inviteExplainer": "No se crea ninguna cuenta: la invitación la reclama quien entre con Google usando ese mismo correo."
+    "inviteExplainer": "No se crea ninguna cuenta: la invitación la reclama quien entre con Google usando ese mismo correo.",
+    "pins": "PIN de fichaje",
+    "pinsHint": "El código con el que cada persona ficha en el reloj del local.",
+    "pinsOnlyAdmin": "Solo el propietario y los administradores pueden reiniciar un PIN.",
+    "pinLengthLabel": "Dígitos del PIN en {{location}}",
+    "pinLengthFixed": "No se cambia desde aquí: bajarlo dejaría sin fichar a toda la tienda hasta reasignar el PIN de cada persona, una por una.",
+    "pinSearch": "Buscar a quién reiniciarle el PIN",
+    "pinTypeToSearch": "Escribe un nombre o un número de empleado para encontrarlo.",
+    "pinNoMatches": "Nadie coincide con esa búsqueda.",
+    "pinResetFailed": "No se pudo reiniciar el PIN"
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",
