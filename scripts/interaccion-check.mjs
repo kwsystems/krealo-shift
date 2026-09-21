@@ -83,6 +83,15 @@ async function conPagina(ruta, cuerpo, { comoKiosco = true } = {}) {
     // registra un error de consola por cada peticion fallida. Se filtran SOLO los
     // fallos de carga de recurso; cualquier excepcion de la app sigue contando.
     if (/Failed to load resource|net::ERR_|ERR_TUNNEL/.test(texto)) return;
+    /*
+     * Y TAMPOCO CUENTA UN BLOQUEO POR CORS, que es la forma que toma el mismo hecho
+     * desde la migracion a Firebase: llamar a una Cloud Function de un proyecto que no
+     * existe —`ejemplo`, el del empaquetado de CI— no da `net::ERR_`, da «blocked by
+     * CORS policy», porque la peticion sale y lo que falta es la respuesta con las
+     * cabeceras. Es el MISMO «no se alcanza el servidor» que la linea de arriba ya
+     * perdona; solo cambio el mensaje al cambiar de proveedor.
+     */
+    if (/blocked by CORS policy|Access to fetch at/.test(texto)) return;
     errores.push('console: ' + texto.slice(0, 160));
   });
 
@@ -373,8 +382,16 @@ for (const ruta of ['/team', '/settings']) {
         return;
       }
 
-      // Y termina donde tiene que terminar: sin sesion, en el acceso.
-      if (!/Iniciar sesión|Sign in|Correo|Email/i.test(texto)) {
+      /*
+       * Y termina donde tiene que terminar: sin sesion, en el acceso.
+       *
+       * SE BUSCA EL BOTON DE GOOGLE, y antes se buscaba «Correo» o «Email». Con la
+       * migracion a Firebase el acceso pasó a ser SOLO con Google: no hay campo de
+       * correo ni contraseña que encontrar, asi que el patron viejo no casaba con una
+       * pantalla que era perfectamente correcta. El boton de Google es ahora el unico
+       * control de esa pantalla, que es justo lo que conviene afirmar.
+       */
+      if (!/Ingresar con Google|Sign in with Google/i.test(texto)) {
         fallar(caso, 'resolvio, pero no acabo en el acceso: ' + texto.slice(0, 200));
         return;
       }
@@ -465,35 +482,39 @@ await conPagina(
 );
 
 // ---------------------------------------------------------------------------
-// 11. "Olvide mi contrasena" HACE algo
+// 11. El enlace de montar el reloj LLEVA a alguna parte
 // ---------------------------------------------------------------------------
 //
-// Era `onPress={() => undefined}`: se veia, se pulsaba y no pasaba nada. Sin servidor
-// la peticion falla, y eso vale: lo que se exige es que la pantalla RESPONDA. Un boton
-// que no cambia nada al pulsarlo es indistinguible de uno roto.
+// AQUI SE PROBABA "Olvide mi contrasena", y ese boton ya no existe: el acceso es solo
+// con Google desde la migracion a Firebase, asi que la pantalla no tiene contrasenas
+// que restablecer. El caso se quedo probando una pantalla borrada y el arnes llevaba
+// fallando desde entonces sin que se notara, porque `playwright` no estaba instalado
+// y los seis chequeos de Chromium nunca llegaban a correr.
+//
+// Se conserva el ESPIRITU, que es lo que valia del caso: el unico control secundario
+// que queda en el acceso tiene que responder. Un boton que no cambia nada al pulsarlo
+// es indistinguible de uno roto, y asi sobrevivio meses el de la contrasena.
+//
+// OJO si algun dia el CI exporta con `EXPO_PUBLIC_APP_ENV=production`: ahi el modo
+// reloj se desactiva a proposito y esta tarjeta desaparece, asi que el caso habria que
+// saltarlo, no arreglarlo.
 await conPagina(
   '/sign-in',
   async (page, errores) => {
-    const caso = 'olvide mi contrasena responde';
+    const caso = 'el enlace de montar el reloj navega';
 
     const antes = await textoVisible(page);
 
-    // Sin correo escrito tiene que pedirlo, no callarse.
-    await page.getByTestId('sign-in-forgot-password').click();
+    await page.getByTestId('setup-kiosk-link').click();
     await page.waitForTimeout(1200);
-    const sinCorreo = await textoVisible(page);
-    if (sinCorreo === antes) {
-      fallar(caso, 'sin correo escrito no dice nada al pulsar');
+    const despues = await textoVisible(page);
+
+    if (despues === antes) {
+      fallar(caso, 'pulsar el enlace no cambio nada en pantalla');
       return;
     }
-
-    // Y con un correo valido tiene que contestar algo distinto de nuevo.
-    await page.getByTestId('sign-in-email').fill('prueba@krealomedia.com');
-    await page.getByTestId('sign-in-forgot-password').click();
-    await page.waitForTimeout(2500);
-    const conCorreo = await textoVisible(page);
-    if (conCorreo === sinCorreo) {
-      fallar(caso, 'con correo valido no cambia nada en pantalla');
+    if (!/c.digo de activaci.n/i.test(despues)) {
+      fallar(caso, 'no llego a la pantalla de activacion: ' + despues.slice(0, 120));
       return;
     }
 
@@ -501,8 +522,8 @@ await conPagina(
       fallar(caso, 'errores de consola: ' + errores.join(' | '));
       return;
     }
-    await page.screenshot({ path: join(CAPTURAS, 'olvide-contrasena.png') });
-    pasar(caso, conCorreo.slice(0, 90));
+    await page.screenshot({ path: join(CAPTURAS, 'montar-reloj.png') });
+    pasar(caso, despues.slice(0, 90));
   },
   { comoKiosco: false },
 );

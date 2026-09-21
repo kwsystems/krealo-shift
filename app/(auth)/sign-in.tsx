@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'expo-router';
+import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { pressHandledByLink, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { isDemoMode } from '@/lib/demo/config';
@@ -193,13 +193,22 @@ export default function SignInScreen() {
               <AppText variant="help" tone="subtle">
                 {t('auth.employeeNoAccountNotice')}
               </AppText>
-              <Link href="/kiosk/setup" asChild>
-                <SecondaryButton
-                  label={t('auth.setupKioskLink')}
-                  onPress={pressHandledByLink}
-                  testID="setup-kiosk-link"
-                />
-              </Link>
+              {/*
+                `router.push` Y NO UN `<Link asChild>`, que es lo que había.
+                `asChild` clona sus propiedades sobre el hijo con el `Slot` de Radix,
+                una pieza pensada para el DOM, y el resultado medido en el navegador es
+                que este control NO navegaba: con el botón anterior ni siquiera llegaba
+                a pintarse, y con el actual se pinta, se pulsa y se queda donde estaba.
+                Es exactamente el fallo que `pressHandledByLink` existía para hacer
+                visible, escondido dentro del mecanismo que debía resolverlo.
+                Navegar a mano es una línea, no depende de cómo esté construido el
+                botón, y se comprueba pulsándolo.
+              */}
+              <SecondaryButton
+                label={t('auth.setupKioskLink')}
+                onPress={() => router.push('/kiosk/setup')}
+                testID="setup-kiosk-link"
+              />
             </Card>
           ) : null}
         </Stack>

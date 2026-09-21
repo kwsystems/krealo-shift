@@ -49,10 +49,15 @@ const TODO = FUENTES.map((f) => f.texto).join('\n');
 // 1. Controles muertos
 // ---------------------------------------------------------------------------
 //
-// `onPress={() => undefined}` esta PROHIBIDO, incluso donde es correcto: cuando el
-// que navega es un `<Link asChild>` de encima, se escribe `onPress={pressHandledByLink}`,
-// que dice lo que pasa. Sin esa distincion no hay forma de separar los dos casos con
-// una comprobacion, y el caso equivocado es invisible.
+// `onPress={() => undefined}` esta PROHIBIDO: un control que se ve, se pulsa y no hace
+// nada es indistinguible de uno sin implementar, y asi sobrevivio meses el boton de
+// "Olvide mi contrasena".
+//
+// AQUI SE EXCEPTUABA `pressHandledByLink`, para los botones cuyo `<Link asChild>` de
+// encima se encargaba de navegar. Esa excepcion ya no existe, y el helper tampoco: se
+// midio en el navegador que el patron NO navegaba —el boton se pintaba, se pulsaba y la
+// pantalla se quedaba donde estaba—, asi que los dos usos pasaron a `router.push`. La
+// excepcion estaba tapando justo el fallo que esta comprobacion busca.
 {
   const PATRONES = [
     /onPress=\{\(\)\s*=>\s*(?:undefined|\{\s*\})\}/,
@@ -71,7 +76,7 @@ const TODO = FUENTES.map((f) => f.texto).join('\n');
       if (PATRONES.some((patron) => patron.test(linea))) {
         problemas.push(
           `${ruta.replace(RAIZ + '/', '')}:${indice + 1} control muerto: ` +
-            'usa `pressHandledByLink` si lo maneja un <Link>, o implementalo',
+            'implementalo, o navega con `router.push` si solo tiene que llevar a otra pantalla',
         );
       }
     });

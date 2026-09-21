@@ -48,22 +48,6 @@ type Props = {
   style?: ViewStyle;
 };
 
-/**
- * `onPress` para un botón que va dentro de un `<Link asChild>`.
- *
- * EXISTE PARA QUE UN BOTÓN MUERTO NO SE PAREZCA A UNO VÁLIDO.
- *
- * `onPress` es obligatorio, y cuando el que navega es el `Link` de encima, el botón no
- * tiene nada que hacer al pulsarse. Eso se escribía `onPress={() => undefined}`, que
- * es EXACTAMENTE lo mismo que se escribe cuando alguien deja un botón sin implementar.
- * Así sobrevivió meses a la vista "Olvidé mi contraseña": un control que se veía, se
- * pulsaba y no hacía nada, indistinguible de los dos usos legítimos que hay al lado.
- *
- * Con un nombre, los dos casos se distinguen leyendo, y `scripts/coherencia-check.mjs`
- * puede prohibir el resto sin falsos positivos.
- */
-export const pressHandledByLink = (): void => undefined;
-
 export function AppButton({
   label,
   onPress,
@@ -100,6 +84,16 @@ export function AppButton({
    * seguir pareciendo el que se acaba de pulsar.
    */
   const apagado = disabled && !loading;
+
+  /**
+   * Cómo se coloca el botón respecto a sus hermanos.
+   *
+   * Va al ENVOLTORIO cuando hay pista y al recuadro cuando no, y es la misma regla en
+   * los dos casos: `flex-start` alinea por arriba, que es lo que hace que un botón con
+   * pista y otro sin ella tengan los recuadros a la misma altura dentro de un `Row`
+   * —el padre alinea al centro por omisión, y ahí es donde se desalineaban—.
+   */
+  const alineado = fullWidth ? styles.fullWidth : styles.autoWidth;
 
   const handlePress = () => {
     if (inactive) return;
@@ -138,6 +132,7 @@ export function AppButton({
         // El estilo del llamante va al RECUADRO y no al envoltorio: es donde se
         // escribía antes, cuando el recuadro era la raíz del componente.
         style,
+        hint === undefined ? alineado : null,
       ]}
     >
       {loading ? (
@@ -159,20 +154,27 @@ export function AppButton({
   );
 
   /**
-   * SIEMPRE ENVUELTO, tenga pista o no, y no por simetría: dentro de un `Row` el
-   * alineado vertical lo decide el padre (`alignItems: 'center'` por omisión), así que
-   * un botón con pista y otro sin ella se centrarían cada uno por su cuenta y los
-   * recuadros quedarían a distinta altura otra vez. Con el envoltorio en `flex-start`
-   * lo que se alinea es la parte de arriba, que es la que se compara al mirar.
+   * SIN PISTA SE DEVUELVE EL RECUADRO PELADO, y esto NO es una optimización.
+   *
+   * La primera versión envolvía siempre, por simetría. Eso rompió los dos botones que
+   * viven dentro de un `<Link asChild>` —los dos son «Configurar este dispositivo como
+   * reloj»—: `asChild` clona sus propiedades de navegación sobre el HIJO INMEDIATO, y
+   * con el envoltorio ese hijo pasó a ser un `View`. El enlace dejó de producir un
+   * `<a href>`: quedaba un `<button>` con solo `div` por encima, que se ve perfecto, se
+   * pulsa, y no lleva a ningún sitio. Justo el fallo que `pressHandledByLink` existe
+   * para hacer visible, reintroducido por el envoltorio.
+   *
+   * No lo vio nadie porque los seis chequeos de Chromium llevaban sin correr desde
+   * siempre —`playwright` no estaba instalado— y ninguna prueba unitaria navega.
    */
+  if (hint === undefined) return boton;
+
   return (
-    <View style={fullWidth ? styles.fullWidth : styles.autoWidth}>
+    <View style={alineado}>
       {boton}
-      {hint ? (
-        <AppText variant="help" tone="subtle" style={[styles.centered, styles.hint]}>
-          {hint}
-        </AppText>
-      ) : null}
+      <AppText variant="help" tone="subtle" style={[styles.centered, styles.hint]}>
+        {hint}
+      </AppText>
     </View>
   );
 }
