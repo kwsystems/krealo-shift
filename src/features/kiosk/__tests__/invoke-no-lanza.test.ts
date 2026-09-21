@@ -39,8 +39,8 @@ jest.mock('@/lib/security/secure-storage', () => ({
     .SECURE_KEYS,
 }));
 
-jest.mock('@/lib/supabase/client', () => ({
-  getSupabase: () => ({ functions: { invoke: (...args: unknown[]) => mockInvoke(...args) } }),
+jest.mock('@/lib/firebase/query', () => ({
+  getDataClient: () => ({ functions: { invoke: (...args: unknown[]) => mockInvoke(...args) } }),
 }));
 
 describe('invoke con el Keychain roto', () => {

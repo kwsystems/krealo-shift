@@ -1,6 +1,6 @@
 import { execute, requireClient, toAdminError } from '@/hooks/use-admin-query';
-import { getSupabase } from '@/lib/supabase/client';
-import { TABLES } from '@/lib/supabase/types';
+import { getDataClient } from '@/lib/firebase/query';
+import { TABLES } from '@/lib/firebase/tables';
 
 /**
  * Logotipo de la organización (§11.6).
@@ -44,7 +44,7 @@ const EXTENSIONS: Record<LogoMimeType, string> = {
  */
 export function logoPublicUrl(logoPath: string | null): string | null {
   if (logoPath === null || logoPath.trim() === '') return null;
-  const db = getSupabase();
+  const db = getDataClient();
   if (db === null) return null;
   const { data } = db.storage.from(LOGO_BUCKET).getPublicUrl(logoPath);
   return data.publicUrl;

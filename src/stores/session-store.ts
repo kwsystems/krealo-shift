@@ -4,7 +4,8 @@ import {
   deactivateAllPushTokens,
   deactivateRememberedPushToken,
 } from '@/features/notifications/api';
-import { getSupabase } from '@/lib/supabase/client';
+import { revokeAllSessions } from '@/lib/firebase/functions';
+import { authSource } from '@/lib/firebase/session';
 
 /**
  * Sesión administrativa (§8).
@@ -13,7 +14,7 @@ import { getSupabase } from '@/lib/supabase/client';
  * necesitan una en P0/P1: fichan con su PIN en el iPad de la tienda.
  *
  * Este store guarda lo mínimo para decidir rutas y pintar la interfaz. Los datos
- * de negocio (membresías, ubicaciones) los sirve TanStack Query desde Supabase.
+ * de negocio (membresías, ubicaciones) los sirve TanStack Query desde Firestore.
  */
 
 export type AppRole = 'owner' | 'admin' | 'manager' | 'employee';
@@ -54,7 +55,7 @@ type SessionState = {
   signOutEverywhere: () => Promise<void>;
   /** Se llama al mostrar el aviso, para que no reaparezca en el siguiente acceso. */
   clearEndReason: () => void;
-  /** Suscripción a los cambios de sesión de Supabase. Devuelve el limpiador. */
+  /** Suscripción a los cambios de sesión de Firebase. Devuelve el limpiador. */
   subscribe: () => () => void;
 };
 
@@ -76,8 +77,8 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   endReason: null,
 
   hydrate: async () => {
-    const supabase = getSupabase();
-    if (supabase === null) {
+    const auth = authSource();
+    if (auth === null) {
       // Sin configuración no hay sesión posible; la app mostrará el aviso de
       // configuración en lugar de quedarse en "unknown" para siempre.
       set({ phase: 'signedOut', user: null, role: null, organizationId: null });
@@ -90,7 +91,9 @@ export const useSessionStore = create<SessionState>((set, get) => ({
      *
      * `getSession()` iba sin try/catch y sin límite de tiempo. Si rechazaba —o
      * simplemente no respondía— `hydrate` moría y `phase` se quedaba en `'unknown'`
-     * para siempre. Y `phase === 'unknown'` es lo que bloquea `app/index.tsx` y
+     * para siempre. Con Firebase el riesgo es el mismo: `authStateReady()` tampoco
+     * resuelve hasta que termina de leer el almacenamiento y, si hay que refrescar
+     * el token, hasta que la red conteste. Y `phase === 'unknown'` es lo que bloquea `app/index.tsx` y
      * `app/(manager)/_layout.tsx`: los dos muestran "Preparando tu sesión" mientras
      * no se resuelve.
      *
@@ -100,15 +103,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
      * fichar a nadie — que es exactamente el escenario para el que existe toda la
      * arquitectura sin conexión.
      *
-     * Los dos caminos de `getSession()` pueden fallar de verdad: lee del
-     * almacenamiento, que aquí es `SecureStore` y puede rechazar, y refresca el token
-     * si caducó, que necesita red.
+     * Los dos caminos pueden fallar de verdad: lee del almacenamiento, que aquí es
+     * `SecureStore` y puede rechazar, y refresca el token si caducó, que necesita red.
      *
      * EL LIMITE DE TIEMPO ES LA MITAD QUE IMPORTA. Un catch no sirve de nada si la
      * llamada no rechaza sino que se queda esperando, y con red a medias —un portal
      * cautivo, un router que acepta la conexión y no enruta— eso es lo normal.
      */
-    let session: Awaited<ReturnType<typeof supabase.auth.getSession>>['data']['session'] = null;
+    let usuario: { uid: string; email: string | null } | null = null;
 
     try {
       // EL TEMPORIZADOR SE LIMPIA. Sin esto queda uno pendiente por arranque
@@ -118,7 +120,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       let temporizador: ReturnType<typeof setTimeout> | undefined;
 
       const resultado = await Promise.race([
-        supabase.auth.getSession(),
+        auth.ready().then(() => 'resuelto' as const),
         new Promise<'agotado'>((resolve) => {
           temporizador = setTimeout(() => resolve('agotado'), SESSION_TIMEOUT_MS);
         }),
@@ -137,7 +139,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         return;
       }
 
-      session = resultado.data.session;
+      usuario = auth.currentUser();
     } catch (error) {
       console.warn(
         '[krealo-shift] No se pudo leer la sesión guardada. Se sigue sin sesión. Motivo: ' +
@@ -147,15 +149,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
       return;
     }
 
-    if (session === null) {
+    if (usuario === null) {
       set({ phase: 'signedOut', user: null, role: null, organizationId: null });
       return;
     }
 
-    set({
-      phase: 'signedIn',
-      user: { userId: session.user.id, email: session.user.email ?? null },
-    });
+    set({ phase: 'signedIn', user: { userId: usuario.uid, email: usuario.email } });
   },
 
   setMembership: ({ role, organizationId }) => set({ role, organizationId }),
@@ -171,14 +170,14 @@ export const useSessionStore = create<SessionState>((set, get) => ({
      */
     set({ endReason: 'signedOut' });
 
-    // ANTES de cerrar la sesión, y no después: la política RLS de `push_tokens`
-    // exige `auth.uid()`, así que en cuanto la sesión se cierra ya no hay forma de
+    // ANTES de cerrar la sesión, y no después: la regla de `push_tokens` exige
+    // `request.auth.uid`, así que en cuanto la sesión se cierra ya no hay forma de
     // apagar el token. Sin esto, un iPhone que cambia de manos sigue recibiendo las
     // alertas de la tienda. No lanza: cerrar sesión funciona aunque falle.
     await deactivateRememberedPushToken();
 
-    const supabase = getSupabase();
-    if (supabase !== null) await supabase.auth.signOut();
+    const auth = authSource();
+    if (auth !== null) await auth.signOut();
     set({ phase: 'signedOut', user: null, role: null, organizationId: null });
   },
 
@@ -190,10 +189,15 @@ export const useSessionStore = create<SessionState>((set, get) => ({
    * había NINGÚN cierre de sesión en la interfaz: quien entraba al panel no tenía
    * forma de salir.
    *
-   * `scope: 'global'` revoca todos los refresh tokens de la persona, así que los demás
-   * dispositivos caen a la pantalla de acceso en cuanto intentan refrescar. NO afecta a
-   * los relojes de tienda: un kiosco no usa sesión personal, usa su propia credencial
-   * de dispositivo, y se revoca desde Ajustes → Relojes.
+   * NO EXISTE UN EQUIVALENTE EN EL CLIENTE DE FIREBASE, y esta es la diferencia real
+   * con Supabase: allí bastaba `scope: 'global'`. Aquí revocar los refresh tokens de
+   * otra sesión solo lo puede hacer el Admin SDK, así que lo hace una Cloud Function
+   * (`revokeAllSessions`) sobre quien la llama — nunca sobre un id que venga del
+   * cliente. Los demás dispositivos caen a la pantalla de acceso en cuanto intentan
+   * refrescar, que con Firebase es dentro de la hora siguiente.
+   *
+   * NO afecta a los relojes de tienda: un kiosco no usa sesión personal, usa su propia
+   * credencial de dispositivo, y se revoca desde Ajustes → Relojes.
    *
    * Los tokens de push se apagan TODOS y no solo el de aquí: revocar sesiones y dejar
    * el teléfono perdido vibrando con los avisos del negocio no es cerrar sesión en
@@ -205,22 +209,27 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     await deactivateAllPushTokens();
 
-    const supabase = getSupabase();
-    if (supabase !== null) await supabase.auth.signOut({ scope: 'global' });
+    // No lanza: si la revocación remota falla, cerrar AQUÍ tiene que funcionar igual.
+    // Dejar a alguien dentro porque no se pudo avisar a los otros aparatos es el peor
+    // de los dos fallos posibles.
+    await revokeAllSessions();
+
+    const auth = authSource();
+    if (auth !== null) await auth.signOut();
     set({ phase: 'signedOut', user: null, role: null, organizationId: null });
   },
 
   subscribe: () => {
-    const supabase = getSupabase();
-    if (supabase === null) return () => undefined;
+    const auth = authSource();
+    if (auth === null) return () => undefined;
 
-    // `onAuthStateChange` puede lanzar al registrarse si el cliente está en mal
+    // `onAuthStateChanged` puede lanzar al registrarse si el cliente está en mal
     // estado. Sin este catch, el `return subscribeSession()` del efecto de arranque
     // reventaría el render de la ruta inicial: pantalla en blanco y nada más.
-    let data: { subscription: { unsubscribe: () => void } };
+    let desuscribir: () => void;
     try {
-      ({ data } = supabase.auth.onAuthStateChange((_event, session) => {
-        if (session === null) {
+      desuscribir = auth.subscribe((usuario) => {
+        if (usuario === null) {
           /*
            * Aquí es donde muere una sesión que SÍ existía: el refresh token caducó o se
            * revocó —incluido "cerrar sesión en todos los dispositivos" pulsado en otro
@@ -228,10 +237,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
            * una palabra, y lo que se lee ahí es "hice algo mal" o "la app se rompió".
            *
            * `phase === 'signedIn'` NO ES OPCIONAL, y costó verlo: este mismo callback se
-           * dispara en el ARRANQUE EN FRÍO con `session === null` —el evento
-           * `INITIAL_SESSION` de Supabase— y la fase todavía en `unknown`. Sin la
-           * comprobación, la primera pantalla que veía alguien que abre la app por
-           * primera vez decía "Tu sesión caducó". No caducó nada: nunca entró.
+           * dispara en el ARRANQUE EN FRÍO con el usuario a `null` y la fase todavía en
+           * `unknown`. Sin la comprobación, la primera pantalla que veía alguien que
+           * abre la app por primera vez decía "Tu sesión caducó". No caducó nada: nunca
+           * entró. Firebase emite esa primera vez igual que hacía Supabase, haya sesión
+           * o no, así que la trampa sobrevive al cambio de backend y la comprobación
+           * también.
            *
            * Se vio levantando la app de verdad con `expo start --web`, no en una prueba:
            * el arranque en frío es justo lo que no ocurre cuando ya tienes el estado
@@ -254,12 +265,12 @@ export const useSessionStore = create<SessionState>((set, get) => ({
         }
         set({
           phase: 'signedIn',
-          user: { userId: session.user.id, email: session.user.email ?? null },
+          user: { userId: usuario.uid, email: usuario.email },
           // Entrar bien borra el motivo anterior: si no, el aviso reaparecería la
           // próxima vez que alguien vea el acceso.
           endReason: null,
         });
-      }));
+      });
     } catch (error) {
       console.warn(
         '[krealo-shift] No se pudo suscribir a los cambios de sesión. Motivo: ' + String(error),
@@ -269,7 +280,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
 
     return () => {
       try {
-        data.subscription.unsubscribe();
+        desuscribir();
       } catch {
         // Al desmontar no hay nada que hacer con un fallo aquí.
       }
@@ -277,7 +288,7 @@ export const useSessionStore = create<SessionState>((set, get) => ({
   },
 }));
 
-/** Jerarquía de permisos. Ocultar un botón no sustituye una política RLS (§7). */
+/** Jerarquía de permisos. Ocultar un botón no sustituye una regla de seguridad (§7). */
 const ROLE_RANK: Record<AppRole, number> = { employee: 0, manager: 1, admin: 2, owner: 3 };
 
 export function hasAtLeastRole(role: AppRole | null, minimum: AppRole): boolean {

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
 import { AdminError, execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
-import { TABLES } from '@/lib/supabase/types';
+import { TABLES } from '@/lib/firebase/tables';
 
 /**
  * Turnos y publicaciones (§11.3).

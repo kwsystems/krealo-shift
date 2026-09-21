@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import type { LocationSettings } from '@/hooks/use-manager-scope';
-import { RPC, TABLES, VIEWS } from '@/lib/supabase/types';
+import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
 
 /**
  * Configuración de organización, ubicación, kioscos y notificaciones (§11.6).

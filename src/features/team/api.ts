@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { generatePin } from './pin';
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
-import { RPC, TABLES } from '@/lib/supabase/types';
+import { RPC, TABLES } from '@/lib/firebase/tables';
 
 /**
  * Datos del equipo (§11.2).

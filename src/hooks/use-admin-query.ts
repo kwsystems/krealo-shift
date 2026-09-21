@@ -1,13 +1,12 @@
-import type { PostgrestError } from '@supabase/supabase-js';
 import type { ZodType } from 'zod';
 
-import { getSupabase } from '@/lib/supabase/client';
+import { getDataClient, type DataError } from '@/lib/firebase/query';
 
 /**
  * Capa compartida de acceso a datos del panel administrativo (§11, §20, §22).
  *
  * Tres reglas que impone este archivo:
- *   1. el usuario nunca ve un error crudo de Supabase: cada fallo se traduce a un
+ *   1. el usuario nunca ve un error crudo de Firestore: cada fallo se traduce a un
  *      `AdminErrorKind` que la pantalla sabe explicar con microcopy propio (§20);
  *   2. toda respuesta se valida con Zod al recibir, no solo al enviar (§22): si el
  *      backend cambia de forma, la pantalla muestra un error honesto en lugar de
@@ -16,14 +15,14 @@ import { getSupabase } from '@/lib/supabase/client';
  *      de cada fila lo define su esquema Zod.
  */
 
-export type AdminClient = NonNullable<ReturnType<typeof getSupabase>>;
+export type AdminClient = NonNullable<ReturnType<typeof getDataClient>>;
 
 export type AdminErrorKind =
   /** Falta configuración de entorno: no hay backend al que preguntar. */
   | 'notConfigured'
   /** Fallo de red. Se puede reintentar. */
   | 'offline'
-  /** RLS o el rol rechazaron la operación. */
+  /** Las reglas de seguridad o el rol rechazaron la operación. */
   | 'forbidden'
   /** Alguien más cambió el dato primero. */
   | 'conflict'
@@ -53,27 +52,44 @@ function readString(source: Record<string, unknown>, key: string): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Códigos de Postgres y de PostgREST que la interfaz sí sabe explicar. */
+/**
+ * Códigos de Firestore y de Cloud Functions que la interfaz sí sabe explicar.
+ *
+ * `failed-precondition` MERECE SU PROPIA LÍNEA y no es un error de servidor
+ * cualquiera: en Firestore es, casi siempre, «falta el índice compuesto de esta
+ * consulta». Se deja caer en `server` con su mensaje intacto a propósito, porque ese
+ * mensaje trae el enlace que crea el índice, y borrarlo obligaría a reproducir el
+ * fallo con la consola abierta para recuperarlo.
+ */
 function kindFromCode(code: string, message: string): AdminErrorKind {
   switch (code) {
-    case '42501': // insufficient_privilege
-    case 'PGRST301': // JWT ausente o expirado
-    case '42P01': // relación inexistente: para el cliente es acceso denegado
+    case 'permission-denied':
+    case 'functions/permission-denied':
+    case 'unauthenticated':
+    case 'functions/unauthenticated':
       return 'forbidden';
-    case '40001': // serialization_failure: lo usa manager_adjust_time
+    case 'aborted':
+    case 'functions/aborted':
       return 'conflict';
-    case '02000': // no_data_found
-    case 'PGRST116': // single() sin filas
+    case 'not-found':
+    case 'functions/not-found':
       return 'notFound';
-    case '23514': // check_violation
-    case '23505': // unique_violation
-    case '23503': // foreign_key_violation
-    case '23001': // restrict_violation
+    case 'invalid-argument':
+    case 'functions/invalid-argument':
+    case 'already-exists':
+    case 'functions/already-exists':
       return 'invalid';
+    case 'unavailable':
+    case 'functions/unavailable':
+    case 'deadline-exceeded':
+    case 'functions/deadline-exceeded':
+      return 'offline';
+    case 'not-configured':
+      return 'notConfigured';
     default:
       break;
   }
-  if (/network|fetch|timeout/i.test(message)) return 'offline';
+  if (/network|fetch|timeout|offline/i.test(message)) return 'offline';
   return 'server';
 }
 
@@ -104,13 +120,13 @@ export function toAdminError(error: unknown): AdminError {
  * que cualquier otro error, y ninguna pantalla revienta (§20).
  */
 export function requireClient(): AdminClient {
-  const db = getSupabase();
+  const db = getDataClient();
   if (db === null) throw new AdminError('notConfigured');
   return db;
 }
 
-type QueryOutcome = { data: unknown; error: PostgrestError | null };
-type MutationOutcome = { error: PostgrestError | null };
+type QueryOutcome = { data: unknown; error: DataError | null };
+type MutationOutcome = { error: DataError | null };
 
 /** Consulta con validación de forma. Devuelve ya tipado por el esquema. */
 export async function selectRows<T>(

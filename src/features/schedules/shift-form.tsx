@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { ShiftInput } from './api';
 import { isValidLocalTime, localTimeToMinutes, type DateKey } from './week';
 import { formatDateKeyShort } from './week';
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import { AdminSheet, InlineNotice, SelectField, type Option } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';

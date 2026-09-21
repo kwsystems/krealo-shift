@@ -28,40 +28,11 @@
  * sería inventar una promesa de tipos que nada verifica.
  */
 
-export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
-
-/** Forma genérica de una tabla: fila, inserción y actualización. */
-export type GenericTable = {
-  Row: Record<string, Json>;
-  Insert: Record<string, Json>;
-  Update: Record<string, Json>;
-  Relationships: [];
-};
-
-export type GenericView = {
-  Row: Record<string, Json>;
-  Relationships: [];
-};
-
-export type GenericFunction = {
-  Args: Record<string, Json>;
-  Returns: Json;
-};
-
-export type Database = {
-  public: {
-    Tables: Record<string, GenericTable>;
-    Views: Record<string, GenericView>;
-    Functions: Record<string, GenericFunction>;
-    Enums: Record<string, string>;
-    CompositeTypes: Record<string, Record<string, Json>>;
-  };
-};
-
 /**
- * Los nombres de tabla que la app usa. No los impone el tipo —el esquema es
- * permisivo— pero tenerlos en un solo lugar evita que un typo en un `from('...')`
- * pase inadvertido hasta producción.
+ * Nombres de las colecciones de Firestore, las vistas servidas por Cloud Function y
+ * las funciones invocables. Son los MISMOS nombres que tenian las tablas en Postgres,
+ * y eso es deliberado: conservarlos dejo intactos los esquemas Zod, las pruebas y los
+ * 62 puntos de llamada al migrar de backend.
  */
 export const TABLES = {
   organizations: 'organizations',
@@ -84,9 +55,22 @@ export const TABLES = {
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
   notificationPreferences: 'notification_preferences',
+  /**
+   * AHORA SI SE PUEDE LEER, y por eso vuelve a `TABLES` tras estar prohibida.
+   *
+   * En Postgres estaba revocada porque la fila mezclaba el inventario con dos
+   * secretos del dispositivo (`credential_hash` y `offline_key`). Al pasar a
+   * Firestore esos dos se separaron a `kiosk_device_secrets`, cerrada a cal y canto
+   * en las reglas, asi que lo que queda aqui no tiene nada que esconder.
+   */
+  kioskDevices: 'kiosk_devices',
 } as const;
 
-/** Vistas de consulta que expone la base (§14). */
+/**
+ * Lo que eran VISTAS de Postgres (§14). Firestore no une ni agrega, asi que cada una
+ * la sirve una Cloud Function que devuelve las mismas filas; el enrutado esta en
+ * `query.ts` y los puntos de llamada no se enteraron.
+ */
 export const VIEWS = {
   employeesWorkingNow: 'employees_working_now',
   /**

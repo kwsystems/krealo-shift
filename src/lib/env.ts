@@ -5,9 +5,11 @@ import { isDemoMode } from '@/lib/demo/config';
 /**
  * Validación de variables de entorno (especificación §30).
  *
- * En cliente solo viven `SUPABASE_URL` y `SUPABASE_ANON_KEY`, que son públicas.
- * La `service_role` NUNCA se expone aquí: vive únicamente en el entorno servidor
- * y en los secretos de las Edge Functions.
+ * En cliente solo vive la configuración de Firebase, que es pública por diseño:
+ * `apiKey` no es una credencial sino el identificador del proyecto ante la API, y
+ * lo que protege los datos son las reglas de Firestore y las Cloud Functions.
+ * La clave de cuenta de servicio NUNCA se expone aquí: las funciones se autentican
+ * solas dentro de Google y no necesitan que nadie les pase un secreto.
  *
  * En desarrollo mostramos un error claro con las claves que faltan; en producción
  * no revelamos valores.
@@ -46,8 +48,22 @@ const envSchema = z.object({
     vacioEsAusente,
     z.enum(['development', 'preview', 'production']).default('development'),
   ),
-  EXPO_PUBLIC_SUPABASE_URL: z.string().url(),
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: z.string().min(20),
+  EXPO_PUBLIC_FIREBASE_API_KEY: z.string().min(20),
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: z.string().min(1),
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: z.string().min(1),
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().min(1),
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().min(1),
+  EXPO_PUBLIC_FIREBASE_APP_ID: z.string().min(1),
+  /**
+   * Identificadores de cliente OAuth para entrar con Google en NATIVO.
+   *
+   * Son opcionales a proposito y no los necesita la web: alli `signInWithPopup` usa
+   * el cliente que Firebase crea solo. En iPad hace falta uno propio, y mientras no
+   * exista la pantalla lo dice en vez de ofrecer un boton que abriria una ventana
+   * con un error de Google.
+   */
+  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: z.preprocess(vacioEsAusente, z.string().optional()),
+  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: z.preprocess(vacioEsAusente, z.string().optional()),
   EXPO_PUBLIC_SUPPORT_EMAIL: z.preprocess(
     vacioEsAusente,
     z.string().email().optional().default('soporte@krealomedia.com'),
@@ -62,8 +78,14 @@ export type Env = z.infer<typeof envSchema>;
 
 const raw = {
   EXPO_PUBLIC_APP_ENV: process.env.EXPO_PUBLIC_APP_ENV,
-  EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
+  EXPO_PUBLIC_FIREBASE_API_KEY: process.env.EXPO_PUBLIC_FIREBASE_API_KEY,
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: process.env.EXPO_PUBLIC_FIREBASE_PROJECT_ID,
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  EXPO_PUBLIC_FIREBASE_APP_ID: process.env.EXPO_PUBLIC_FIREBASE_APP_ID,
+  EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+  EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   EXPO_PUBLIC_SUPPORT_EMAIL: process.env.EXPO_PUBLIC_SUPPORT_EMAIL,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
 };
@@ -75,9 +97,9 @@ const parsed = envSchema.safeParse(raw);
  *
  * SE REPORTAN TODOS LOS PROBLEMAS, no solo dos códigos de error. La versión anterior
  * filtraba por `invalid_type` y `too_small`, y eso dejaba fuera un caso que se da
- * siempre: con `EXPO_PUBLIC_SUPABASE_URL=` vacío, Zod devuelve `invalid_string`
- * —porque falla el `.url()`, no el tipo—, así que la pantalla decía que faltaba solo
- * la anon key y callaba la URL.
+ * siempre: con `EXPO_PUBLIC_FIREBASE_API_KEY=` vacío, Zod devuelve `too_small`
+ * —porque falla el `.min(20)`, no el tipo—, así que la pantalla nombraba unas claves
+ * y callaba otras.
  *
  * Alguien pega entonces la clave, vuelve a arrancar y sigue sin funcionar, sin saber
  * por qué. Un mensaje que enumera la mitad de los problemas es peor que uno genérico:
@@ -94,7 +116,7 @@ export const missingEnvKeys: string[] = parsed.success
  * a secas: sin esta línea, la app con `EXPO_PUBLIC_DEMO=1` seguiría parándose en «Falta
  * configuración del entorno», que es exactamente la pared que el modo demostración
  * existe para quitar. No afloja nada fuera de ese modo: con la demostración apagada, las
- * dos claves de Supabase siguen siendo obligatorias y el mensaje sigue nombrándolas.
+ * seis claves de Firebase siguen siendo obligatorias y el mensaje sigue nombrándolas.
  */
 export const isEnvConfigured = parsed.success || isDemoMode;
 
@@ -108,8 +130,14 @@ export const env: Env = parsed.success
   : {
       EXPO_PUBLIC_APP_ENV:
         (raw.EXPO_PUBLIC_APP_ENV as Env['EXPO_PUBLIC_APP_ENV'] | undefined) ?? 'development',
-      EXPO_PUBLIC_SUPABASE_URL: raw.EXPO_PUBLIC_SUPABASE_URL ?? '',
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: raw.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
+      EXPO_PUBLIC_FIREBASE_API_KEY: raw.EXPO_PUBLIC_FIREBASE_API_KEY ?? '',
+      EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: raw.EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN ?? '',
+      EXPO_PUBLIC_FIREBASE_PROJECT_ID: raw.EXPO_PUBLIC_FIREBASE_PROJECT_ID ?? '',
+      EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: raw.EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET ?? '',
+      EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: raw.EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID ?? '',
+      EXPO_PUBLIC_FIREBASE_APP_ID: raw.EXPO_PUBLIC_FIREBASE_APP_ID ?? '',
+      EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: raw.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+      EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: raw.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
       EXPO_PUBLIC_SUPPORT_EMAIL: raw.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'soporte@krealomedia.com',
       EXPO_PUBLIC_PRIVACY_URL: raw.EXPO_PUBLIC_PRIVACY_URL ?? 'https://krealomedia.com/privacidad',
     };

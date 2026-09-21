@@ -2,7 +2,7 @@
  * El arranque de la sesión NUNCA deja la app colgada (§6.1, §20).
  *
  * ESTA PRUEBA EXISTE POR EL FALLO DE MAYOR ALCANCE QUE HA TENIDO EL PROYECTO.
- * `hydrate` llamaba a `getSession()` sin try/catch y sin límite de tiempo. Si eso
+ * `hydrate` leia la sesion guardada sin try/catch y sin límite de tiempo. Si eso
  * rechazaba —o simplemente no respondía— `phase` se quedaba en `'unknown'` para
  * siempre.
  *
@@ -24,23 +24,34 @@
 // simuladas de todas formas.
 import { useSessionStore } from '../session-store';
 
-const mockGetSession = jest.fn();
-const mockOnAuthStateChange = jest.fn();
+const mockReady = jest.fn();
+const mockCurrentUser = jest.fn();
+const mockSubscribe = jest.fn();
 
-jest.mock('@/lib/supabase/client', () => ({
-  getSupabase: () => ({
-    auth: {
-      getSession: () => mockGetSession(),
-      onAuthStateChange: (...args: unknown[]) => mockOnAuthStateChange(...args),
-      signOut: jest.fn(),
-    },
+jest.mock('@/lib/firebase/session', () => ({
+  authSource: () => ({
+    ready: () => mockReady(),
+    currentUser: () => mockCurrentUser(),
+    subscribe: (...args: unknown[]) => mockSubscribe(...args),
+    signOut: jest.fn(),
+    signInDemo: null,
   }),
+}));
+
+jest.mock('@/lib/firebase/functions', () => ({
+  revokeAllSessions: jest.fn(),
 }));
 
 jest.mock('@/features/notifications/api', () => ({
   deactivateRememberedPushToken: jest.fn(),
   deactivateAllPushTokens: jest.fn(),
 }));
+
+/** La sesion resuelta: `ready()` termina y `currentUser()` dice quien es. */
+function sesionResuelta(user: { uid: string; email: string } | null) {
+  mockReady.mockResolvedValue(undefined);
+  mockCurrentUser.mockReturnValue(user);
+}
 
 describe('arranque de la sesión', () => {
   let warn: jest.SpyInstance;
@@ -56,15 +67,13 @@ describe('arranque de la sesión', () => {
       organizationId: null,
       endReason: null,
     });
-    mockOnAuthStateChange.mockReturnValue({ subscription: { unsubscribe: jest.fn() } });
+    mockSubscribe.mockReturnValue(jest.fn());
   });
 
   afterEach(() => warn.mockRestore());
 
   it('resuelve a signedIn con una sesión válida', async () => {
-    mockGetSession.mockResolvedValue({
-      data: { session: { user: { id: 'u1', email: 'a@b.com' } } },
-    });
+    sesionResuelta({ uid: 'u1', email: 'a@b.com' });
 
     await useSessionStore.getState().hydrate();
 
@@ -73,16 +82,16 @@ describe('arranque de la sesión', () => {
   });
 
   it('resuelve a signedOut sin sesión guardada', async () => {
-    mockGetSession.mockResolvedValue({ data: { session: null } });
+    sesionResuelta(null);
 
     await useSessionStore.getState().hydrate();
 
     expect(useSessionStore.getState().phase).toBe('signedOut');
   });
 
-  it('NO SE QUEDA EN unknown si getSession rechaza', async () => {
+  it('NO SE QUEDA EN unknown si leer la sesión rechaza', async () => {
     // El caso que dejaba la app entera en "Preparando tu sesión".
-    mockGetSession.mockRejectedValue(new Error('Network request failed'));
+    mockReady.mockRejectedValue(new Error('Network request failed'));
 
     await useSessionStore.getState().hydrate();
 
@@ -90,11 +99,11 @@ describe('arranque de la sesión', () => {
     expect(warn).toHaveBeenCalled();
   });
 
-  it('NO SE QUEDA EN unknown si getSession no responde nunca', async () => {
+  it('NO SE QUEDA EN unknown si leer la sesión no responde nunca', async () => {
     // La mitad que un catch no cubre: con red a medias —un portal cautivo, un router
     // que acepta la conexión y no enruta— la llamada no rechaza, se queda esperando.
     jest.useFakeTimers();
-    mockGetSession.mockReturnValue(new Promise(() => undefined));
+    mockReady.mockReturnValue(new Promise(() => undefined));
 
     const enCurso = useSessionStore.getState().hydrate();
     await jest.advanceTimersByTimeAsync(6_500);
@@ -107,7 +116,7 @@ describe('arranque de la sesión', () => {
   it('el aviso del límite de tiempo dice que el kiosco sigue funcionando', async () => {
     // Un aviso que solo dice "falló" no le sirve a nadie que lo lea en un log.
     jest.useFakeTimers();
-    mockGetSession.mockReturnValue(new Promise(() => undefined));
+    mockReady.mockReturnValue(new Promise(() => undefined));
 
     const enCurso = useSessionStore.getState().hydrate();
     await jest.advanceTimersByTimeAsync(6_500);
@@ -119,7 +128,7 @@ describe('arranque de la sesión', () => {
   it('subscribe no revienta si el cliente falla al registrarse', () => {
     // El efecto de arranque hace `return subscribeSession()`. Si esto lanzara,
     // reventaría el render de la ruta inicial: pantalla en blanco y nada más.
-    mockOnAuthStateChange.mockImplementation(() => {
+    mockSubscribe.mockImplementation(() => {
       throw new Error('cliente en mal estado');
     });
 
@@ -138,20 +147,20 @@ describe('arranque de la sesión', () => {
  * pantalla de alguien que abría la app por primera vez decía "Tu sesión caducó". No
  * caducó nada: nunca había entrado.
  *
- * `onAuthStateChange` se dispara en el ARRANQUE EN FRÍO con `session === null` —el
- * evento `INITIAL_SESSION` de Supabase— y el código marcaba `expired` sin comprobar que
- * antes hubiera habido sesión, aunque su propio comentario decía "aquí es donde muere una
- * sesión que SÍ existía".
+ * La suscripción se dispara en el ARRANQUE EN FRÍO con el usuario a `null` —Firebase
+ * emite esa primera vez siempre, igual que hacía Supabase— y el código marcaba
+ * `expired` sin comprobar que antes hubiera habido sesión, aunque su propio comentario
+ * decía "aquí es donde muere una sesión que SÍ existía".
  *
  * Se vio levantando la app con `expo start --web` y mirándola. El arranque en frío es
  * justo lo que no ocurre en una prueba que ya tiene el estado puesto para probar otra
  * cosa.
  */
 describe('motivo del fin de sesión', () => {
-  const dispararCambio = (session: unknown) => {
-    const escuchar = mockOnAuthStateChange.mock.calls[0]?.[0] as
-      ((evento: string, sesion: unknown) => void) | undefined;
-    escuchar?.('INITIAL_SESSION', session);
+  const dispararCambio = (user: { uid: string; email: string } | null) => {
+    const escuchar = mockSubscribe.mock.calls[0]?.[0] as
+      ((usuario: { uid: string; email: string } | null) => void) | undefined;
+    escuchar?.(user);
   };
 
   beforeEach(() => {
@@ -163,7 +172,7 @@ describe('motivo del fin de sesión', () => {
       organizationId: null,
       endReason: null,
     });
-    mockOnAuthStateChange.mockReturnValue({ subscription: { unsubscribe: jest.fn() } });
+    mockSubscribe.mockReturnValue(jest.fn());
   });
 
   it('EL ARRANQUE EN FRÍO no dice que la sesión caducó', () => {
@@ -196,7 +205,7 @@ describe('motivo del fin de sesión', () => {
     // Si no, el aviso reaparecería la próxima vez que alguien viera el acceso.
     useSessionStore.setState({ phase: 'signedOut', endReason: 'expired' });
     useSessionStore.getState().subscribe();
-    dispararCambio({ user: { id: 'u1', email: 'a@b.com' } });
+    dispararCambio({ uid: 'u1', email: 'a@b.com' });
 
     expect(useSessionStore.getState().phase).toBe('signedIn');
     expect(useSessionStore.getState().endReason).toBeNull();

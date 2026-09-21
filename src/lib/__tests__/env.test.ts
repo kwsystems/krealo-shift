@@ -2,9 +2,9 @@
  * La configuración del entorno acepta el `.env` que el README manda crear (§30).
  *
  * ESTA PRUEBA EXISTE POR UN FALLO EN EL CAMINO DOCUMENTADO, que es el peor sitio donde
- * puede haber uno. El README dice «copia `.env.example` a `.env` y pega la URL y la anon
- * key», y `.env.example` trae `EXPO_PUBLIC_SUPPORT_EMAIL=` y `EXPO_PUBLIC_PRIVACY_URL=`
- * en blanco, porque una plantilla no puede traer valores de nadie.
+ * puede haber uno. El README dice «copia `.env.example` a `.env`», y `.env.example` trae
+ * `EXPO_PUBLIC_SUPPORT_EMAIL=` y `EXPO_PUBLIC_PRIVACY_URL=` en blanco, porque una
+ * plantilla no puede traer el correo de soporte de nadie.
  *
  * `.optional()` de Zod NO cubre la cadena vacía: solo cubre `undefined`. Así que las dos
  * llegaban como `''`, fallaban `.email()` y `.url()`, y la app arrancaba diciendo «Falta
@@ -15,9 +15,14 @@
  * README, no leyéndolo.
  */
 
-const SUPABASE_OK = {
-  EXPO_PUBLIC_SUPABASE_URL: 'https://ejemplo.supabase.co',
-  EXPO_PUBLIC_SUPABASE_ANON_KEY: 'una-clave-anonima-suficientemente-larga',
+/** Las seis de Firebase, con la forma que tienen de verdad. */
+const FIREBASE_OK = {
+  EXPO_PUBLIC_FIREBASE_API_KEY: 'AIzaSyBejemploDeClaveDeApiSuficientementeLarga',
+  EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN: 'krealo-shift.firebaseapp.com',
+  EXPO_PUBLIC_FIREBASE_PROJECT_ID: 'krealo-shift',
+  EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET: 'krealo-shift.firebasestorage.app',
+  EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: '577753574972',
+  EXPO_PUBLIC_FIREBASE_APP_ID: '1:577753574972:web:ejemplo',
 };
 
 /** Recarga `env.ts`, que lee `process.env` al importarse. */
@@ -33,8 +38,7 @@ function cargarEntorno(vars: Record<string, string | undefined>) {
 
 const CLAVES = [
   'EXPO_PUBLIC_APP_ENV',
-  'EXPO_PUBLIC_SUPABASE_URL',
-  'EXPO_PUBLIC_SUPABASE_ANON_KEY',
+  ...Object.keys(FIREBASE_OK),
   'EXPO_PUBLIC_SUPPORT_EMAIL',
   'EXPO_PUBLIC_PRIVACY_URL',
 ];
@@ -47,9 +51,9 @@ describe('variables de entorno', () => {
     Object.assign(process.env, original);
   });
 
-  it('EL .env QUE MANDA EL README vale: opcionales en blanco y las dos de Supabase puestas', () => {
+  it('EL .env QUE MANDA EL README vale: opcionales en blanco y las de Firebase puestas', () => {
     const { isEnvConfigured, missingEnvKeys, env } = cargarEntorno({
-      ...SUPABASE_OK,
+      ...FIREBASE_OK,
       EXPO_PUBLIC_APP_ENV: 'development',
       EXPO_PUBLIC_SUPPORT_EMAIL: '',
       EXPO_PUBLIC_PRIVACY_URL: '',
@@ -64,7 +68,7 @@ describe('variables de entorno', () => {
 
   it('un valor puesto de verdad se respeta', () => {
     const { env } = cargarEntorno({
-      ...SUPABASE_OK,
+      ...FIREBASE_OK,
       EXPO_PUBLIC_SUPPORT_EMAIL: 'ayuda@krealoshift.com',
       EXPO_PUBLIC_PRIVACY_URL: 'https://krealoshift.com/privacidad',
     });
@@ -77,32 +81,32 @@ describe('variables de entorno', () => {
     // equivocado tiene que decirse, porque es un error de tecleo que alguien puede
     // arreglar.
     const { missingEnvKeys } = cargarEntorno({
-      ...SUPABASE_OK,
+      ...FIREBASE_OK,
       EXPO_PUBLIC_SUPPORT_EMAIL: 'esto-no-es-un-correo',
     });
 
     expect(missingEnvKeys).toContain('EXPO_PUBLIC_SUPPORT_EMAIL');
   });
 
-  it('las OBLIGATORIAS vacías siguen fallando, y se nombran las dos', () => {
+  it('las OBLIGATORIAS vacías siguen fallando, y se nombran TODAS', () => {
     /*
-     * Aquí una cadena vacía SÍ es un error: sin URL no hay a dónde conectarse. Y se
-     * nombran las dos: una versión anterior filtraba por código de error y con la URL
-     * vacía decía que faltaba solo la anon key, así que alguien pegaba la clave, volvía a
-     * arrancar y seguía sin funcionar.
+     * Aquí una cadena vacía SÍ es un error: sin proyecto no hay a dónde conectarse. Y
+     * se nombran todas: una versión anterior filtraba por código de error y con un
+     * valor vacío nombraba solo algunas, así que alguien pegaba esas, volvía a arrancar
+     * y seguía sin funcionar. Con seis variables en vez de dos, enumerar la mitad
+     * costaría tres ciclos de prueba y error en vez de uno.
      */
-    const { isEnvConfigured, missingEnvKeys } = cargarEntorno({
-      EXPO_PUBLIC_SUPABASE_URL: '',
-      EXPO_PUBLIC_SUPABASE_ANON_KEY: '',
-    });
+    const vacias = Object.fromEntries(Object.keys(FIREBASE_OK).map((clave) => [clave, '']));
+    const { isEnvConfigured, missingEnvKeys } = cargarEntorno(vacias);
 
     expect(isEnvConfigured).toBe(false);
-    expect(missingEnvKeys).toContain('EXPO_PUBLIC_SUPABASE_URL');
-    expect(missingEnvKeys).toContain('EXPO_PUBLIC_SUPABASE_ANON_KEY');
+    for (const clave of Object.keys(FIREBASE_OK)) {
+      expect(missingEnvKeys).toContain(clave);
+    }
   });
 
   it('el entorno de la app en blanco cae a development', () => {
-    const { env } = cargarEntorno({ ...SUPABASE_OK, EXPO_PUBLIC_APP_ENV: '' });
+    const { env } = cargarEntorno({ ...FIREBASE_OK, EXPO_PUBLIC_APP_ENV: '' });
     expect(env.EXPO_PUBLIC_APP_ENV).toBe('development');
   });
 });

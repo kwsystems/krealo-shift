@@ -1,6 +1,6 @@
 import { execute } from '@/hooks/use-admin-query';
-import { getSupabase } from '@/lib/supabase/client';
-import { TABLES } from '@/lib/supabase/types';
+import { getDataClient } from '@/lib/firebase/query';
+import { TABLES } from '@/lib/firebase/tables';
 import type { PushPlatform } from './push-adapter';
 
 /**
@@ -87,7 +87,7 @@ export function rememberPushToken(expoToken: string): void {
 export async function deactivateAllPushTokens(): Promise<void> {
   rememberedToken = null;
   try {
-    const db = getSupabase();
+    const db = getDataClient();
     const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
     if (userId === null) return;
 

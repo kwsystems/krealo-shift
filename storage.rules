@@ -1,0 +1,48 @@
+rules_version = '2';
+
+// Almacenamiento de Krealo Shift.
+//
+// Sustituye los dos buckets de Supabase Storage: `attendance-photos` (privado, con
+// URLs firmadas) y el logo de la organizacion (lectura publica). Aqui son dos
+// prefijos del mismo bucket, con reglas opuestas a proposito.
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function membership(orgId) {
+      return get(/databases/(default)/documents/organization_memberships/$(orgId + '_' + request.auth.uid)).data;
+    }
+
+    function isAdmin(orgId) {
+      return request.auth != null
+        && exists(/databases/(default)/documents/organization_memberships/$(orgId + '_' + request.auth.uid))
+        && membership(orgId).status == 'active'
+        && membership(orgId).role in ['owner', 'admin'];
+    }
+
+    // LA FOTO DE UN FICHAJE NO SE SIRVE NUNCA DIRECTO. Es la cara de un trabajador
+    // en su puesto: retrato identificable, con hora y tienda. Se lee solo por URL
+    // firmada de caducidad corta, que emite la Cloud Function tras comprobar que
+    // quien la pide gestiona esa ubicacion; y se sube solo desde `attach-photo`,
+    // porque el kiosco no tiene sesion personal con la que autenticarse aqui.
+    //
+    // Dejar esto abierto a `request.auth != null` seria peor que en Supabase: alli
+    // el bucket privado obligaba a pasar por la firma. Cerrado significa cerrado.
+    match /attendance-photos/{orgId}/{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // El logo se muestra en el kiosco, que no tiene sesion: por eso su lectura es
+    // publica. Lo cambia solo un administrador de esa misma organizacion.
+    match /organization-logos/{orgId}/{fileName} {
+      allow read: if true;
+      allow write: if isAdmin(orgId)
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+    }
+
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

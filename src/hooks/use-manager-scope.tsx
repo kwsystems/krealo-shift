@@ -4,10 +4,10 @@ import { z } from 'zod';
 
 import { track } from '@/lib/analytics';
 import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
-import { getSupabase } from '@/lib/supabase/client';
+import { getDataClient } from '@/lib/firebase/query';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
 import type { TimeFormatPreference } from '@/utils/time';
-import { TABLES } from '@/lib/supabase/types';
+import { TABLES } from '@/lib/firebase/tables';
 
 /**
  * Contexto del panel administrativo: organización, rol, ubicaciones y la
@@ -158,7 +158,7 @@ export type ManagerScopeData = {
 export const managerScopeKey = ['manager', 'scope'] as const;
 
 async function fetchManagerScope(): Promise<ManagerScopeData> {
-  const db = getSupabase();
+  const db = getDataClient();
   const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
 
   const memberships = await selectRows(z.array(membershipSchema), (client) => {

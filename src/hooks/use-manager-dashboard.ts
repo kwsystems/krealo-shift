@@ -10,7 +10,7 @@ import { fetchWorkSessions } from '@/features/timesheets/api';
 import { ADMIN_LIST_STALE_MS, DASHBOARD_POLL_MS, selectRows } from '@/hooks/use-admin-query';
 import { useNetworkStore } from '@/stores/network-store';
 import { minutesBetween } from '@/utils/time';
-import { VIEWS } from '@/lib/supabase/types';
+import { VIEWS } from '@/lib/firebase/tables';
 
 /**
  * Inicio administrativo (§11.1).

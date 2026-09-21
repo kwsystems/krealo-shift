@@ -3,7 +3,7 @@ import { z } from 'zod';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
-import { RPC, TABLES, VIEWS } from '@/lib/supabase/types';
+import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
 
 /**
  * Horas y hojas de tiempo (§11.4).

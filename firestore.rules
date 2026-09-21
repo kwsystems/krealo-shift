@@ -1,0 +1,296 @@
+rules_version = '2';
+
+// Reglas de seguridad de Krealo Shift.
+//
+// Traducen las politicas RLS que vivian en Postgres (`20260827000200_rls.sql` y las
+// migraciones 001400-001600 que las cerraron). El modelo no cambia: cambia el motor.
+//
+// TRES DIFERENCIAS DE FONDO CON RLS, Y NINGUNA ES COSMETICA
+//
+// 1. UNA REGLA NO ES UN FILTRO. En Postgres, una consulta sin `where` devolvia solo
+//    las filas que la politica permitia. Aqui no: si la consulta no acota por lo
+//    mismo que la regla exige, se deniega ENTERA. Por eso toda consulta de la app
+//    lleva su `where` de organizacion o de ubicacion: el discriminador cuando algo
+//    falla es que el documento suelto SI se lee y la lista no.
+//
+// 2. CADA `get()` SE PAGA Y SE CUENTA. Se lee UN solo documento de membresia por
+//    evaluacion, con id determinista `{orgId}_{uid}`, y de ahi salen rol, estado,
+//    ubicaciones gestionadas y el empleado vinculado. Denormalizar esos cuatro datos
+//    en la membresia es lo que evita encadenar tres lecturas en cada regla.
+//
+// 3. LO QUE ERA `security definer` AHORA ES CLOUD FUNCTION. Fichajes, PIN,
+//    credenciales de kiosco y proyecciones de sesion NO son escribibles por el
+//    cliente, igual que antes: el Admin SDK se salta estas reglas por diseno.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // -----------------------------------------------------------------------
+    // Ayudantes: el equivalente de app_is_member / app_role_in / app_manages_location
+    // -----------------------------------------------------------------------
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function membership(orgId) {
+      return get(/databases/$(database)/documents/organization_memberships/$(orgId + '_' + request.auth.uid)).data;
+    }
+
+    function membershipExists(orgId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/organization_memberships/$(orgId + '_' + request.auth.uid));
+    }
+
+    // Una membresia 'invited' o 'suspended' NO es miembro. Era `status = 'active'` en
+    // el indice parcial de Postgres, y perderlo aqui dejaria entrar a alguien a quien
+    // se le retiro el acceso sin borrarle la fila.
+    function isMember(orgId) {
+      return membershipExists(orgId) && membership(orgId).status == 'active';
+    }
+
+    function roleIn(orgId, roles) {
+      return isMember(orgId) && membership(orgId).role in roles;
+    }
+
+    function isAdmin(orgId) {
+      return roleIn(orgId, ['owner', 'admin']);
+    }
+
+    function isStaff(orgId) {
+      return roleIn(orgId, ['owner', 'admin', 'manager']);
+    }
+
+    // `managed_location_ids` lo mantiene el servidor al asignar ubicaciones. Un
+    // owner o admin gestiona TODAS las de su organizacion, y por eso no depende de
+    // esa lista: si dependiera, un admin recien creado no veria nada hasta que
+    // alguien le asignara ubicaciones a mano.
+    function managesLocation(orgId, locationId) {
+      return isAdmin(orgId)
+        || (isMember(orgId) && locationId in membership(orgId).managed_location_ids);
+    }
+
+    function isSelfEmployee(orgId, employeeId) {
+      return isMember(orgId) && membership(orgId).employee_id == employeeId;
+    }
+
+    // -----------------------------------------------------------------------
+    // Organizacion y personas
+    // -----------------------------------------------------------------------
+
+    match /organizations/{orgId} {
+      allow read: if isMember(orgId);
+      // `logo_path` lo escribe la funcion de subida, no el cliente directamente,
+      // pero admin puede cambiar nombre, locale, zona y settings.
+      allow update: if isAdmin(orgId);
+      allow create, delete: if false;    // alta y baja de empresa: solo servidor
+    }
+
+    match /profiles/{userId} {
+      allow read, write: if signedIn() && request.auth.uid == userId;
+    }
+
+    match /organization_memberships/{membershipId} {
+      // Cada quien ve la suya —es como la app descubre a que organizacion pertenece
+      // antes de saber nada mas— y los administradores ven las de su empresa.
+      allow read: if signedIn()
+        && (resource.data.user_id == request.auth.uid || isAdmin(resource.data.organization_id));
+      // La escritura pasa por Cloud Function: cambiar un rol tiene que quedar en
+      // `audit_logs` y `managed_location_ids` tiene que seguir siendo cierto.
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Ubicaciones, puestos y empleados
+    // -----------------------------------------------------------------------
+
+    match /locations/{locationId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if isAdmin(request.resource.data.organization_id);
+      allow update: if isAdmin(resource.data.organization_id);
+      allow delete: if false;    // una ubicacion con historial no se borra: se desactiva
+    }
+
+    match /job_roles/{jobRoleId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if isAdmin(request.resource.data.organization_id);
+      allow update, delete: if isAdmin(resource.data.organization_id);
+    }
+
+    match /employees/{employeeId} {
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, employeeId);
+      allow create: if isStaff(request.resource.data.organization_id);
+      allow update: if isStaff(resource.data.organization_id);
+      allow delete: if false;    // un empleado con fichajes no se borra: pasa a inactive
+    }
+
+    match /employee_location_assignments/{assignmentId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow write: if managesLocation(
+        request.resource.data.organization_id,
+        request.resource.data.location_id
+      );
+    }
+
+    match /employee_job_roles/{id} {
+      allow read: if isMember(resource.data.organization_id);
+      allow write: if isStaff(request.resource.data.organization_id);
+    }
+
+    // EL PIN NO SE LEE NUNCA DESDE EL CLIENTE, ni siquiera su hash, ni siquiera por el
+    // owner. Devolverlo permitiria atacarlo sin limite de intentos y sin dejar rastro:
+    // seis digitos son un millon de combinaciones, cosa de segundos en local.
+    match /employee_pin_credentials/{employeeId} {
+      allow read, write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Kioscos
+    // -----------------------------------------------------------------------
+
+    // El inventario SIN secretos: esto es lo que sustituye a la vista
+    // `kiosk_devices_admin`. El hash de la credencial vive en otra coleccion.
+    match /kiosk_devices/{deviceId} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;    // activar y revocar pasan por Cloud Function
+    }
+
+    match /kiosk_device_secrets/{deviceId} {
+      allow read, write: if false;
+    }
+
+    match /kiosk_activation_codes/{codeId} {
+      allow read, write: if false;
+    }
+
+    match /kiosk_rejected_attempts/{id} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // Turnos
+    // -----------------------------------------------------------------------
+
+    match /shifts/{shiftId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if managesLocation(
+        request.resource.data.organization_id,
+        request.resource.data.location_id
+      );
+      allow update, delete: if managesLocation(
+        resource.data.organization_id,
+        resource.data.location_id
+      );
+    }
+
+    match /shift_publications/{id} {
+      allow read: if managesLocation(resource.data.organization_id, resource.data.location_id);
+      allow create: if managesLocation(
+        request.resource.data.organization_id,
+        request.resource.data.location_id
+      );
+      allow update, delete: if false;    // una publicacion es un hecho, no un borrador
+    }
+
+    // -----------------------------------------------------------------------
+    // Fichajes: solo lectura para todo el mundo
+    // -----------------------------------------------------------------------
+
+    // APPEND-ONLY DE VERDAD, como los disparadores `reject_mutation()` en Postgres.
+    // El evento crudo es la unica prueba de lo que paso; corregirlo es una fila nueva
+    // en `time_adjustments`, no un update. El cliente NUNCA escribe aqui: los ocho
+    // caminos de escritura son Cloud Functions.
+    match /time_events/{eventId} {
+      allow read: if isSelfEmployee(resource.data.organization_id, resource.data.employee_id)
+        || managesLocation(resource.data.organization_id, resource.data.location_id);
+      allow write: if false;
+    }
+
+    // Proyeccion recalculable: la escribe el servidor al aplicar cada evento.
+    match /work_sessions/{sessionId} {
+      allow read: if isSelfEmployee(resource.data.organization_id, resource.data.employee_id)
+        || managesLocation(resource.data.organization_id, resource.data.location_id);
+      allow write: if false;
+    }
+
+    match /break_intervals/{intervalId} {
+      allow read: if isMember(resource.data.organization_id);
+      allow write: if false;
+    }
+
+    match /time_adjustments/{adjustmentId} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;    // toda correccion pasa por la funcion que la audita
+    }
+
+    match /timesheet_periods/{periodId} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;    // aprobar y reabrir sellan horas: van por funcion
+    }
+
+    match /time_edit_requests/{requestId} {
+      allow read: if isSelfEmployee(resource.data.organization_id, resource.data.employee_id)
+        || managesLocation(resource.data.organization_id, resource.data.location_id);
+      // Crear la solicitud desde el kiosco va por funcion (el empleado no tiene
+      // sesion). Un gerente si puede crearla desde el panel.
+      allow create: if managesLocation(
+        request.resource.data.organization_id,
+        request.resource.data.location_id
+      );
+      // Resolverla cambia horas pagadas: por funcion, para que quede auditado.
+      allow update, delete: if false;
+    }
+
+    // -----------------------------------------------------------------------
+    // P2: preparadas, sin pantalla todavia (§26)
+    // -----------------------------------------------------------------------
+
+    match /availability_rules/{id} {
+      allow read: if isMember(resource.data.organization_id);
+      allow write: if isStaff(resource.data.organization_id);
+    }
+
+    match /time_off_requests/{id} {
+      allow read: if isMember(resource.data.organization_id);
+      allow write: if isStaff(resource.data.organization_id);
+    }
+
+    match /announcements/{id} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if isStaff(request.resource.data.organization_id);
+      allow update, delete: if isStaff(resource.data.organization_id);
+    }
+
+    // -----------------------------------------------------------------------
+    // Notificaciones y auditoria
+    // -----------------------------------------------------------------------
+
+    match /push_tokens/{tokenId} {
+      allow read, write: if signedIn() && request.auth.uid == resource.data.user_id;
+      allow create: if signedIn() && request.auth.uid == request.resource.data.user_id;
+    }
+
+    match /notification_preferences/{prefId} {
+      allow read, write: if signedIn()
+        && prefId.split('_')[0] == request.auth.uid;
+    }
+
+    match /manager_alert_deliveries/{id} {
+      allow read, write: if false;    // cola interna del enviador
+    }
+
+    // El registro de auditoria se lee para rendir cuentas y no se escribe desde el
+    // cliente jamas: un registro que su propio actor puede editar no prueba nada.
+    match /audit_logs/{id} {
+      allow read: if isAdmin(resource.data.organization_id);
+      allow write: if false;
+    }
+
+    // Nada mas existe. Una coleccion que alguien cree por error nace cerrada.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

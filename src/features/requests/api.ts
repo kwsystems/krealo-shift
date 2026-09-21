@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { adjustWorkSession } from '@/features/timesheets/api';
 import { execute, selectRows } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
-import { TABLES } from '@/lib/supabase/types';
+import { TABLES } from '@/lib/firebase/tables';
 
 /**
  * Bandeja de solicitudes (§11.5).

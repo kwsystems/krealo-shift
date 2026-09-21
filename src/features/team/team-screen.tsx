@@ -6,7 +6,7 @@ import type { EmployeeDraft } from './api';
 import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
 import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from './employee-form';
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { MemberList } from '@/components/team/member-list';
 import {

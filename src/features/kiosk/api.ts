@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import type { BreakReason } from '@/domain/break-reason';
-import { getSupabase } from '@/lib/supabase/client';
+import { getDataClient } from '@/lib/firebase/query';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import type { KioskBinding } from '@/stores/kiosk-store';
 
@@ -169,7 +169,7 @@ async function invoke<T>(
   body: Record<string, unknown>,
   schema: z.ZodType<T>,
 ): Promise<KioskApiResult<T>> {
-  const supabase = getSupabase();
+  const supabase = getDataClient();
   if (supabase === null) return { ok: false, error: { kind: 'not_configured' } };
 
   // EL TRY EMPIEZA AQUI Y NO DESPUES DE LEER EL KEYCHAIN, y eso era un fallo grave.
@@ -188,13 +188,18 @@ async function invoke<T>(
   // empleado de pie frente al iPad, sin mensaje, sin poder fichar, y la unica salida
   // era cerrar la app. Lo mismo en la pantalla de salir del modo kiosco.
   try {
-    // Las Edge Functions exigen DOS cabeceras: el secreto y el identificador
-    // publico del dispositivo. Con una sola, `authenticate_kiosk` no puede saber
-    // contra que hash comparar y rechaza la llamada.
+    // Las funciones exigen DOS datos del dispositivo: el secreto y su identificador
+    // publico. Con uno solo, el servidor no puede saber contra que hash comparar y
+    // rechaza la llamada.
+    //
+    // VIAJAN EN EL CUERPO Y YA NO EN CABECERAS, y no es una relajacion: una Cloud
+    // Function invocable no deja poner cabeceras propias —el SDK arma la peticion—,
+    // asi que la credencial va dentro del mismo JSON cifrado por TLS que el resto
+    // del fichaje. Lo que la protegia antes era el TLS, no el nombre del campo.
     //
     // EN SU PROPIO TRY para no confundirse con un fallo de red: los dos casos
     // necesitan consejos opuestos, y el catch de abajo devuelve `offline`.
-    let kioskHeaders: { 'x-kiosk-credential': string; 'x-kiosk-device': string } | undefined;
+    let kioskAuth: { credential: string; devicePublicId: string } | undefined;
     try {
       const credential = await secureStorage.get(`${SECURE_KEYS.kioskCredential}.secret`);
       const binding = await secureStorage.getJson<{ devicePublicId?: string }>(
@@ -202,17 +207,16 @@ async function invoke<T>(
       );
       const publicId = binding?.devicePublicId ?? null;
 
-      kioskHeaders =
+      kioskAuth =
         credential !== null && publicId !== null
-          ? { 'x-kiosk-credential': credential, 'x-kiosk-device': publicId }
+          ? { credential, devicePublicId: publicId }
           : undefined;
     } catch {
       return { ok: false, error: { kind: 'device_credential' } };
     }
 
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body,
-      headers: kioskHeaders,
+      body: { ...body, kioskAuth },
     });
 
     if (error !== null) {

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { EmployeeDraft } from './api';
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import {
   AdminSheet,
   InlineNotice,

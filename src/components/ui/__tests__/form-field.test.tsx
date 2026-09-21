@@ -1,6 +1,6 @@
 import { fireEvent, screen } from '@testing-library/react-native';
 
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import { renderWithProviders } from '@/test-utils/render';
 
 /**

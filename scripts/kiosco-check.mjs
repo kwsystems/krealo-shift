@@ -28,12 +28,7 @@
  *   npm run demo:export
  *   node scripts/kiosco-check.mjs dist-demo
  */
-import {
-  servirExport,
-  cargarPlaywright,
-  sembrarKiosco,
-  medirContraste,
-} from './lib/arnes-web.mjs';
+import { servirExport, cargarPlaywright, sembrarKiosco, medirContraste } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -109,75 +104,79 @@ const navegador = await chromium.launch();
 const problemas = [];
 
 for (const tema of TEMAS) {
-for (const [etiquetaBase, ancho, alto] of TAMANOS) {
-  const etiqueta = `${etiquetaBase} (${tema})`;
-  const ctx = await navegador.newContext({
-    viewport: { width: ancho, height: alto },
-    colorScheme: tema,
-  });
-  const pagina = await ctx.newPage();
+  for (const [etiquetaBase, ancho, alto] of TAMANOS) {
+    const etiqueta = `${etiquetaBase} (${tema})`;
+    const ctx = await navegador.newContext({
+      viewport: { width: ancho, height: alto },
+      colorScheme: tema,
+    });
+    const pagina = await ctx.newPage();
 
-  // Se activa el reloj por su propia pantalla, como lo haría una persona.
-  await pagina.goto(base + '/kiosk/setup', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1500);
-  const campos = pagina.locator('input');
-  if ((await campos.count()) >= 2) {
-    await campos.nth(0).fill('123456');
-    await campos.nth(1).fill('Reloj tienda');
-    await pagina.getByRole('button').first().click();
-    await pagina.waitForTimeout(3000);
-  }
-
-  await pagina.goto(base + '/kiosk', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1800);
-
-  const medida = await pagina.evaluate(() => {
-    const textos = [...document.querySelectorAll('*')].filter(
-      (el) => el.children.length === 0 && (el.textContent || '').trim() === '0',
-    );
-    const cero = textos[textos.length - 1];
-    if (cero === undefined) return null;
-    // El botón es el ancestro que de verdad tiene tamaño de botón.
-    let boton = cero;
-    while (boton.parentElement !== null && boton.getBoundingClientRect().height < 40) {
-      boton = boton.parentElement;
+    // Se activa el reloj por su propia pantalla, como lo haría una persona.
+    await pagina.goto(base + '/kiosk/setup', { waitUntil: 'networkidle' });
+    await pagina.waitForTimeout(1500);
+    const campos = pagina.locator('input');
+    if ((await campos.count()) >= 2) {
+      await campos.nth(0).fill('123456');
+      await campos.nth(1).fill('Reloj tienda');
+      await pagina.getByRole('button').first().click();
+      await pagina.waitForTimeout(3000);
     }
-    const r = boton.getBoundingClientRect();
-    return { abajo: Math.round(r.bottom), alto: Math.round(r.height), ventana: window.innerHeight };
-  });
 
-  if (medida === null) {
-    problemas.push(`${etiqueta} (${ancho}×${alto}): no se encontró el teclado`);
-    console.log(`  ${etiqueta.padEnd(25)} SIN TECLADO`);
+    await pagina.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+    await pagina.waitForTimeout(1800);
+
+    const medida = await pagina.evaluate(() => {
+      const textos = [...document.querySelectorAll('*')].filter(
+        (el) => el.children.length === 0 && (el.textContent || '').trim() === '0',
+      );
+      const cero = textos[textos.length - 1];
+      if (cero === undefined) return null;
+      // El botón es el ancestro que de verdad tiene tamaño de botón.
+      let boton = cero;
+      while (boton.parentElement !== null && boton.getBoundingClientRect().height < 40) {
+        boton = boton.parentElement;
+      }
+      const r = boton.getBoundingClientRect();
+      return {
+        abajo: Math.round(r.bottom),
+        alto: Math.round(r.height),
+        ventana: window.innerHeight,
+      };
+    });
+
+    if (medida === null) {
+      problemas.push(`${etiqueta} (${ancho}×${alto}): no se encontró el teclado`);
+      console.log(`  ${etiqueta.padEnd(25)} SIN TECLADO`);
+      await ctx.close();
+      continue;
+    }
+
+    const holgura = medida.ventana - medida.abajo;
+    const cabe = holgura >= HOLGURA_MINIMA;
+    const tactil = medida.alto >= MINIMO_TACTIL;
+
+    if (!cabe) {
+      problemas.push(
+        holgura < 0
+          ? `${etiqueta} (${ancho}×${alto}): el teclado se SALE ${-holgura}px por abajo`
+          : `${etiqueta} (${ancho}×${alto}): solo ${holgura}px de holgura, hacen falta ${HOLGURA_MINIMA}`,
+      );
+    }
+    if (!tactil) {
+      problemas.push(
+        `${etiqueta} (${ancho}×${alto}): botón de ${medida.alto}px, por debajo del mínimo táctil de ${MINIMO_TACTIL}`,
+      );
+    }
+
+    console.log(
+      `  ${etiqueta.padEnd(25)} ${String(ancho).padStart(4)}×${String(alto).padEnd(4)} ` +
+        `holgura ${String(holgura).padStart(4)}px  ` +
+        `botón ${medida.alto}px  ${cabe && tactil ? 'OK' : 'FALLA'}`,
+    );
+
     await ctx.close();
-    continue;
   }
-
-  const holgura = medida.ventana - medida.abajo;
-  const cabe = holgura >= HOLGURA_MINIMA;
-  const tactil = medida.alto >= MINIMO_TACTIL;
-
-  if (!cabe) {
-    problemas.push(
-      holgura < 0
-        ? `${etiqueta} (${ancho}×${alto}): el teclado se SALE ${-holgura}px por abajo`
-        : `${etiqueta} (${ancho}×${alto}): solo ${holgura}px de holgura, hacen falta ${HOLGURA_MINIMA}`,
-    );
-  }
-  if (!tactil) {
-    problemas.push(
-      `${etiqueta} (${ancho}×${alto}): botón de ${medida.alto}px, por debajo del mínimo táctil de ${MINIMO_TACTIL}`,
-    );
-  }
-
-  console.log(
-    `  ${etiqueta.padEnd(25)} ${String(ancho).padStart(4)}×${String(alto).padEnd(4)} ` +
-      `holgura ${String(holgura).padStart(4)}px  ` +
-      `botón ${medida.alto}px  ${cabe && tactil ? 'OK' : 'FALLA'}`,
-  );
-
-  await ctx.close();
-}
 }
 
 /*

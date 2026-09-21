@@ -62,7 +62,10 @@
     "signOutEverywhereHint": "Cierra la sesión en tu teléfono y en cualquier otro dispositivo donde hayas entrado. No afecta a los relojes de las tiendas: esos usan su propia credencial.",
     "signOutEverywhereConfirm": "Vas a salir de esta app y de todos los demás dispositivos donde hayas iniciado sesión. Tendrás que ingresar otra vez en cada uno.",
     "signInAsAdmin": "Entrar como administrador",
-    "demoHint": "Modo demostración: entra con el botón, o con cualquier correo y contraseña."
+    "demoHint": "Modo demostración: entra con este botón, sin cuenta de Google.",
+    "signInWithGoogle": "Ingresar con Google",
+    "googleFailed": "No se pudo ingresar con Google. Inténtalo nuevamente.",
+    "googleUnavailableNative": "Falta configurar el ingreso con Google para iPad. Avisa a soporte: el panel sí funciona desde el navegador."
   },
   "kiosk": {
     "idleTitle": "Marca tu entrada o salida",

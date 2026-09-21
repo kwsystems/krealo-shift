@@ -1,7 +1,7 @@
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
 import { crearAlmacen, DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID } from './seed';
-import type { AppSupabaseClient } from '@/lib/supabase/client';
+import type { DataClient } from '@/lib/firebase/query';
 
 /**
  * El cliente de mentira del modo demostración.
@@ -113,7 +113,7 @@ function crearAuth(alCambiar: () => void) {
     getUser: async () => sinError({ user: sesion === null ? null : sesion.user }),
     onAuthStateChange: (callback: Suscriptor) => {
       suscriptores.add(callback);
-      // Igual que supabase-js: el primer aviso llega solo, en cuanto hay suscriptor.
+      // Igual que Firebase: el primer aviso llega solo, en cuanto hay suscriptor.
       setTimeout(() => callback('INITIAL_SESSION', sesion), 0);
       return {
         data: {
@@ -142,14 +142,10 @@ function crearAuth(alCambiar: () => void) {
       avisar('SIGNED_OUT');
       return { error: null };
     },
-    resetPasswordForEmail: async (_correo: string, _opciones?: unknown) => ({ error: null }),
-    exchangeCodeForSession: async (_codigo: string) => {
-      sesion = sesionDemo();
-      recordarSesion(true);
-      avisar('SIGNED_IN');
-      return sinError({ session: sesion });
-    },
-    updateUser: async (_cambios: { password?: string }) => sinError({ user: usuarioDemo() }),
+    // Aqui vivian `resetPasswordForEmail`, `exchangeCodeForSession` y `updateUser`.
+    // Se fueron con el formulario de correo y contrasena: con Google no hay
+    // contrasena nuestra que recuperar ni actualizar, y un doble de algo que ya no
+    // existe solo sirve para que una prueba pase sobre una funcion muerta.
   };
 }
 
@@ -460,10 +456,10 @@ function crearStorage() {
   };
 }
 
-let instancia: AppSupabaseClient | null = null;
+let instancia: DataClient | null = null;
 
 /** El cliente de demostración, creado una vez por carga de la pestaña. */
-export function getDemoClient(): AppSupabaseClient {
+export function getDemoClient(): DataClient {
   if (instancia !== null) return instancia;
 
   /*
@@ -490,6 +486,6 @@ export function getDemoClient(): AppSupabaseClient {
     storage: crearStorage(),
   };
 
-  instancia = cliente as unknown as AppSupabaseClient;
+  instancia = cliente as unknown as DataClient;
   return instancia;
 }

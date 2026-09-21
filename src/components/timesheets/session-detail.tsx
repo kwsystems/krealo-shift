@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
 import { alertLabelKey } from './session-row';
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import {
   AdminSheet,
   InlineNotice,

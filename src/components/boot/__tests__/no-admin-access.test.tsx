@@ -93,14 +93,14 @@ describe('guarda del grupo de acceso', () => {
     expect(layout).toContain("destination.kind !== 'signIn'");
   });
 
-  it('la pantalla de contraseña nueva vive FUERA del grupo de acceso', () => {
-    /*
-     * Un enlace de recuperación crea una sesión real, así que la guarda de arriba
-     * echaría de la pantalla a la persona justo antes de dejarla escribir la
-     * contraseña. Si alguien mueve el archivo dentro de `(auth)`, la recuperación deja
-     * de funcionar sin que falle nada más.
-     */
-    const ruta = join(__dirname, '../../../../app/restablecer.tsx');
-    expect(readFileSync(ruta, 'utf8')).toContain('exchangeRecoveryCode');
-  });
+  /*
+   * AQUÍ HABÍA UNA PRUEBA MÁS, y se fue con lo que vigilaba: la pantalla de
+   * contraseña nueva tenía que vivir FUERA del grupo `(auth)`, porque un enlace de
+   * recuperación crea una sesión real y la guarda de arriba habría echado a la
+   * persona justo antes de dejarla escribir la contraseña.
+   *
+   * Con el acceso por Google no hay contraseña nuestra que recuperar, así que
+   * `app/restablecer.tsx` ya no existe. Dejar la prueba habría sido vigilar un
+   * archivo borrado; quitarla es parte de borrarlo, no un descuido.
+   */
 });

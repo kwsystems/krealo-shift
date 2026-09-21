@@ -4,7 +4,7 @@ import * as Crypto from 'expo-crypto';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
 
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';

@@ -11,7 +11,7 @@ import {
   type NotificationPreferences,
   type OrganizationPatch,
 } from './api';
-import { FormField } from '@app/(auth)/sign-in';
+import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
 import {
   AdminSheet,

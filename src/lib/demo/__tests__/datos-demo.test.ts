@@ -25,9 +25,10 @@ import { fetchDailySummaries, fetchPeriod, fetchWorkSessions } from '@/features/
 import { fetchRequests } from '@/features/requests/api';
 import { fetchKioskDevices } from '@/features/settings/api';
 import { fetchBreakTimeByReason } from '@/features/reports/api';
-import { getSupabase } from '@/lib/supabase/client';
+import { getDataClient } from '@/lib/firebase/query';
+import { authSource } from '@/lib/firebase/session';
 import { DEMO_LOCATION_1, DEMO_ORG_ID } from '@/lib/demo/seed';
-import { TABLES } from '@/lib/supabase/types';
+import { TABLES } from '@/lib/firebase/tables';
 import { BREAK_REASONS } from '@/domain/break-reason';
 
 const lunes = (() => {
@@ -56,18 +57,19 @@ describe('modo demostración', () => {
    * vuelve a desaparecer el login— y que se entra —si no, la demostración no sirve—.
    */
   it('arranca SIN sesión, para que la pantalla de acceso se vea', async () => {
-    const db = getSupabase();
-    expect(db).not.toBeNull();
-    const { data } = await db!.auth.getSession();
-    expect(data.session).toBeNull();
+    const auth = authSource();
+    expect(auth).not.toBeNull();
+    await auth!.ready();
+    expect(auth!.currentUser()).toBeNull();
   });
 
-  it('y entrar con cualquier credencial abre la sesión', async () => {
-    const db = getSupabase();
-    await db!.auth.signInWithPassword({ email: 'quien.sea@ejemplo.com', password: 'lo-que-sea' });
-    const { data } = await db!.auth.getSession();
-    expect(data.session).not.toBeNull();
-    await db!.auth.signOut();
+  it('y el botón de demostración abre la sesión', async () => {
+    const auth = authSource();
+    expect(auth!.signInDemo).not.toBeNull();
+    await auth!.signInDemo!();
+    await auth!.ready();
+    expect(auth!.currentUser()).not.toBeNull();
+    await auth!.signOut();
   });
 
   /**
@@ -76,7 +78,7 @@ describe('modo demostración', () => {
    * era justamente que la fila existía y el filtro no la alcanzaba.
    */
   it('la membresía pasa el filtro de alcance, no solo existe', async () => {
-    const db = getSupabase();
+    const db = getDataClient();
     const { data, error } = await db!
       .from(TABLES.organizationMemberships)
       .select('organization_id, role')

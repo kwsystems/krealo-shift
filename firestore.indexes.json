@@ -1,0 +1,150 @@
+{
+  "//": "Indices compuestos de Krealo Shift. Uno por cada consulta que la app hace de verdad: se extrajeron leyendo las cadenas .eq/.gte/.lt/.order de src/features y src/hooks, no de memoria. En Firestore una consulta sin su indice NO se degrada, falla; y es mejor asi, porque la alternativa es que ordene en memoria y mienta.",
+  "indexes": [
+    {
+      "//": "Equipo: la lista de empleados de la empresa, por nombre.",
+      "collectionGroup": "employees",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "full_name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "job_roles",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "locations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "name", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Arranque de sesion: a que organizacion pertenece quien acaba de entrar.",
+      "collectionGroup": "organization_memberships",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "user_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Horario semanal de una tienda. La consulta mas usada de la app.",
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "location_id", "order": "ASCENDING" },
+        { "fieldPath": "starts_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Turnos de una persona. `status` va como IN de dos valores y no como != porque con dos desigualdades (status y starts_at) Firestore obliga a ordenar primero por ellas, y el orden que la pantalla necesita es por hora de inicio.",
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employee_id", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "starts_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "starts_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Ultima version publicada de la semana de una tienda.",
+      "collectionGroup": "shift_publications",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "location_id", "order": "ASCENDING" },
+        { "fieldPath": "week_starts_on", "order": "ASCENDING" },
+        { "fieldPath": "publication_version", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Fichajes de una persona en un rango de fechas (hoja de horas).",
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employee_id", "order": "ASCENDING" },
+        { "fieldPath": "occurred_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Estado de asistencia actual: el ultimo evento de la persona. `seq` desempata cuando dos comparten instante, igual que en Postgres.",
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employee_id", "order": "ASCENDING" },
+        { "fieldPath": "occurred_at", "order": "DESCENDING" },
+        { "fieldPath": "seq", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "location_id", "order": "ASCENDING" },
+        { "fieldPath": "occurred_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Sesiones de trabajo de una tienda en la semana.",
+      "collectionGroup": "work_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "location_id", "order": "ASCENDING" },
+        { "fieldPath": "starts_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "work_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employee_id", "order": "ASCENDING" },
+        { "fieldPath": "starts_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Solicitudes 'Olvide marcar' de una tienda, las nuevas primero.",
+      "collectionGroup": "time_edit_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "location_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "//": "Cola del enviador de alertas: lo pendiente, en orden de llegada.",
+      "collectionGroup": "manager_alert_deliveries",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "queued_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "//": "Auditoria de la empresa, lo mas reciente arriba.",
+      "collectionGroup": "audit_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organization_id", "order": "ASCENDING" },
+        { "fieldPath": "created_at", "order": "DESCENDING" }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

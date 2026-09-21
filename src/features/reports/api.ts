@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 import { selectRows } from '@/hooks/use-admin-query';
-import { VIEWS } from '@/lib/supabase/types';
+import { VIEWS } from '@/lib/firebase/tables';
 
 /**
  * La ÚNICA consulta propia de Reportes (§11.4).

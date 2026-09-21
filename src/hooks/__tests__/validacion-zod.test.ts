@@ -4,8 +4,8 @@ import { AdminError, adminErrorKind, selectRows } from '../use-admin-query';
 
 const mockGetSupabase = jest.fn();
 
-jest.mock('@/lib/supabase/client', () => ({
-  getSupabase: () => mockGetSupabase(),
+jest.mock('@/lib/firebase/query', () => ({
+  getDataClient: () => mockGetSupabase(),
 }));
 
 /**
