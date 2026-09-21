@@ -1,29 +1,47 @@
 {
-  "//": "Indices compuestos de Krealo Shift. Uno por cada consulta que la app hace de verdad: se extrajeron leyendo las cadenas .eq/.gte/.lt/.order de src/features y src/hooks, no de memoria. En Firestore una consulta sin su indice NO se degrada, falla; y es mejor asi, porque la alternativa es que ordene en memoria y mienta.",
+  "//": "Indices compuestos de Krealo Shift. Uno por cada consulta que la app hace de verdad: se extrajeron leyendo las cadenas .eq/.gte/.lt/.order de src/ Y las .where/.orderBy de functions/. Las dos mitades: derivarlos solo del cliente dejo tres consultas del servidor sin indice y la primera se manifesto como un 500. En Firestore una consulta sin su indice NO se degrada, falla; y es mejor asi, porque la alternativa es que ordene en memoria y mienta.",
   "indexes": [
     {
       "//": "Equipo: la lista de empleados de la empresa, por nombre.",
       "collectionGroup": "employees",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "full_name", "order": "ASCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "full_name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "job_roles",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "locations",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "name", "order": "ASCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "name",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -31,9 +49,18 @@
       "collectionGroup": "organization_memberships",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "user_id", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "created_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "user_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -41,8 +68,14 @@
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "location_id", "order": "ASCENDING" },
-        { "fieldPath": "starts_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -50,17 +83,32 @@
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "employee_id", "order": "ASCENDING" },
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "starts_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "shifts",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "starts_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -68,9 +116,18 @@
       "collectionGroup": "shift_publications",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "location_id", "order": "ASCENDING" },
-        { "fieldPath": "week_starts_on", "order": "ASCENDING" },
-        { "fieldPath": "publication_version", "order": "DESCENDING" }
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "week_starts_on",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publication_version",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
@@ -78,8 +135,14 @@
       "collectionGroup": "time_events",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "employee_id", "order": "ASCENDING" },
-        { "fieldPath": "occurred_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -87,17 +150,32 @@
       "collectionGroup": "time_events",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "employee_id", "order": "ASCENDING" },
-        { "fieldPath": "occurred_at", "order": "DESCENDING" },
-        { "fieldPath": "seq", "order": "DESCENDING" }
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "seq",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "time_events",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "location_id", "order": "ASCENDING" },
-        { "fieldPath": "occurred_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
@@ -105,16 +183,28 @@
       "collectionGroup": "work_sessions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "location_id", "order": "ASCENDING" },
-        { "fieldPath": "starts_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "work_sessions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "employee_id", "order": "ASCENDING" },
-        { "fieldPath": "starts_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
@@ -122,9 +212,18 @@
       "collectionGroup": "time_edit_requests",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "location_id", "order": "ASCENDING" },
-        { "fieldPath": "created_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
@@ -132,8 +231,14 @@
       "collectionGroup": "manager_alert_deliveries",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "queued_at", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "queued_at",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
@@ -141,8 +246,67 @@
       "collectionGroup": "audit_logs",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "organization_id", "order": "ASCENDING" },
-        { "fieldPath": "created_at", "order": "DESCENDING" }
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Canje de un codigo de activacion: los vivos y sin usar. LO DESCUBRIO UN 500 EN PRODUCCION, no una revision: los 16 indices de arriba salieron de leer las consultas del CLIENTE, y esta la escribe el SERVIDOR. Derivar los indices de un solo lado deja el otro sin cubrir, y el sintoma es `INTERNAL` en la funcion, no un aviso.",
+      "collectionGroup": "kiosk_activation_codes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "used_count",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "expires_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Lo que el kiosco le ensena a una persona tras su PIN: sus solicitudes ya resueltas.",
+      "collectionGroup": "time_edit_requests",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "//": "Pausas por motivo de una tienda en un rango: el grafico de «en que se va el tiempo».",
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

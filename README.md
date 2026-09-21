@@ -556,64 +556,88 @@ archivo. Cambiar el esquema rompe los enlaces profundos existentes.
 
 ## Qué falta
 
-Esto no está terminado y no se disfraza. La lista se revisó archivo por archivo el
-2026-08-28: la versión anterior decía que faltaban el panel administrativo, las
-notificaciones y el almacenamiento de fotos, y las tres estaban hechas. Una lista de
-pendientes equivocada es peor que no tenerla, porque se usa para decidir qué hacer.
+Esto no está terminado y no se disfraza. **La lista se revisó entera el 2026-09-21**,
+después de mover el backend a Firebase: una lista de pendientes equivocada es peor que
+no tenerla, porque se usa para decidir qué hacer.
 
-**Bloqueado por credenciales o hardware que no tengo** (tarea `aP8PPsGC02bbePX5Oo9i`
-y `NBTEQcPVN4AJ8X0Nyazk` en el Publisher):
+### Bloquea que alguien pueda entrar
+
+- **Habilitar el proveedor de Google en Firebase Auth.** Tres clics en la consola y
+  no hay API que los haga. Hasta entonces el botón está y la ventana de Google
+  contesta que el proveedor está deshabilitado. Ver «Configurar Firebase paso a paso».
+- **Vincular al primer propietario**, con `functions/scripts/vincular-propietario.mjs`,
+  después de que esa persona entre por primera vez. Antes no existe su `uid`.
+
+### Lo que dejó a medias la migración a Firebase
+
+- **Las pruebas de las reglas de seguridad.** Eran 265 aserciones SQL que
+  impersonaban usuarios contra Postgres, y se fueron con él. Su equivalente
+  —`@firebase/rules-unit-testing` sobre el emulador— no está escrito. **Es la deuda
+  más grande del proyecto ahora mismo:** las reglas están razonadas y desplegadas,
+  pero nada las vigila contra una edición futura.
+- **`sendManagerAlerts` no se portó.** Son unas 600 líneas entre cálculo,
+  deduplicación y reclamo por lotes. Sin ella las alertas no se calculan ni se envían.
+  No rompe la app —la disparaba un programador externo, no el cliente— y su catálogo
+  de textos traducidos sí se conservó, en `functions/src/shared/alert-messages.ts`.
+- **La purga de fotos de fichaje no está programada.** La hacía `pg_cron` a diario;
+  Firestore no tiene equivalente dentro de la base y hace falta un Cloud Scheduler.
+  Lo que se olvida aquí son caras de personas guardadas indefinidamente.
+- **Entrar con Google en iPad** necesita un cliente OAuth de iOS y su
+  `EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID`. La app lo dice en pantalla mientras falte.
+
+### Bloqueado por credenciales o hardware que no tengo
 
 - **verificación en dispositivo del circuito offline**: la cola local, la
   sincronización y la validación del PIN sin conexión están implementadas
   (`src/lib/offline/`) y con pruebas, pero el flujo completo —cortar la red,
   fichar, recuperarla y comprobar que sincroniza **una sola vez**— solo se puede
   confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
-- **disparador de las alertas**: `send-manager-alerts` está escrita y probada, pero
-  hay que llamarla cada 15 minutos desde fuera (documentado en
-  abajo). Sin eso las alertas no se calculan ni se envían:
-  no se pierden, pero nadie se entera;
 - **`EAS_PROJECT_ID`**: sin él la app no puede pedir token de push, y el panel lo
   dice con un aviso honesto en vez de un botón que fallaría;
-- **secretos de las Edge Functions**: `KIOSK_TOKEN_SECRET` y `MANAGER_ALERTS_TOKEN`.
-
-**Trabajo pendiente de verdad, que sí se puede hacer aquí:**
-
 - **capturas para la App Store del PANEL administrativo**: `scripts/capturas-store.mjs`
-  genera 24 capturas —kiosco y acceso, en los tres tamaños que pide App Store Connect y
-  en los dos idiomas— y comprueba el tamaño de cada PNG leyendo su cabecera, porque
-  Apple rechaza una captura de un píxel de más. Las del panel necesitan una sesión real
-  contra Firebase, así que el script las hace solo con credenciales:
-  `KS_SHOT_EMAIL=... KS_SHOT_PASSWORD=... node scripts/capturas-store.mjs <export>`;
+  genera 24 capturas y comprueba el tamaño de cada PNG leyendo su cabecera, porque
+  Apple rechaza una captura de un píxel de más. Las del panel necesitan una sesión
+  real contra Firebase;
 - **revisar el icono con Andree**: hay uno propio, generado por
-  `scripts/generar-iconos.mjs` a partir de los tokens de color de la app, y ya no es
-  el de la plantilla de Expo. Pero el motivo gráfico es una decisión de marca, y esa
-  es suya: si tiene un logotipo de Krealo Shift, sustituirlo es cambiar los PNG o la
-  geometría del script, y no toca código;
-- **anuncios**: la tabla `announcements` existe, tiene RLS y el seed crea uno, y nada
-  en la app los lee todavía. Eso NO es deuda: §26 manda «preparar arquitectura,
-  implementar solo después de P0/P1 estable», el modelo de datos de §15 pide la tabla y
-  el seed de §29 pide el anuncio de demostración. La tabla está donde debe estar; lo que
-  falta es la pantalla, que ninguna sección de §9 ni §11 especifica. Cuando se
-  especifique, el camino no es RLS directa: el kiosco no tiene sesión personal, así que
-  el anuncio tendría que viajar en el paquete del kiosco, y eso es un cambio de Edge
-  Function;
-- **resultado de solicitudes sin conexión**: el kiosco muestra el resultado de las
-  solicitudes solo con red, y es una decisión escrita (ver
-  `20260827001800_kiosk_request_updates.sql`), no un olvido. Si se quisiera offline,
-  habría que replicar en el iPad decisiones de un encargado.
+  `scripts/generar-iconos.mjs` a partir de los tokens de color de la app. El motivo
+  gráfico es una decisión de marca, y esa es suya.
 
-**Lo que NO falta, por si la lista anterior confundió a alguien:** el esquema y las
-22 migraciones, RLS con 265 aserciones, las 8 Edge Functions, el modo kiosco completo,
-el editor de horarios semanal, hojas de tiempo con exportación CSV, correcciones y
-aprobaciones, configuración, notificaciones —registro de token, cálculo de alertas y
-envío—, fotos de fichaje con bucket privado y URLs firmadas, y español e inglés
+### Dos pruebas en rojo que NO son de la migración
+
+Las dos se reproducen en `main` y las dos dependen de CUÁNDO y DÓNDE se corren, que
+es la clase de fallo que parece intermitente y no lo es:
+
+- `week.test.ts` solo pasa con `TZ=UTC`. Falla en `America/Lima` —justo la zona del
+  producto— porque `formatDateKeyShort('2026-08-27')` devuelve el día anterior. En CI
+  pasa porque los runners van en UTC;
+- el test de pausas de la demostración **falla los lunes**. La semilla siembra «de
+  lunes hasta ayer», que el lunes es un rango vacío, así que `break_time_by_reason`
+  queda sin filas. Es el mismo fallo que ya se arregló una vez para una prueba SQL
+  (commit `063c90a`).
+
+### Decidido, no pendiente
+
+- **anuncios**: la colección `announcements` existe y nada en la app los lee todavía.
+  §26 manda «preparar arquitectura, implementar solo después de P0/P1 estable». Lo que
+  falta es la pantalla, que ninguna sección de §9 ni §11 especifica. Cuando se
+  especifique, el camino no son las reglas: el kiosco no tiene sesión personal, así
+  que el anuncio tendría que viajar en el paquete del kiosco;
+- **resultado de solicitudes sin conexión**: el kiosco lo muestra solo con red, y es
+  una decisión escrita, no un olvido. Si se quisiera offline, habría que replicar en
+  el iPad decisiones de un encargado.
+
+### Lo que NO falta, por si la lista anterior confundió a alguien
+
+Las 28 colecciones con sus reglas e índices desplegados, las 21 Cloud Functions, el
+modo kiosco completo, el editor de horarios semanal, hojas de tiempo con exportación
+CSV, correcciones y aprobaciones, configuración, registro de token de push y cálculo
+de alertas en el cliente, fotos de fichaje con URLs firmadas, y español e inglés
 completos.
 
-Los nueve eventos de analítica de §31 están instrumentados en sus nueve sitios, con tipo
-cerrado y sin un solo campo de texto libre, pero **no se envían a ningún servicio
+Los nueve eventos de analítica de §31 están instrumentados en sus nueve sitios, con
+tipo cerrado y sin un solo campo de texto libre, pero **no se envían a ningún servicio
 todavía**: elegirlo y dar sus credenciales es de Andree, y conectarlo es una llamada a
-`setAnalyticsSink`. El motivo está en `docs/DECISIONES.md`.
+`setAnalyticsSink`.
 
 ### Lo que necesita la cuenta Apple del propietario
 
