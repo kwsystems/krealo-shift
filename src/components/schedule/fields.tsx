@@ -77,17 +77,45 @@ export function KeyValueRow({
 /**
  * Tarjeta compacta de cifra del inicio administrativo (§11.1).
  * El número va con su etiqueta completa: un número suelto no dice nada.
+ *
+ * EL COLOR ES LA EXCEPCIÓN, NO EL ADORNO, y antes era al revés.
+ *
+ * `tone` venía con `'info'` por defecto y teñía el fondo, el borde, la etiqueta Y la
+ * cifra. Como cada sitio elegía un tono distinto para que las tarjetas «se
+ * distinguieran», en Horas salían cinco tarjetas con cinco colores —`info`,
+ * `working`, `onBreak`, `offShift`, `late`— y en Reportes «Llegó a tiempo 80%»
+ * aparecía en ROJO DE PELIGRO, porque el tono elegido fue `late`.
+ *
+ * Tres cosas se rompen con eso:
+ *
+ *   1. **El color deja de significar.** Si cinco cifras vecinas llevan cinco colores,
+ *      el color ya no dice «mira esto», dice «soy la tercera tarjeta». Cuando de
+ *      verdad hay algo que atender —una jornada sin cerrar— no queda ningún color
+ *      libre con el que gritarlo.
+ *   2. **Miente.** Un 80% de puntualidad no es un error. Pintarlo del mismo rojo que
+ *      una incidencia entrena a la gente a ignorar el rojo, que es lo último que se
+ *      quiere en la pantalla donde aparecen las incidencias de verdad.
+ *   3. **Aplana la jerarquía.** El dato que importa compite con otros cuatro marcos
+ *      igual de llamativos.
+ *
+ * Ahora: sin `tone`, la tarjeta es neutra —superficie, borde fino, cifra en tinta
+ * principal— y no compite con nadie. Con `tone`, el borde y el icono toman el color,
+ * pero LA CIFRA NO: el borde ya señala la excepción, y teñir también el número lo
+ * convierte en un cartel y deja de leerse como un dato.
+ *
+ * Si una fila entera necesita tonos, la fila está mal pensada, no mal pintada.
  */
 export function StatTile({
   label,
   value,
-  tone = 'info',
+  tone,
   icon,
   onPress,
   testID,
 }: {
   label: string;
   value: string;
+  /** SOLO cuando el número es una excepción que pide acción. Por defecto, neutra. */
   tone?: StatusTone;
   icon?: IconName;
   onPress?: () => void;
@@ -95,16 +123,26 @@ export function StatTile({
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
-  const palette = paletaDeEstado(colors)[tone];
+  const palette = tone === undefined ? null : paletaDeEstado(colors)[tone];
   const content = (
-    <View style={[styles.tile, { backgroundColor: palette.bg, borderColor: palette.border }]}>
+    <View
+      style={[
+        styles.tile,
+        {
+          backgroundColor: colors.surface,
+          borderColor: palette === null ? colors.border : palette.border,
+        },
+      ]}
+    >
       <Row gap={spacing.xs}>
-        {icon !== undefined ? <Ionicons name={icon} size={16} color={palette.fg} /> : null}
-        <AppText variant="label" style={{ color: palette.fg }}>
+        {icon !== undefined ? (
+          <Ionicons name={icon} size={16} color={palette === null ? colors.ink500 : palette.fg} />
+        ) : null}
+        <AppText variant="label" tone={palette === null ? 'subtle' : undefined}>
           {label}
         </AppText>
       </Row>
-      <AppText variant="section" tabular style={{ color: palette.fg }}>
+      <AppText variant="section" tabular>
         {value}
       </AppText>
     </View>

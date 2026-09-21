@@ -286,20 +286,17 @@ export function TimesheetsScreen() {
                 <StatTile
                   label={t('timesheet.netHours')}
                   value={minutesToHHmm(totals.netMinutes)}
-                  tone="info"
                   icon="time-outline"
                   testID="total-net"
                 />
                 <StatTile
                   label={t('timesheet.regular')}
                   value={minutesToHHmm(totals.regularMinutes)}
-                  tone="working"
                   icon="checkmark-circle"
                 />
                 <StatTile
                   label={t('timesheet.overtimeInformative')}
                   value={minutesToHHmm(totals.overtimeMinutes)}
-                  tone="onBreak"
                   icon="trending-up-outline"
                   /*
                    * El `testID` lo pide `scripts/reportes-check.mjs`: abre esta
@@ -331,7 +328,6 @@ export function TimesheetsScreen() {
                         (totals.overtimeMinutes * scope.settings.overtimeMultiplierPercent) / 100,
                       ),
                     )}
-                    tone="onBreak"
                     icon="calculator-outline"
                     testID="total-overtime-equivalent"
                   />
@@ -339,13 +335,17 @@ export function TimesheetsScreen() {
                 <StatTile
                   label={t('timesheet.breaks')}
                   value={minutesToHHmm(totals.unpaidBreakMinutes + totals.paidBreakMinutes)}
-                  tone="offShift"
                   icon="cafe-outline"
                 />
                 <StatTile
                   label={t('states.needsReviewBadge')}
                   value={String(totals.needsReviewDays)}
-                  tone={totals.needsReviewDays > 0 ? 'late' : 'offShift'}
+                  /*
+                   * EL UNICO TONO DE ESTA FILA, y por eso funciona: una jornada sin
+                   * cerrar es lo que hay que atender hoy. Con las otras cinco tenidas
+                   * tambien, esta no destacaba sobre nada.
+                   */
+                  tone={totals.needsReviewDays > 0 ? 'late' : undefined}
                   icon="alert-circle"
                 />
               </Row>

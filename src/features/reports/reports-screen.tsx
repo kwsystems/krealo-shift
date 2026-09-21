@@ -458,7 +458,7 @@ export function ReportsScreen() {
                 <StatTile
                   label={t('reports.overtime')}
                   value={minutesToHHmm(extraMinutos)}
-                  tone={extraMinutos > 0 ? 'warning' : 'offShift'}
+                  tone={extraMinutos > 0 ? 'warning' : undefined}
                   icon="alert-circle-outline"
                   testID="report-overtime"
                 />
@@ -469,12 +469,17 @@ export function ReportsScreen() {
                       ? t('reports.noData')
                       : `${puntualidad.onTimePercent}%`
                   }
+                  /*
+                   * ANTES ESTO PINTABA UN 80% EN ROJO DE PELIGRO, con el tono `late`.
+                   * Un 80% de puntualidad no es un error: es una cifra por debajo del
+                   * objetivo, que es un aviso. Y el verde de `working` cuando se cumple
+                   * tampoco aporta: celebrar lo esperado gasta color que hace falta
+                   * para lo que no lo es.
+                   */
                   tone={
-                    puntualidad.onTimePercent === null
-                      ? 'offShift'
-                      : puntualidad.onTimePercent >= 90
-                        ? 'working'
-                        : 'late'
+                    puntualidad.onTimePercent !== null && puntualidad.onTimePercent < 90
+                      ? 'warning'
+                      : undefined
                   }
                   icon="walk-outline"
                   testID="report-ontime"
