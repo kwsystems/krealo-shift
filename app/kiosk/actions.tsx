@@ -22,12 +22,14 @@ import {
   RequiredBreakSheet,
   type RequiredBreakChoice,
 } from '@/components/attendance/kiosk-sheets';
+import { InlineNotice } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { ActionCountdown } from '@/components/ui/action-countdown';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
+import { fotoDeVerificacionObligatoria, permiteFicharSinRed } from '@/lib/kiosk/disponibilidad';
 import { track } from '@/lib/analytics';
 import { enqueueEvent, enqueuePhotoForEvent } from '@/lib/offline/outbox';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
@@ -107,6 +109,12 @@ type Step =
       duplicate: boolean;
     };
 
+/**
+ * Cuanto se espera a la camara antes de darla por fallida. Doce segundos es de sobra
+ * para conceder un permiso y corto para no parecer colgado.
+ */
+const ESPERA_MAXIMA_DE_FOTO_MS = 12_000;
+
 export default function KioskActionsScreen() {
   const { colors } = useTheme();
   const styles = useEstilos();
@@ -139,13 +147,47 @@ export default function KioskActionsScreen() {
   const [overrideError, setOverrideError] = useState<string | null>(null);
   const [overrideChecking, setOverrideChecking] = useState(false);
   const [earlyAuthorized, setEarlyAuthorized] = useState(false);
-  // La foto es opcional: `null` significa que todavia no hay resultado, y
-  // 'skipped' que no se pudo tomar. En ninguno de los dos casos se bloquea el
-  // fichaje (§9.6).
+  /*
+   * `null` significa que todavia no hay resultado, y 'skipped' que no se pudo tomar.
+   *
+   * QUE PASE ENTONCES DEPENDE DEL APARATO. En un iPad de pared la foto es opcional y
+   * nunca bloquea (§9.6): el aparato ya prueba que la persona estaba ahi. En un
+   * navegador la direccion se abre desde cualquier sitio, asi que la foto es la UNICA
+   * prueba de presencia y sin ella no hay fichaje. Ver `disponibilidad.ts`.
+   */
   const [photo, setPhoto] = useState<PhotoResult | null>(null);
+  /** Cambia al reintentar para REMONTAR la camara: el componente solo captura una vez. */
+  const [intentoDeFoto, setIntentoDeFoto] = useState(0);
 
   const policies = binding?.policies ?? DEFAULT_KIOSK_POLICIES;
   const timezone = binding?.timezone ?? 'America/Lima';
+
+  /** Se ofrece la camara si la sede la pidio, o si el aparato la exige (web). */
+  const pideFoto = policies.photoEnabled || fotoDeVerificacionObligatoria;
+  const fotoPendiente = fotoDeVerificacionObligatoria && photo === null;
+  const fotoImposible = fotoDeVerificacionObligatoria && photo?.status === 'skipped';
+
+  /*
+   * LA ESPERA TIENE PLAZO, y sin el la pantalla se quedaba colgada para siempre.
+   *
+   * `PhotoCapture` solo avisa de que no pudo tomar la foto cuando el permiso esta
+   * denegado Y el navegador dice que ya no se puede volver a pedir. Un navegador que
+   * bloquea la camara sin mas —o una camara que no responde— no cumple ninguna de las
+   * dos, asi que nunca llegaba ningun resultado: con la foto obligatoria eso dejaba
+   * «Esperando la foto de verificacion...» fijo en pantalla, sin fichaje y sin salida.
+   * Medido en el navegador, que es donde la foto es obligatoria.
+   *
+   * Pasado el plazo se da por fallida, que es lo que de hecho es, y entonces aparece el
+   * aviso con «volver a intentar» y «cancelar».
+   */
+  useEffect(() => {
+    if (!fotoPendiente || step.name !== 'confirm') return;
+    const plazo = setTimeout(
+      () => setPhoto({ status: 'skipped', reason: 'failed' }),
+      ESPERA_MAXIMA_DE_FOTO_MS,
+    );
+    return () => clearTimeout(plazo);
+  }, [fotoPendiente, step.name, intentoDeFoto]);
 
   /** Vuelve a reposo limpiando todo el estado temporal (§9.5). */
   const returnToIdle = useCallback(() => {
@@ -379,6 +421,19 @@ export default function KioskActionsScreen() {
     // Sesion validada sin conexion: no hay token del servidor que consumir, asi
     // que el evento va directo a la cola local (§9.7).
     if (actionToken === null) {
+      /*
+       * EN WEB SE NIEGA EN VEZ DE ENCOLAR. La cola del navegador vive en memoria y no
+       * sobrevive a un recargado, asi que encolar aqui seria darle a la persona una
+       * confirmacion por un fichaje que puede evaporarse sin que nadie se entere. Un
+       * "ahora no se puede, vuelve a intentarlo" es recuperable; una hora perdida en
+       * silencio no. Ver `permiteFicharSinRed`.
+       */
+      if (!permiteFicharSinRed) {
+        setError(t('kiosk.webNeedsNetwork'));
+        setStep({ name: 'identify' });
+        setSubmitting(false);
+        return;
+      }
       await commitOffline(event);
       setSubmitting(false);
       return;
@@ -700,18 +755,59 @@ export default function KioskActionsScreen() {
                 </AppText>
               ) : null}
 
-              {policies.photoEnabled ? (
+              {pideFoto ? (
                 <Stack gap={spacing.sm}>
                   <PhotoNotice />
-                  <PhotoCapture onResult={setPhoto} />
+                  <PhotoCapture key={intentoDeFoto} onResult={setPhoto} />
                 </Stack>
               ) : null}
 
-              <ActionCountdown
-                onComplete={() => void commitAction(step.event)}
-                onCancel={() => setStep({ name: 'identify' })}
-                testID="kiosk-confirm-countdown"
-              />
+              {/*
+                LA CUENTA REGRESIVA NO ARRANCA HASTA QUE HAY FOTO, cuando la foto es
+                obligatoria. Si arrancara antes, el fichaje se confirmaria solo a los
+                tres segundos con la camara todavia pidiendo permiso: exactamente el
+                fichaje sin prueba que la foto viene a impedir.
+              */}
+              {fotoImposible ? (
+                <Stack gap={spacing.sm}>
+                  <InlineNotice
+                    tone="late"
+                    icon="camera-outline"
+                    title={t('kiosk.photoRequiredTitle')}
+                    body={t('kiosk.photoRequiredBody')}
+                    testID="kiosk-photo-required"
+                  />
+                  <SecondaryButton
+                    label={t('kiosk.photoRetry')}
+                    onPress={() => {
+                      setPhoto(null);
+                      setIntentoDeFoto((n) => n + 1);
+                    }}
+                    testID="kiosk-photo-retry"
+                  />
+                  <GhostButton
+                    label={t('common.cancel')}
+                    onPress={() => setStep({ name: 'identify' })}
+                  />
+                </Stack>
+              ) : fotoPendiente ? (
+                <Stack gap={spacing.sm}>
+                  <AppText variant="help" tone="subtle" testID="kiosk-photo-waiting">
+                    {t('kiosk.photoRequiredWaiting')}
+                  </AppText>
+                  {/* Siempre hay salida: esperar no puede ser un callejon. */}
+                  <GhostButton
+                    label={t('common.cancel')}
+                    onPress={() => setStep({ name: 'identify' })}
+                  />
+                </Stack>
+              ) : (
+                <ActionCountdown
+                  onComplete={() => void commitAction(step.event)}
+                  onCancel={() => setStep({ name: 'identify' })}
+                  testID="kiosk-confirm-countdown"
+                />
+              )}
             </Card>
           ) : null}
 

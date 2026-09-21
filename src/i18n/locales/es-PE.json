@@ -153,7 +153,12 @@
     "reasonNoteTitle": "¿Qué pasó?",
     "reasonNoteHint": "Una línea basta. Sirve para que tu gerente no tenga que preguntarte después.",
     "reasonNotePlaceholder": "Ej.: fui a la clínica",
-    "reasonNoteRequired": "Escribe una línea para continuar"
+    "reasonNoteRequired": "Escribe una línea para continuar",
+    "photoRequiredWaiting": "Esperando la foto de verificación…",
+    "photoRequiredTitle": "Sin foto no se puede fichar aquí",
+    "photoRequiredBody": "Desde un navegador la foto es la única prueba de que estás en el local. Permite el uso de la cámara y vuelve a intentarlo.",
+    "photoRetry": "Volver a intentar la foto",
+    "webNeedsNetwork": "Sin conexión no se puede fichar desde el navegador. Vuelve a intentarlo cuando haya red."
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

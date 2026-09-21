@@ -153,7 +153,12 @@
     "reasonNoteTitle": "What happened?",
     "reasonNoteHint": "One line is enough. It saves your manager from asking later.",
     "reasonNotePlaceholder": "e.g. went to the clinic",
-    "reasonNoteRequired": "Write one line to continue"
+    "reasonNoteRequired": "Write one line to continue",
+    "photoRequiredWaiting": "Waiting for the verification photo…",
+    "photoRequiredTitle": "No photo, no clock-in here",
+    "photoRequiredBody": "In a browser the photo is the only proof that you are at the store. Allow camera access and try again.",
+    "photoRetry": "Try the photo again",
+    "webNeedsNetwork": "You cannot clock in from a browser while offline. Try again when you have a connection."
   },
   "attendance": {
     "statusOffShift": "Off shift",
