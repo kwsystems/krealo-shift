@@ -370,20 +370,27 @@ node functions/scripts/sembrar.mjs
 que se puede volver a lanzar sin duplicar nada. Con `--solo-ver` dice qué haría sin
 escribir.
 
-### Darte acceso a ti mismo
-
-La membresía se identifica por el `uid` que Firebase asigna al entrar con Google, y
-ese `uid` **no existe hasta que entras por primera vez**. Así que el orden es:
-
-1. entra en la app con Google;
-2. después, desde tu máquina:
+### Dar acceso a alguien
 
 ```bash
-node functions/scripts/vincular-propietario.mjs tu@correo.com
+node functions/scripts/dar-acceso.mjs alguien@empresa.com --rol admin
+node functions/scripts/dar-acceso.mjs --listar
 ```
 
-Eso crea la membresía `owner` y tu perfil. Si intentas lanzarlo antes de haber
-entrado, el script lo dice y para: no crea cuentas.
+Los roles son `owner`, `admin`, `manager` y `employee`; sin `--rol` se asume
+`manager`.
+
+**El script resuelve los dos casos y no crea cuentas.** La membresía se identifica
+por el `uid` que Firebase asigna al entrar con Google, y ese `uid` no existe antes de
+la primera vez:
+
+- si esa persona **ya entró**, le escribe la membresía y tiene efecto al recargar;
+- si **no ha entrado nunca**, deja una invitación con su correo. La reclama sola la
+  primera vez que entre, y no hay que volver a lanzar nada.
+
+La alternativa a las invitaciones sería fabricarle la cuenta con su correo desde el
+servidor. No se hace: es crear la identidad de otra persona en un sistema donde esa
+identidad firma horas que se pagan.
 
 ### El secreto del token de kiosco
 
@@ -565,8 +572,8 @@ no tenerla, porque se usa para decidir qué hacer.
 - **Habilitar el proveedor de Google en Firebase Auth.** Tres clics en la consola y
   no hay API que los haga. Hasta entonces el botón está y la ventana de Google
   contesta que el proveedor está deshabilitado. Ver «Configurar Firebase paso a paso».
-- **Vincular al primer propietario**, con `functions/scripts/vincular-propietario.mjs`,
-  después de que esa persona entre por primera vez. Antes no existe su `uid`.
+- **Dar acceso al primer propietario**, con `functions/scripts/dar-acceso.mjs`. Si ya
+  entró se aplica al instante; si no, queda invitación y se canjea sola al entrar.
 
 ### Lo que dejó a medias la migración a Firebase
 

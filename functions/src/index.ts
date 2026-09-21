@@ -36,6 +36,8 @@ export {
   syncManagedLocations,
 } from './manager';
 
+export { claimInvitation, inviteMember } from './invitations';
+
 export {
   activateKiosk,
   refreshKioskRoster,

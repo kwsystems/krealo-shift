@@ -49,6 +49,7 @@ export function toISO(value: Date | string): string {
 export const COLLECTIONS = {
   organizations: 'organizations',
   memberships: 'organization_memberships',
+  invitations: 'organization_invitations',
   profiles: 'profiles',
   locations: 'locations',
   employees: 'employees',

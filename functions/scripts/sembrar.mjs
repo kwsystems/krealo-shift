@@ -15,11 +15,11 @@
  * ES IDEMPOTENTE: usa identificadores fijos y escribe con `merge`, asi que correrlo
  * dos veces no duplica nada. Se puede volver a lanzar sin pensarlo.
  *
- * NO CREA NINGUNA CUENTA. La membresia del propietario necesita el `uid` que Firebase
- * asigna al entrar con Google por primera vez, y ese `uid` no existe hasta que
- * alguien entra. Cuando exista:
+ * NO CREA NINGUNA CUENTA. La membresia necesita el `uid` que Firebase asigna al entrar
+ * con Google por primera vez, y ese `uid` no existe hasta que alguien entra. Para dar
+ * acceso —haya entrado ya o no, que deja invitacion pendiente—:
  *
- *     node functions/scripts/vincular-propietario.mjs tu@correo.com
+ *     node functions/scripts/dar-acceso.mjs tu@correo.com --rol owner
  *
  * Uso:
  *     node functions/scripts/sembrar.mjs              # crea o actualiza
@@ -457,5 +457,5 @@ for (let i = 0; i < documentos.length; i += 400) {
 }
 
 console.log('\nListo. Las colecciones existen y la organización de ejemplo está dentro.');
-console.log('Siguiente paso, cuando alguien entre con Google por primera vez:');
-console.log('  node functions/scripts/vincular-propietario.mjs <su-correo>');
+console.log('Siguiente paso, dar acceso a alguien:');
+console.log('  node functions/scripts/dar-acceso.mjs <su-correo> --rol owner');

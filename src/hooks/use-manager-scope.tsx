@@ -6,6 +6,7 @@ import { docId } from '@/lib/firebase/ids';
 
 import { track } from '@/lib/analytics';
 import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
+import { callFunction } from '@/lib/firebase/functions';
 import { getDataClient } from '@/lib/firebase/query';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
 import type { TimeFormatPreference } from '@/utils/time';
@@ -173,7 +174,36 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
     return userId === null ? query : query.eq('user_id', userId);
   });
 
-  const membership = memberships[0];
+  let membership = memberships[0];
+
+  /**
+   * ANTES DE RENDIRSE, MIRAR SI HAY UNA INVITACIÓN ESPERANDO.
+   *
+   * Quien entra por primera vez invitado por correo no tiene membresía todavía: su
+   * `uid` no existía cuando se le invitó, así que la invitación quedó escrita con su
+   * correo y hay que canjearla. Se hace AQUÍ, en el único punto por el que pasa todo
+   * el que descubre que no tiene permisos, y no en la pantalla de acceso: por aquí
+   * pasa también una sesión restaurada, que en el acceso no se vería nunca.
+   *
+   * Se intenta UNA vez. Si no hay invitación, la función lo dice sin error y se cae al
+   * mismo `forbidden` de siempre: quien no está invitado ve lo que veía antes.
+   */
+  if (membership === undefined) {
+    const { data } = await callFunction<{ claimed: boolean }>('claimInvitation');
+    if (data?.claimed === true) {
+      const reintento = await selectRows(z.array(membershipSchema), (client) => {
+        const query = client
+          .from(TABLES.organizationMemberships)
+          .select('organization_id, role')
+          .eq('status', 'active')
+          .order('created_at', { ascending: true })
+          .limit(1);
+        return userId === null ? query : query.eq('user_id', userId);
+      });
+      membership = reintento[0];
+    }
+  }
+
   if (membership === undefined) {
     // Sin membresía activa no hay panel que mostrar. Se trata como acceso
     // denegado para que la pantalla diga qué hacer —pedir que te agreguen al

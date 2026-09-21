@@ -100,6 +100,20 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    /**
+     * INVITACIONES: CERRADAS A TODO EL MUNDO, y no es exceso de celo.
+     *
+     * Una invitacion dice «este correo tendra rol admin». Poder LEERLAS daria la lista
+     * de a quien se esta dando acceso y con que rol, que es el mapa para elegir a quien
+     * suplantar. Poder ESCRIBIRLAS seria poder invitarse a uno mismo como admin.
+     *
+     * Se crean con `inviteMember` y se reclaman con `claimInvitation`, que toma el
+     * correo del token verificado y nunca de un parametro.
+     */
+    match /organization_invitations/{invitationId} {
+      allow read, write: if false;
+    }
+
     // -----------------------------------------------------------------------
     // Ubicaciones, puestos y empleados
     // -----------------------------------------------------------------------
