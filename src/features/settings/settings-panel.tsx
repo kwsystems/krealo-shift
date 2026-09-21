@@ -28,7 +28,7 @@ import { OrganizationLogoField } from './logo-field';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
 import { AppText } from '@/components/ui/app-text';
-import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import {
@@ -338,6 +338,10 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
 
   const [name, setName] = useState(location.name);
   const [address, setAddress] = useState(location.address);
+  const [aCerrar, setACerrar] = useState(false);
+  const [nuevaSede, setNuevaSede] = useState('');
+  const [nuevaDireccion, setNuevaDireccion] = useState('');
+  const [abierta, setAbierta] = useState<string | null>(null);
   const [settings, setSettings] = useState<LocationSettings>(location.settings);
   const [numbers, setNumbers] = useState<Record<NumericSettingKey, string>>({
     photoRetentionDays: String(location.settings.photoRetentionDays),
@@ -372,6 +376,25 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
 
   return (
     <FormCard collapsible title={t('settings.locations')} description={location.name}>
+      {/*
+        QUE SEDE SE ESTA EDITANDO, y antes no se podia elegir: esta tarjeta recibia la
+        del alcance y no habia forma de cambiarla desde aqui. Con dos tiendas, la
+        segunda solo se podia configurar yendo a otra pantalla a cambiar la seleccion y
+        volviendo, lo cual no se le ocurre a nadie.
+      */}
+      {scope.locations.length > 1 ? (
+        <SelectField
+          label={t('settings.locationPick')}
+          value={location.id}
+          options={scope.locations.map((sede) => ({
+            value: sede.id,
+            label: sede.is_active ? sede.name : `${sede.name} · ${t('settings.locationInactive')}`,
+          }))}
+          onChange={scope.setLocationId}
+          testID="location-pick"
+        />
+      ) : null}
+
       <FormField
         label={t('settings.locationName')}
         value={name}
@@ -469,6 +492,129 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
         disabled={!canEdit || name.trim().length < 2}
         loading={mutations.saveLocation.isPending}
         testID="location-save"
+      />
+
+      {/*
+        CERRAR, NO BORRAR, y el texto de abajo lo dice sin rodeos porque es la pregunta
+        que se hace todo el mundo. La regla de Firestore prohibe el borrado a proposito:
+        una sede tiene fichajes colgando —horas ya pagadas, turnos publicados,
+        correcciones con su auditoria— y borrar la fila dejaria todo eso apuntando a una
+        tienda que no existe, justo cuando hace falta leerlo, que es anos despues.
+      */}
+      {canEdit ? (
+        <Stack gap={spacing.sm}>
+          <Row justify="space-between" align="center" gap={spacing.md} wrap>
+            <AppText variant="bodyStrong">{t('settings.locationStatus')}</AppText>
+            <StatusBadge
+              compact
+              label={
+                location.is_active ? t('settings.locationActive') : t('settings.locationInactive')
+              }
+              tone={location.is_active ? 'working' : 'offShift'}
+              icon={location.is_active ? 'storefront-outline' : 'lock-closed-outline'}
+            />
+          </Row>
+          {location.is_active ? (
+            <GhostButton
+              label={t('settings.locationClose')}
+              onPress={() => setACerrar(true)}
+              disabled={mutations.toggleLocation.isPending}
+              fullWidth={false}
+              testID="location-close"
+            />
+          ) : (
+            <SecondaryButton
+              label={t('settings.locationReopen')}
+              onPress={() =>
+                mutations.toggleLocation.mutate({ locationId: location.id, isActive: true })
+              }
+              loading={mutations.toggleLocation.isPending}
+              fullWidth={false}
+              testID="location-reopen"
+            />
+          )}
+          <AppText variant="help" tone="subtle">
+            {t('settings.locationNoDelete')}
+          </AppText>
+        </Stack>
+      ) : null}
+
+      {/* Abrir una tienda nueva exigia la terminal y credenciales del proyecto. */}
+      {canEdit ? (
+        <Stack gap={spacing.sm}>
+          <AppText variant="bodyStrong">{t('settings.addLocation')}</AppText>
+          <AppText variant="help" tone="subtle">
+            {t('settings.addLocationHint')}
+          </AppText>
+          <FormField
+            label={t('settings.addLocationName')}
+            value={nuevaSede}
+            onChangeText={setNuevaSede}
+            testID="location-new-name"
+          />
+          <FormField
+            label={t('settings.locationAddress')}
+            value={nuevaDireccion}
+            onChangeText={setNuevaDireccion}
+            testID="location-new-address"
+          />
+          <PrimaryButton
+            label={t('settings.addLocationSubmit')}
+            disabled={nuevaSede.trim() === ''}
+            loading={mutations.addLocation.isPending}
+            onPress={() => {
+              const nombre = nuevaSede.trim();
+              mutations.addLocation.mutate(
+                {
+                  name: nombre,
+                  address: nuevaDireccion.trim(),
+                  timezone: scope.timezone,
+                  settings: DEFAULT_LOCATION_SETTINGS,
+                },
+                {
+                  onSuccess: () => {
+                    setAbierta(nombre);
+                    setNuevaSede('');
+                    setNuevaDireccion('');
+                  },
+                },
+              );
+            }}
+            testID="location-create"
+          />
+          {abierta === null ? null : (
+            <InlineNotice
+              tone="working"
+              icon="checkmark-circle"
+              title={t('settings.addLocationDone', { name: abierta })}
+            />
+          )}
+          {mutations.addLocation.error === null ? null : (
+            <InlineNotice
+              tone="late"
+              icon="warning-outline"
+              title={t('settings.addLocationFailed')}
+              body={
+                mutations.addLocation.error instanceof Error
+                  ? mutations.addLocation.error.message
+                  : undefined
+              }
+            />
+          )}
+        </Stack>
+      ) : null}
+
+      <ConfirmSheet
+        visible={aCerrar}
+        title={t('settings.locationCloseConfirmTitle', { name: location.name })}
+        body={t('settings.locationCloseConfirmBody')}
+        confirmLabel={t('settings.locationClose')}
+        destructive
+        onConfirm={() => {
+          mutations.toggleLocation.mutate({ locationId: location.id, isActive: false });
+          setACerrar(false);
+        }}
+        onCancel={() => setACerrar(false)}
       />
     </FormCard>
   );

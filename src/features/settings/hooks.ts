@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   createActivationCode,
+  createLocation,
   fetchKioskDevices,
   fetchNotificationPreferences,
   revokeKioskDevice,
   saveNotificationPreferences,
+  setLocationActive,
   updateLocation,
   updateOrganization,
   type NotificationPreferences,
@@ -75,6 +77,23 @@ export function useSettingsMutations(organizationId: string | null) {
     onSuccess: invalidateScope,
   });
 
+  const addLocation = useMutation({
+    mutationFn: (variables: {
+      name: string;
+      address: string;
+      timezone: string;
+      settings: LocationSettings;
+    }) => createLocation({ organizationId: organizationId ?? '', ...variables }),
+    onSuccess: invalidateScope,
+  });
+
+  /** Cerrar o reabrir. Borrar no existe: el porqué está en `setLocationActive`. */
+  const toggleLocation = useMutation({
+    mutationFn: (variables: { locationId: string; isActive: boolean }) =>
+      setLocationActive(variables),
+    onSuccess: invalidateScope,
+  });
+
   const saveLocation = useMutation({
     mutationFn: (variables: {
       locationId: string;
@@ -109,7 +128,15 @@ export function useSettingsMutations(organizationId: string | null) {
     },
   });
 
-  return { saveOrganization, saveLocation, generateCode, revokeKiosk, saveNotifications };
+  return {
+    saveOrganization,
+    saveLocation,
+    addLocation,
+    toggleLocation,
+    generateCode,
+    revokeKiosk,
+    saveNotifications,
+  };
 }
 
 /**

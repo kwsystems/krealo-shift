@@ -15,6 +15,19 @@
 
 export type Fila = Record<string, unknown>;
 
+/**
+ * Identificadores de las filas creadas durante la demostracion.
+ *
+ * Llevan el nombre de la tabla para que un id suelto en una captura diga de donde sale,
+ * y un contador global para que dos tablas no puedan repetirlo. No pretende parecerse a
+ * un id de Firestore: si alguien lo ve, tiene que saber que es de mentira.
+ */
+let contadorDeIds = 0;
+const nuevoId = (tabla: string): string => {
+  contadorDeIds += 1;
+  return `demo-${tabla}-${contadorDeIds}`;
+};
+
 export type ErrorPostgrest = {
   message: string;
   details: string;
@@ -180,11 +193,29 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
     return this;
   }
 
-  private escribir(): ErrorPostgrest | null {
+  private escribir(): { error: ErrorPostgrest | null; creadas: Fila[] } {
     const actuales = this.almacen.get(this.nombre) ?? [];
 
     if (this.operacion === 'insert' || this.operacion === 'upsert') {
-      const nuevas = this.carga.map((fila) => ({ ...fila }));
+      /*
+       * EL ID LO PONE LA BASE, y aquí no lo ponía nadie.
+       *
+       * El adaptador real genera la referencia del documento al insertar y devuelve la
+       * fila creada, y dos altas de la app dependen de ello: `createEmployee` necesita
+       * el id para asignarle ubicaciones y puestos, y `createLocation` para ofrecer la
+       * sede recién abierta. En la demostración la fila se guardaba tal cual —sin id— y
+       * `insert(...).select('id').single()` devolvía `null`, así que las dos altas
+       * fallaban con «expected object, received null», un error de Zod que no menciona
+       * en ningún momento que el problema sea el backend de mentira.
+       *
+       * O sea que la demostración no podía dar de alta NADA, y eso lo escondía: es la
+       * superficie contra la que se verifica todo lo demás.
+       */
+      const nuevas: Fila[] = this.carga.map((fila) => ({
+        ...fila,
+        id: fila.id ?? nuevoId(this.nombre),
+        created_at: fila.created_at ?? new Date().toISOString(),
+      }));
       const clave = this.conflicto;
       const conserva =
         this.operacion === 'upsert' && clave.length > 0
@@ -193,7 +224,7 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
             )
           : actuales;
       this.almacen.set(this.nombre, [...conserva, ...nuevas]);
-      return null;
+      return { error: null, creadas: nuevas };
     }
 
     const alcanzadas = (fila: Fila) => this.filtros.every((cumple) => cumple(fila));
@@ -203,7 +234,7 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
         this.nombre,
         actuales.filter((fila) => !alcanzadas(fila)),
       );
-      return null;
+      return { error: null, creadas: [] };
     }
 
     // update
@@ -212,7 +243,7 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
       this.nombre,
       actuales.map((fila) => (alcanzadas(fila) ? { ...fila, ...parche } : fila)),
     );
-    return null;
+    return { error: null, creadas: [] };
   }
 
   then<R1 = Resultado<T>, R2 = never>(
@@ -222,7 +253,23 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
     return Promise.resolve()
       .then((): Resultado<T> => {
         if (this.operacion !== 'select') {
-          return { data: null as T, error: this.escribir() };
+          const { error: fallo, creadas } = this.escribir();
+          if (fallo !== null) return { data: null as T, error: fallo };
+          // Sin `select()` encadenado no se espera ningun dato: se conserva `null`,
+          // que es lo que devuelven los `update(...).eq(...)` de toda la app.
+          if (this.columnas === null && this.unica === null) {
+            return { data: null as T, error: null };
+          }
+          const proyectadas = creadas.map((fila) => this.proyectar(fila));
+          if (this.unica !== null) {
+            return proyectadas.length === 1
+              ? { data: proyectadas[0] as T, error: null }
+              : {
+                  data: null as T,
+                  error: error('PGRST116', `se esperaba una fila y hay ${proyectadas.length}`),
+                };
+          }
+          return { data: proyectadas as T, error: null };
         }
 
         const filas = this.leer();

@@ -48,6 +48,69 @@ export async function updateLocation(params: {
   );
 }
 
+/**
+ * Abrir una sede nueva.
+ *
+ * NO HABÍA FORMA DE HACERLO DESDE LA APP, y la regla de Firestore sí lo permitía desde
+ * el primer día (`allow create: if isAdmin(...)`). Lo que faltaba era la pantalla: abrir
+ * una tienda exigía una máquina con credenciales de administrador del proyecto de Google
+ * y correr `functions/scripts/configurar-empresa.mjs`. Para un negocio eso no es una
+ * herramienta, es una llamada a quien programó la app.
+ *
+ * LOS AJUSTES SALEN DE `DEFAULT_LOCATION_SETTINGS`, no se piden al crear. Son once
+ * valores —tolerancias, umbrales de horas extra, foto, formato de hora— y ninguno se
+ * puede decidir bien antes de haber abierto la tienda. Se crean con los de fábrica y se
+ * afinan en la misma sección, que es donde ya se editan los de las demás.
+ *
+ * La zona horaria se hereda de la organización: una cadena con sedes en husos distintos
+ * es un caso que existe, pero heredar acierta casi siempre y el campo se edita después.
+ */
+export async function createLocation(params: {
+  organizationId: string;
+  name: string;
+  address: string;
+  timezone: string;
+  settings: LocationSettings;
+}): Promise<string> {
+  const creada = await selectRows(z.object({ id: docId() }), (db) =>
+    db
+      .from(TABLES.locations)
+      .insert({
+        organization_id: params.organizationId,
+        name: params.name.trim(),
+        address: params.address.trim(),
+        timezone: params.timezone,
+        is_active: true,
+        settings: params.settings,
+      })
+      .select('id')
+      .single(),
+  );
+  return creada.id;
+}
+
+/**
+ * Cerrar o reabrir una sede. NO existe borrarla, y no es un olvido.
+ *
+ * La regla lo prohíbe expresamente (`allow delete: if false`) porque una sede tiene
+ * fichajes colgando: horas que se pagaron, turnos publicados, correcciones con su
+ * auditoría. Borrar la fila dejaría todo eso apuntando a una tienda que no existe, y el
+ * historial de nómina de quien trabajó ahí se volvería ilegible justo cuando hace falta
+ * —una reclamación, una inspección— que es años después.
+ *
+ * Cerrarla hace lo que de verdad se quiere: deja de ofrecerse para fichar y para
+ * programar turnos, y lo ya registrado se sigue pudiendo leer. Y se puede reabrir, que
+ * borrar no permite.
+ */
+export async function setLocationActive(params: {
+  locationId: string;
+  isActive: boolean;
+}): Promise<void> {
+  await execute((db) =>
+    db.from(TABLES.locations).update({ is_active: params.isActive }).eq('id', params.locationId),
+  );
+}
+
 const kioskDeviceSchema = z.object({
   id: docId(),
   display_name: z.string(),
