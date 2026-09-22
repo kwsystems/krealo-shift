@@ -42,7 +42,7 @@ export function RequestsPanel() {
   const scope = useManagerScope();
   const language = currentLanguage();
 
-  const [tab, setTab] = useState<RequestTab>('corrections');
+  const [tab, setTab] = useState<RequestTab | null>(null);
   const [onlyPending, setOnlyPending] = useState(true);
   const [commenting, setCommenting] = useState<TimeEditRequest | null>(null);
   const [comment, setComment] = useState('');
@@ -53,15 +53,6 @@ export function RequestsPanel() {
   const names = useEmployeeNames(organizationId);
   const mutations = useRequestMutations();
 
-  const visible = useMemo(
-    () =>
-      (requests.data ?? []).filter(
-        (request) =>
-          tabForKind(request.kind) === tab && (!onlyPending || request.status === 'pending'),
-      ),
-    [requests.data, tab, onlyPending],
-  );
-
   const pendingByTab = useMemo(() => {
     const counts: Record<RequestTab, number> = { corrections: 0, forgot: 0, unscheduled: 0 };
     for (const request of requests.data ?? []) {
@@ -70,6 +61,37 @@ export function RequestsPanel() {
     }
     return counts;
   }, [requests.data]);
+
+  /**
+   * LA PESTAÑA DE ENTRADA ES LA PRIMERA QUE TIENE ALGO PENDIENTE, y antes era siempre
+   * «Correcciones de hora».
+   *
+   * El inicio destaca «1 solicitud esperando tu respuesta» y al pulsarlo se llegaba a
+   * una pantalla que decía «No hay solicitudes pendientes», porque la que había era de
+   * otro tipo y vivía dos pestañas más allá, con su número al lado que nadie mira
+   * después de leer un cartel de vacío. Un contador que lleva a un vacío es peor que no
+   * tener contador: la primera vez se busca, y la segunda ya no se pulsa.
+   *
+   * Es `null` hasta que llegan los datos justamente para poder decidirlo con ellos; en
+   * cuanto alguien toca una pestaña, manda su elección y esto deja de opinar.
+   */
+  const tabElegida: RequestTab = useMemo(() => {
+    if (tab !== null) return tab;
+    return (
+      (['corrections', 'forgot', 'unscheduled'] as const).find(
+        (candidata) => pendingByTab[candidata] > 0,
+      ) ?? 'corrections'
+    );
+  }, [tab, pendingByTab]);
+
+  const visible = useMemo(
+    () =>
+      (requests.data ?? []).filter(
+        (request) =>
+          tabForKind(request.kind) === tabElegida && (!onlyPending || request.status === 'pending'),
+      ),
+    [requests.data, tabElegida, onlyPending],
+  );
 
   const decide = (request: TimeEditRequest, decision: 'approved' | 'rejected') => {
     mutations.review.mutate(
@@ -96,7 +118,7 @@ export function RequestsPanel() {
 
       <SegmentedControl
         label={t('requests.title')}
-        value={tab}
+        value={tabElegida}
         options={[
           {
             value: 'corrections',

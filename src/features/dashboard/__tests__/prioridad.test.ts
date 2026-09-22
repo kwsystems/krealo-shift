@@ -83,7 +83,7 @@ describe('lo más importante del día', () => {
     expect(resultado.titular?.destino).toBe('/(manager)/schedule');
     expect(resultado.resto.map((fila) => fila.destino)).toEqual([
       '/(manager)/hours',
-      '/(manager)/more',
+      '/(manager)/requests',
     ]);
   });
 

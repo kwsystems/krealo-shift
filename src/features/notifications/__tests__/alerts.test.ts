@@ -60,9 +60,9 @@ describe('routeForAlertType', () => {
   });
 
   it('manda las solicitudes y los relojes a Más', () => {
-    expect(routeForAlertType('newRequest')).toBe('/(manager)/more');
-    expect(routeForAlertType('kioskNotSyncing')).toBe('/(manager)/more');
-    expect(routeForAlertType('wrongKiosk')).toBe('/(manager)/more');
+    expect(routeForAlertType('newRequest')).toBe('/(manager)/requests');
+    expect(routeForAlertType('kioskNotSyncing')).toBe('/(manager)/settings');
+    expect(routeForAlertType('wrongKiosk')).toBe('/(manager)/settings');
   });
 
   it('manda tardanza y ausencia al inicio, que es donde se ve quién falta', () => {

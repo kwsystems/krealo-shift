@@ -36,7 +36,7 @@ import { useTheme } from '@/theme/use-theme';
  *
  * GUARDA DE SESIÓN Y DE ROL
  * `(manager)` es un grupo, así que sus rutas viven en la raíz: `/team`,
- * `/schedule`, `/hours`, `/more`. Eso significa que se alcanzan por enlace
+ * `/schedule`, `/hours`, `/requests`, `/settings`. Eso significa que se alcanzan por enlace
  * profundo o escribiendo la URL en Expo Web SIN pasar por la redirección de
  * `app/index.tsx`. Sin esta guarda, el panel administrativo quedaba accesible sin
  * sesión.

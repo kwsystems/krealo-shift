@@ -71,12 +71,12 @@ export function routeForAlertType(type: ManagerAlertType): string {
     // Un cambio de horario lleva al horario, no a la lista de quién falta.
     case 'scheduleChange':
       return '/(manager)/schedule';
-    // Las solicitudes viven en Más, junto a la bandeja.
+    // Las solicitudes son la Bandeja, que es una pestaña propia.
     case 'newRequest':
-      return '/(manager)/more';
-    // Los relojes y su estado están en la configuración, dentro de Más.
+      return '/(manager)/requests';
+    // Los relojes y su estado están en Ajustes.
     case 'kioskNotSyncing':
     case 'wrongKiosk':
-      return '/(manager)/more';
+      return '/(manager)/settings';
   }
 }

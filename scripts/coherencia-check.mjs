@@ -23,7 +23,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 
 const RAIZ = process.cwd();
 const problemas = [];
@@ -138,6 +138,55 @@ const TODO = FUENTES.map((f) => f.texto).join('\n');
     problemas.push(
       `i18n huerfana: ${clave} — conectala o quitala de los DOS idiomas. ` +
         'Si se arma con plantilla, el prefijo tiene que verse en el codigo.',
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3. Rutas que no existen
+// ---------------------------------------------------------------------------
+//
+// ESTA COMPROBACION NACE DE UN FALLO REAL (2026-09-21). Al partir la pestaña «Mas» en
+// Bandeja y Ajustes se borro `app/(manager)/more.tsx`, y TRES sitios se quedaron
+// apuntando a `/(manager)/more`: la tarjeta de «solicitud esperando tu respuesta» del
+// inicio y dos destinos de aviso. Pulsarlas llevaba a «Unmatched Route».
+//
+// Lo grave no es el despiste, es que nada lo vio: `tsc` no mira dentro de una cadena, y
+// las PRUEBAS afirmaban el valor viejo —`toBe('/(manager)/more')`— asi que seguian
+// verdes fijando una ruta muerta. Una prueba que copia la constante que vigila no
+// vigila nada.
+//
+// Se miran solo las cadenas que empiezan por `/(` o `/kiosk`: son las rutas de verdad
+// de esta app, y acotarlo asi evita tomar por ruta cualquier cadena que empiece por
+// barra —un `photo_path`, una URL—.
+{
+  const BASE_APP = join(RAIZ, 'app');
+  const rutasDeArchivo = new Set();
+  for (const ruta of archivos(BASE_APP, ['.tsx'])) {
+    const relativa = ruta.slice(BASE_APP.length).split(sep).join('/');
+    const sinExtension = relativa.slice(0, -'.tsx'.length);
+    rutasDeArchivo.add(sinExtension);
+    // `index` se alcanza por su carpeta: `app/(manager)/index.tsx` es `/(manager)`.
+    if (sinExtension.endsWith('/index')) {
+      rutasDeArchivo.add(sinExtension.slice(0, -'/index'.length) || '/');
+    }
+  }
+
+  const PATRON = /['"`](\/(?:\([a-z-]+\)|kiosk)[^'"`\s]*)['"`]/g;
+  const vistas = new Map();
+  for (const { ruta, texto } of FUENTES) {
+    for (const [, destino] of texto.matchAll(PATRON)) {
+      if (!vistas.has(destino)) vistas.set(destino, ruta);
+    }
+  }
+
+  console.log(`rutas referenciadas: ${vistas.size}`);
+
+  for (const [destino, donde] of vistas) {
+    if (rutasDeArchivo.has(destino)) continue;
+    problemas.push(
+      `ruta inexistente: ${destino} (en ${donde.replace(RAIZ + '/', '')}) — ` +
+        'no hay ningun archivo en app/ que la sirva, asi que lleva a "Unmatched Route"',
     );
   }
 }

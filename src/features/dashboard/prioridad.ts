@@ -60,7 +60,7 @@ const DESTINO: Readonly<Record<ClaveAccionable, string | null>> = {
   absent: '/(manager)/schedule',
   late: '/(manager)/schedule',
   incomplete: '/(manager)/hours',
-  requests: '/(manager)/more',
+  requests: '/(manager)/requests',
   pendingSync: null,
 };
 
