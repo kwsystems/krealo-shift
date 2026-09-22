@@ -301,3 +301,51 @@ export async function rebuildWorkSession(
       { merge: true },
     );
 }
+
+/**
+ * La pausa que sigue abierta, si la hay: desde cuándo y de qué tipo.
+ *
+ * EL RELOJ TIENE UNA PANTALLA PARA ESTO QUE NUNCA SALIA. `buildEmployeeContext` devolvía
+ * `openBreak: null` fijo, así que `app/kiosk/actions.tsx` —que solo pinta «En descanso
+ * desde {{hora}}» cuando no es null— no entraba nunca en esa rama. Quien está en pausa
+ * vuelve al teclado y el reloj no le dice desde cuándo lleva fuera, que es justo lo que
+ * necesita para saber si ya le toca volver.
+ *
+ * Se mira SOLO desde la última entrada: una pausa sin cerrar de anteayer no es una pausa
+ * abierta, es un olvido, y eso lo señala la marca de la hoja de horas. Confundirlos haría
+ * que el reloj le dijera a alguien que lleva dos días descansando.
+ */
+export async function pausaAbiertaDe(
+  employeeId: string,
+): Promise<{ startedAt: string; breakType: string } | null> {
+  const desde = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+
+  const snapshot = await db
+    .collection(COLLECTIONS.timeEvents)
+    .where('employee_id', '==', employeeId)
+    .where('occurred_at', '>=', desde)
+    .orderBy('occurred_at', 'asc')
+    .get();
+
+  const eventos = snapshot.docs
+    .map((doc) => doc.data())
+    .sort((a, b) => {
+      const porInstante = String(a.occurred_at).localeCompare(String(b.occurred_at));
+      return porInstante !== 0 ? porInstante : Number(a.seq ?? 0) - Number(b.seq ?? 0);
+    });
+
+  let abierta: { startedAt: string; breakType: string } | null = null;
+  for (const evento of eventos) {
+    // Una entrada nueva empieza otra jornada: lo de antes ya no cuenta.
+    if (evento.event_type === 'clock_in' || evento.event_type === 'clock_out') abierta = null;
+    if (evento.event_type === 'break_start') {
+      abierta = {
+        startedAt: String(evento.occurred_at),
+        breakType: String(evento.break_type ?? 'unpaid'),
+      };
+    }
+    if (evento.event_type === 'break_end') abierta = null;
+  }
+
+  return abierta;
+}

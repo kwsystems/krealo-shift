@@ -189,3 +189,70 @@ describe('el reloj sabe a qué hora termina la jornada', () => {
     expect(contexto.openSession?.shiftEndsAt).toBeNull();
   });
 });
+
+describe('los campos del contexto que estaban fijos', () => {
+  /**
+   * `openBreak: null` fijo. `actions.tsx:578` solo pinta «En descanso desde {{hora}}»
+   * cuando no es null, así que quien está en pausa volvía al teclado y el reloj no le
+   * decía desde cuándo llevaba fuera — que es justo lo que necesita para saber si ya le
+   * toca volver.
+   */
+  it('dice desde cuándo lleva la pausa abierta', async () => {
+    await ponerTurno(-1 * HORA, 7 * HORA);
+    await fichar('clock_in', 'entrada-pausa', TURNO);
+    await fichar('break_start', 'inicio-pausa', TURNO);
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      openSession: { openBreak: { startedAt: string; breakType: string } | null } | null;
+    };
+
+    expect(contexto.openSession?.openBreak).not.toBeNull();
+    expect(typeof contexto.openSession?.openBreak?.startedAt).toBe('string');
+  });
+
+  /** Y al volver de la pausa deja de estar abierta: si no, el aviso no se apagaría nunca. */
+  it('deja de decirlo cuando la pausa termina', async () => {
+    await ponerTurno(-1 * HORA, 7 * HORA);
+    await fichar('clock_in', 'entrada-pausa-2', TURNO);
+    await fichar('break_start', 'inicio-pausa-2', TURNO);
+    await fichar('break_end', 'fin-pausa-2', TURNO);
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      openSession: { openBreak: unknown } | null;
+    };
+
+    expect(contexto.openSession?.openBreak).toBeNull();
+  });
+
+  /**
+   * `jobRoleName: null` fijo, en los dos sitios. En una tienda con caja y piso, el puesto
+   * es como distingues dos turnos del mismo día.
+   */
+  it('dice el puesto de la persona', async () => {
+    await db
+      .collection(COLLECTIONS.jobRoles)
+      .doc('puesto-caja')
+      .set({ id: 'puesto-caja', organization_id: ORG, name: 'Caja' });
+    await db.collection(COLLECTIONS.employeeJobRoles).doc(`${PERSONA}_caja`).set({
+      organization_id: ORG,
+      employee_id: PERSONA,
+      job_role_id: 'puesto-caja',
+      is_primary: true,
+    });
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      employee: { jobRoleName: string | null };
+    };
+
+    expect(contexto.employee.jobRoleName).toBe('Caja');
+  });
+
+  /** Sin puesto asignado, `null` es la respuesta correcta: no hay nada que inventar. */
+  it('devuelve null si la persona no tiene puesto', async () => {
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      employee: { jobRoleName: string | null };
+    };
+
+    expect(contexto.employee.jobRoleName).toBeNull();
+  });
+});

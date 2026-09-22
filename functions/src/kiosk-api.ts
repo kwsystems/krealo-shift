@@ -12,9 +12,10 @@ import {
 } from '../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { membershipOf, requireManagesLocation, requireUid } from './shared/caller';
-import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
+import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/attendance';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
+import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
   authenticateKiosk,
@@ -212,31 +213,9 @@ export const refreshKioskRoster = onCall(async (request) => {
    * por empleado en Ajustes, y el reloj los enseña debajo del nombre para distinguir
    * a dos personas que se llaman igual.
    */
-  const puestos = new Map<string, string>();
-  for (const doc of (
-    await db
-      .collection(COLLECTIONS.jobRoles)
-      .where('organization_id', '==', kiosk.organizationId)
-      .get()
-  ).docs) {
-    puestos.set(doc.id, String(doc.data().name ?? ''));
-  }
-
-  const puestoDe = new Map<string, string>();
-  for (const doc of (
-    await db
-      .collection(COLLECTIONS.employeeJobRoles)
-      .where('organization_id', '==', kiosk.organizationId)
-      .get()
-  ).docs) {
-    const fila = doc.data();
-    const nombre = puestos.get(String(fila.job_role_id));
-    if (nombre === undefined) continue;
-    // El principal gana; si no hay ninguno marcado, vale el primero que aparezca.
-    if (fila.is_primary === true || !puestoDe.has(String(fila.employee_id))) {
-      puestoDe.set(String(fila.employee_id), nombre);
-    }
-  }
+  const { porPuesto: puestos, porEmpleado: puestoDe } = await puestosPorEmpleado(
+    kiosk.organizationId,
+  );
 
   const asignaciones = await db
     .collection(COLLECTIONS.employeeLocations)
@@ -517,13 +496,26 @@ async function buildEmployeeContext(
     .limit(5)
     .get();
 
+  /*
+   * EL PUESTO, que estaba fijo en `jobRoleName: null` en los dos sitios donde se manda.
+   * `actions.tsx:567` lo pinta debajo del nombre y `:652` lo usa como pista al elegir
+   * turno; ninguno salía nunca. En una tienda con caja y piso, el puesto es como
+   * distingues dos turnos del mismo día.
+   *
+   * Va aquí arriba y no junto al `return` porque el mapa de turnos de abajo ya lo
+   * necesita. La primera versión lo cargaba después y reventaba con «Cannot access
+   * 'puestos' before initialization», que es el recordatorio de que el orden importa.
+   */
+  const puestos = await puestosPorEmpleado(kiosk.organizationId);
+  const puestoDeLaPersona = puestos.porEmpleado.get(employeeId) ?? null;
+
   const proximos = turnos.docs
     .filter((doc) => doc.data().status === 'published')
     .map((doc) => ({
       id: doc.id,
       startsAt: doc.data().starts_at as string,
       endsAt: doc.data().ends_at as string,
-      jobRoleName: null,
+      jobRoleName: puestos.porPuesto.get(String(doc.data().job_role_id)) ?? null,
       employeeNote: (doc.data().employee_note as string | null) ?? null,
       plannedUnpaidBreakMinutes: (doc.data().planned_unpaid_break_minutes as number) ?? 0,
       changedSinceLastPublication: false,
@@ -571,6 +563,8 @@ async function buildEmployeeContext(
    * El turno sale de la SESION, no de la lista de proximos: al fichar la entrada queda
    * apuntado a cual pertenece, y es el unico que dice cuando termina LA JORNADA EN CURSO.
    */
+  const pausaAbierta = sesion === undefined ? null : await pausaAbiertaDe(employeeId);
+
   const turnoDeLaSesion =
     sesion === undefined || typeof sesion.shift_id !== 'string'
       ? undefined
@@ -583,7 +577,7 @@ async function buildEmployeeContext(
       opaqueId: employeeId,
       displayName: (empleado.preferred_name as string | null) ?? (empleado.full_name as string),
       initials: iniciales(String(empleado.full_name)),
-      jobRoleName: null,
+      jobRoleName: puestoDeLaPersona,
       canManageLocation: asignacion.can_manage === true,
     },
     attendanceState: estado,
@@ -599,7 +593,7 @@ async function buildEmployeeContext(
               ((sesion.paid_break_minutes as number) ?? 0) +
               ((sesion.unpaid_break_minutes as number) ?? 0),
             requiredBreakMinutes: politicas.requiredBreakMinutes,
-            openBreak: null,
+            openBreak: pausaAbierta,
           },
     earliestClockInAt:
       elegibilidad.eligible || elegibilidad.reason !== 'too_early' ? null : elegibilidad.earliestAt,
