@@ -115,6 +115,73 @@ export async function fetchJobRoles(organizationId: string): Promise<JobRole[]> 
   );
 }
 
+/**
+ * Los colores que se le pueden dar a un puesto.
+ *
+ * NO HAY SELECTOR DE COLOR, y es deliberado: `color` se guarda, se lee y se valida con
+ * Zod, pero NINGUNA pantalla lo pinta —comprobado buscando consumidores en todo el
+ * proyecto, no hay ninguno—. Un selector para un campo que no se ve sería trabajo para
+ * nadie y una decisión más que pedirle a quien solo quiere añadir «Cajero».
+ *
+ * Se asigna rotando esta lista, que es la misma de `configurar-empresa.mjs`, para que
+ * el día que el horario sí pinte el puesto los colores ya estén repartidos y validados
+ * en vez de ser todos iguales.
+ */
+const COLORES_DE_PUESTO = ['#7157E8', '#2FA36B', '#B56B00', '#2A6FA8', '#C43D4D'] as const;
+
+/**
+ * Abrir un puesto nuevo.
+ *
+ * NO SE PODIA DESDE LA APP, aunque la regla lo permite desde el primer dia
+ * (`allow create: if isAdmin(...)`). Los puestos se ASIGNAN al empleado —eso si estaba—
+ * pero tenian que existir antes, y solo los plantaba `configurar-empresa.mjs` desde una
+ * terminal con credenciales del proyecto de Google. En una empresa nueva el selector de
+ * «Puestos» salia vacio y no habia forma de añadir el primero.
+ */
+export async function createJobRole(params: {
+  organizationId: string;
+  name: string;
+  /** Cuántos hay ya, solo para repartir colores distintos. */
+  existentes: number;
+}): Promise<string> {
+  const creado = await selectRows(z.object({ id: docId() }), (db) =>
+    db
+      .from(TABLES.jobRoles)
+      .insert({
+        organization_id: params.organizationId,
+        name: params.name.trim(),
+        color: COLORES_DE_PUESTO[params.existentes % COLORES_DE_PUESTO.length],
+        is_active: true,
+      })
+      .select('id')
+      .single(),
+  );
+  return creado.id;
+}
+
+export async function renameJobRole(params: { jobRoleId: string; name: string }): Promise<void> {
+  await execute((db) =>
+    db.from(TABLES.jobRoles).update({ name: params.name.trim() }).eq('id', params.jobRoleId),
+  );
+}
+
+/**
+ * Cerrar o reabrir un puesto. NO hay borrado, aunque la regla lo permitiria.
+ *
+ * Un puesto lo referencian las asignaciones de cada empleado y los turnos publicados.
+ * Borrar la fila dejaria a gente con un puesto que no existe y turnos apuntando al
+ * vacio, y el historial de quien cubrio que se volveria ilegible. Es el mismo
+ * razonamiento que con las sedes y con los empleados, que tampoco se borran.
+ */
+export async function setJobRoleActive(params: {
+  jobRoleId: string;
+  isActive: boolean;
+}): Promise<void> {
+  await execute((db) =>
+    db.from(TABLES.jobRoles).update({ is_active: params.isActive }).eq('id', params.jobRoleId),
+  );
+}
+
 export type EmployeeDraft = {
   fullName: string;
   preferredName: string | null;

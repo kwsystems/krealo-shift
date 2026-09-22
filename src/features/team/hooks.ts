@@ -8,7 +8,10 @@ import {
   fetchJobRoles,
   fetchLocationAssignments,
   fetchUpcomingShifts,
+  createJobRole,
+  renameJobRole,
   resetEmployeePin,
+  setJobRoleActive,
   setEmployeeStatus,
   updateEmployee,
   type Employee,
@@ -166,7 +169,28 @@ export function useTeamMutations(organizationId: string | null) {
     mutationFn: (params: { employeeId: string; pinLength: number }) => resetEmployeePin(params),
   });
 
-  return { create, update, changeStatus, resetPin };
+  /*
+   * Los puestos invalidan lo MISMO que los empleados: la lista de puestos vive bajo la
+   * clave `team`, y el horario pinta turnos que llevan puesto. Abrir uno nuevo tiene que
+   * verse en el selector del formulario de empleado sin recargar.
+   */
+  const addJobRole = useMutation({
+    mutationFn: (params: { name: string; existentes: number }) =>
+      createJobRole({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidate,
+  });
+
+  const renameRole = useMutation({
+    mutationFn: (params: { jobRoleId: string; name: string }) => renameJobRole(params),
+    onSuccess: invalidate,
+  });
+
+  const toggleJobRole = useMutation({
+    mutationFn: (params: { jobRoleId: string; isActive: boolean }) => setJobRoleActive(params),
+    onSuccess: invalidate,
+  });
+
+  return { create, update, changeStatus, resetPin, addJobRole, renameRole, toggleJobRole };
 }
 
 export function useUpcomingShifts(organizationId: string | null, employeeId: string | null) {

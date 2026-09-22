@@ -22,6 +22,7 @@ import {
   SelectField,
   ToggleField,
 } from '@/components/schedule/fields';
+import { JobRolesCard } from './job-roles-card';
 import { MembersCard } from './members-card';
 import { PinsCard } from './pins-card';
 import { OrganizationLogoField } from './logo-field';
@@ -94,6 +95,14 @@ export function SettingsPanel() {
               es el orden en que se monta una tienda. Primero qué es la empresa, luego
               dónde está, luego quién entra, y al final con qué aparato se ficha.
             */}
+            {/*
+              Los puestos van con la sede y ANTES de los accesos: los dos describen la
+              forma del negocio —dónde se trabaja y en qué— mientras que lo de abajo es
+              quién entra y con qué. Además el formulario de empleado pide sede Y puesto,
+              así que quien está montando la tienda necesita los dos antes de dar de alta
+              a nadie.
+            */}
+            <JobRolesCard />
             <MembersCard />
             {/*
               El PIN va DESPUÉS de los accesos y ANTES de los relojes, siguiendo el
