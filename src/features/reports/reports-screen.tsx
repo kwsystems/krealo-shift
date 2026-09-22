@@ -79,6 +79,7 @@ export function ReportsScreen() {
   const [señalado, setSeñalado] = useState<Señalado>(null);
   const [compartirAbierto, setCompartirAbierto] = useState(false);
   const [personaElegida, setPersonaElegida] = useState<string | null>(null);
+  const [motivoAbierto, setMotivoAbierto] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
   const thisWeekStart = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
@@ -215,11 +216,18 @@ export function ReportsScreen() {
     label: etiquetaMotivo[fila.reason],
     valueText: minutesToHHmm(fila.minutes),
     hint: t('reports.reasonShare', { percent: fila.sharePercent, count: fila.pauses }),
+    // Solo se puede abrir lo que tiene algo dentro: «Comida» no pide explicación, así
+    // que su fila no finge ser un botón.
+    pressable: fila.notes.length > 0,
     segments: [
       { value: fila.minutes, color: chart(colors).series1, label: t('reports.breakTime') },
     ],
   }));
   const maxMotivo = motivos[0]?.minutes ?? 0;
+  const notasAbiertas = motivos.find((fila) => fila.reason === motivoAbierto)?.notes ?? [];
+  // El único motivo que pide explicación es «Otro», pero se busca por «tiene notas» y no
+  // por su nombre: el día que otro motivo las pida, esto sigue funcionando.
+  const motivoConNotas = motivos.find((fila) => fila.notes.length > 0);
 
   // ------------------------------------------------------------------ días
   const columnas: DayColumn[] = dias.map((dia) => ({
@@ -610,12 +618,59 @@ export function ReportsScreen() {
                   emptyBody={t('reports.noBreaksBody')}
                   onRetry={() => void breaks.refetch()}
                 >
-                  <RankingBars
-                    rows={filasMotivo}
-                    max={maxMotivo}
-                    onPoint={señalarFila('motivos')}
-                    testID="ranking-reasons"
-                  />
+                  <Stack gap={spacing.sm}>
+                    <RankingBars
+                      rows={filasMotivo}
+                      max={maxMotivo}
+                      onPoint={señalarFila('motivos')}
+                      onPress={(row) =>
+                        setMotivoAbierto((actual) => (actual === row.id ? null : row.id))
+                      }
+                      selectedId={motivoAbierto}
+                      testID="ranking-reasons"
+                    />
+
+                    {/*
+                      LO QUE ESCRIBIÓ LA GENTE, que hasta ahora no leía nadie.
+                      La app OBLIGA a poner un motivo al pausar por «Otro»; si esa frase
+                      no se lee nunca, se le está pidiendo algo a cambio de nada.
+                      Son frases sobre por qué alguien se ausentó —a veces médicas—, así
+                      que viven AQUÍ y solo aquí: no van al resumen que se comparte por
+                      chat ni al CSV que se manda por correo.
+                    */}
+                    {/*
+                      EL AVISO DE QUE SE PUEDE ABRIR VA AQUÍ Y NO EN LA PISTA DE LA FILA.
+                      Se probó a añadirlo a la pista —«9% del total · 1 pausa · toca para
+                      ver 1 explicación»— y `responsive:check` lo cazó: en la disposición
+                      ancha el nombre y su pista viven en una columna de 208 px fijos con
+                      una sola línea, así que pedía 282 px y se recortaba desde el iPad
+                      horizontal para arriba. Aquí abajo el texto envuelve y cabe en
+                      cualquier ancho.
+                    */}
+                    {motivoConNotas !== undefined && motivoAbierto === null ? (
+                      <AppText variant="help" tone="subtle">
+                        {t('reports.reasonNotesToggle', {
+                          reason: etiquetaMotivo[motivoConNotas.reason],
+                          count: motivoConNotas.notes.length,
+                        })}
+                      </AppText>
+                    ) : null}
+
+                    {notasAbiertas.length > 0 ? (
+                      <Stack gap={spacing.xs} testID="reason-notes">
+                        {notasAbiertas.map((nota) => (
+                          <Stack key={`${nota.employeeId}-${nota.at}`} gap={0}>
+                            <AppText variant="label" tone="subtle">
+                              {`${formatDateKeyShort(dateKeyOf(nota.at, scope.timezone), language)} · ${nombre(
+                                nota.employeeId,
+                              )} · ${minutesToHHmm(nota.minutes)}`}
+                            </AppText>
+                            <AppText variant="body">{nota.note}</AppText>
+                          </Stack>
+                        ))}
+                      </Stack>
+                    ) : null}
+                  </Stack>
                 </AsyncSection>
               </ChartCard>
             </Stack>

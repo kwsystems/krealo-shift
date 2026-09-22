@@ -461,6 +461,8 @@
     "whereTimeGoes": "Where the non-working time goes",
     "whereTimeGoesHint": "{{total}} of breaks this week, by reason.",
     "breakTime": "Break time",
+    "reasonNotesToggle_one": "Tap “{{reason}}” to read the note.",
+    "reasonNotesToggle_other": "Tap “{{reason}}” to read the {{count}} notes.",
     "reasonShare_one": "{{percent}}% of the total · {{count}} break",
     "reasonShare_other": "{{percent}}% of the total · {{count}} breaks",
     "noBreaksTitle": "No breaks recorded",

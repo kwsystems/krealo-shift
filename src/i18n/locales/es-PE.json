@@ -461,6 +461,8 @@
     "whereTimeGoes": "En qué se va el tiempo que no se trabaja",
     "whereTimeGoesHint": "{{total}} de pausas en la semana, por motivo.",
     "breakTime": "Tiempo de pausa",
+    "reasonNotesToggle_one": "Toca «{{reason}}» para leer la explicación.",
+    "reasonNotesToggle_other": "Toca «{{reason}}» para leer las {{count}} explicaciones.",
     "reasonShare_one": "{{percent}}% del total · {{count}} pausa",
     "reasonShare_other": "{{percent}}% del total · {{count}} pausas",
     "noBreaksTitle": "Sin pausas registradas",

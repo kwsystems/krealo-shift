@@ -451,6 +451,102 @@ function soloHoras(texto) {
   }
 }
 
+/*
+ * LAS EXPLICACIONES DE «OTRO», que son la razón de que la app las pida.
+ *
+ * Al pausar por «Otro» el reloj OBLIGA a escribir por qué. Esa frase se guardaba, cruzaba
+ * la cola sin conexión y llegaba hasta el servidor… y no la leía nadie: Reportes enseñaba
+ * «Otro: 45 min» y se acababa ahí. Pedirle algo a alguien y no usarlo nunca es peor que
+ * no pedirlo: enseña que la app pide cosas que no sirven.
+ *
+ * Se comprueban tres cosas, y la tercera es la que se olvida:
+ *   1. que las explicaciones se LEEN, con su fecha y de quién son;
+ *   2. que abrirlas NO mueve el número de arriba —el gráfico y la lista salen de la
+ *      misma fila, y si al desplegarla cambiara el total la pantalla se contradiría a sí
+ *      misma y nadie sabría cuál creer—;
+ *   3. que los motivos SIN explicación no fingen ser botones. «Comida» no justifica
+ *      nada, así que su fila no se pulsa: un control que no hace nada enseña que tocar
+ *      la pantalla no sirve, y entonces nadie toca el que sí sirve.
+ */
+{
+  const contexto = await navegador.newContext({ viewport: { width: 1100, height: 1400 } });
+  const pagina = await contexto.newPage();
+  await entrar(pagina);
+  await irA(pagina, base, '/reports', { asentar: 800 });
+
+  /*
+   * SE MIRA LA SEMANA ANTERIOR, y no por capricho: la pantalla abre en la semana EN
+   * CURSO, que un martes lleva dos días y trae una sola pausa por «Otro». Exigir varias
+   * ahí sería exigirle al calendario, y este arnés ya tuvo esa lección con `inicio:check`.
+   * La semana anterior está sembrada entera —seis días— y trae las mismas cuatro
+   * explicaciones se corra el día que se corra.
+   */
+  await pagina.locator('[data-testid="week-previous"]').click();
+  await pagina.waitForTimeout(800);
+
+  const filaOtro = pagina.locator('[data-testid="ranking-row-other"]');
+  const filaComida = pagina.locator('[data-testid="ranking-row-meal"]');
+
+  if ((await filaOtro.count()) === 0) {
+    problemas.push('no hay ninguna pausa por «Otro» en la demostración: no se pudo comprobar');
+  } else {
+    const rolDeComida =
+      (await filaComida.count()) === 0 ? null : await filaComida.first().getAttribute('role');
+    if (rolDeComida === 'button') {
+      problemas.push(
+        'la fila de «Comida» se puede pulsar y no tiene nada que desplegar: es un control muerto',
+      );
+    }
+    if ((await filaOtro.first().getAttribute('role')) !== 'button') {
+      problemas.push('la fila de «Otro» tiene explicaciones pero no se puede pulsar');
+    }
+
+    const minutosAntes = (await filaOtro.first().innerText()).replace(/\s+/g, ' ').trim();
+    await filaOtro.first().click();
+    await pagina.waitForTimeout(400);
+
+    const notas = pagina.locator('[data-testid="reason-notes"]');
+    if ((await notas.count()) === 0) {
+      problemas.push('tocar «Otro» no desplegó ninguna explicación');
+    } else {
+      const leidas = await notas
+        .first()
+        .evaluate((caja) =>
+          [...caja.children].map((hijo) => (hijo.textContent ?? '').replace(/\s+/g, ' ').trim()),
+        );
+      if (leidas.length < 2) {
+        problemas.push(
+          `solo se leyó ${leidas.length} explicación: la demostración debería tener varias ` +
+            'distintas para que se vea que es una lista',
+        );
+      }
+      for (const linea of leidas) {
+        // Fecha, persona y texto: sin los tres, la nota no se puede interpretar.
+        if (!/\d/.test(linea) || linea.length < 25) {
+          problemas.push(`una explicación sale sin fecha o sin texto: «${linea}»`);
+        }
+      }
+      console.log(`  explicaciones de «Otro»   ${leidas.length} leídas`);
+      for (const linea of leidas) console.log(`    ${linea.slice(0, 96)}`);
+    }
+
+    const minutosDespues = (await filaOtro.first().innerText()).replace(/\s+/g, ' ').trim();
+    if (minutosAntes !== minutosDespues) {
+      problemas.push(
+        `abrir las explicaciones cambió la fila de «Otro»: «${minutosAntes}» -> «${minutosDespues}»`,
+      );
+    }
+
+    // Y que se vuelva a cerrar: una lista que solo sabe abrirse deja la pantalla ocupada.
+    await filaOtro.first().click();
+    await pagina.waitForTimeout(400);
+    if ((await pagina.locator('[data-testid="reason-notes"]').count()) > 0) {
+      problemas.push('las explicaciones no se cierran al volver a tocar «Otro»');
+    }
+  }
+  await contexto.close();
+}
+
 await navegador.close();
 await cerrar();
 

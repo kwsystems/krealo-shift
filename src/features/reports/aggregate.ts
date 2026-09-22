@@ -145,11 +145,14 @@ export function punctuality(sessions: WorkSession[]): Punctuality {
   };
 }
 
+export type BreakNote = { at: string; minutes: number; note: string };
+
 export type BreakRow = {
   employee_id: string;
   break_reason: string;
   minutes: number;
   pauses: number;
+  notes?: BreakNote[];
 };
 
 export type ReasonTotal = {
@@ -158,6 +161,16 @@ export type ReasonTotal = {
   pauses: number;
   /** Parte del total no trabajado, 0-100. Responde «en qué se va» sin un quesito. */
   sharePercent: number;
+  /**
+   * Lo que escribió cada persona, con QUIÉN lo escribió y CUÁNDO.
+   *
+   * Solo lo trae «Otro», que es el único motivo que obliga a poner una explicación. Las
+   * demás filas llevan la lista vacía: «Comida» no necesita justificarse.
+   *
+   * Van de más reciente a más antigua: al abrir la fila lo primero que se quiere ver es
+   * lo de hoy, no lo de hace una semana.
+   */
+  notes: (BreakNote & { employeeId: string })[];
 };
 
 /**
@@ -171,7 +184,7 @@ export type ReasonTotal = {
 export function minutesByReason(rows: BreakRow[]): ReasonTotal[] {
   const porMotivo = new Map<BreakReason, ReasonTotal>();
   for (const reason of BREAK_REASONS) {
-    porMotivo.set(reason, { reason, minutes: 0, pauses: 0, sharePercent: 0 });
+    porMotivo.set(reason, { reason, minutes: 0, pauses: 0, sharePercent: 0, notes: [] });
   }
 
   for (const row of rows) {
@@ -182,6 +195,15 @@ export function minutesByReason(rows: BreakRow[]): ReasonTotal[] {
     if (fila === undefined) continue;
     fila.minutes += row.minutes;
     fila.pauses += row.pauses;
+    for (const nota of row.notes ?? []) {
+      // Una nota en blanco no es una nota: ocuparía una línea para no decir nada.
+      if (nota.note.trim() === '') continue;
+      fila.notes.push({ ...nota, employeeId: row.employee_id });
+    }
+  }
+
+  for (const fila of porMotivo.values()) {
+    fila.notes.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   }
 
   const total = [...porMotivo.values()].reduce((suma, fila) => suma + fila.minutes, 0);

@@ -40,6 +40,15 @@ export type RankingRow = {
   valueText: string;
   /** Texto de apoyo bajo el nombre (p. ej. «3 de 12 turnos»). */
   hint?: string;
+  /**
+   * `false` deja la fila SIN pulsar aunque el gráfico entero acepte pulsaciones.
+   *
+   * Existe por los motivos de pausa: solo «Otro» tiene explicaciones que desplegar, y
+   * cablear `onPress` a las seis filas dejaría cinco controles que parecen botones y no
+   * hacen nada. `coherencia-check` caza justo eso, y con razón: un control muerto enseña
+   * que tocar la pantalla no sirve, y entonces nadie toca el que sí sirve.
+   */
+  pressable?: boolean;
 };
 
 export function RankingBars({
@@ -154,11 +163,13 @@ export function RankingBars({
           </Row>
         );
 
+        const activable = onPress !== undefined && row.pressable !== false;
+
         return (
           <Pressable
             key={row.id}
             testID={`ranking-row-${row.id}`}
-            accessibilityRole={onPress === undefined ? undefined : 'button'}
+            accessibilityRole={activable ? 'button' : undefined}
             accessibilityLabel={accesible}
             accessibilityState={
               selectedId === undefined ? undefined : { selected: selectedId === row.id }
@@ -166,7 +177,7 @@ export function RankingBars({
             onHoverIn={() => onPoint?.(row)}
             onHoverOut={() => onPoint?.(null)}
             onPressIn={() => onPoint?.(row)}
-            onPress={onPress === undefined ? undefined : () => onPress(row)}
+            onPress={activable ? () => onPress(row) : undefined}
             style={[styles.fila, selectedId === row.id ? styles.filaElegida : null]}
           >
             {contenido}

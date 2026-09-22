@@ -22,6 +22,25 @@ const breakRowSchema = z.object({
   break_type: z.string().nullable(),
   minutes: z.coerce.number().int(),
   pauses: z.coerce.number().int(),
+  /*
+   * Lo que la persona escribió al pausar por «Otro».
+   *
+   * OPCIONAL A PROPÓSITO, y no por pereza: la vista la sirve una Cloud Function
+   * desplegada aparte, así que entre que esto se publica y que la función nueva está
+   * arriba hay un rato en el que la respuesta NO trae `notes`. Con el campo obligatorio,
+   * Zod tumbaría el gráfico de motivos ENTERO durante ese rato: una pantalla que
+   * funcionaba se quedaría en error por una mejora que aún no ha llegado.
+   */
+  notes: z
+    .array(
+      z.object({
+        at: z.string(),
+        minutes: z.coerce.number().int(),
+        note: z.string(),
+      }),
+    )
+    .optional()
+    .default([]),
 });
 
 export type BreakByReasonRow = z.infer<typeof breakRowSchema>;
@@ -34,7 +53,7 @@ export async function fetchBreakTimeByReason(params: {
   return selectRows(z.array(breakRowSchema), (db) =>
     db
       .from(VIEWS.breakTimeByReason)
-      .select('employee_id, work_date, break_reason, break_type, minutes, pauses')
+      .select('employee_id, work_date, break_reason, break_type, minutes, pauses, notes')
       .eq('location_id', params.locationId)
       .gte('work_date', params.from)
       .lte('work_date', params.to),

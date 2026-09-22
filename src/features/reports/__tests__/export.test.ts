@@ -239,3 +239,84 @@ describe('nombre del archivo', () => {
     );
   });
 });
+
+/**
+ * LAS NOTAS DE LAS PAUSAS NO SALEN DE LA PANTALLA.
+ *
+ * Al pausar por «Otro» la app obliga a escribir por qué, y desde hoy esas frases se leen
+ * en Reportes. Son frases de un empleado sobre por qué se ausentó —«fui a la clínica»—,
+ * o sea dato personal y a veces médico.
+ *
+ * Que hoy no salgan en lo que se comparte no es mérito de nadie: es que nadie las puso.
+ * Esta prueba lo convierte en una decisión. El CSV se manda por correo y el resumen se
+ * pega en un chat, o sea a gente que no eligió leerlas y en un sitio del que ya no se
+ * pueden retirar; si algún día tienen que ir, que sea a propósito y borrando esto, no
+ * porque alguien añadió una columna sin pensarlo.
+ */
+describe('lo que se comparte no lleva las notas de las pausas', () => {
+  const HORAS: EmployeeHours = {
+    employeeId: 'ana',
+    days: 1,
+    netMinutes: 480,
+    regularMinutes: 480,
+    overtimeMinutes: 0,
+  };
+
+  const ETIQUETAS_DEL_RESUMEN: SummaryLabels = {
+    heading: 'Krealo Shift · Sede Principal · 14 al 20 de septiembre',
+    totalHours: 'Horas del periodo',
+    people: 'Personas',
+    overtime: 'Extra',
+    punctuality: 'Llegó a tiempo',
+    punctualityUnknown: 'Puntualidad: sin turnos programados',
+    topPerson: 'Más horas',
+    topReason: 'Más tiempo de pausa',
+    footer: 'Son horas fichadas, no producción.',
+  };
+
+  it('el CSV tiene exactamente estas nueve columnas y ninguna de notas', () => {
+    const cabecera = buildReportCsv({
+      rows: [
+        {
+          employeeId: 'ana',
+          name: 'Ana',
+          hours: HORAS,
+          measuredShifts: 1,
+          lateArrivals: 0,
+          breakMinutes: 30,
+        },
+      ],
+      labels: ETIQUETAS,
+      // El CSV separa filas con CRLF (lo quiere Excel): partir por '\n' dejaría un '\r'
+      // pegado a la última columna y la comparación fallaría por un carácter invisible.
+    }).split('\r\n')[0];
+
+    expect(cabecera?.split(',')).toEqual([
+      'Persona',
+      'Días',
+      'Horas netas',
+      'Horas netas (decimal)',
+      'Normales',
+      'Extra',
+      'Turnos',
+      'Tardanzas',
+      'Minutos de pausa',
+    ]);
+  });
+
+  it('el resumen solo nombra el MOTIVO, no lo que alguien escribió', () => {
+    const texto = buildReportSummary({
+      labels: ETIQUETAS_DEL_RESUMEN,
+      totalMinutes: 480,
+      people: 1,
+      overtimeMinutes: 0,
+      punctuality: { measured: 1, late: 0, unscheduled: 0, onTimePercent: 100, byEmployee: [] },
+      top: { name: 'Ana', minutes: 480 },
+      topReason: { name: 'Otro', minutes: 45 },
+    });
+
+    expect(texto).toContain('Otro');
+    expect(texto).not.toContain('clínica');
+    expect(texto).not.toContain('colegio');
+  });
+});

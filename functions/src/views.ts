@@ -300,9 +300,38 @@ export const viewBreakTimeByReason = onCall(async (request) => {
         break_type: tipo,
         minutes: 0,
         pauses: 0,
+        notes: [] as { at: string; minutes: number; note: string }[],
       };
       actual.minutes = (actual.minutes as number) + minutos;
       actual.pauses = (actual.pauses as number) + 1;
+
+      /*
+       * LA NOTA DE LA PAUSA, que hasta ahora se guardaba y no la leia nadie.
+       *
+       * Al pausar por «Otro» la app OBLIGA a escribir un motivo, y ese texto viaja en el
+       * propio evento `break_start` que este bucle ya esta leyendo. Pero la vista solo
+       * devolvia minutos, asi que Reportes enseñaba «Otro: 45 min» sin las explicaciones
+       * detras. Se le estaba pidiendo a la gente que escribiera algo cada vez que se
+       * ausentaba por un motivo raro a cambio de nada, y eso es peor que no pedirlo:
+       * enseña que la app pide cosas que no sirven.
+       *
+       * VA AQUI Y NO EN UNA FUNCION NUEVA porque el evento ya esta en la mano: sacarlo
+       * aparte serian dos lecturas del mismo rango para el mismo dato.
+       *
+       * Quien recibe esto es exactamente quien ya podia ver la vista —`autorizarUbicacion`
+       * corre arriba—, o sea un encargado de ESA sede. No se añade audiencia.
+       */
+      const nota = typeof inicio.break_note === 'string' ? inicio.break_note.trim() : '';
+      if (nota !== '') {
+        (actual.notes as { at: string; minutes: number; note: string }[]).push({
+          at: String(inicio.occurred_at),
+          minutes: minutos,
+          // El teclado del reloj ya corta en 500; esto es el cinturon por si un evento
+          // viejo o la cola sin conexion trajera algo mas largo.
+          note: nota.slice(0, 500),
+        });
+      }
+
       agregado.set(clave, actual);
       inicio = null;
     }

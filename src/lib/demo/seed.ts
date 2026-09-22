@@ -55,6 +55,22 @@ const pausaId = (n: number) => id('aaaaaaaa', n);
  * personas fichando, que es lo que hace que el gráfico de motivos tenga algo que
  * enseñar.
  */
+/**
+ * Lo que la gente escribe al pausar por «Otro», que la app OBLIGA a rellenar.
+ *
+ * Están aquí para que la demostración enseñe de qué sirve pedirla: sin notas, Reportes
+ * dice «Otro: 45 min» y no hay forma de saber si eso es un problema o un martes normal.
+ *
+ * SON INVENTADAS, y a propósito parecidas a lo que alguien escribiría de verdad: son
+ * frases de un empleado sobre por qué se ausentó, o sea dato personal y a veces médico.
+ * Ninguna sale de una persona real ni nombra a nadie.
+ */
+const NOTAS_DEMO: readonly string[] = [
+  'Fui a la clínica, me dieron cita a esa hora y no pude moverla.',
+  'Llamaron del colegio de mi hijo, tuve que salir a recogerlo.',
+  'Trámite en el banco; solo atienden en horario de tienda.',
+];
+
 const MOTIVOS_DEMO: readonly BreakReason[] = [
   'meal',
   'rest',
@@ -341,7 +357,21 @@ export function crearAlmacen(): Almacen {
        * contar como trabajo, estos números cambian solos— y `net_minutes` sigue
        * siendo bruto menos lo que de verdad no se paga.
        */
-      const motivo = MOTIVOS_DEMO[persona % MOTIVOS_DEMO.length] ?? 'meal';
+      /*
+       * EL MOTIVO SE CORRE UN DÍA CADA DÍA, y no es adorno: sin el desplazamiento el
+       * motivo era `persona % 6` y la sede `persona % 3`, o sea que la sede quedaba
+       * DETERMINADA por el motivo. Con doce personas eso dejaba «Otro» y «Permiso»
+       * ENTEROS en la segunda sede, y el tablero mira la primera: dos de los seis
+       * motivos no salían nunca donde alguien los iba a ver, y con ellos las
+       * explicaciones que «Otro» obliga a escribir.
+       *
+       * Medido antes de tocar nada: de las 42 filas de `break_time_by_reason`, las 4 de
+       * «Otro» y las 8 de «Permiso» estaban las doce en la sede 2.
+       *
+       * Sumar el día rompe esa atadura sin mover a nadie de sede: a lo largo de la
+       * semana cada motivo pasa por gente de las dos.
+       */
+      const motivo = MOTIVOS_DEMO[(persona + Math.abs(dia)) % MOTIVOS_DEMO.length] ?? 'meal';
       const minutosPausa = MINUTOS_POR_MOTIVO[motivo];
       const pagada = DEFAULT_PAID_REASONS[motivo];
       const descansoPagado = pagada ? minutosPausa : 0;
@@ -384,6 +414,13 @@ export function crearAlmacen(): Almacen {
       const finPausa = conHora(fecha, 11, minutosPausa);
       const tipoPausa = pagada ? 'paid' : 'unpaid';
 
+      /*
+       * La nota solo existe cuando el motivo es «Otro», porque es el único que la pide.
+       * Se reparte por persona para que en Reportes salgan varias distintas y se vea que
+       * la lista es una lista, no un texto suelto.
+       */
+      const nota = motivo === 'other' ? (NOTAS_DEMO[persona % NOTAS_DEMO.length] ?? null) : null;
+
       intervalos.push({
         id: pausaId(contadorSesion),
         work_session_id: sesionId(contadorSesion),
@@ -394,6 +431,7 @@ export function crearAlmacen(): Almacen {
         duration_minutes: minutosPausa,
         break_type: tipoPausa,
         break_reason: motivo,
+        break_note: nota,
       });
 
       // La vista `break_time_by_reason` la calcula la base con SQL; aquí es una tabla
@@ -408,6 +446,7 @@ export function crearAlmacen(): Almacen {
         break_type: tipoPausa,
         pauses: 1,
         minutes: minutosPausa,
+        notes: nota === null ? [] : [{ at: aISO(inicioPausa), minutes: minutosPausa, note: nota }],
       });
 
       for (const [tipo, cuando, descanso] of [
@@ -460,7 +499,9 @@ export function crearAlmacen(): Almacen {
      * las filas de Horas decían que sí hubo descansos. La demostración se contradecía a
      * sí misma un día de cada siete, y con ella la prueba que lo vigila.
      */
-    const motivo = MOTIVOS_DEMO[persona % MOTIVOS_DEMO.length] ?? 'meal';
+    // El mismo corrimiento que arriba, con un desfase fijo: hoy no tiene índice de día,
+    // pero tampoco puede repetir el reparto del lunes.
+    const motivo = MOTIVOS_DEMO[(persona + 2) % MOTIVOS_DEMO.length] ?? 'meal';
     const minutosPausa = MINUTOS_POR_MOTIVO[motivo];
     const pagada = DEFAULT_PAID_REASONS[motivo];
     const tipoPausa = pagada ? 'paid' : 'unpaid';
@@ -510,6 +551,9 @@ export function crearAlmacen(): Almacen {
       flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
     });
 
+    // La misma nota que arriba: solo la tiene «Otro», que es el único motivo que la pide.
+    const nota = motivo === 'other' ? (NOTAS_DEMO[persona % NOTAS_DEMO.length] ?? null) : null;
+
     intervalos.push({
       id: pausaId(contadorSesion),
       work_session_id: sesionId(contadorSesion),
@@ -520,6 +564,7 @@ export function crearAlmacen(): Almacen {
       duration_minutes: minutosPausa,
       break_type: tipoPausa,
       break_reason: motivo,
+      break_note: nota,
     });
 
     // Del MISMO intervalo, por lo mismo que arriba: el gráfico de motivos no puede
@@ -533,6 +578,7 @@ export function crearAlmacen(): Almacen {
       break_type: tipoPausa,
       pauses: 1,
       minutes: minutosPausa,
+      notes: nota === null ? [] : [{ at: aISO(inicioPausa), minutes: minutosPausa, note: nota }],
     });
 
     for (const [tipo, cuando, descanso] of [

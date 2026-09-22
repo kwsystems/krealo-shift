@@ -215,3 +215,75 @@ describe('en qué se va el tiempo que no se trabaja', () => {
     expect(filas).toHaveLength(1);
   });
 });
+
+/**
+ * LAS NOTAS DE «OTRO», que son la razón de que se le pida una a la gente.
+ *
+ * Lo que se comprueba aquí es que juntarlas NO toca los minutos: el gráfico y la lista
+ * salen de la misma fila, así que si sumar las explicaciones cambiara un total, la
+ * pantalla se contradiría a sí misma —«Otro: 45 min» arriba y tres notas que suman otra
+ * cosa abajo— y nadie sabría cuál creer.
+ */
+describe('las explicaciones de las pausas por «Otro»', () => {
+  const CON_NOTAS: BreakRow[] = [
+    {
+      employee_id: 'ana',
+      break_reason: 'other',
+      minutes: 20,
+      pauses: 1,
+      notes: [{ at: '2026-09-21T14:00:00.000Z', minutes: 20, note: 'Fui a la clínica.' }],
+    },
+    {
+      employee_id: 'beto',
+      break_reason: 'other',
+      minutes: 25,
+      pauses: 1,
+      notes: [{ at: '2026-09-22T14:00:00.000Z', minutes: 25, note: 'Trámite en el banco.' }],
+    },
+    { employee_id: 'ana', break_reason: 'meal', minutes: 30, pauses: 1 },
+  ];
+
+  it('las junta en la fila de «otro» sin mover los minutos', () => {
+    const filas = minutesByReason(CON_NOTAS);
+    const otro = filas.find((fila) => fila.reason === 'other');
+    expect(otro?.minutes).toBe(45);
+    expect(otro?.pauses).toBe(2);
+    expect(otro?.notes).toHaveLength(2);
+  });
+
+  it('las más recientes primero: al abrir se quiere ver lo de hoy', () => {
+    const otro = minutesByReason(CON_NOTAS).find((fila) => fila.reason === 'other');
+    expect(otro?.notes.map((nota) => nota.note)).toEqual([
+      'Trámite en el banco.',
+      'Fui a la clínica.',
+    ]);
+  });
+
+  it('cada nota sabe de QUIÉN es, que es la mitad de lo que se necesita para leerla', () => {
+    const otro = minutesByReason(CON_NOTAS).find((fila) => fila.reason === 'other');
+    expect(otro?.notes.map((nota) => nota.employeeId)).toEqual(['beto', 'ana']);
+  });
+
+  /**
+   * Una fila sin notas lleva la lista VACÍA y no `undefined`: la pantalla hace
+   * `notes.length` sin preguntar, y una fila que viene de una función desplegada vieja
+   * —sin el campo— no puede tumbarla.
+   */
+  it('un motivo sin explicaciones trae la lista vacía, no un hueco', () => {
+    const comida = minutesByReason(CON_NOTAS).find((fila) => fila.reason === 'meal');
+    expect(comida?.notes).toEqual([]);
+  });
+
+  it('una nota en blanco no ocupa una línea para no decir nada', () => {
+    const filas = minutesByReason([
+      {
+        employee_id: 'ana',
+        break_reason: 'other',
+        minutes: 10,
+        pauses: 1,
+        notes: [{ at: '2026-09-22T14:00:00.000Z', minutes: 10, note: '   ' }],
+      },
+    ]);
+    expect(filas.find((fila) => fila.reason === 'other')?.notes).toEqual([]);
+  });
+});
