@@ -22,7 +22,7 @@
  *   npm run demo:export
  *   node scripts/tema-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import { servirExport, cargarPlaywright, entrarComoDemo, irA } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -55,14 +55,13 @@ for (const tema of ['light', 'dark']) {
   });
   const pagina = await contexto.newPage();
 
-  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1500);
-  await pagina.locator('[data-testid="sign-in-demo"]').click();
-  await pagina.waitForTimeout(2800);
+  // Esperando POR LA PANTALLA y no por el reloj: los números fijos que había aquí
+  // —1.500 y 2.800 ms— estaban afinados en una máquina, y en un runner compartido más
+  // lento se quedan cortos y el arnés mide una pantalla a medio montar. Ver `irA`.
+  await entrarComoDemo(pagina, base);
 
   for (const [nombre, ruta] of RUTAS) {
-    await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(2400);
+    await irA(pagina, base, ruta, { asentar: 500 });
 
     const medidas = await pagina.evaluate((areaMinima) => {
       // Luminancia relativa WCAG: 0 es negro, 1 es blanco.

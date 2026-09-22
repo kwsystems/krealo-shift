@@ -8,6 +8,8 @@ node_modules/
 dist/
 dist-demo/
 dist-demo-prod/
+# Las capturas que deja `inicio:check` (el CI las sube como artefacto).
+capturas/
 web-build/
 expo-env.d.ts
 

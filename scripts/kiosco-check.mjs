@@ -36,7 +36,16 @@
  *   npm run demo:export
  *   node scripts/kiosco-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright, sembrarKiosco, medirContraste } from './lib/arnes-web.mjs';
+import {
+  servirExport,
+  cargarPlaywright,
+  sembrarKiosco,
+  medirContraste,
+  esperarPantalla,
+  esperarAlgoDeTexto,
+  MARCADORES,
+  irA,
+} from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -176,18 +185,22 @@ for (const tema of TEMAS) {
     const pagina = await ctx.newPage();
 
     // Se activa el reloj por su propia pantalla, como lo haría una persona.
+    // Las esperas son POR LA PANTALLA y no por el reloj: los números fijos que había
+    // aquí estaban afinados en una máquina, y en un runner compartido más lento se
+    // quedan cortos y el arnés mide un teclado a medio pintar. Ver `irA`.
     await pagina.goto(base + '/kiosk/setup', { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(1500);
+    await esperarAlgoDeTexto(pagina, 40);
     const campos = pagina.locator('input');
     if ((await campos.count()) >= 2) {
       await campos.nth(0).fill('123456');
       await campos.nth(1).fill('Reloj tienda');
       await pagina.getByRole('button').first().click();
-      await pagina.waitForTimeout(3000);
+      // Y que la activación haya servido de algo: si no aparece el teclado, el reloj no
+      // quedó montado y medir lo que venga después sería medir la pantalla equivocada.
+      await esperarPantalla(pagina, MARCADORES['/kiosk'], { asentar: 0 });
     }
 
-    await pagina.goto(base + '/kiosk', { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(1800);
+    await irA(pagina, base, '/kiosk', { asentar: 500 });
 
     const medida = await pagina.evaluate(() => {
       const textos = [...document.querySelectorAll('*')].filter(
@@ -264,8 +277,7 @@ for (const tema of TEMAS) {
   });
   const pag = await ctx.newPage();
   await sembrarKiosco(pag);
-  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
-  await pag.waitForTimeout(2500);
+  await irA(pag, base, '/kiosk', { asentar: 700 });
 
   // Hay DOS teclados en el DOM —el del PIN y el de la autorización del gerente—, así
   // que se selecciona el visible o se espera para siempre por uno oculto.
@@ -378,8 +390,7 @@ for (const tema of TEMAS) {
   });
   const pag = await ctx.newPage();
   await sembrarKiosco(pag);
-  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
-  await pag.waitForTimeout(2500);
+  await irA(pag, base, '/kiosk', { asentar: 700 });
 
   await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
   for (const digito of ['1', '2', '3', '4', '5', '6']) {
@@ -474,8 +485,7 @@ for (const tema of TEMAS) {
     }
   };
 
-  await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
-  await pag.waitForTimeout(2800);
+  await irA(pag, base, '/kiosk', { asentar: 800 });
   await parar('reloj y teclado');
 
   // Con tres dígitos: puntos llenos y vacíos a la vez, que es como se ve de verdad.

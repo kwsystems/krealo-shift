@@ -118,6 +118,14 @@ Atajos equivalentes definidos en `package.json`: `npm start`, `npm run web`,
 web como se publica y comprueba que arranca: una guarda mal puesta ya dejó una vez la
 web publicada en una página completamente en blanco, y en desarrollo no se notaba.
 
+**Los siete arneses de la demostración corren en el CI en cada push**, uno por
+runner: `demo`, `kiosco`, `reportes`, `inicio`, `tema`, `contraste` y `responsive`.
+Hasta ahora solo corrían a mano y eso costó caro: un commit dejó el reloj web sin
+poder fichar —la foto de verificación fallaba siempre— y su CI estuvo en verde; lo
+destapó `kiosco:check` corrido a mano un día después. Correrlos en local sigue
+siendo lo suyo mientras se trabaja (son más rápidos que esperar al CI), pero ya no
+hace falta acordarse.
+
 Ninguna dependencia actual requiere `expo prebuild`: el proyecto sigue en
 workflow administrado y todo lo nativo se configura desde `app.config.ts`
 (plugins de Expo). Si en el futuro se agrega una dependencia que sí lo exija,

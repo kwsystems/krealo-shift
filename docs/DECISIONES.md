@@ -488,12 +488,60 @@ cada archivo y el error apunta al sitio equivocado.
 
 ### CI sin secretos
 
-`.github/workflows/ci.yml` corre lint, typecheck, pruebas y validación del YAML de
-Maestro. No pide credenciales de Supabase, Expo ni Apple, así que funciona en un
-clon recién hecho y en un fork.
+`.github/workflows/ci.yml` corre lint, formato, typecheck, pruebas, los empaquetados
+de web e iOS, seis chequeos de Chromium sobre el export sin demostración, los siete
+arneses de la demostración y la validación del YAML de Maestro. No pide credenciales
+de Firebase, Expo ni Apple, así que funciona en un clon recién hecho y en un fork.
 
-- **Costo:** las pruebas SQL (`scripts/db-test.sh`) y los builds de EAS quedan
-  fuera de CI. Son tareas locales documentadas en el README.
+- **Costo:** las pruebas de las reglas de Firestore y los builds de EAS quedan fuera
+  de CI. Son tareas locales documentadas en el README.
+
+### Los arneses esperan POR LA PANTALLA, nunca un número de milisegundos (2026-09-22)
+
+Cada arnés de navegador esperaba un tiempo fijo después de cada navegación —49 en
+total, de 150 a 3.200 ms— afinado en una máquina concreta. Eso los mantuvo FUERA del
+CI durante meses, y con razón: en un runner compartido más lento una espera corta
+hace que el arnés mida una pantalla a medio montar, y el rojo que sale no es de la
+app, es del reloj. Un arnés que da rojos que no son culpa de nadie se acaba
+ignorando, y uno ignorado es peor que no tenerlo.
+
+Ahora toda espera de navegación es por el MARCADOR de la pantalla —un texto o un
+`testID` que solo sale ahí—, declarado una sola vez en `MARCADORES`
+(`scripts/lib/arnes-web.mjs`), con el número solo como techo. Una máquina lenta
+tarda más en vez de fallar.
+
+- **La regla:** un arnés nuevo NO añade un `waitForTimeout` después de un `goto` ni
+  de un clic que cambie de pantalla. Usa `irA`, `entrarComoDemo` o
+  `esperarPantalla`. Si la pantalla no tiene marcador, se le añade uno a `MARCADORES`
+  antes que la espera.
+- **Lo que sí sigue siendo fijo:** 17 esperas dentro de una pantalla ya montada
+  —abrir una hoja, teclear un PIN, cambiar de pestaña— y el `asentar` de 300-800 ms
+  que deja terminar la animación de entrada antes de medir anchos o colores.
+- **Costo:** un marcador mal elegido planta el arnés hasta el tope (30 s) en vez de
+  medir mal. Se prefiere: `demo:check` abre el reloj SIN activar, así que ahí sale su
+  pantalla de activación y no el teclado, y está exceptuado a propósito.
+
+### El escenario de ausentes GARANTIZA sus ausencias, no las espera (2026-09-22)
+
+El tablero solo cuenta como ausencia un turno de hoy que YA TERMINÓ sin que nadie
+fichara. `?escenario=ausentes` se limitaba a buscar esos turnos, y medido hora a hora
+los siete días la semilla no los tiene casi nunca: entre semana solo a partir de las
+20:00 UTC, y sábado y domingo nunca —el domingo la tienda cierra y el sábado se
+siembra en borrador—. Así que `inicio:check` pasaba o fallaba según cuándo se
+corriera.
+
+Ahora el escenario COLOCA los turnos que hagan falta en el trozo de día que ya ha
+pasado. Son datos sembrados: se pueden poner donde convenga.
+
+- **Por qué no bajar el número que el arnés exige:** es la forma fácil de que deje de
+  fallar y también de que deje de comprobar.
+- **Lo que no se puede garantizar:** en el instante exacto en que empieza el día de
+  la tienda no puede haber ninguna ausencia —«hoy» y «ahora» son el mismo punto—.
+  Antes el agujero eran horas y días; ahora es un milisegundo, y hay una prueba que
+  lo fija.
+- **Costo:** el domingo el escenario enseña turnos en un día en que la tienda cierra.
+  Es un día de mentira pedido a propósito para ver la pantalla con ausencias, no una
+  afirmación sobre el calendario.
 
 ### Las pruebas SQL corren contra un Postgres real con un shim de `auth`
 

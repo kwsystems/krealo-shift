@@ -29,7 +29,15 @@
  *   npm run demo:export
  *   node scripts/contraste-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright, medirContraste } from './lib/arnes-web.mjs';
+import {
+  servirExport,
+  cargarPlaywright,
+  medirContraste,
+  esperarPantalla,
+  MARCADOR_ACCESO,
+  MARCADORES,
+  irA,
+} from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -166,16 +174,18 @@ for (const tema of TEMAS) {
 
     // La pantalla de acceso, ANTES de entrar. Es la primera que ve cualquiera y la única
     // que se ve sin sesión, así que un texto ilegible ahí es el peor sitio posible.
+    // Esperando POR LA PANTALLA y no por el reloj. Los números fijos que había aquí
+    // estaban afinados en una máquina; en un runner más lento se quedan cortos y el
+    // arnés mide una pantalla a medio montar. Ver `esperarPantalla`.
     await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(2000);
+    await esperarPantalla(pagina, MARCADOR_ACCESO, { asentar: 400 });
     await revisar('acceso');
 
     await pagina.locator('[data-testid="sign-in-demo"]').click();
-    await pagina.waitForTimeout(2800);
+    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 500 });
 
     for (const [nombre, ruta] of RUTAS) {
-      await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
-      await pagina.waitForTimeout(2400);
+      await irA(pagina, base, ruta, { asentar: 500 });
       await revisar(nombre);
     }
 

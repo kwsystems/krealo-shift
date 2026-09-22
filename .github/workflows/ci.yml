@@ -147,26 +147,53 @@ jobs:
       - name: Compilar las Cloud Functions
         run: npx tsc -p functions --noEmit
 
-  responsive:
-    name: 'Anchos: nada se sale ni se recorta'
+  arneses:
+    name: 'Arnés: ${{ matrix.arnes.nombre }}'
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    # JOB APARTE Y NO UN PASO MÁS, por el reloj: el export de la demostración y las 56
-    # cargas de página son unos diez minutos, y metidos en `verificar` retrasarían el
-    # lint y las pruebas —que son lo primero que alguien quiere ver— esos diez minutos.
-    # Aquí corre en paralelo y no le cuesta tiempo a nadie.
+    # LOS SIETE ARNESES DE LA DEMOSTRACIÓN. `responsive` ya estaba; los otros SEIS
+    # entran aquí, y hasta ahora solo corrían cuando alguien se acordaba.
     #
-    # POR QUÉ HACE FALTA EN EL CI Y NO A MANO. El panel llevaba meses con dieciocho
-    # fallos de ancho: un horario que mostraba «03:00 – 09:…» en un portátil, una barra
-    # de pestañas que decía «Hora…» al lado de «Horas», un filtro que escondía seis
-    # empleados de nueve. Ninguno reventaba nada, así que ninguna revisión los vio, y
-    # los seis arneses de la demostración solo corrían cuando alguien se acordaba.
+    # POR QUÉ ESTABAN FUERA Y POR QUÉ ENTRAN AHORA. `verificar` recorre la app SIN modo
+    # demostración: comprueba que las pantallas se pintan, que responden y que son
+    # accesibles, pero sobre datos vacíos. Estos la recorren COMO LA VIVE UNA PERSONA,
+    # con la tienda sembrada, y encuentran cosas que el otro no puede ver.
     #
-    # DE MOMENTO SOLO ESTE. Los otros cinco —demo, kiosco, reportes, inicio, tema,
-    # contraste— siguen siendo manuales y eso tiene su propia tarea: usan esperas fijas
-    # afinadas en una máquina local, y en un runner compartido más lento alguna puede
-    # quedarse corta y dar rojos que no son de la app. Este ya espera por selector.
+    # La consecuencia ya pasó dos veces:
+    #  - e3d5a2a dejó el reloj web SIN PODER FICHAR —la foto de verificación fallaba
+    #    siempre— y su CI estuvo EN VERDE. Lo destapó `kiosco:check` corrido a mano un
+    #    día después.
+    #  - el panel llevaba meses con dieciocho fallos de ancho —un horario que mostraba
+    #    «03:00 – 09:…», una barra de pestañas que decía «Hora…» al lado de «Horas»— y
+    #    ninguna revisión los vio.
+    # Un arnés que solo corre cuando alguien se acuerda no protege nada.
+    #
+    # LO QUE LOS TENÍA FUERA eran las esperas: cada uno esperaba un número fijo de
+    # milisegundos afinado en una máquina concreta, y en un runner compartido más lento
+    # se quedan cortas y el arnés mide una pantalla a medio montar. Eso da rojo, y el
+    # rojo no es de la app: es del reloj. Ahora esperan POR LA PANTALLA —hasta ver su
+    # marcador— con el número solo como techo, así que una máquina lenta tarda más en
+    # vez de fallar. Ver `esperarPantalla` en scripts/lib/arnes-web.mjs.
+    #
+    # UNO POR RUNNER Y NO SIETE PASOS EN UNO, por el reloj: en serie son unos quince
+    # minutos y así son unos seis, porque el empaquetado (~1,5 min) es lo único que se
+    # repite. `fail-fast: false` porque cuando se rompe algo de verdad se rompe en
+    # varios a la vez, y verlos todos dice qué pasó mucho mejor que ver el primero.
+    strategy:
+      fail-fast: false
+      matrix:
+        arnes:
+          - { id: demo, nombre: 'ocho pantallas con contenido y distintas entre sí' }
+          - { id: kiosco, nombre: 'el reloj de fichaje, de punta a punta con foto' }
+          - { id: reportes, nombre: 'Reportes cuadra con Horas' }
+          # `capturas` es el tercer argumento de inicio-check.mjs: las deja DENTRO del
+          # workspace para poder subirlas como artefacto sin depender de rutas absolutas.
+          - { id: inicio, nombre: 'Inicio cambia según el día', extra: capturas }
+          - { id: tema, nombre: 'claro y oscuro sin mezclarse' }
+          - { id: contraste, nombre: 'todo el texto se lee' }
+          - { id: responsive, nombre: 'nada se sale ni se recorta' }
+
     steps:
       - name: Traer el código
         uses: actions/checkout@v4
@@ -183,14 +210,25 @@ jobs:
       - name: Instalar Chromium
         run: npx playwright install --with-deps chromium
 
-      # Con `EXPO_PUBLIC_DEMO=1`: el arnés entra con el botón de demostración y mide las
-      # pantallas del panel con datos. Sin demo se quedaría midiendo el acceso siete
-      # veces, que es justo el engaño contra el que el arnés tiene guardas.
+      # Con `EXPO_PUBLIC_DEMO=1`: los arneses entran con el botón de demostración y
+      # recorren el panel con datos. Sin demo se quedarían midiendo el acceso una y otra
+      # vez, que es justo el engaño contra el que tienen guardas.
       - name: Empaquetar la demostración
         run: npm run demo:export
 
-      - name: Medir los anchos
-        run: npm run responsive:check
+      - name: Correr el arnés
+        run: npm run ${{ matrix.arnes.id }}:check -- ${{ matrix.arnes.extra }}
+
+      # Las tres capturas de Inicio son lo que se mira para decidir si, además de
+      # distinto, está bien. En una máquina se abren solas; aquí hay que subirlas.
+      # `always()` porque cuando el arnés falla es cuando más se quieren ver.
+      - name: Guardar las capturas de Inicio
+        if: ${{ always() && matrix.arnes.id == 'inicio' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: capturas-inicio
+          path: capturas
+          if-no-files-found: warn
 
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro

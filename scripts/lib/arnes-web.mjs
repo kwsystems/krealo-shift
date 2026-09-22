@@ -278,6 +278,13 @@ export const MARCADORES = {
   '/reports': 'Mide presencia, no trabajo hecho',
   '/requests': 'Correcciones de hora',
   '/settings': 'Cambia el idioma de esta app',
+  /*
+   * El reloj de fichaje se identifica por su teclado, y `visible` NO es adorno: hay DOS
+   * teclados en el DOM —el del PIN y el de la autorización del gerente— y el segundo
+   * existe desde el primer render sin verse. Esperar a que «esté» daría por montada una
+   * pantalla que todavía no ha pintado nada.
+   */
+  '/kiosk': { testid: 'keypad-1', visible: true },
 };
 
 /** El de la pantalla de acceso, que es la única que se ve SIN sesión. */
@@ -300,24 +307,34 @@ export function quienSeColo(texto) {
 /**
  * Espera a que una pantalla esté montada DE VERDAD: hasta ver su marcador en el texto.
  *
+ * `obligatorio: false` devuelve `false` en vez de reventar, para los arneses que
+ * prefieren anotar «esta pantalla no se cargó» y seguir midiendo las demás: parar en la
+ * primera esconde las otras seis, y un informe a medias se lee como si el resto
+ * estuviera bien.
+ *
  * `asentar` es el único tiempo fijo que queda, y es a propósito: entre que el marcador
  * aparece y que la pantalla termina de colocarse hay una animación de entrada, y medir
  * anchos a mitad de la animación da números que no son los de nadie. Son 300 ms sobre
  * una espera que ya sabe que la pantalla está ahí, no una apuesta sobre cuánto tarda.
  */
-export async function esperarPantalla(pagina, marcador, { timeout = 30000, asentar = 300 } = {}) {
+export async function esperarPantalla(
+  pagina,
+  marcador,
+  { timeout = 30000, asentar = 300, obligatorio = true } = {},
+) {
   try {
     if (typeof marcador === 'object' && marcador !== null) {
       await pagina
         .locator(`[data-testid="${marcador.testid}"]`)
         .first()
-        .waitFor({ state: 'attached', timeout });
+        .waitFor({ state: marcador.visible === true ? 'visible' : 'attached', timeout });
     } else {
       await pagina.waitForFunction((m) => (document.body?.innerText ?? '').includes(m), marcador, {
         timeout,
       });
     }
   } catch {
+    if (!obligatorio) return false;
     const texto = ((await pagina.evaluate(() => document.body?.innerText ?? '')) || '').replace(
       /\s+/g,
       ' ',
@@ -331,6 +348,7 @@ export async function esperarPantalla(pagina, marcador, { timeout = 30000, asent
     );
   }
   if (asentar > 0) await pagina.waitForTimeout(asentar);
+  return true;
 }
 
 /**
@@ -357,4 +375,27 @@ export async function irA(pagina, base, ruta, opciones = {}) {
   }
   await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
   await esperarPantalla(pagina, marcador, opciones);
+}
+
+/**
+ * Espera a que la página tenga algo de texto, SIN fallar si no llega.
+ *
+ * Para los sitios donde lo que se espera es justo lo que se está comprobando: esperar
+ * por el marcador convertiría un fallo de la app —«esta pantalla sale en blanco»— en un
+ * plantón del arnés, y el mensaje sería peor. Así la espera se adapta a la máquina y la
+ * comprobación de después sigue siendo la que habla.
+ *
+ * Devuelve `true` si llegó a haber texto.
+ */
+export async function esperarAlgoDeTexto(pagina, minimo, { timeout = 20000 } = {}) {
+  try {
+    await pagina.waitForFunction(
+      (n) => (document.body?.innerText ?? '').trim().length >= n,
+      minimo,
+      { timeout },
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }

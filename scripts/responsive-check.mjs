@@ -50,7 +50,7 @@
  *   npm run demo:export
  *   node scripts/responsive-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import { servirExport, cargarPlaywright, esperarPantalla, MARCADORES } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -346,13 +346,20 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
     // alguien sin sesión, así que un recorte ahí es el peor sitio posible —y de hecho es
     // donde vive el enlace para montar el reloj de fichaje—.
     if (pantalla !== 'acceso' && !entrado) {
+      // Antes eran 3.000 ms fijos. Ahora se espera a que Inicio esté montado: en una
+      // máquina lenta tarda lo que tarde en vez de seguir con la sesión a medias.
       await pagina.locator('[data-testid="sign-in-demo"]').click();
-      await pagina.waitForTimeout(3000);
+      await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
       entrado = true;
     }
 
     await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(2000);
+    /*
+     * `obligatorio: false` A PROPÓSITO: si esta pantalla no aparece, la guarda de abajo
+     * lo anota con su nombre y el arnés SIGUE midiendo las demás. Reventar aquí dejaría
+     * las otras seis sin medir y el informe se leería como si estuvieran bien.
+     */
+    await esperarPantalla(pagina, marcador, { asentar: 400, obligatorio: false });
 
     const texto = ((await pagina.evaluate(() => document.body.innerText)) || '').replace(
       /\s+/g,

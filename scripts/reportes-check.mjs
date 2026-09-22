@@ -26,7 +26,14 @@
  */
 import { readFileSync } from 'node:fs';
 
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import {
+  servirExport,
+  cargarPlaywright,
+  esperarPantalla,
+  MARCADOR_ACCESO,
+  MARCADORES,
+  irA,
+} from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -49,14 +56,18 @@ const { base, cerrar } = await servirExport(DIR, 8125);
 const { chromium } = cargarPlaywright();
 const navegador = await chromium.launch();
 
+// Todas las esperas de navegación son POR LA PANTALLA y no por el reloj: los números
+// fijos que había —entre 1.500 y 3.000 ms— estaban afinados en una máquina, y en un
+// runner compartido más lento se quedan cortos y el arnés lee una pantalla a medio
+// montar: totales a cero, gráficos sin barras. Ver `irA` y `esperarPantalla`.
 async function entrar(pagina) {
   await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1500);
+  await esperarPantalla(pagina, MARCADOR_ACCESO, { asentar: 0 });
   const boton = pagina.locator('[data-testid="sign-in-demo"]');
   if ((await boton.count()) === 0)
     throw new Error('no aparece el botón de entrar en la demostración');
   await boton.click();
-  await pagina.waitForTimeout(2500);
+  await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
 }
 
 /** El texto de una casilla de total, tal y como lo lee una persona. */
@@ -83,13 +94,11 @@ function soloHoras(texto) {
   pagina.on('pageerror', (e) => errores.push(String(e).slice(0, 200)));
   await entrar(pagina);
 
-  await pagina.goto(base + '/hours', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(2500);
+  await irA(pagina, base, '/hours', { asentar: 600 });
   const horasNeto = soloHoras(await leerCasilla(pagina, 'total-net'));
   const horasExtra = soloHoras(await leerCasilla(pagina, 'total-overtime'));
 
-  await pagina.goto(base + '/reports', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(2500);
+  await irA(pagina, base, '/reports', { asentar: 600 });
   const reporteNeto = soloHoras(await leerCasilla(pagina, 'report-total'));
   const reporteExtra = soloHoras(await leerCasilla(pagina, 'report-overtime'));
 
@@ -282,8 +291,7 @@ function soloHoras(texto) {
   const contexto = await navegador.newContext({ viewport: { width: 390, height: 844 } });
   const pagina = await contexto.newPage();
   await entrar(pagina);
-  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(2000);
+  await irA(pagina, base, '/', { asentar: 600 });
 
   for (const etiqueta of PESTANAS) {
     const nodo = pagina.getByText(etiqueta, { exact: true }).last();
@@ -316,8 +324,7 @@ function soloHoras(texto) {
    * 390 px. Lo vio el ojo y no el arnés, así que el arnés estaba incompleto: un corte
    * es un corte esté donde esté, y aquí hay siete oportunidades de que ocurra.
    */
-  await pagina.goto(base + '/reports', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(3000);
+  await irA(pagina, base, '/reports', { asentar: 800 });
   const ejes = await pagina
     .locator('[data-testid="week-columns"]')
     .first()
@@ -344,12 +351,11 @@ function soloHoras(texto) {
       ejes.some((e) => e.scroll > e.cliente) ? 'ALGUNA CORTADA' : 'ok'
     }`,
   );
-  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(2000);
+  await irA(pagina, base, '/', { asentar: 600 });
 
   // Y que se pueda llegar a Reportes tocándola, no solo escribiendo la URL.
   await pagina.getByText('Reportes', { exact: true }).last().click();
-  await pagina.waitForTimeout(2500);
+  await esperarPantalla(pagina, MARCADORES['/reports'], { asentar: 600 });
   if ((await pagina.locator('[data-testid="manager-reports"]').count()) === 0) {
     problemas.push('tocar la pestaña Reportes no lleva a Reportes');
   }
@@ -386,8 +392,7 @@ function soloHoras(texto) {
     });
     const pagina = await contexto.newPage();
     await entrar(pagina);
-    await pagina.goto(base + '/reports', { waitUntil: 'networkidle' });
-    await pagina.waitForTimeout(3000);
+    await irA(pagina, base, '/reports', { asentar: 800 });
 
     const encontrado = await pagina.evaluate(() => {
       const marcas = new Set();

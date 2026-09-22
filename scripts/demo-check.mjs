@@ -22,7 +22,15 @@
  */
 import { existsSync } from 'node:fs';
 
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import {
+  servirExport,
+  cargarPlaywright,
+  esperarPantalla,
+  MARCADOR_ACCESO,
+  MARCADORES,
+  irA,
+  esperarAlgoDeTexto,
+} from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 /** Opcional: un segundo export compilado con EXPO_PUBLIC_APP_ENV=production. */
@@ -65,15 +73,18 @@ const vistas = new Map();
  * comprobacion de "todas distintas".
  */
 async function entrarComoAdministrador(pagina) {
+  // Se espera POR LA PANTALLA y no por el reloj: los 1.500 y 2.500 ms que habia aqui
+  // estaban afinados en una maquina, y en un runner compartido mas lento se quedan
+  // cortos y el arnes mide una pantalla a medio montar. Ver `esperarPantalla`.
   await pagina.goto(base + '/', { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1500);
+  await esperarPantalla(pagina, MARCADOR_ACCESO, { asentar: 0 });
   const boton = pagina.locator('[data-testid="sign-in-demo"]');
   if ((await boton.count()) === 0) {
     problemas.push('no aparece el boton de entrar como administrador en la demostracion');
     return;
   }
   await boton.click();
-  await pagina.waitForTimeout(2500);
+  await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
 }
 
 await entrarComoAdministrador(pagina);
@@ -83,8 +94,19 @@ for (const [nombre, ruta] of RUTAS) {
   pagina.removeAllListeners('pageerror');
   pagina.on('pageerror', (e) => errores.push(String(e).slice(0, 200)));
 
-  await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(2200);
+  /*
+   * EL RELOJ DE FICHAJE SE SALTA EL MARCADOR, a propósito. Aquí se abre SIN activar
+   * —este arnés no siembra ningún reloj— así que lo que sale es su pantalla de
+   * activación y no el teclado, y esperar el teclado planta el arnés 30 segundos y lo
+   * mata. Lo que se comprueba de esa ruta es justo lo de abajo: que diga algo y que no
+   * se parezca a ninguna otra pantalla.
+   */
+  if (ruta === '/kiosk') {
+    await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
+    await esperarAlgoDeTexto(pagina, MINIMO_CARACTERES);
+  } else {
+    await irA(pagina, base, ruta, { asentar: 400 });
+  }
 
   const texto = ((await pagina.evaluate(() => document.body.innerText)) || '')
     .replace(/\s+/g, ' ')
@@ -147,11 +169,11 @@ if (DIR_PROD !== undefined) {
   {
     const url = baseProd + '/';
     await pag.goto(url, { waitUntil: 'networkidle' });
-    await pag.waitForTimeout(1500);
+    await esperarPantalla(pag, MARCADOR_ACCESO, { asentar: 0 });
     const boton = pag.locator('[data-testid="sign-in-demo"]');
     if ((await boton.count()) > 0) {
       await boton.click();
-      await pag.waitForTimeout(2500);
+      await esperarPantalla(pag, MARCADORES['/'], { asentar: 400 });
     }
   }
 
@@ -161,7 +183,10 @@ if (DIR_PROD !== undefined) {
     ['/kiosk/setup', 'kiosk-unavailable-here'],
   ]) {
     await pag.goto(baseProd + ruta, { waitUntil: 'networkidle' });
-    await pag.waitForTimeout(2200);
+    // Aqui la espera NO puede ser por el marcador: lo que se comprueba abajo es
+    // precisamente si la pantalla trae algo, y esperar por eso convertiria un fallo de
+    // la app en un planton del arnes. Ver `esperarAlgoDeTexto`.
+    await esperarAlgoDeTexto(pag, MINIMO_CARACTERES);
     const texto = ((await pag.evaluate(() => document.body.innerText)) || '').trim();
 
     if (texto.length < MINIMO_CARACTERES) {
@@ -194,8 +219,7 @@ for (const [etiqueta, ancho, esperada] of [
   const ctx = await navegador.newContext({ viewport: { width: ancho, height: 900 } });
   const pag = await ctx.newPage();
   await entrarComoAdministrador(pag);
-  await pag.goto(base + '/', { waitUntil: 'networkidle' });
-  await pag.waitForTimeout(1800);
+  await irA(pag, base, '/', { asentar: 400 });
   const hay = (await pag.locator('[data-testid="desktop-header"]').count()) > 0;
   if (hay !== esperada) {
     problemas.push(
