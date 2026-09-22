@@ -170,7 +170,20 @@ export function AppButton({
   if (hint === undefined) return boton;
 
   return (
-    <View style={alineado}>
+    /*
+     * `estrechable` SOLO cuando hay pista, y hace falta: un botón `fullWidth={false}`
+     * con pista se envuelve en esta vista, que con `alignSelf: 'flex-start'` se
+     * dimensiona por su contenido. Y el contenido es la pista, un texto que sin tope se
+     * tiende en UNA línea tan ancha como haga falta. Medido en «Editar turno» de un
+     * turno publicado: «Un turno publicado no se elimina: se cancela y queda en el
+     * historial.» se salía 106 px de la hoja a 360 px de ancho, y se leía «…se cancela y
+     * qued». El botón de al lado no tiene pista y por eso no se notaba.
+     *
+     * Con `flexShrink` la vista puede encogerse por debajo de su contenido dentro de un
+     * `Row`, y entonces el texto envuelve en vez de empujar; `maxWidth` la tapa también
+     * donde el padre no sea flex.
+     */
+    <View style={[alineado, styles.estrechable]}>
       {boton}
       <AppText variant="help" tone="subtle" style={[styles.centered, styles.hint]}>
         {hint}
@@ -248,4 +261,5 @@ const styles = StyleSheet.create({
   autoWidth: { alignSelf: 'flex-start' },
   centered: { textAlign: 'center' },
   hint: { marginTop: spacing.xs },
+  estrechable: { flexShrink: 1, maxWidth: '100%' },
 });

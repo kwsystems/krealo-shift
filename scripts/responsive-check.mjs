@@ -101,6 +101,27 @@ const PANTALLAS = [
   ['ajustes', '/settings', 'Cambia el idioma de esta app'],
 ];
 
+/**
+ * LO QUE VIVE DETRÁS DE UN BOTÓN, que hasta ahora no se medía.
+ *
+ * Las ocho pantallas de arriba son las que tienen URL. Todo lo demás —editar un turno,
+ * copiar la semana, dar de alta a alguien, compartir el reporte— vive en una hoja que
+ * solo existe después de un toque, y el arnés no la abría NUNCA.
+ *
+ * Y ahí había un fallo de los gordos: en «Editar turno» de un turno publicado, la pista
+ * de «Cancelar turno» se salía 106 px de la hoja a 360 px de ancho y se leía «…se cancela
+ * y qued». Apareció mirando una captura de otra tarea, de casualidad, que es exactamente
+ * el modo de fallo contra el que existe este arnés.
+ *
+ * Cada entrada es [pantalla, ruta, con qué se abre, qué hoja tiene que salir].
+ */
+const HOJAS = [
+  ['horario', '/schedule', '[data-testid^="shift-"]', 'shift-form-sheet'],
+  ['horario', '/schedule', '[data-testid="schedule-copy-week"]', 'copy-week-sheet'],
+  ['equipo', '/team', '[data-testid="team-add-employee"]', 'employee-form-sheet'],
+  ['reportes', '/reports', '[data-testid="report-share-open"]', 'report-share-sheet'],
+];
+
 /** Textos que, si aparecen tras entrar, significan que se está midiendo otra pantalla. */
 const INTRUSOS = [
   ['la pantalla de acceso', 'Ingresa a Krealo Shift'],
@@ -298,6 +319,44 @@ const { base, cerrar } = await servirExport(DIR, 8260);
 const { chromium } = cargarPlaywright();
 const navegador = await chromium.launch();
 
+/**
+ * Lo que se le pide a una hoja: que nada de lo que hay dentro se salga de ella.
+ *
+ * SE MIDE CONTRA EL BORDE DE LA HOJA Y NO CONTRA LA VENTANA, y esa es la diferencia que
+ * lo hace servir: en una tablet la hoja va centrada y es más estrecha que la ventana, así
+ * que un texto puede salirse de la hoja —y verse cortado por su borde— sin salirse de la
+ * pantalla. Medir contra la ventana daría verde sobre un texto cortado.
+ */
+const MEDIR_HOJA = (hojaTestId) => {
+  const hoja = document.querySelector(`[data-testid="${hojaTestId}"]`);
+  if (hoja === null) return null;
+  const caja = hoja.getBoundingClientRect();
+  const limpiar = (texto) =>
+    texto
+      .replace(/[\uE000-\uF8FF]/g, '')
+      .replace(/[\u{F0000}-\u{FFFFD}\u{100000}-\u{10FFFD}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+  const fuera = [];
+  const recortes = [];
+  let medidos = 0;
+  for (const el of hoja.querySelectorAll('*')) {
+    if (el.children.length > 0) continue;
+    const texto = limpiar(el.textContent ?? '');
+    const c = el.getBoundingClientRect();
+    if (c.width === 0 || c.height === 0) continue;
+    medidos += 1;
+    if (c.right > caja.right + 1) {
+      fuera.push({ texto: texto.slice(0, 60), sale: Math.round(c.right - caja.right) });
+    }
+    if (texto !== '' && el.scrollWidth > el.clientWidth + 1) {
+      recortes.push({ texto: texto.slice(0, 60), px: el.scrollWidth - el.clientWidth });
+    }
+  }
+  return { medidos, fuera, recortes, ancho: Math.round(caja.width) };
+};
+
 const problemas = [];
 const deudaVista = new Set();
 const exencionesVistas = new Set();
@@ -470,6 +529,81 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
   await ctx.close();
 }
 
+/*
+ * SEGUNDA PASADA: LAS HOJAS.
+ *
+ * Solo en los tres anchos donde una hoja aprieta —los dos teléfonos y el iPad vertical—
+ * y no en los siete: en un monitor la hoja tiene su ancho fijo y lo que pase ahí ya lo
+ * dice el iPad. Cuatro hojas × tres anchos son doce aperturas, medio minuto.
+ *
+ * Si una hoja no se puede abrir NO SE CALLA: se reporta. Un arnés que se salta en
+ * silencio lo que no encuentra acaba midiendo la mitad y diciendo que todo está bien,
+ * que es como el panel llevaba meses con dieciocho fallos de ancho.
+ */
+for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a <= 768)) {
+  const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+  const pagina = await ctx.newPage();
+  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
+  await pagina.locator('[data-testid="sign-in-demo"]').click();
+  await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
+
+  for (const [pantalla, ruta, abridor, hoja] of HOJAS) {
+    await pagina.goto(base + ruta, { waitUntil: 'networkidle' });
+    const cargada = await esperarPantalla(pagina, MARCADORES[ruta], {
+      asentar: 400,
+      obligatorio: false,
+    });
+    if (!cargada) {
+      problemas.push(`${nombreAncho}, ${pantalla}/${hoja}: no se cargó la pantalla`);
+      continue;
+    }
+
+    const boton = pagina.locator(abridor).first();
+    if ((await boton.count()) === 0) {
+      problemas.push(
+        `${nombreAncho}, ${pantalla}: no se encontró «${abridor}», así que «${hoja}» ` +
+          'se quedó sin medir',
+      );
+      continue;
+    }
+    await boton.click();
+    const abierta = await esperarPantalla(
+      pagina,
+      { testid: hoja, visible: true },
+      {
+        asentar: 500,
+        obligatorio: false,
+      },
+    );
+    if (!abierta) {
+      problemas.push(`${nombreAncho}, ${pantalla}: «${abridor}» no abrió «${hoja}»`);
+      continue;
+    }
+
+    const m = await pagina.evaluate(MEDIR_HOJA, hoja);
+    if (m === null || m.medidos < 5) {
+      problemas.push(`${nombreAncho}, ${hoja}: la hoja se abrió vacía`);
+      continue;
+    }
+    for (const f of m.fuera) {
+      problemas.push(
+        `${nombreAncho} (${ancho}px), ${hoja}: «${f.texto}» se sale ${f.sale}px de la hoja ` +
+          `(la hoja mide ${m.ancho}px)`,
+      );
+    }
+    for (const r of m.recortes) {
+      problemas.push(`${nombreAncho} (${ancho}px), ${hoja}: «${r.texto}» se recorta ${r.px}px`);
+    }
+    console.log(
+      `  ${String(ancho).padStart(4)} ${hoja.padEnd(20)} ${String(m.medidos).padStart(3)} ` +
+        `elementos, ${m.fuera.length + m.recortes.length === 0 ? 'todo cabe en la hoja' : 'NO CABE'}`,
+    );
+    await pagina.keyboard.press('Escape');
+    await pagina.waitForTimeout(200);
+  }
+  await ctx.close();
+}
+
 await navegador.close();
 await cerrar();
 
@@ -487,6 +621,6 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  `\nOK: ${PANTALLAS.length} pantallas × ${ANCHOS.length} anchos. Nada se sale, nada se ` +
-    'recorta sin querer, y todo lo que se pulsa llega al mínimo táctil.',
+  `\nOK: ${PANTALLAS.length} pantallas × ${ANCHOS.length} anchos y ${HOJAS.length} hojas. ` +
+    'Nada se sale, nada se recorta sin querer, y todo lo que se pulsa llega al mínimo táctil.',
 );
