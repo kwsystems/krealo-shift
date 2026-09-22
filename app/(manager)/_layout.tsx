@@ -144,10 +144,28 @@ export default function ManagerLayout() {
           tabBarItemStyle: {
             minHeight: sizes.touchTargetPreferred,
             justifyContent: 'center',
-            // En vertical, cada pestaña se queda con el alto que necesita en vez de
-            // repartirse la columna entera: si no, cinco pestañas ocupan toda la
-            // altura de un monitor y quedan separadas por huecos enormes.
-            ...(useSidebar ? { flex: 0, marginBottom: spacing.xs } : null),
+            /*
+             * En vertical, cada pestaña se queda con el alto que necesita en vez de
+             * repartirse la columna entera: si no, siete pestañas ocupan toda la
+             * altura de un monitor y quedan separadas por huecos enormes.
+             *
+             * ES `flexGrow: 0` Y NO `flex: 0`, y la diferencia son 22 píxeles de
+             * objetivo táctil. De todo este estilo, `BottomTabItem` reenvía UNA SOLA
+             * propiedad al elemento pulsable —`const { flex } = StyleSheet.flatten(style)`—
+             * y el resto se queda en un `View` que lo envuelve. Así que `flex: 0`, que
+             * en React Native significa «no crecer, encogible, BASE CERO», llegaba al
+             * enlace y lo dejaba con altura de contenido cero: 30 px, solo su relleno.
+             *
+             * Y no se veía. El envoltorio sí medía sus 52 px y centraba, el icono y la
+             * etiqueta desbordaban a la vista, así que la pestaña PARECÍA de 52 px
+             * mientras el área que recibe el dedo era de 30. En un iPad, con los siete
+             * destinos pegados uno debajo de otro, eso es entrar en «Horas» cuando se
+             * quería «Horario». Medido con `responsive:check`, no mirando.
+             *
+             * `flexGrow: 0` expresa la misma intención —no crecer— sin viajar al
+             * pulsable, que recupera su altura natural: 24 de icono más 30 de relleno.
+             */
+            ...(useSidebar ? { flexGrow: 0, marginBottom: spacing.xs } : null),
           },
           tabBarLabelStyle: {
             fontFamily: fontFamily.medium,

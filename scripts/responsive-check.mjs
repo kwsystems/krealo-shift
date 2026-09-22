@@ -132,13 +132,6 @@ const DEUDA = new Map([
     'acceso/recorte/Configurar este dispositivo como reloj',
     'el enlace del reloj se corta (SJYNEknQrikuvEOaolpa)',
   ],
-  ['*/tactil/Inicio', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Equipo', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Horario', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Horas', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Reportes', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Bandeja', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
-  ['*/tactil/Ajustes', 'los destinos de la barra lateral miden 30 px (IxzN7vk7MSpBJlyOZRHQ)'],
   [
     'reportes/tactil/testid:day-column-',
     'las columnas de día son focalizables y estrechas (zMeTpeHUPyTpTqcKK0gz)',
