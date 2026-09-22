@@ -173,8 +173,18 @@ const PUESTOS = [
  * propósito: recargar devuelve la demostración a su estado inicial, que es lo que uno
  * quiere al enseñarla, y evita que un experimento a medias quede pegado para siempre.
  */
-export function crearAlmacen(): Almacen {
-  const ahora = new Date();
+export function crearAlmacen(instante: Date = new Date()): Almacen {
+  /*
+   * EL «AHORA» SE PUEDE INYECTAR, y por defecto es el de verdad.
+   *
+   * No es un gancho para pruebas por gusto: la semilla reparte los datos a partir del
+   * dia de la semana, y eso ya rompio la demostracion un lunes —`break_intervals` se
+   * quedaba vacia, Reportes salia en blanco y las filas de Horas decian que si hubo
+   * descansos—. Un fallo que solo aparece un dia de cada siete no se puede vigilar
+   * esperando a que llegue ese dia: hay que poder pedirle a la semilla que crea que hoy
+   * es lunes. Ver `siete-dias.test.ts`.
+   */
+  const ahora = new Date(instante);
   const hoy = new Date(ahora);
   hoy.setHours(0, 0, 0, 0);
 
