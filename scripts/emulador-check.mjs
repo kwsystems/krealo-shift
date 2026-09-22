@@ -57,7 +57,27 @@ try {
 }
 rmSync(carpeta, { recursive: true, force: true });
 
-const { numTotalTests = 0, numPassedTests = 0, numPendingTests = 0, numFailedTests = 0 } = datos;
+const {
+  numTotalTests = 0,
+  numPassedTests = 0,
+  numPendingTests = 0,
+  numFailedTests = 0,
+  numFailedTestSuites = 0,
+} = datos;
+
+/*
+ * UNA SUITE QUE NI CARGA NO APARECE COMO PRUEBA FALLIDA. Paso en el CI: a
+ * `purga-fotos.test.ts` le faltaba `firebase-admin/storage` y el informe decia
+ * «8 pasaron, 0 fallaron» tan tranquilo, porque las cinco que no llegaron a existir no
+ * se cuentan en ningun sitio. Lo unico que lo delataba era el codigo de salida. Se mira
+ * aparte para que el mensaje diga lo que pasa de verdad.
+ */
+if (numFailedTestSuites > 0) {
+  console.error(
+    `\nFALLA: ${numFailedTestSuites} suite(s) no llegaron a ejecutarse. Suele ser un módulo que no se encuentra: revisa que estén instaladas las dependencias de functions/.`,
+  );
+  process.exit(1);
+}
 console.log(
   `\npruebas con emulador: ${numPassedTests} pasaron, ${numFailedTests} fallaron, ${numPendingTests} pendientes (${numTotalTests} en total).`,
 );

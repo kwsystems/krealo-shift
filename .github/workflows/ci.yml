@@ -215,6 +215,13 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # LAS DE `functions/` HACEN FALTA AQUÍ, y faltaban. Las pruebas de la purga
+      # importan `firebase-admin/storage`, que vive en `functions/node_modules`: sin este
+      # paso la suite ni siquiera carga («Cannot find module») y en una máquina de
+      # desarrollo no se ve, porque quien toca las funciones ya las tiene puestas.
+      - name: Instalar dependencias de las Cloud Functions
+        run: npm ci --prefix functions
+
       # Explícito y no por `npx` a secas: así la versión queda en el registro del
       # trabajo y una descarga fallida se ve como lo que es.
       - name: Instalar la CLI de Firebase
