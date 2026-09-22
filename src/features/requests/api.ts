@@ -37,7 +37,12 @@ const proposedValueSchema = z
   })
   .catch({});
 
-const requestSchema = z.object({
+/**
+ * Se exporta para poder COMPROBAR que una solicitud recién creada se puede volver a leer.
+ * Es el mismo caso que los turnos: el shim escribía `created_at` como `serverTimestamp()`,
+ * volvía como objeto, y `z.string()` lo rechazaba. La bandeja entera fallaba.
+ */
+export const requestSchema = z.object({
   id: docId(),
   employee_id: docId(),
   location_id: docId(),
