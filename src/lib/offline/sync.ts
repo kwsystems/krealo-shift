@@ -361,6 +361,55 @@ async function refreshOfflinePackageUnsafe(): Promise<{ ok: boolean }> {
  */
 const PHOTOS_PER_PASS = 1;
 
+/**
+ * EN WEB LA «RUTA LOCAL» ES LA FOTO ENTERA.
+ *
+ * `expo-camera` en el navegador no escribe ningún archivo: devuelve la imagen como
+ * `data:image/jpeg;base64,…`, y eso es lo que queda en `pending_media.local_uri`. Y
+ * `expo-file-system` en web no tiene `getInfoAsync` ni `readAsStringAsync`: lanzan
+ * «not available». Con el código de abajo tal cual, cada pase daba la foto por fallida
+ * y la reintentaba para siempre, sin un solo error visible, así que la ÚNICA prueba de
+ * presencia del reloj web (ver `src/lib/kiosk/disponibilidad.ts`) no llegaba nunca al
+ * servidor.
+ *
+ * Se reconoce esa forma y se manda el base64 que ya viene dentro. No hay archivo que
+ * borrar después: la fila de la cola es la única copia y `markPhotoUploaded` la cierra.
+ */
+const FOTO_EMBEBIDA = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=]+)$/;
+
+type FotoParaSubir = Omit<Parameters<typeof attachPhoto>[0], 'eventId'> & {
+  /** `false` cuando la imagen vive embebida en la URI y no hay archivo detrás. */
+  enArchivo: boolean;
+};
+
+/** `null` si ya no hay nada que subir: el archivo desapareció. */
+async function leerFoto(localUri: string): Promise<FotoParaSubir | null> {
+  const embebida = FOTO_EMBEBIDA.exec(localUri);
+  if (embebida !== null) {
+    const mime = embebida[1] ?? '';
+    const imageBase64 = embebida[2] ?? '';
+    return {
+      imageBase64,
+      // El servidor solo distingue estos dos; cualquier otra cosa la trata como JPEG,
+      // que es lo que el kiosco pide a la cámara.
+      contentType: mime === 'image/webp' ? 'image/webp' : 'image/jpeg',
+      enArchivo: false,
+    };
+  }
+
+  const info = await FileSystem.getInfoAsync(localUri);
+  if (!info.exists) {
+    // El archivo ya no está: iOS limpia el directorio de caché cuando le hace
+    // falta espacio. Reintentar para siempre algo que no existe no lleva a
+    // ninguna parte, así que se cierra.
+    return null;
+  }
+  const imageBase64 = await FileSystem.readAsStringAsync(localUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+  return { imageBase64, enArchivo: true };
+}
+
 async function uploadPendingPhotos(): Promise<void> {
   let photos: Awaited<ReturnType<typeof pendingPhotos>>;
   try {
@@ -371,26 +420,20 @@ async function uploadPendingPhotos(): Promise<void> {
 
   for (const photo of photos.slice(0, PHOTOS_PER_PASS)) {
     try {
-      const info = await FileSystem.getInfoAsync(photo.localUri);
-      if (!info.exists) {
-        // El archivo ya no está: iOS limpia el directorio de caché cuando le hace
-        // falta espacio. Reintentar para siempre algo que no existe no lleva a
-        // ninguna parte, así que se cierra.
+      const foto = await leerFoto(photo.localUri);
+      if (foto === null) {
         await markPhotoUploaded(photo.localUri);
         continue;
       }
+      const { enArchivo, ...imagen } = foto;
 
-      const imageBase64 = await FileSystem.readAsStringAsync(photo.localUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      const result = await attachPhoto({ eventId: photo.eventId, imageBase64 });
+      const result = await attachPhoto({ eventId: photo.eventId, ...imagen });
 
       if (result.ok) {
         await markPhotoUploaded(photo.localUri);
         // Se borra la copia local: ya está en el servidor y es la cara de una
         // persona. Dejarla en el iPad sería guardarla dos veces sin motivo (§22).
-        await FileSystem.deleteAsync(photo.localUri, { idempotent: true });
+        if (enArchivo) await FileSystem.deleteAsync(photo.localUri, { idempotent: true });
       } else {
         await marcarFalloDeFoto(photo.localUri);
       }

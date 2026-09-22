@@ -432,8 +432,18 @@ function crearFunctions(almacen: Almacen) {
           ]);
           return sinError({ requestId, status: 'pending' });
         }
-        case 'attach-photo':
-          return sinError({ ok: true });
+        case 'attach-photo': {
+          // La respuesta real trae la ruta donde quedó la foto y el cliente la exige
+          // (`attachPhotoResponseSchema`). Sin ella, la demostración daba la subida
+          // por fallida y la reintentaba en cada pase, en silencio: no se podía ver
+          // funcionar el camino entero de la foto.
+          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const eventoId = typeof cuerpo.eventId === 'string' ? cuerpo.eventId : 'sin-evento';
+          return sinError({
+            ok: true,
+            photoPath: `attendance-photos/${DEMO_ORG_ID}/${eventoId}.jpg`,
+          });
+        }
         /*
          * La activación funciona con CUALQUIER código.
          *

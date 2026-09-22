@@ -18,6 +18,14 @@
  * generación: si funciona ahí, funciona en cualquier teléfono que alguien ponga en el
  * mostrador.
  *
+ * Y CON UNA CÁMARA FALSA. Desde e3d5a2a el reloj en web exige foto para fichar y la
+ * cuenta atrás no arranca sin ella, así que sin cámara ningún fichaje termina. Chromium
+ * se lanza con un dispositivo de vídeo sintético y el permiso concedido: es lo único
+ * que permite recorrer el fichaje entero en un servidor de CI. De paso es la ÚNICA
+ * verificación del camino feliz de la foto en web —la tarjeta llegando a la cuenta
+ * atrás es la prueba de que se tomó—. La primera vez que corrió encontró que
+ * `takePictureAsync` fallaba siempre en web (ver `photo-capture.tsx`).
+ *
  * Y EN LOS DOS TEMAS, por dos razones distintas. El layout, porque el tema cambia pesos
  * y bordes y podría mover el último botón unos píxeles. El contraste, porque el kiosco
  * se lee A UN BRAZO DE DISTANCIA, de pie y con gente detrás: un reloj que en el
@@ -98,10 +106,65 @@ const DEUDA_DE_CLARO = new Map([
  */
 const HOLGURA_MINIMA = 8;
 
+/**
+ * Cámara sintética de Chromium. `--use-fake-device-for-media-stream` inventa una cámara
+ * que emite un patrón de prueba —sin ella `getUserMedia` falla con NotFoundError y la
+ * foto no puede existir— y `--use-fake-ui-for-media-stream` acepta solo el diálogo de
+ * permiso. `CON_CAMARA` deja además el permiso como concedido para la API de permisos,
+ * que es lo primero que consulta `expo-camera`: sin él la tarjeta pasa por «pedir
+ * permiso» y también llega, pero ese es un camino más y no el del reloj instalado.
+ * Medidos los tres estados; el control es correr esto sin `CAMARA_FALSA`, que falla
+ * nombrando la foto.
+ */
+const CAMARA_FALSA = ['--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'];
+const CON_CAMARA = { permissions: ['camera'] };
+
 const { base, cerrar } = await servirExport(DIR, 8210);
 const { chromium } = cargarPlaywright();
-const navegador = await chromium.launch();
+const navegador = await chromium.launch({ args: CAMARA_FALSA });
 const problemas = [];
+
+/**
+ * Marca la entrada y espera a que arranque la cuenta atrás.
+ *
+ * En web la cuenta atrás NO arranca hasta que hay foto, así que verla aparecer es la
+ * prueba de que la cámara la tomó. Si en su lugar sale «Sin foto no se puede fichar
+ * aquí», la foto falló, y eso es un fallo del reloj y no del arnés: se anota con
+ * nombre. Devuelve `true` si se llegó a la cuenta atrás.
+ */
+const marcarEntrada = async (pag, etiqueta) => {
+  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
+  const cuenta = pag.locator('[data-testid="kiosk-confirm-countdown"]');
+  const sinFoto = pag.locator('[data-testid="kiosk-photo-required"]');
+  await Promise.race([
+    cuenta.waitFor({ timeout: 15000 }).catch(() => undefined),
+    sinFoto.waitFor({ timeout: 15000 }).catch(() => undefined),
+  ]);
+  if ((await sinFoto.count()) > 0) {
+    problemas.push(
+      `${etiqueta}: la foto de verificación FALLÓ y el fichaje no se pudo confirmar ` +
+        '(en web sin foto no hay cuenta atrás)',
+    );
+    return false;
+  }
+  if ((await cuenta.count()) === 0) {
+    problemas.push(`${etiqueta}: tras marcar entrada no apareció la cuenta atrás en 15 s`);
+    return false;
+  }
+  return true;
+};
+
+/** Espera a que la cuenta atrás termine en la tarjeta de resultado. */
+const esperarResultado = async (pag, etiqueta) => {
+  const resultado = pag.locator('[data-testid="kiosk-result"]');
+  await resultado.waitFor({ timeout: 10000 }).catch(() => undefined);
+  if ((await resultado.count()) === 0) {
+    problemas.push(`${etiqueta}: la cuenta atrás no terminó en un resultado en 10 s`);
+    return false;
+  }
+  await pag.waitForTimeout(600);
+  return true;
+};
 
 for (const tema of TEMAS) {
   for (const [etiquetaBase, ancho, alto] of TAMANOS) {
@@ -195,7 +258,10 @@ for (const tema of TEMAS) {
  * lo enciende, y que escribir algo sí.
  */
 {
-  const ctx = await navegador.newContext({ viewport: { width: 834, height: 1112 } });
+  const ctx = await navegador.newContext({
+    viewport: { width: 834, height: 1112 },
+    ...CON_CAMARA,
+  });
   const pag = await ctx.newPage();
   await sembrarKiosco(pag);
   await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
@@ -214,20 +280,26 @@ for (const tema of TEMAS) {
 
   await tecleaPin();
   // Entrar a trabajar: la pausa solo existe estando dentro. No hay botón de confirmar,
-  // hay una cuenta atrás de 3 s que se cierra sola.
-  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
-  await pag.waitForTimeout(5200);
-  const listo = pag.locator('[data-testid="kiosk-result-done"]');
-  if ((await listo.count()) > 0) {
-    await listo.click();
-    await pag.waitForTimeout(1500);
+  // hay una cuenta atrás de 3 s que se cierra sola —y en web, antes, la foto—.
+  // Sin entrada no hay pausa que probar. Si la foto falló, `marcarEntrada` ya lo anotó
+  // con nombre y la pantalla se queda en la tarjeta de confirmación, sin teclado al que
+  // volver: seguir sería esperar 20 s por un teclado que no va a aparecer y morir con
+  // un TimeoutError en vez de con el mensaje. Pasó en el control sin cámara.
+  const entro =
+    (await marcarEntrada(pag, 'nota de «Otro»')) && (await esperarResultado(pag, 'nota de «Otro»'));
+  if (entro) {
+    const listo = pag.locator('[data-testid="kiosk-result-done"]');
+    if ((await listo.count()) > 0) {
+      await listo.click();
+      await pag.waitForTimeout(1500);
+    }
+    await tecleaPin();
   }
-  await tecleaPin();
 
   const pausa = pag.locator('[data-testid="kiosk-action-break_start"]');
-  if ((await pausa.count()) === 0) {
+  if (entro && (await pausa.count()) === 0) {
     problemas.push('nota de pausa: no se llegó al botón de iniciar descanso');
-  } else {
+  } else if (entro) {
     await pausa.click();
     await pag.waitForTimeout(1200);
     await pag.locator('[data-testid="break-reason-other"]').click();
@@ -300,7 +372,10 @@ for (const tema of TEMAS) {
  * bien.
  */
 {
-  const ctx = await navegador.newContext({ viewport: { width: 390, height: 844 } });
+  const ctx = await navegador.newContext({
+    viewport: { width: 390, height: 844 },
+    ...CON_CAMARA,
+  });
   const pag = await ctx.newPage();
   await sembrarKiosco(pag);
   await pag.goto(base + '/kiosk', { waitUntil: 'networkidle' });
@@ -312,8 +387,9 @@ for (const tema of TEMAS) {
     await pag.waitForTimeout(180);
   }
   await pag.waitForTimeout(3000);
-  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
-  await pag.waitForTimeout(5200);
+  if (await marcarEntrada(pag, 'confirmación')) {
+    await esperarResultado(pag, 'confirmación');
+  }
 
   const texto = ((await pag.evaluate(() => document.body.innerText)) || '').replace(/\s+/g, ' ');
   const confirma = /registrada|registrado/i.test(texto);
@@ -361,6 +437,7 @@ for (const tema of TEMAS) {
   const ctx = await navegador.newContext({
     viewport: { width: 834, height: 1112 },
     colorScheme: tema,
+    ...CON_CAMARA,
   });
   const pag = await ctx.newPage();
   await sembrarKiosco(pag);
@@ -416,11 +493,14 @@ for (const tema of TEMAS) {
   await pag.waitForTimeout(3200);
   await parar('acciones');
 
-  await pag.locator('[data-testid="kiosk-action-clock_in"]').click();
-  await pag.waitForTimeout(1200);
-  await parar('cuenta atrás');
-  await pag.waitForTimeout(4400);
-  await parar('entrada registrada');
+  // La parada de la cuenta atrás incluye el aviso de la foto y su recuadro: es la
+  // tarjeta tal y como la ve quien ficha desde un navegador.
+  if (await marcarEntrada(pag, `contraste en ${tema}`)) {
+    await parar('cuenta atrás');
+    if (await esperarResultado(pag, `contraste en ${tema}`)) {
+      await parar('entrada registrada');
+    }
+  }
 
   await ctx.close();
 }

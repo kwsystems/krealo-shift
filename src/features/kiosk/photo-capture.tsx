@@ -30,6 +30,35 @@ export type PhotoResult =
   | { status: 'captured'; uri: string }
   | { status: 'skipped'; reason: 'permission_denied' | 'unavailable' | 'failed' };
 
+/**
+ * EN WEB, «CÁMARA LISTA» NO SIGNIFICA LISTA.
+ *
+ * `expo-camera` en el navegador avisa `onCameraReady` en cuanto consigue el stream,
+ * antes de que el `<video>` haya recibido un solo fotograma, y `takePictureAsync` en
+ * ese instante lanza `ERR_CAMERA_NOT_READY`. Medido con Playwright y una cámara falsa:
+ * fallaba SIEMPRE, en menos de 1,5 s. Y en la web la foto es obligatoria (ver
+ * `src/lib/kiosk/disponibilidad.ts`), así que nadie podía fichar desde un navegador.
+ *
+ * Se le vuelve a preguntar cada poco, con un tope. En iOS y Android el aviso sí llega
+ * con la cámara lista, así que el primer intento vale y esto no se ejecuta.
+ *
+ * El tope (40 × 200 ms = 8 s) es más corto que el plazo de `app/kiosk/actions.tsx`
+ * (12 s) a propósito: si se agota, el fallo lo declara este componente con su motivo,
+ * y no el cronómetro de fuera, que solo sabe que «no llegó nada».
+ */
+const REINTENTO_MS = 200;
+const INTENTOS_MAXIMOS = 40;
+
+function laCamaraNoEstabaLista(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { code?: unknown }).code === 'ERR_CAMERA_NOT_READY'
+  );
+}
+
+const esperar = (ms: number) => new Promise<void>((listo) => setTimeout(listo, ms));
+
 export function PhotoCapture({
   onResult,
   autoCapture = true,
@@ -61,17 +90,44 @@ export function PhotoCapture({
     }
   }, [permission, onResult]);
 
+  // Si la tarjeta se desmonta a media espera —la persona canceló—, el resultado ya
+  // no tiene a quién avisar y se calla.
+  const montado = useRef(true);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+    };
+  }, []);
+
+  const tomarCuandoEsteLista = async () => {
+    for (let intento = 1; ; intento += 1) {
+      try {
+        return await cameraRef.current?.takePictureAsync({
+          // Comprimida de forma razonable: es evidencia de revisión, no una foto de
+          // catálogo, y se sube desde la red de una tienda (§9.6, §23).
+          quality: 0.5,
+          skipProcessing: true,
+          // Solo cuenta en web: JPEG en vez del PNG por defecto. Es lo que el servidor
+          // guarda (`image/jpeg`) y pesa una fracción. En nativo se ignora.
+          imageType: 'jpg',
+        });
+      } catch (error) {
+        if (!laCamaraNoEstabaLista(error) || intento >= INTENTOS_MAXIMOS || !montado.current) {
+          throw error;
+        }
+        await esperar(REINTENTO_MS);
+      }
+    }
+  };
+
   const capture = async () => {
     if (captured.current || cameraRef.current === null) return;
     captured.current = true;
 
     try {
-      const photo = await cameraRef.current.takePictureAsync({
-        // Comprimida de forma razonable: es evidencia de revisión, no una foto de
-        // catálogo, y se sube desde la red de una tienda (§9.6, §23).
-        quality: 0.5,
-        skipProcessing: true,
-      });
+      const photo = await tomarCuandoEsteLista();
+      if (!montado.current) return;
 
       if (photo?.uri === undefined) {
         setFailed(true);
@@ -80,6 +136,7 @@ export function PhotoCapture({
       }
       onResult({ status: 'captured', uri: photo.uri });
     } catch {
+      if (!montado.current) return;
       // La cámara falló. El fichaje sigue: se avisa y se deja constancia.
       setFailed(true);
       onResult({ status: 'skipped', reason: 'failed' });
