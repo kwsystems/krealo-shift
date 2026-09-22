@@ -23,7 +23,12 @@ import { TABLES } from '@/lib/firebase/tables';
 
 export const shiftStatusValues = ['draft', 'published', 'cancelled'] as const;
 
-const shiftRowSchema = z.object({
+/**
+ * Se exporta para poder COMPROBAR que un turno recién creado se puede volver a leer.
+ * `forma-del-turno.test.ts` arma el documento exacto que acaba en Firestore y lo pasa por
+ * aquí: hasta el 2026-09-22 no pasaba, y crear un turno tiraba la semana entera.
+ */
+export const shiftRowSchema = z.object({
   id: docId(),
   employee_id: docId(),
   location_id: docId(),
@@ -132,6 +137,18 @@ function actorId(): string | null {
   return useSessionStore.getState().user?.userId ?? null;
 }
 
+/*
+ * `publication_version` y `published_at` SE ESCRIBEN AQUI, y antes no los escribía
+ * nadie. En Postgres los ponía un trigger de la base; el trigger se fue con la
+ * migración y no lo reemplazó nada, así que un turno creado por la app nacía sin dos
+ * campos que su propio esquema declara obligatorios. `selectRows` no descarta la fila
+ * mala: lanza. O sea que crear un turno tiraba la consulta de la SEMANA ENTERA.
+ *
+ * Cero es el valor correcto al nacer: significa «todavía no se ha publicado nunca», y
+ * es lo que distingue un borrador nuevo de uno que ya estuvo publicado y se editó
+ * después. Quién sella la versión al PUBLICAR es otra cosa, y sigue pendiente: el
+ * comentario de `publishShifts` explica por qué no debería decidirlo el cliente.
+ */
 export async function createShift(params: {
   organizationId: string;
   locationId: string;
@@ -145,6 +162,8 @@ export async function createShift(params: {
     db.from(TABLES.shifts).insert({
       ...row,
       status: 'draft',
+      publication_version: 0,
+      published_at: null,
       created_by: createdBy,
       updated_by: createdBy,
     }),
@@ -268,6 +287,8 @@ export async function copyPreviousWeek(params: {
       employee_note: shift.employee_note,
       manager_note: shift.manager_note,
       status: 'draft' as const,
+      publication_version: 0,
+      published_at: null,
       created_by: createdBy,
       updated_by: createdBy,
     };

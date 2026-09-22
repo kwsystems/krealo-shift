@@ -7,7 +7,6 @@ import {
   limit as limitTo,
   orderBy,
   query,
-  serverTimestamp,
   updateDoc,
   where,
   writeBatch,
@@ -25,6 +24,30 @@ import { env } from '@/lib/env';
 
 import { getDb, getFirebaseAuth, getFirebaseStorage } from './client';
 import { callFunction } from './functions';
+
+/**
+ * La marca de tiempo que ponen las escrituras del cliente, COMO TEXTO ISO Y NO COMO
+ * `serverTimestamp()`.
+ *
+ * ESTO ROMPIA EL HORARIO ENTERO Y NO SE VEIA. El proyecto tiene una regla explícita
+ * —está escrita en `functions/src/shared/admin.ts`— de que las fechas se guardan como
+ * texto ISO 8601 en UTC y nunca como `Timestamp`, porque así ordenan igual como texto
+ * que como instante y los rangos de Firestore funcionan sobre el texto. El servidor la
+ * cumple; este shim no la cumplía.
+ *
+ * Un `serverTimestamp()` vuelve de Firestore como objeto `Timestamp`, y aquí no hay
+ * ningún convertidor: `d.data()` entrega lo que haya. Los esquemas esperan
+ * `z.string()`, así que al leer un documento que el cliente había escrito la validación
+ * fallaba… y `selectRows` no descarta la fila, LANZA. O sea que editar un turno no
+ * estropeaba ese turno: tiraba la consulta de la semana completa.
+ *
+ * SE PIERDE que la hora la ponga el servidor y no el aparato, y se acepta: estas marcas
+ * son metadatos de auditoría del panel, no las horas que se pagan. Esas las sella el
+ * servidor en `submitTimeEvent` y siguen igual.
+ */
+function ahoraISO(): string {
+  return new Date().toISOString();
+}
 
 /**
  * Capa de consultas sobre Firestore, con la misma forma que usaba el panel con
@@ -359,7 +382,7 @@ class MutationBuilder implements PromiseLike<{ error: DataError | null }> {
     if (porId && soloFiltro !== undefined) {
       const ref = doc(this.db, this.table, String(soloFiltro.value));
       if (this.kind === 'delete') await deleteDoc(ref);
-      else await updateDoc(ref, { ...this.patch, updated_at: serverTimestamp() });
+      else await updateDoc(ref, { ...this.patch, updated_at: ahoraISO() });
       return { error: null };
     }
 
@@ -407,7 +430,7 @@ class MutationBuilder implements PromiseLike<{ error: DataError | null }> {
 
         alguno = true;
         if (this.kind === 'delete') batch.delete(ref);
-        else batch.update(ref, { ...this.patch, updated_at: serverTimestamp() });
+        else batch.update(ref, { ...this.patch, updated_at: ahoraISO() });
       }
 
       if (alguno) await batch.commit();
@@ -424,7 +447,7 @@ class MutationBuilder implements PromiseLike<{ error: DataError | null }> {
     const batch = writeBatch(this.db);
     snapshot.docs.forEach((found) => {
       if (this.kind === 'delete') batch.delete(found.ref);
-      else batch.update(found.ref, { ...this.patch, updated_at: serverTimestamp() });
+      else batch.update(found.ref, { ...this.patch, updated_at: ahoraISO() });
     });
     await batch.commit();
     return { error: null };
@@ -508,7 +531,17 @@ class Table {
         const id = documentId(this.table, row);
         const ref =
           id === null ? doc(collection(this.db, this.table)) : doc(this.db, this.table, id);
-        const value = { ...row, id: ref.id, created_at: row.created_at ?? serverTimestamp() };
+        /*
+         * `updated_at` TAMBIEN AL INSERTAR, y antes solo se ponía al actualizar. La
+         * asimetría no tenía motivo y era la que dejaba a un turno recién creado sin un
+         * campo que su propio esquema declara obligatorio.
+         */
+        const value = {
+          ...row,
+          id: ref.id,
+          created_at: row.created_at ?? ahoraISO(),
+          updated_at: row.updated_at ?? ahoraISO(),
+        };
         batch.set(ref, value);
         written.push(value);
       });
@@ -531,7 +564,7 @@ class Table {
         const id = documentId(this.table, row);
         const ref =
           id === null ? doc(collection(this.db, this.table)) : doc(this.db, this.table, id);
-        const value = { ...row, id: ref.id, updated_at: serverTimestamp() };
+        const value = { ...row, id: ref.id, updated_at: ahoraISO() };
         batch.set(ref, value, { merge: true });
         written.push(value);
       });
