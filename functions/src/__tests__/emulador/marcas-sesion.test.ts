@@ -155,3 +155,37 @@ describe('las marcas llegan a la sesión de trabajo', () => {
     expect(await marcasDeLaSesion()).not.toContain('early_departure');
   });
 });
+
+describe('el reloj sabe a qué hora termina la jornada', () => {
+  /**
+   * `verifyPin` devolvía `shiftEndsAt: null` fijo, así que el reloj conocía la hora de
+   * fin justo después de fichar la entrada —`submitTimeEvent` sí la manda— y la olvidaba
+   * en cuanto la persona volvía al teclado. El mismo campo, correcto en una función y
+   * muerto en la otra.
+   *
+   * Sin esta hora el reloj no puede saber que alguien está saliendo antes de tiempo, que
+   * es lo que hay que detectar para poder preguntarle por qué.
+   */
+  it('lo dice al teclear el PIN con una jornada abierta, no solo al fichar entrada', async () => {
+    await ponerTurno(-1 * HORA, 7 * HORA);
+    await fichar('clock_in', 'entrada-para-ver-el-fin', TURNO);
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      openSession: { shiftEndsAt: string | null } | null;
+    };
+
+    const turno = (await db.collection(COLLECTIONS.shifts).doc(TURNO).get()).data();
+    expect(contexto.openSession?.shiftEndsAt).toBe(turno?.ends_at);
+  });
+
+  /** Sin turno no hay hora de fin que inventar, y `null` es la respuesta correcta. */
+  it('devuelve null cuando la jornada no tiene turno', async () => {
+    await fichar('clock_in', 'entrada-sin-turno-fin', null);
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      openSession: { shiftEndsAt: string | null } | null;
+    };
+
+    expect(contexto.openSession?.shiftEndsAt).toBeNull();
+  });
+});

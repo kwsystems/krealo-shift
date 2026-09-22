@@ -558,6 +558,24 @@ async function buildEmployeeContext(
     locationId: kiosk.locationId,
   });
 
+  /*
+   * A QUE HORA TERMINA SU JORNADA, que estaba fijo en `null`.
+   *
+   * `submitTimeEvent` si lo devuelve —lo arreglo fd65ea0— pero aqui no, asi que el reloj
+   * lo sabia justo despues de fichar la entrada y lo olvidaba en cuanto la persona
+   * volvia al teclado. El mismo campo, correcto en una funcion y muerto en la otra.
+   *
+   * Y no es un adorno: sin esta hora el reloj no puede saber que alguien esta saliendo
+   * antes de tiempo, que es justo lo que hay que detectar para preguntarle por que.
+   *
+   * El turno sale de la SESION, no de la lista de proximos: al fichar la entrada queda
+   * apuntado a cual pertenece, y es el unico que dice cuando termina LA JORNADA EN CURSO.
+   */
+  const turnoDeLaSesion =
+    sesion === undefined || typeof sesion.shift_id !== 'string'
+      ? undefined
+      : (await db.collection(COLLECTIONS.shifts).doc(sesion.shift_id).get()).data();
+
   return {
     actionToken: token,
     expiresAt,
@@ -576,7 +594,7 @@ async function buildEmployeeContext(
         ? null
         : {
             startedAt: sesion.starts_at,
-            shiftEndsAt: null,
+            shiftEndsAt: (turnoDeLaSesion?.ends_at as string | undefined) ?? null,
             takenBreakMinutes:
               ((sesion.paid_break_minutes as number) ?? 0) +
               ((sesion.unpaid_break_minutes as number) ?? 0),
