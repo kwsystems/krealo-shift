@@ -100,13 +100,60 @@ function clavesDeNivel1(cuerpo) {
   return [...new Set(claves)];
 }
 
+/**
+ * Quita los comentarios de linea que ocupan su propia linea.
+ *
+ * HACE FALTA PARA NO PERDER CLAVES. `segmentosDeNivel1` reconoce una clave por el
+ * principio de su trozo, y el trozo empieza justo despues de la coma anterior: si entre
+ * medias hay un comentario, el trozo empieza por `//` y la clave se descarta ENTERA, en
+ * silencio. Asi se escapaba `verifiers` del paquete del kiosco, que lleva encima ocho
+ * lineas de comentario y que la funcion no devolvia.
+ *
+ * Solo las lineas que EMPIEZAN por `//`, para no destrozar un `https://` dentro de una
+ * cadena.
+ */
+const sinComentarios = (texto) => texto.replace(/^[ \t]*\/\/.*$/gm, '');
+
+/**
+ * El texto sin comentarios de ninguna clase, para leer solo CODIGO.
+ *
+ * Hace falta al buscar que campos lee una funcion: los comentarios de este proyecto
+ * citan el nombre del campo equivocado a proposito —«esto leia `request.data?.code`»—
+ * y el chequeo se acusaba a si mismo de un desajuste que acababa de arreglar. Un
+ * chequeo que se queja de su propia documentacion es un chequeo que se ignora.
+ */
+const soloCodigo = (texto) => texto.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+
+/**
+ * Lo que queda de un valor al quitarle todo lo anidado.
+ *
+ * Sirve para leer la CADENA de arriba —`z.array(...).default([])`— sin confundirla con
+ * lo que hay dentro. Un `roster: z.array(z.object({ jobRoleName: ....default(null) }))`
+ * es obligatorio aunque un campo suyo tenga valor por defecto, y mirando el texto entero
+ * parecia opcional: el chequeo se callaba que la funcion no devolvia el roster.
+ */
+function superficie(valor) {
+  let nivel = 0;
+  let salida = '';
+  for (const car of valor) {
+    if (car === '(' || car === '{' || car === '[') {
+      if (nivel === 0) salida += car;
+      nivel += 1;
+    } else if (car === ')' || car === '}' || car === ']') {
+      nivel -= 1;
+      if (nivel === 0) salida += car;
+    } else if (nivel === 0) salida += car;
+  }
+  return salida;
+}
+
 /** Cada clave de nivel 1 con TODO su valor, para poder mirarlo entero. */
 function segmentosDeNivel1(cuerpo) {
   const salida = [];
   let nivel = 0;
   let trozo = '';
   const empujar = () => {
-    const m = trozo.match(/^\s*([A-Za-z_$][\w$]*)\s*:/);
+    const m = sinComentarios(trozo).match(/^\s*([A-Za-z_$][\w$]*)\s*:/);
     if (m !== null) salida.push({ clave: m[1], valor: trozo });
     trozo = '';
   };
@@ -144,7 +191,9 @@ for (const ruta of archivos(join(RAIZ, 'functions', 'src'), ['.ts'])) {
 
     const lee = [
       ...new Set(
-        [...real.cuerpo.matchAll(/request\.data\?\.([A-Za-z_$][\w$]*)/g)].map((x) => x[1]),
+        [...soloCodigo(real.cuerpo).matchAll(/request\.data\?\.([A-Za-z_$][\w$]*)/g)].map(
+          (x) => x[1],
+        ),
       ),
     ];
 
@@ -158,6 +207,32 @@ for (const ruta of archivos(join(RAIZ, 'functions', 'src'), ['.ts'])) {
     for (const r of real.cuerpo.matchAll(/\breturn\s*\{/g)) {
       const b = bloque(real.cuerpo, r.index + r[0].length - 1);
       if (b !== null) for (const k of clavesDeNivel1(b.cuerpo)) devuelve.add(k);
+    }
+
+    /*
+     * SE SIGUE UN SALTO, Y SOLO UNO. `verifyPin` termina en
+     * `return buildEmployeeContext(...)`, un ayudante del mismo archivo, y sin esto se
+     * quedaba «sin comprobar»: precisamente la respuesta mas grande del kiosco —ocho
+     * claves, la que decide que botones ve la persona— y el paso inmediatamente
+     * anterior a fichar.
+     *
+     * Solo un salto y solo dentro del archivo, a proposito: encadenar mas seria
+     * empezar a escribir un interprete, y lo que no se pueda seguir se sigue diciendo
+     * en voz alta en vez de darse por bueno.
+     */
+    if (devuelve.size === 0) {
+      const salto = soloCodigo(real.cuerpo).match(/\breturn\s+([A-Za-z_$][\w$]*)\s*\(/);
+      const ayudante =
+        salto === null ? null : texto.match(new RegExp(`\\bfunction ${salto[1]}\\s*\\(`));
+      if (ayudante !== null) {
+        const cuerpoAyudante = bloque(texto, texto.indexOf(')', ayudante.index));
+        if (cuerpoAyudante !== null) {
+          for (const r of cuerpoAyudante.cuerpo.matchAll(/\breturn\s*\{/g)) {
+            const b = bloque(cuerpoAyudante.cuerpo, r.index + r[0].length - 1);
+            if (b !== null) for (const k of clavesDeNivel1(b.cuerpo)) devuelve.add(k);
+          }
+        }
+      }
     }
 
     /*
@@ -191,6 +266,20 @@ for (const { texto } of FUENTES_CLIENTE) {
   for (const m of texto.matchAll(/const ([A-Za-z_$][\w$]*)\s*=\s*z\.object\(/g)) {
     const b = bloque(texto, m.index + m[0].length - 1);
     if (b === null) continue;
+
+    /*
+     * UN ESQUEMA QUE SE COMBINA CON OTRO NO SE PUEDE EXIGIR CLAVE A CLAVE. `okSchema`
+     * es `z.object({ ok }).or(z.object({ invitationId }))`: mirando solo el primer
+     * `z.object` salia que `inviteMember` debe devolver `ok`, cuando devolver
+     * `invitationId` es igual de valido. Se marca como no comprobable, que es la
+     * verdad, en vez de dar una queja falsa.
+     */
+    const despues = texto.slice(b.fin + 1, b.fin + 40);
+    if (/^\s*\)\s*\.(or|and|union|merge|extend|partial)\b/.test(despues)) {
+      sinComprobar.push(`${m[1]}: se combina con otro esquema (.or/.and)`);
+      continue;
+    }
+
     /*
      * SE MIRA EL VALOR ENTERO DE CADA CLAVE, no su primera linea. Un
      * `organization: z` … `.object({...})` … `.default({...})` repartido en cuatro
@@ -198,7 +287,7 @@ for (const { texto } of FUENTES_CLIENTE) {
      * como obligatorio: el chequeo acusaba de no devolver algo que el cliente no exige.
      */
     const requeridas = segmentosDeNivel1(b.cuerpo)
-      .filter(({ valor }) => !/\.optional\(\)|\.default\(/.test(valor))
+      .filter(({ valor }) => !/\.optional\(\)|\.default\(/.test(superficie(valor)))
       .map(({ clave }) => clave);
     esquemas.set(m[1], requeridas);
   }

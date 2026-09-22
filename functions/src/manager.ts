@@ -1,6 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 
 import bcrypt from 'bcryptjs';
+import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
@@ -71,6 +72,13 @@ export const setEmployeePin = onCall(async (request) => {
         organization_id: empleado.organization_id,
         pin_hash: bcrypt.hashSync(pin, BCRYPT_ROUNDS),
         pin_length: pin.length,
+        /*
+         * SUBE UNA CON CADA CAMBIO, y sobre un campo que no existia arranca en 1, que
+         * es justo lo que el reloj exige. Es lo que permite a un fichaje guardado sin
+         * conexion decir contra que version de PIN se valido: sin numero, un PIN
+         * cambiado a media tarde no se distingue del viejo al sincronizar.
+         */
+        pin_version: FieldValue.increment(1),
         failed_attempts: 0,
         locked_until: null,
         rotated_at: nowISO(),

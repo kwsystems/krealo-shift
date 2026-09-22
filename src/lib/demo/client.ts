@@ -386,10 +386,46 @@ function crearFunctions(almacen: Almacen) {
             summary: { shiftEndsAt: null, netMinutesToday: 0 },
           });
         }
+        /*
+         * LAS DOS DEVOLVIAN UNA FORMA INVENTADA —`{ ok, accepted, rejected }` y
+         * `{ ok, employees }`—, que es el mismo fallo que ya tuvieron aqui `verify-pin`
+         * y «olvidé marcar»: el cliente valida con Zod y ninguna de las dos pasaba.
+         *
+         * En la demostracion no hay cola sin conexion ni verificadores que guardar, asi
+         * que lo correcto es la respuesta VACIA pero BIEN FORMADA, no una abreviatura.
+         * Una demo que responde cualquier cosa es peor que una que no responde: parece
+         * que el circuito funciona.
+         */
         case 'sync-offline-events':
-          return sinError({ ok: true, accepted: 0, rejected: 0 });
+          return sinError({
+            results: [],
+            accepted: 0,
+            pending: 0,
+            syncedAt: new Date().toISOString(),
+          });
         case 'refresh-kiosk-roster':
-          return sinError({ ok: true, employees: [] });
+          return sinError({
+            location: { id: DEMO_LOCATION_1, name: 'Sede Principal', timezone: 'America/Lima' },
+            organization: { name: 'Café Demostración', logoPath: null },
+            policies: {
+              pinLength: 6,
+              photoEnabled: false,
+              earlyClockInMinutes: 10,
+              lateGraceMinutes: 5,
+              allowUnscheduledShifts: true,
+              timeFormat: '24h',
+              requiredBreakMinutes: 0,
+            },
+            roster: (almacen.get('employees') ?? []).map((persona) => ({
+              opaqueId: String(persona.id),
+              displayName: String(persona.preferred_name ?? persona.full_name ?? 'Sin nombre'),
+              jobRoleName: null,
+            })),
+            shifts: [],
+            // Sin verificadores: en la demostracion no se ficha sin conexion.
+            verifiers: [],
+            refreshedAt: new Date().toISOString(),
+          });
         /*
          * «OLVIDÉ MARCAR» TIENE QUE FUNCIONAR EN LA DEMO, y no funcionaba.
          *

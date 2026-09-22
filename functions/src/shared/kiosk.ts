@@ -51,6 +51,15 @@ export type KioskContext = {
   deviceId: string;
   organizationId: string;
   locationId: string;
+  /**
+   * `offline_key` de ESTE aparato. Viaja en el contexto porque `authenticateKiosk` ya
+   * lee el documento de secretos para comprobar la credencial: quien la necesite
+   * despues no tiene que volver a leerlo.
+   *
+   * Con ella se derivan los verificadores de PIN sin conexion, atados al dispositivo
+   * para que copiar el SQLite de un iPad a otro no de un verificador utilizable.
+   */
+  offlineKey: string;
 };
 
 export type KioskAuth = { credential?: unknown; devicePublicId?: unknown };
@@ -154,6 +163,7 @@ export async function authenticateKiosk(payload: unknown): Promise<KioskContext>
     deviceId: deviceDoc.id,
     organizationId: device.organization_id as string,
     locationId: device.location_id as string,
+    offlineKey: (secretSnapshot.data()?.offline_key as string | undefined) ?? '',
   };
 }
 

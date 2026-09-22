@@ -25,6 +25,14 @@ export type TimeEventInput = {
   employeeId: string;
   locationId: string;
   eventType: TimeEventType;
+  /**
+   * El turno al que pertenece el fichaje. El reloj lo manda —la persona elige su
+   * turno antes de entrar— y se escribia `null` igualmente, asi que ni el evento ni la
+   * sesion sabian nunca a que turno correspondian: la hoja de tiempo no podia comparar
+   * lo planificado con lo trabajado y al fichar no habia forma de decir a que hora
+   * termina la jornada.
+   */
+  shiftId?: string | null;
   breakType?: string | null;
   breakReason?: string | null;
   breakNote?: string | null;
@@ -130,7 +138,7 @@ export async function recordTimeEvent(input: TimeEventInput): Promise<{
     organization_id: input.organizationId,
     employee_id: input.employeeId,
     location_id: input.locationId,
-    shift_id: null,
+    shift_id: input.shiftId ?? null,
     event_type: input.eventType,
     break_type: input.breakType ?? null,
     break_reason: input.breakReason ?? null,
@@ -240,7 +248,9 @@ export async function rebuildWorkSession(
         organization_id: organizationId,
         employee_id: employeeId,
         location_id: locationId,
-        shift_id: null,
+        // El turno de la sesion es el del fichaje de ENTRADA: los de pausa y salida
+        // pueden venir sin el y no por eso la jornada deja de ser de ese turno.
+        shift_id: (inicio.shift_id as string | null) ?? null,
         clock_in_event_id: inicio.id,
         clock_out_event_id: salida?.id ?? null,
         starts_at: startsAt,

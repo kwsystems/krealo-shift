@@ -13,6 +13,7 @@ import {
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { membershipOf, requireManagesLocation, requireUid } from './shared/caller';
 import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
+import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
   authenticateKiosk,
   issueActionToken,
@@ -229,33 +230,86 @@ export const refreshKioskRoster = onCall(async (request) => {
   const location = (await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data();
   if (location === undefined) throw new HttpsError('not-found', 'Esa tienda ya no existe.');
 
+  const organizacion = (
+    await db.collection(COLLECTIONS.organizations).doc(kiosk.organizationId).get()
+  ).data();
+
+  /*
+   * LOS PUESTOS, EN DOS CONSULTAS Y NO EN UNA POR PERSONA. Son los que se configuran
+   * por empleado en Ajustes, y el reloj los enseña debajo del nombre para distinguir
+   * a dos personas que se llaman igual.
+   */
+  const puestos = new Map<string, string>();
+  for (const doc of (
+    await db
+      .collection(COLLECTIONS.jobRoles)
+      .where('organization_id', '==', kiosk.organizationId)
+      .get()
+  ).docs) {
+    puestos.set(doc.id, String(doc.data().name ?? ''));
+  }
+
+  const puestoDe = new Map<string, string>();
+  for (const doc of (
+    await db
+      .collection(COLLECTIONS.employeeJobRoles)
+      .where('organization_id', '==', kiosk.organizationId)
+      .get()
+  ).docs) {
+    const fila = doc.data();
+    const nombre = puestos.get(String(fila.job_role_id));
+    if (nombre === undefined) continue;
+    // El principal gana; si no hay ninguno marcado, vale el primero que aparezca.
+    if (fila.is_primary === true || !puestoDe.has(String(fila.employee_id))) {
+      puestoDe.set(String(fila.employee_id), nombre);
+    }
+  }
+
   const asignaciones = await db
     .collection(COLLECTIONS.employeeLocations)
     .where('location_id', '==', kiosk.locationId)
     .get();
 
-  const empleados = [];
+  const roster = [];
+  const verifiers = [];
   for (const asignacion of asignaciones.docs) {
     const employeeId = asignacion.data().employee_id as string;
     const empleado = (await db.collection(COLLECTIONS.employees).doc(employeeId).get()).data();
     if (empleado === undefined || empleado.status !== 'active') continue;
 
+    roster.push({
+      opaqueId: employeeId,
+      displayName: (empleado.preferred_name as string | null) ?? (empleado.full_name as string),
+      jobRoleName: puestoDe.get(employeeId) ?? null,
+    });
+
     /**
      * EL VERIFICADOR DE PIN SIN CONEXION va atado a ESTE dispositivo, con su
      * `offline_key`. Sin ese atado, copiar el archivo SQLite de un iPad a otro
      * daria un verificador utilizable en la otra tienda.
+     *
+     * NUNCA SE MANDA EL HASH: se manda la sal —que el iPad necesita para poder
+     * recalcular bcrypt con el PIN tecleado— y el digest con clave del hash. Con eso
+     * el aparato puede comparar, pero no puede probar PIN contra el hash original si
+     * alguien se lleva el SQLite sin la clave del Keychain.
+     *
+     * La cadena `clave:hash` tiene que coincidir byte a byte con `deriveVerifier` de
+     * `src/lib/offline/pin.ts`, o el PIN correcto se rechaza sin conexion.
      */
     const credencial = (
       await db.collection(COLLECTIONS.pinCredentials).doc(employeeId).get()
     ).data();
+    const hash = credencial?.pin_hash;
+    // Sin PIN no hay verificador. Y sin la clave del aparato tampoco: mandar uno
+    // derivado de una cadena vacia seria mandar algo que nunca va a casar.
+    if (typeof hash !== 'string' || hash.length < 29 || kiosk.offlineKey === '') continue;
 
-    empleados.push({
-      opaqueId: employeeId,
-      displayName: (empleado.preferred_name as string | null) ?? (empleado.full_name as string),
-      initials: iniciales(String(empleado.full_name)),
-      pinVerifier: credencial?.pin_hash ?? null,
-      pinLength: credencial?.pin_length ?? politicasDe(location).pinLength,
-      canManageLocation: asignacion.data().can_manage === true,
+    verifiers.push({
+      employeeOpaqueId: employeeId,
+      pinSalt: salDeBcrypt(hash),
+      pinVerifier: verificadorSinConexion(kiosk.offlineKey, hash),
+      pinLength: Number(credencial?.pin_length ?? politicasDe(location).pinLength),
+      pinVersion: Number(credencial?.pin_version ?? 1),
     });
   }
 
@@ -273,25 +327,39 @@ export const refreshKioskRoster = onCall(async (request) => {
     last_seen_at: nowISO(),
   });
 
+  /*
+   * LA FORMA ES LA QUE VALIDA EL RELOJ, y no lo era: esto devolvia `employees` con las
+   * politicas metidas dentro de `location`, sin `roster`, sin `verifiers` y sin
+   * `refreshedAt`. El esquema de `refreshKioskRoster` exige esas cuatro claves, asi que
+   * el refresco fallaba SIEMPRE en la validacion: el iPad no renovaba nunca su lista de
+   * gente ni sus verificadores, que es justo lo que le permite fichar sin conexion.
+   */
   return {
     location: {
       id: kiosk.locationId,
       name: location.name,
       timezone: location.timezone ?? 'America/Lima',
-      policies: politicasDe(location),
     },
-    employees: empleados,
+    organization: {
+      name: (organizacion?.name as string | null) ?? null,
+      logoPath: (organizacion?.logo_path as string | null) ?? null,
+    },
+    policies: politicasDe(location),
+    roster,
     shifts: turnos.docs
       .filter((doc) => doc.data().status === 'published')
       .map((doc) => ({
         id: doc.id,
-        employeeId: doc.data().employee_id,
+        employeeOpaqueId: doc.data().employee_id,
         startsAt: doc.data().starts_at,
         endsAt: doc.data().ends_at,
-        plannedUnpaidBreakMinutes: doc.data().planned_unpaid_break_minutes ?? 0,
+        jobRoleName: puestos.get(String(doc.data().job_role_id)) ?? null,
         employeeNote: doc.data().employee_note ?? null,
+        plannedUnpaidBreakMinutes: doc.data().planned_unpaid_break_minutes ?? 0,
+        changedSinceLastPublication: doc.data().changed_since_last_publication === true,
       })),
-    syncedAt: nowISO(),
+    verifiers,
+    refreshedAt: nowISO(),
   };
 });
 
@@ -541,18 +609,31 @@ export const submitTimeEvent = onCall(OPCIONES_CON_SECRETO, async (request) => {
     throw new HttpsError('invalid-argument', 'Falta la clave de idempotencia.');
   }
 
+  const shiftId = (request.data?.shiftId as string | null) ?? null;
+
+  /*
+   * LA HORA LA PONE EL SERVIDOR, no el aparato. Esto leia `request.data?.occurredAt`,
+   * que el reloj no manda nunca —manda `occurredAtDevice`, que es otra cosa: la hora
+   * del iPad, que se guarda aparte justamente para poder comparar—. Y es lo correcto
+   * que sea asi: un fichaje EN LINEA se sella con el reloj del servidor, porque un iPad
+   * con la hora cambiada a mano seria una hora de entrada cambiada a mano.
+   */
+  const occurredAt = nowISO();
+
   const resultado = await recordTimeEvent({
     organizationId: kiosk.organizationId,
     employeeId,
     locationId: kiosk.locationId,
     eventType,
+    shiftId,
     breakType: (request.data?.breakType as string | null) ?? null,
     breakReason: (request.data?.breakReason as string | null) ?? null,
     breakNote: (request.data?.breakNote as string | null) ?? null,
-    occurredAt: (request.data?.occurredAt as string | undefined) ?? nowISO(),
+    occurredAt,
     occurredAtDevice: (request.data?.occurredAtDevice as string | null) ?? null,
     idempotencyKey,
     deviceId: kiosk.deviceId,
+    deviceSequence: Number(request.data?.deviceSequence ?? 0),
     isOffline: false,
     source: 'kiosk',
   });
@@ -565,14 +646,38 @@ export const submitTimeEvent = onCall(OPCIONES_CON_SECRETO, async (request) => {
     .get();
   const sesion = abierta.docs[0]?.data();
 
+  /*
+   * A que hora termina la jornada. Es lo unico que la pantalla de confirmacion enseña
+   * ademas de la hora del fichaje, y salia siempre vacia porque aqui habia un `null`
+   * fijo. El turno se saca del que mando el reloj, y si no mando ninguno, del que
+   * quedo apuntado en la sesion al fichar la entrada.
+   */
+  const turnoId = shiftId ?? (sesion?.shift_id as string | null) ?? null;
+  const turno =
+    turnoId === null
+      ? undefined
+      : (await db.collection(COLLECTIONS.shifts).doc(turnoId).get()).data();
+
+  /*
+   * LA FORMA ES LA QUE VALIDA EL RELOJ. Esto devolvia `duplicated` y `session`, y el
+   * esquema del cliente exige `status`, `occurredAt`, `serverReceivedAt`, `flags` y
+   * `summary`. O sea que TODO FICHAJE quedaba registrado en la base y el iPad lo daba
+   * por fallido: la persona veia «No pudimos completar la accion» despues de haber
+   * fichado de verdad, y volvia a intentarlo. Es el fallo mas caro de los que habia,
+   * porque fichar es para lo unico que existe la aplicacion.
+   */
   return {
+    status: resultado.duplicated ? ('duplicate' as const) : ('accepted' as const),
     eventId: resultado.eventId,
-    duplicated: resultado.duplicated,
     attendanceState: resultado.state,
-    session: {
-      startedAt: sesion?.starts_at ?? null,
-      shiftEndsAt: null,
-      netMinutesToday: (sesion?.net_minutes as number | undefined) ?? 0,
+    occurredAt,
+    serverReceivedAt: nowISO(),
+    // Las marcas las pone la proyeccion de la sesion —llegada tarde, turno sin
+    // planificar—, no este fichaje: se devuelven las que ya tenga.
+    flags: ((sesion?.flags as string[] | undefined) ?? []).map(String),
+    summary: {
+      shiftEndsAt: (turno?.ends_at as string | undefined) ?? null,
+      netMinutesToday: Math.max(0, (sesion?.net_minutes as number | null) ?? 0),
     },
   };
 });
@@ -594,35 +699,85 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
     (a, b) => Number(a?.deviceSequence ?? 0) - Number(b?.deviceSequence ?? 0),
   );
 
+  /**
+   * QUIEN FICHO SIN CONEXION NO TIENE TOKEN DE ACCION, y exigirselo era imposible de
+   * cumplir: el token lo emite `verifyPin`, que es una llamada de red, y estos eventos
+   * se guardaron precisamente porque no habia red. Asi que cada evento del lote
+   * fallaba con «Vuelve a marcar tu PIN» y la cola no se vaciaba nunca: una tienda con
+   * el wifi caido una tarde perdia la tarde entera.
+   *
+   * Lo que autentica aqui son dos cosas distintas:
+   *   - el APARATO, por su credencial, que ya comprobo `authenticateKiosk`;
+   *   - la PERSONA, por el verificador sin conexion que el propio servidor le entrego
+   *     a este dispositivo, derivado con su `offline_key` (ver `refreshKioskRoster`).
+   *
+   * Y se comprueba que la persona siga asignada A ESTA TIENDA, que es lo que el token
+   * garantizaba: sin eso, un id de empleado inventado en el JSON ficharia a cualquiera.
+   */
+  const deLaTienda = new Set(
+    (
+      await db
+        .collection(COLLECTIONS.employeeLocations)
+        .where('location_id', '==', kiosk.locationId)
+        .get()
+    ).docs.map((doc) => String(doc.data().employee_id)),
+  );
+
   const resultados = [];
   for (const evento of ordenados) {
-    const employeeId = exigirTokenDeAccion(evento, kiosk);
+    const idempotencyKey = String(evento?.idempotencyKey ?? '');
+    const employeeId = String(evento?.employeeOpaqueId ?? '');
+
+    if (evento?.offlineVerified !== true || !deLaTienda.has(employeeId)) {
+      resultados.push({
+        idempotencyKey,
+        status: 'rejected' as const,
+        reason: 'Ese fichaje no es de alguien de esta tienda.',
+      });
+      continue;
+    }
+
     try {
       const resultado = await recordTimeEvent({
         organizationId: kiosk.organizationId,
         employeeId,
         locationId: kiosk.locationId,
         eventType: String(evento.eventType) as TimeEventType,
+        shiftId: (evento.shiftId as string | null) ?? null,
         breakType: evento.breakType ?? null,
         breakReason: evento.breakReason ?? null,
         breakNote: evento.breakNote ?? null,
-        occurredAt: String(evento.occurredAt),
-        occurredAtDevice: evento.occurredAtDevice ?? null,
-        idempotencyKey: String(evento.idempotencyKey),
+        /*
+         * AQUI SI MANDA EL RELOJ DEL IPAD, al reves que en un fichaje en linea. Es el
+         * unico dato que hay de cuando paso: el servidor se entera horas despues, y
+         * sellarlo con su propia hora pondria la entrada de las 8 a las 14. Se
+         * guardan las dos, y `is_offline` deja dicho cual es cual.
+         */
+        occurredAt: String(evento.occurredAtDevice ?? nowISO()),
+        occurredAtDevice: (evento.occurredAtDevice as string | null) ?? null,
+        idempotencyKey,
         deviceId: kiosk.deviceId,
         deviceSequence: Number(evento.deviceSequence ?? 0),
         isOffline: true,
         source: 'kiosk',
       });
       resultados.push({
-        idempotencyKey: evento.idempotencyKey,
-        accepted: true,
-        duplicated: resultado.duplicated,
+        idempotencyKey,
+        status: resultado.duplicated ? ('duplicate' as const) : ('accepted' as const),
+        attendanceState: resultado.state,
+        eventId: resultado.eventId,
       });
     } catch (error) {
+      /*
+       * `needs_review` Y NO `rejected`: una transicion invalida al sincronizar casi
+       * siempre es un fichaje que le falta al otro lado —la salida de ayer que se
+       * quedo en un iPad apagado—, no un intento de colar algo. Rechazarlo lo borra de
+       * la cola y pierde la hora trabajada; marcarlo lo deja para que un encargado lo
+       * mire. Ver `backoff.ts`, que ya distingue los dos casos en el aparato.
+       */
       resultados.push({
-        idempotencyKey: evento.idempotencyKey,
-        accepted: false,
+        idempotencyKey,
+        status: 'needs_review' as const,
         reason: error instanceof HttpsError ? error.message : 'Error desconocido',
       });
     }
@@ -633,7 +788,15 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
     .doc(kiosk.deviceId)
     .update({ last_sync_at: nowISO(), last_seen_at: nowISO() });
 
-  return { results: resultados, syncedAt: nowISO() };
+  return {
+    results: resultados,
+    // El esquema del cliente exige las dos, y sin ellas la respuesta entera se
+    // descartaba: el iPad daba por fallido un lote que el servidor habia guardado.
+    accepted: resultados.filter((r) => r.status === 'accepted' || r.status === 'duplicate').length,
+    // Nada queda a medias: el bucle resuelve todos los eventos del lote.
+    pending: 0,
+    syncedAt: nowISO(),
+  };
 });
 
 /**
@@ -669,7 +832,12 @@ export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request
     organization_id: kiosk.organizationId,
     employee_id: employeeId,
     location_id: kiosk.locationId,
-    work_session_id: (request.data?.workSessionId as string | null) ?? null,
+    /*
+     * SIEMPRE NULO, y leia `request.data?.workSessionId`, que el reloj no manda: una
+     * solicitud de «Olvide marcar» se escribe justamente cuando NO hay sesion que
+     * corregir. Quien la aprueba la ata a la jornada por `target_date`.
+     */
+    work_session_id: null,
     /*
      * `proposedAt`, QUE ES LO QUE MANDA EL RELOJ. Esto leia `proposedValue` y
      * `targetDate`, que el cliente no envia nunca, asi que toda solicitud de «Olvide
@@ -692,7 +860,9 @@ export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request
     updated_at: nowISO(),
   });
 
-  return { requestId: doc.id };
+  // `status` lo exige el esquema del cliente, y sin el la solicitud se creaba pero el
+  // reloj decia «No pudimos completar la accion»: la persona la mandaba tres veces.
+  return { requestId: doc.id, status: 'pending' as const };
 });
 
 /**
@@ -742,7 +912,7 @@ export const attachPhoto = onCall(async (request) => {
   }
   await eventoRef.update({ photo_path: ruta });
 
-  return { photoPath: ruta };
+  return { ok: true as const, photoPath: ruta };
 });
 
 /**

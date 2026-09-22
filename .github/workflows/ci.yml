@@ -147,6 +147,16 @@ jobs:
       - name: Compilar las Cloud Functions
         run: npx tsc -p functions --noEmit
 
+      # VA DESPUES DE COMPILAR A PROPOSITO: esto no mira tipos, mira NOMBRES. El
+      # cliente y las funciones se hablan por un objeto sin tipo comun, asi que una
+      # clave mal puesta compila, pasa el linter, pasa las pruebas —la demostracion
+      # implementa su propia version con la forma correcta— y falla en produccion.
+      # Asi se fueron a produccion, entre otros, un `activateKiosk` que respondia 400
+      # siempre y un `submitTimeEvent` que guardaba el fichaje y decia que habia
+      # fallado. Ninguno de los pasos anteriores puede verlos.
+      - name: Comprobar contratos cliente ↔ Cloud Functions
+        run: node scripts/contratos-check.mjs
+
   arneses:
     name: 'Arnés: ${{ matrix.arnes.nombre }}'
     runs-on: ubuntu-latest
