@@ -135,46 +135,40 @@ describe('el escenario «ausentes» a cualquier hora y cualquier día', () => {
   });
 
   /**
-   * EL CONTROL: que el arreglo haga falta de verdad, y por los dos motivos distintos.
+   * EL CONTROL: que el arreglo haga falta de verdad.
    *
-   * Si estas dos expectativas dejaran de cumplirse, las de arriba podrían estar pasando
-   * porque el calendario coopera y no porque el escenario garantice nada. Son la medida
-   * de la que salieron los agujeros de la cabecera, puesta donde se rompa si la semilla
-   * cambia.
+   * Cuenta, en cada una de las 63 combinaciones, a cuánta gente podía llegar la versión
+   * ANTERIOR —la que solo sabía usar turnos de hoy YA TERMINADOS— y exige que se quede
+   * corta en la mayoría. Si dejara de quedarse corta, las pruebas de arriba estarían
+   * pasando porque el calendario coopera y no porque el escenario garantice nada.
+   *
+   * SE CUENTAN COMBINACIONES Y NO SE FIJA UN DÍA Y UNA HORA CONCRETOS, y eso lo enseñó
+   * correr las pruebas en otra zona: las dos primeras versiones de este control decían
+   * «a las 13:59 UTC no hay NINGÚN turno terminado» y «el fin de semana no hay NI UNO
+   * publicado», y las dos eran ciertas en UTC y en Lima y falsas en Madrid y en Tokio,
+   * porque la semilla arma sus días con la hora DEL PROCESO. O sea que el control tenía
+   * el mismo defecto que la cosa que vigila. Lo que sí es propiedad del escenario, y no
+   * de dónde corra, es que la semilla no llega sola a las tres casi nunca.
    */
-  it('hacía falta entre semana: a las 13:59 UTC no hay ningún turno de hoy terminado', () => {
-    ponerElReloj('2026-09-22', '13:59');
-    const ahora = new Date().toISOString();
-    const hoy = dateKeyOf(ahora, TZ);
-    const terminados = (crearAlmacen().get('shifts') ?? []).filter(
-      (turno) =>
-        turno.status === 'published' &&
-        turno.location_id === DEMO_LOCATION_1 &&
-        dateKeyOf(String(turno.starts_at), TZ) === hoy &&
-        String(turno.ends_at) < ahora,
-    );
-    expect(terminados).toHaveLength(0);
-  });
-
-  it('y hacía falta el fin de semana: el día de la tienda no tiene NI UN turno publicado', () => {
-    for (const cuando of [
-      ['2026-09-20', '13:59'],
-      ['2026-09-21', '02:13'],
-      ['2026-09-26', '13:59'],
-    ] as const) {
-      ponerElReloj(cuando[0], cuando[1]);
-      const hoy = dateKeyOf(new Date().toISOString(), TZ);
-      const deHoy = (crearAlmacen().get('shifts') ?? []).filter(
-        (turno) =>
-          turno.status === 'published' &&
-          turno.location_id === DEMO_LOCATION_1 &&
-          dateKeyOf(String(turno.starts_at), TZ) === hoy,
-      );
-      expect({ cuando: cuando.join(' '), deHoy: deHoy.length }).toEqual({
-        cuando: cuando.join(' '),
-        deHoy: 0,
-      });
+  it('hacía falta: con solo los turnos ya terminados no se llega a tres casi nunca', () => {
+    const cortas: string[] = [];
+    for (const [dia, horaUTC] of CUANDO) {
+      ponerElReloj(dia, horaUTC);
+      const ahora = new Date().toISOString();
+      const hoy = dateKeyOf(ahora, TZ);
+      const alcanzables = new Set<string>();
+      for (const turno of crearAlmacen().get('shifts') ?? []) {
+        if (turno.status !== 'published') continue;
+        if (turno.location_id !== DEMO_LOCATION_1) continue;
+        if (dateKeyOf(String(turno.starts_at), TZ) !== hoy) continue;
+        if (String(turno.ends_at) >= ahora) continue;
+        alcanzables.add(String(turno.employee_id));
+      }
+      if (alcanzables.size < CUANTAS_PROMETE) cortas.push(`${dia} ${horaUTC}`);
     }
+    // El fallo de Jest ya dice el número, que es el dato que hace falta para saber si el
+    // control sigue mordiendo o si la semilla cambió.
+    expect(cortas.length).toBeGreaterThan(CUANDO.length / 2);
   });
 
   /**

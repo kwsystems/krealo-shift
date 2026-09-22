@@ -43,6 +43,31 @@ function utcToKey(date: Date): DateKey {
   return date.toISOString().slice(0, 10);
 }
 
+/**
+ * La misma fecha de calendario, pero A MEDIANOCHE LOCAL, para ENSEÑARLA.
+ *
+ * `keyToUtc` es el correcto para CONTAR —sumar días, preguntar qué día de la semana
+ * es— porque toda la aritmética de abajo usa los getters UTC y así no la mueve la zona
+ * del proceso. Pero `format` de date-fns lee los getters LOCALES, y ahí una medianoche
+ * UTC en una zona con desfase negativo cae el día ANTERIOR: en Lima (UTC-5),
+ * `formatDateKeyShort('2026-08-27')` devolvía «26 Aug».
+ *
+ * Y no era solo la prueba. Una clave `yyyy-MM-dd` es una fecha de calendario, sin hora:
+ * lo que se enseña de ella no puede depender de dónde esté el aparato. Esto sale en las
+ * columnas del horario, en el encabezado de la semana y en las tarjetas de Reportes, y
+ * la app es para tiendas en Perú, así que el día equivocado se veía EN PRODUCCIÓN y en
+ * el CI no, porque los runners de ubuntu van en UTC.
+ *
+ * Con la medianoche local, `format` imprime el año, el mes y el día que se le pidieron
+ * en cualquier zona. Donde la medianoche local no existe —un adelanto de horario justo
+ * a las 00:00— el motor devuelve la 01:00 del MISMO día, que se formatea igual.
+ */
+function keyToLocal(key: DateKey): Date | null {
+  const parts = parseKey(key);
+  if (parts === null) return null;
+  return new Date(parts.year, parts.month - 1, parts.day);
+}
+
 /** Suma (o resta) días de calendario a una fecha `yyyy-MM-dd`. */
 export function addDaysToKey(key: DateKey, days: number): DateKey {
   const utc = keyToUtc(key);
@@ -201,9 +226,9 @@ export function weekRangeInstants(
 
 /** Nombre corto del día para las columnas del iPad: "lun 25". */
 export function formatDayColumn(key: DateKey, language: SupportedLanguage): string {
-  const utc = keyToUtc(key);
-  if (utc === null) return key;
-  return format(utc, 'EEE d', { locale: dateFnsLocales[language] });
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  return format(local, 'EEE d', { locale: dateFnsLocales[language] });
 }
 
 /**
@@ -214,22 +239,22 @@ export function formatDayColumn(key: DateKey, language: SupportedLanguage): stri
  * número: una etiqueta a medias se lee mal y encima parece un fallo.
  */
 export function formatWeekdayShort(key: DateKey, language: SupportedLanguage): string {
-  const utc = keyToUtc(key);
-  if (utc === null) return key;
-  return format(utc, 'EEE', { locale: dateFnsLocales[language] });
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  return format(local, 'EEE', { locale: dateFnsLocales[language] });
 }
 
 /** Fecha larga del encabezado: "27 de agosto de 2026". */
 export function formatDateKeyLong(key: DateKey, language: SupportedLanguage): string {
-  const utc = keyToUtc(key);
-  if (utc === null) return key;
+  const local = keyToLocal(key);
+  if (local === null) return key;
   const pattern = language === 'es-PE' ? "d 'de' MMMM 'de' yyyy" : 'MMMM d, yyyy';
-  return format(utc, pattern, { locale: dateFnsLocales[language] });
+  return format(local, pattern, { locale: dateFnsLocales[language] });
 }
 
 /** Fecha corta para tarjetas y filtros: "25 ago". */
 export function formatDateKeyShort(key: DateKey, language: SupportedLanguage): string {
-  const utc = keyToUtc(key);
-  if (utc === null) return key;
-  return format(utc, 'd MMM', { locale: dateFnsLocales[language] });
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  return format(local, 'd MMM', { locale: dateFnsLocales[language] });
 }

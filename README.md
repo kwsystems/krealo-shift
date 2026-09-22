@@ -638,18 +638,23 @@ no tenerla, porque se usa para decidir qué hacer.
   `scripts/generar-iconos.mjs` a partir de los tokens de color de la app. El motivo
   gráfico es una decisión de marca, y esa es suya.
 
-### Dos pruebas en rojo que NO son de la migración
+### Las pruebas que dependían de CUÁNDO y DÓNDE se corren
 
-Las dos se reproducen en `main` y las dos dependen de CUÁNDO y DÓNDE se corren, que
-es la clase de fallo que parece intermitente y no lo es:
-
-- `week.test.ts` solo pasa con `TZ=UTC`. Falla en `America/Lima` —justo la zona del
-  producto— porque `formatDateKeyShort('2026-08-27')` devuelve el día anterior. En CI
-  pasa porque los runners van en UTC;
-- el test de pausas de la demostración **falla los lunes**. La semilla siembra «de
-  lunes hasta ayer», que el lunes es un rango vacío, así que `break_time_by_reason`
-  queda sin filas. Es el mismo fallo que ya se arregló una vez para una prueba SQL
-  (commit `063c90a`).
+- **`week.test.ts` solo pasaba con `TZ=UTC`: arreglado**, y no era la prueba sino el
+  código. `formatDateKeyShort('2026-08-27')` devolvía el día ANTERIOR en `America/Lima`
+  —la zona del producto—, así que el día equivocado se veía en producción y en CI no,
+  porque los runners van en UTC. Una clave `yyyy-MM-dd` es una fecha de calendario y
+  lo que se enseña de ella no puede depender de dónde esté el aparato. Ahora el CI
+  corre `jest` además en `America/Lima` y en `Europe/Madrid`, y la suite pasa en las
+  siete zonas probadas, de UTC-9 a UTC+14.
+- **el test de pausas de la demostración fallaba los lunes**: la causa ya no existe.
+  Fallaba porque la semilla sembraba «de lunes hasta ayer» y el lunes eso es un rango
+  vacío; hoy siembra catorce días (de hace una semana a dentro de seis) y la prueba
+  consulta la quincena entera, así que ningún día de la semana deja el rango sin
+  filas. **No se ha vuelto a correr un lunes**, que es lo único que lo confirmaría del
+  todo: no se puede simular, porque la prueba calcula el lunes de la semana al importar
+  el módulo y ninguna zona horaria mueve hoy hasta un lunes. Queda la tarea
+  `W3XrXBW0iGe8NDu8kQps` para correrlo un lunes y cerrarlo.
 
 ### Decidido, no pendiente
 

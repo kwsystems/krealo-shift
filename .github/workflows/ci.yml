@@ -71,6 +71,22 @@ jobs:
       - name: Pruebas
         run: npx jest --ci
 
+      # Y OTRA VEZ EN OTRAS ZONAS HORARIAS, porque el runner va en UTC y la app es para
+      # tiendas en Perú. `week.test.ts` llevaba meses pasando aquí y fallando en
+      # `America/Lima`: `formatDateKeyShort('2026-08-27')` devolvía el día ANTERIOR, o
+      # sea un fallo de verdad que la zona del CI escondía.
+      #
+      # Madrid no está de adorno: con solo UTC y Lima —las dos zonas en las que se
+      # arregló— quedaban dos controles de las pruebas del escenario de ausentes que
+      # afirmaban cosas ciertas solo en esas dos. Un desfase POSITIVO las tumbó, y eso es
+      # justo lo que se le pide a esto.
+      - name: Pruebas en la zona de la tienda y en una con desfase positivo
+        run: |
+          for zona in America/Lima Europe/Madrid; do
+            echo "== TZ=$zona =="
+            TZ=$zona npx jest --ci
+          done
+
       # EMPAQUETAR DE VERDAD, y no solo comprobar tipos. `tsc` resuelve los tipos y
       # da verde aunque el grafo de modulos no se pueda construir: asi paso
       # inadvertido que el empaquetado para web fallaba entero porque Metro no
