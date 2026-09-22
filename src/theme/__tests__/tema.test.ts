@@ -67,44 +67,31 @@ describe('contraste del texto', () => {
     ['info sobre su insignia', 'info600', 'info50'],
   ];
 
-  /**
-   * DEUDA HEREDADA DEL TEMA CLARO, ANOTADA AQUÍ A PROPÓSITO.
-   *
-   * Al medir estos pares aparecieron dos que NO llegan, y no son del tema oscuro: son
-   * del claro, el que la app lleva usando desde siempre.
-   *
-   *   success600 sobre success50 → 4,31:1
-   *   warning600 sobre warning50 → 3,86:1
-   *
-   * No se arreglaron aquí porque la tarea que los encontró prometía no cambiar el
-   * aspecto de ninguna pantalla, y oscurecerlos cambia las insignias de toda la app.
-   * Tampoco se bajó el listón de la prueba para que pasara, que es la salida fácil y
-   * deja una prueba que ya no comprueba nada.
-   *
-   * Así que quedan nombrados: la prueba exige 4,5:1 a TODO lo demás y a los dos temas, y
-   * estas dos se saltan el lado claro con su deuda escrita. Tarea nJTTpJRad37anvPtsAZc.
-   * Cuando se arreglen, se borra esta lista y la prueba vuelve a ser uniforme.
+  /*
+   * SIN EXCEPCIONES EN NINGUNO DE LOS DOS TEMAS, y aquí hubo dos hasta el 2026-09-22:
+   * `success600` sobre `success50` daba 4,31:1 y `warning600` sobre `warning50` 3,86:1.
+   * No eran del tema oscuro —el oscuro se diseñó midiendo— sino del CLARO, el que la app
+   * llevaba usando desde siempre, y salían en «Trabajando» y «En descanso», que se leen
+   * en Inicio, en la lista de «Ahora mismo» y en el reloj de fichaje. Se arreglaron
+   * oscureciendo los dos tonos lo justo (#16845B → #157D56, #B56B00 → #A26000), no
+   * bajando el listón de esta prueba, que es la salida fácil y deja una prueba que ya no
+   * comprueba nada.
    */
-  const DEUDA_EN_CLARO: ColorToken[] = ['success600', 'warning600'];
-
   it.each(casos)('%s llega a 4,5:1 en los DOS temas', (_nombre, tinta, fondo) => {
-    if (!DEUDA_EN_CLARO.includes(tinta)) {
-      expect(contraste(lightColors[tinta], lightColors[fondo])).toBeGreaterThanOrEqual(4.5);
-    }
-    // El oscuro no tiene excepciones: se diseñó midiendo, así que no hay nada heredado
-    // que disculpar.
+    expect(contraste(lightColors[tinta], lightColors[fondo])).toBeGreaterThanOrEqual(4.5);
     expect(contraste(darkColors[tinta], darkColors[fondo])).toBeGreaterThanOrEqual(4.5);
   });
 
   /**
-   * Y la deuda no puede crecer en silencio: si alguien añade un tercer par flojo al tema
-   * claro, esta prueba lo caza aunque la de arriba lo perdone.
+   * Y ninguno se queda pegado al límite. Los dos que se arreglaron pasaron de 4,31 y
+   * 3,86 a 4,71 y 4,65: si alguien retoca un tono y lo deja rozando el 4,5, esto lo dice
+   * antes de que un redondeo distinto lo tumbe.
    */
-  it('la deuda del tema claro sigue siendo exactamente esos dos pares', () => {
-    const flojos = casos
-      .filter(([, tinta, fondo]) => contraste(lightColors[tinta], lightColors[fondo]) < 4.5)
-      .map(([, tinta]) => tinta);
-    expect(flojos.sort()).toEqual([...DEUDA_EN_CLARO].sort());
+  it('ninguno del tema claro se queda a menos de una décima del mínimo', () => {
+    const justos = casos
+      .filter(([, tinta, fondo]) => contraste(lightColors[tinta], lightColors[fondo]) < 4.6)
+      .map(([nombre]) => nombre);
+    expect(justos).toEqual([]);
   });
 
   /**

@@ -101,26 +101,19 @@ const RUTAS = [
 const PESTANAS = [];
 
 /**
- * DEUDA DEL TEMA CLARO, NOMBRADA PARA QUE ESTE ARNÉS SIGA SIRVIENDO.
+ * LA DEUDA DEL TEMA CLARO SE PAGÓ EL 2026-09-22, y esta lista se queda vacía a propósito.
  *
- * Dos tintas del tema CLARO no llegan a 4,5:1 sobre su insignia, y llevan así desde
- * antes del modo oscuro:
+ * Dos tintas del tema CLARO no llegaban a 4,5:1 sobre su insignia, y llevaban así desde
+ * antes del modo oscuro: `success600` #16845B a 4,31:1 («Trabajando», «a tiempo») y
+ * `warning600` #B56B00 a 3,86:1 («En pausa», el aviso de demostración). Se oscurecieron
+ * lo justo —#157D56 y #A26000— y ahora dan 4,71 y 4,65.
  *
- *   #16845B — `success600`. «Trabajando», «a tiempo». 4,24 y 4,31:1.
- *   #B56B00 — `warning600`. «En pausa», el aviso de demostración. 3,86 y 4,14:1.
- *
- * Arreglarlas cambia las insignias de estado de TODA la app: es un cambio visible que
- * decide Andree, y está en la tarea nJTTpJRad37anvPtsAZc. Aquí se excusan por su valor
- * exacto y SOLO en claro. En oscuro no se excusa nada, porque el oscuro se diseñó
- * midiendo y no hereda nada que disculpar.
- *
- * Lo que NO se hace es bajar el mínimo. Eso deja un arnés que dice OK sin comprobar nada,
- * y la deuda deja de existir para quien lea la salida.
+ * El mapa sigue aquí y vacío porque la forma de excusar una deuda tiene que seguir
+ * existiendo: cuando aparezca la siguiente, se anota con su valor exacto y su tarea, y no
+ * se baja el mínimo. Bajar el mínimo deja un arnés que dice OK sin comprobar nada, y la
+ * deuda deja de existir para quien lea la salida.
  */
-const DEUDA_DE_CLARO = new Map([
-  ['rgb(22, 132, 91)', 'success600 en claro (nJTTpJRad37anvPtsAZc)'],
-  ['rgb(181, 107, 0)', 'warning600 en claro (nJTTpJRad37anvPtsAZc)'],
-]);
+const DEUDA_DE_CLARO = new Map([]);
 
 const problemas = [];
 const deudaVista = new Set();

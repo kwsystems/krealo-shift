@@ -32,9 +32,9 @@ export const lightColors = {
   canvas: '#F7F7FA',
   border: '#E5E3EB',
   success50: '#EAF9F1',
-  success600: '#16845B',
+  success600: '#157D56',
   warning50: '#FFF6E5',
-  warning600: '#B56B00',
+  warning600: '#A26000',
   danger50: '#FFF0F1',
   /** Un paso más que `danger50`: el fondo de un botón de peligro PULSADO. */
   danger100: '#FFE3E6',
@@ -444,8 +444,10 @@ export function interpolateFontByHeight(height: number, min: number, max: number
  * importó de verdad:
  *
  *   - `primary600` + `warning600` (los dos únicos colores que se tocan, en la barra
- *     apilada de horas extra) → TODO PASA. Peor par ΔE 31.3 con protanopia, 34.8
- *     con visión normal, contraste ≥ 3:1 los dos.
+ *     apilada de horas extra) → TODO PASA. Peor par ΔE 30.4 con protanopia, 32.8
+ *     con visión normal, contraste ≥ 3:1 los dos. (Vuelto a medir el 2026-09-22 al
+ *     oscurecer `warning600` de #B56B00 a #A26000 para que la insignia «En descanso»
+ *     llegue a 4,5:1 como texto: baja un pelo la separación y sigue pasando todo.)
  *   - `success600` + `danger600`, que es lo que cualquiera pinta para «a tiempo /
  *     tarde» → **FALLA**: ΔE 4.8 con deuteranopia. Verde y rojo son el MISMO COLOR
  *     para una de cada doce personas, y un gráfico de puntualidad pintado así no
