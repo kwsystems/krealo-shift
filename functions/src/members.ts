@@ -42,19 +42,6 @@ function textoRequerido(valor: unknown, campo: string): string {
   return valor.trim();
 }
 
-/** Las membresias activas con rango de mando. Se usa para no dejar la casa vacia. */
-async function quienesMandan(organizationId: string): Promise<{ userId: string; role: AppRole }[]> {
-  const encontrados = await db
-    .collection(COLLECTIONS.memberships)
-    .where('organization_id', '==', organizationId)
-    .where('status', '==', 'active')
-    .get();
-
-  return encontrados.docs
-    .map((d) => ({ userId: d.data().user_id as string, role: d.data().role as AppRole }))
-    .filter((m) => m.role === 'owner' || m.role === 'admin');
-}
-
 /**
  * Quien tiene acceso y quien esta invitado.
  *
@@ -149,33 +136,23 @@ export const setMemberRole = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'No puedes cambiar el rol de alguien por encima.');
   }
 
-  // Degradar al ultimo que manda deja la organizacion sin nadie que la administre.
-  const mandan = await quienesMandan(organizationId);
-  const bajaDeMando = RANGO[nuevoRol] < RANGO.admin;
-  /**
-   * ESTA GUARDA NO SE ALCANZA NUNCA, medido el 2026-09-22. Se deja y se explica en vez
-   * de borrarse porque quitarla es decision de quien escribio esto.
+  /*
+   * AQUI HABIA UNA GUARDA QUE NO SE EJECUTABA NUNCA, y se borra por eso.
    *
-   * Para llegar aqui hay que haber pasado `requireRole(['owner','admin'])` —o sea,
-   * estar dentro de `quienesMandan`— y no ser el objetivo, porque eso se rechaza antes.
-   * Con las dos cosas ciertas, `mandan` tiene DOS entradas como minimo y `<= 1` no puede
-   * cumplirse. Comprobado desactivandola: las doce pruebas de `members.test.ts` siguen
-   * en verde.
+   * Comprobaba que no se degradara al ultimo que manda, pero para llegar hasta ella hay
+   * que haber pasado `requireRole(['owner','admin'])` —o sea, estar uno mismo dentro de
+   * los que mandan— y no ser el objetivo, porque eso se rechaza veinte lineas mas
+   * arriba. Con las dos cosas ciertas hay DOS al mando como minimo, asi que su
+   * condicion no podia cumplirse. Medido el 22-sep-2026: desactivandola, las doce
+   * pruebas seguian en verde.
    *
-   * El invariante que pretende proteger —que la empresa nunca se quede sin nadie que la
-   * administre— si se cumple, pero lo sostiene la comprobacion de «no te tocas a ti
-   * mismo» de unas lineas mas arriba. Eso es lo que fija la prueba.
+   * EL INVARIANTE SIGUE PROTEGIDO, y por lo que de verdad lo protegia: el «no te cambias
+   * el rol a ti mismo». Eso lo fija la prueba «la última persona que administra no puede
+   * degradarse a sí misma», que SI puede fallar si alguien quita esa regla.
    *
-   * Conviene decidir: o se borra, o se hace alcanzable. Mientras siga asi, alguien puede
-   * quitar el «no te tocas a ti mismo» creyendo que esto lo cubre, y entonces el ultimo
-   * admin si podra dejar la organizacion sin llaves.
+   * Se borra en vez de dejarla porque un control que no corre es peor que no tener
+   * ninguno: invita a quitar el que si funciona creyendo que este lo cubre.
    */
-  if (bajaDeMando && mandan.length <= 1 && mandan.some((m) => m.userId === objetivo)) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Es la única persona que administra esta organización. Nombra a otra antes.',
-    );
-  }
 
   const ubicaciones = await db
     .collection(COLLECTIONS.locations)
@@ -229,15 +206,12 @@ export const revokeMember = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'No puedes quitar el acceso a alguien por encima.');
   }
 
-  const mandan = await quienesMandan(organizationId);
-  // Tampoco se alcanza, y por el mismo motivo exacto que en `setMemberRole`: quien llama
-  // esta dentro de `mandan` y no es el objetivo, asi que `mandan` tiene dos o mas.
-  if (mandan.length <= 1 && mandan.some((m) => m.userId === objetivo)) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Es la única persona que administra esta organización. Nombra a otra antes.',
-    );
-  }
+  /*
+   * La misma guarda inalcanzable que en `setMemberRole`, borrada por el mismo motivo:
+   * quien llama esta dentro de los que mandan y no es el objetivo, asi que siempre hay
+   * dos o mas. Lo que sostiene el invariante aqui es el «no te quitas el acceso a ti
+   * mismo» de arriba, y eso lo fija `revoke-member.test.ts`.
+   */
 
   await ref.update({ status: 'suspended', updated_at: nowISO() });
 
