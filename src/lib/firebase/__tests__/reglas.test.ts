@@ -72,7 +72,7 @@ const SEDE = 'sede-principal';
 if (process.env.FIRESTORE_EMULATOR_HOST === undefined) {
   it('el emulador de Firestore tiene que estar corriendo', () => {
     throw new Error(
-      'Sin FIRESTORE_EMULATOR_HOST no hay nada que probar. Lanza: npm run reglas:check',
+      'Sin FIRESTORE_EMULATOR_HOST no hay nada que probar. Lanza: npm run emulador:check',
     );
   });
 }

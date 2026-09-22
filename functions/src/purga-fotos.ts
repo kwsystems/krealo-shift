@@ -138,42 +138,55 @@ async function purgarUbicacion(params: {
  * A las 3:30 no hay nadie fichando en ninguna de las tiendas, asi que el borrado no
  * compite con el uso real ni con la sincronizacion de los relojes.
  */
+/**
+ * La pasada completa, SEPARADA DEL PROGRAMADOR para poder comprobarla.
+ *
+ * `onSchedule` devuelve un objeto de despliegue, no una funcion que se pueda llamar: lo
+ * que envuelve queda dentro y una prueba no lo alcanza. Y aqui hace falta alcanzarlo,
+ * porque lo que esto hace —borrar retratos de personas— no se da por bueno leyendo el
+ * codigo: una marca de agua mal avanzada, un prefijo de Storage equivocado o un corte de
+ * retencion mal calculado tienen exactamente el mismo aspecto y no borran nada.
+ */
+export async function purgarTodasLasUbicaciones(): Promise<
+  Resumen & { ubicaciones: number; sinPlazo: number }
+> {
+  const ubicaciones = await db.collection(COLLECTIONS.locations).get();
+  const total: Resumen = { miradas: 0, borradas: 0, fallidas: 0 };
+  let saltadas = 0;
+
+  for (const ubicacion of ubicaciones.docs) {
+    const datos = ubicacion.data();
+    const dias = plazoDeRetencion(
+      (datos.settings as Record<string, unknown> | undefined)?.photoRetentionDays,
+    );
+    if (dias === null) {
+      saltadas += 1;
+      continue;
+    }
+
+    const parcial = await purgarUbicacion({
+      organizationId: datos.organization_id as string,
+      locationId: ubicacion.id,
+      dias,
+    });
+    total.miradas += parcial.miradas;
+    total.borradas += parcial.borradas;
+    total.fallidas += parcial.fallidas;
+  }
+
+  return { ...total, ubicaciones: ubicaciones.size, sinPlazo: saltadas };
+}
+
 export const purgarFotosDeFichaje = onSchedule(
   { schedule: '30 3 * * *', timeZone: 'America/Lima', retryCount: 1 },
   async () => {
-    const ubicaciones = await db.collection(COLLECTIONS.locations).get();
-    const total: Resumen = { miradas: 0, borradas: 0, fallidas: 0 };
-    let saltadas = 0;
-
-    for (const ubicacion of ubicaciones.docs) {
-      const datos = ubicacion.data();
-      const dias = plazoDeRetencion(
-        (datos.settings as Record<string, unknown> | undefined)?.photoRetentionDays,
-      );
-      if (dias === null) {
-        saltadas += 1;
-        continue;
-      }
-
-      const parcial = await purgarUbicacion({
-        organizationId: datos.organization_id as string,
-        locationId: ubicacion.id,
-        dias,
-      });
-      total.miradas += parcial.miradas;
-      total.borradas += parcial.borradas;
-      total.fallidas += parcial.fallidas;
-    }
+    const resumen = await purgarTodasLasUbicaciones();
 
     /*
      * Se registra SIEMPRE, tambien cuando no borro nada. Un trabajo programado que solo
      * habla cuando actua es indistinguible de uno que dejo de ejecutarse, y lo que hay
      * que poder comprobar es justamente que sigue corriendo.
      */
-    logger.info('Purga de fotos de fichaje', {
-      ubicaciones: ubicaciones.size,
-      sinPlazo: saltadas,
-      ...total,
-    });
+    logger.info('Purga de fotos de fichaje', resumen);
   },
 );

@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 /**
- * Las reglas de Firestore, ejercitadas contra el emulador — y la prueba de que
- * CORRIERON.
+ * Todo lo que necesita emuladores de Firebase — y la prueba de que CORRIO.
+ *
+ * Hoy son dos cosas, y las dos protegen algo que no se puede comprobar leyendo codigo:
+ * las reglas de Firestore (quien puede leer que) y la purga de fotos de fichaje (que
+ * los retratos se borran cuando la app promete que se borran).
  *
  * POR QUE NO BASTA CON LANZAR JEST. Durante meses el CI ejecutaba estas ocho pruebas y
  * salía verde sin haber comprobado nada: el archivo empezaba con
@@ -26,13 +29,21 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const carpeta = mkdtempSync(join(tmpdir(), 'reglas-'));
+const carpeta = mkdtempSync(join(tmpdir(), 'emulador-'));
 const informe = join(carpeta, 'jest.json');
 
 const jest = `npx jest -c jest.emulador.config.js --ci --json --outputFile=${informe}`;
 const emulador = spawnSync(
   'npx',
-  ['firebase', 'emulators:exec', '--only', 'firestore', '--project', 'demo-krealo-shift', jest],
+  [
+    'firebase',
+    'emulators:exec',
+    '--only',
+    'firestore,storage',
+    '--project',
+    'demo-krealo-shift',
+    jest,
+  ],
   { stdio: 'inherit', shell: false },
 );
 
@@ -48,7 +59,7 @@ rmSync(carpeta, { recursive: true, force: true });
 
 const { numTotalTests = 0, numPassedTests = 0, numPendingTests = 0, numFailedTests = 0 } = datos;
 console.log(
-  `\nreglas de Firestore: ${numPassedTests} pasaron, ${numFailedTests} fallaron, ${numPendingTests} pendientes (${numTotalTests} en total).`,
+  `\npruebas con emulador: ${numPassedTests} pasaron, ${numFailedTests} fallaron, ${numPendingTests} pendientes (${numTotalTests} en total).`,
 );
 
 if (numTotalTests === 0) {
@@ -60,7 +71,7 @@ if (numPendingTests > 0) {
   process.exit(1);
 }
 if (numFailedTests > 0 || emulador.status !== 0) {
-  console.error('FALLA: las reglas no pasaron sus pruebas.');
+  console.error('FALLA: las pruebas con emulador no pasaron.');
   process.exit(1);
 }
-console.log('OK: las reglas se ejercitaron de verdad contra el emulador.');
+console.log('OK: se ejercitaron de verdad contra los emuladores.');

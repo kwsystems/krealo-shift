@@ -22,8 +22,9 @@ module.exports = {
   testEnvironment: 'node',
   testMatch: [
     '<rootDir>/src/lib/firebase/__tests__/reglas.test.ts',
-    '<rootDir>/functions/src/**/__tests__/emulador/*.test.ts',
+    '<rootDir>/functions/src/__tests__/emulador/*.test.ts',
   ],
+  setupFiles: ['<rootDir>/jest.emulador.setup.js'],
   transform: {
     '^.+\\.[jt]sx?$': [
       'babel-jest',
@@ -41,4 +42,18 @@ module.exports = {
   // El SDK de Firebase publica ESM y hay que transpilarlo igual que el código propio.
   transformIgnorePatterns: ['/node_modules/(?!(firebase|@firebase)/)'],
   testTimeout: 30000,
+
+  /**
+   * DE UNA EN UNA, y no es por lentitud: es que COMPARTEN EL EMULADOR.
+   *
+   * Cada suite vacía la base entera en su `beforeEach` —es la única forma de partir de
+   * un estado conocido— así que dos corriendo a la vez se borran los datos mutuamente.
+   * El síntoma no es un error claro sino fallos que cambian de sitio entre ejecuciones:
+   * la primera vez que se juntaron las dos suites cayeron tres pruebas, y lanzadas por
+   * separado las trece pasaban.
+   *
+   * La alternativa sería un proyecto de emulador por suite, que cuesta más y compra lo
+   * mismo: estas pruebas duran segundos y no hay nada que ganar paralelizándolas.
+   */
+  maxWorkers: 1,
 };

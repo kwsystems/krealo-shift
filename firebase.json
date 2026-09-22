@@ -75,6 +75,11 @@
       "host": "127.0.0.1",
       "port": 8099
     },
+    "//storage": "Hace falta para poder COMPROBAR la purga de fotos: sin emulador de Storage, la prueba solo podria mirar que se limpia `photo_path` en Firestore, que es la mitad que NO importa. Lo que hay que ver desaparecer es el archivo.",
+    "storage": {
+      "host": "127.0.0.1",
+      "port": 9199
+    },
     "singleProjectMode": true,
     "hub": {
       "host": "127.0.0.1",
