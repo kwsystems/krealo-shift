@@ -97,6 +97,50 @@ for (const ruta of aComprobar) {
   }
 }
 
+/**
+ * Y QUE EL PAQUETE LLEVE LA CONFIGURACIÓN DENTRO.
+ *
+ * ESTA COMPROBACIÓN NACE DE HABER ROTO LA WEB EN PRODUCCIÓN (2026-09-21). Se desplegó
+ * un paquete construido SIN `.env` —el archivo no existía en la copia de trabajo—, así
+ * que `expo export` horneó las variables de Firebase vacías y el sitio publicado no
+ * enseñaba la aplicación sino «Falta configuración del entorno». Lo peor: esta misma
+ * comprobación pasó EN VERDE sobre esa web rota, porque hasta aquí solo miraba que los
+ * 59 archivos se sirvieran con su tipo correcto. Y lo hacían: un JavaScript perfecto
+ * que arrancaba una pantalla de error.
+ *
+ * Así que ahora se mira DENTRO del paquete que acaba de publicarse. Si lleva una clave
+ * de API de Google y el identificador del proyecto, se construyó con configuración; si
+ * no, se construyó sin ella y da igual lo bien servido que esté.
+ *
+ * No hace falta navegador: las variables `EXPO_PUBLIC_*` se hornean en el paquete —son
+ * públicas por diseño, van en el cliente— así que leerlo basta y cuesta una descarga.
+ */
+if (fallos.length === 0) {
+  const entrada = aComprobar.find((ruta) => /entry-[a-f0-9]+\.js$/.test(ruta));
+  if (entrada === undefined) {
+    console.error('FALLA: no encontré el paquete de entrada; algo cambió en el empaquetado.');
+    process.exit(1);
+  }
+
+  // La misma construcción que el bucle de arriba: `aComprobar` guarda rutas DEL DISCO,
+  // no URLs. Usarlas tal cual pedía una dirección inexistente y la comprobación acusaba
+  // de «sin configuración» a un despliegue correcto.
+  const urlEntrada = `${BASE}/${relative(DIST, entrada).split(sep).join('/')}`;
+  const paquete = await (await fetch(urlEntrada)).text();
+  const faltan = [];
+  if (!/AIza[0-9A-Za-z_-]{30,}/.test(paquete)) faltan.push('la clave de API de Firebase');
+  if (!paquete.includes('krealo-shift')) faltan.push('el identificador del proyecto');
+
+  if (faltan.length > 0) {
+    console.error(`\nFALLA: el paquete publicado no lleva ${faltan.join(' ni ')}.`);
+    console.error('  Se construyó sin `.env`, así que el sitio enseña «Falta configuración');
+    console.error('  del entorno» en vez de la aplicación. Copia `.env.example` a `.env`,');
+    console.error('  reconstruye y vuelve a desplegar.');
+    process.exit(1);
+  }
+  console.log('El paquete publicado lleva su configuración de Firebase dentro.');
+}
+
 if (fallos.length === 0) {
   console.log(`Todo servido con su tipo correcto: ${aComprobar.length} archivos.`);
   process.exit(0);
