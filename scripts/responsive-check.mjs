@@ -129,10 +129,6 @@ const DEUDA = new Map([
   ['horas/fuera', 'el filtro de empleados es un carrusel (nhK2Ojc2qu0qqy2uRefc)'],
   ['horas/tactil/Ele', 'el chip del filtro corta el nombre (jAxDGi0czdJvd1R3YhGA)'],
   [
-    'acceso/recorte/Configurar este dispositivo como reloj',
-    'el enlace del reloj se corta (SJYNEknQrikuvEOaolpa)',
-  ],
-  [
     'reportes/tactil/testid:day-column-',
     'las columnas de día son focalizables y estrechas (zMeTpeHUPyTpTqcKK0gz)',
   ],
