@@ -7,6 +7,8 @@ import {
   type TimeEventType,
 } from '../../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './admin';
+import { marcasDeLaSesion } from './marcas';
+import { politicasDe } from './politicas';
 
 /**
  * Registro de fichajes y su proyeccion. Reemplaza a `submit_time_event`,
@@ -238,6 +240,38 @@ export async function rebuildWorkSession(
       ? null
       : Math.floor((new Date(endsAt).getTime() - new Date(startsAt).getTime()) / 60000);
 
+  /*
+   * LAS MARCAS, que hasta hoy eran un `flags: []` fijo.
+   *
+   * Se calculan aqui porque es el unico sitio que tiene las tres piezas a la vez: los
+   * eventos crudos, el turno al que dijeron pertenecer y la sede que pone las
+   * tolerancias. La decision en si vive en `marcas.ts`, sin Firestore delante, para
+   * poder probarla.
+   *
+   * Si el turno o la sede no se pueden leer se sigue adelante con lo que haya: una marca
+   * que no se puede calcular no puede impedir que la sesion se guarde, porque la sesion
+   * es lo que sostiene las horas que se pagan y la marca solo es un aviso.
+   */
+  const turnoId = (inicio.shift_id as string | null) ?? null;
+  const turnoDoc =
+    turnoId === null
+      ? undefined
+      : (await db.collection(COLLECTIONS.shifts).doc(turnoId).get()).data();
+  const sedeDoc = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+
+  const marcas = marcasDeLaSesion({
+    turno:
+      turnoDoc === undefined
+        ? null
+        : { starts_at: String(turnoDoc.starts_at), ends_at: String(turnoDoc.ends_at) },
+    entrada: startsAt,
+    salida: endsAt,
+    entradaSegunElAparato: (inicio.occurred_at_device as string | null) ?? null,
+    salidaSegunElAparato: (salida?.occurred_at_device as string | null) ?? null,
+    sinConexion: inicio.is_offline === true || salida?.is_offline === true,
+    politicas: politicasDe(sedeDoc ?? {}),
+  });
+
   const sessionId = `${employeeId}_${startsAt}`;
   await db
     .collection(COLLECTIONS.workSessions)
@@ -260,7 +294,7 @@ export async function rebuildWorkSession(
         unpaid_break_minutes: noPagados,
         net_minutes: brutos === null ? null : brutos - noPagados,
         status: abierta ? 'open' : 'complete',
-        flags: [],
+        flags: marcas,
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       },
