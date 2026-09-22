@@ -317,6 +317,21 @@ y el identificador del proyecto.
 el cambio tocó `functions/`, la web nueva acaba hablando con funciones viejas. Mirar
 `git log <ultimo-despliegue>..HEAD -- functions/` antes de decidir si hace falta.
 
+**Si el despliegue de funciones muere con «Cannot determine backend specification.
+Timeout after 10000», no es tu código.** El CLI arranca las funciones en un servidor
+local, le pide `/__/functions.yaml` y ese `GET` —que es el que carga los módulos— tiene
+**10 segundos fijos**. En Linux el código carga en 632 ms; en Windows, con el antivirus
+revisando 1200 paquetes y el disco frío, se pasa de largo y el CLI culpa al código. El
+límite se sube con una variable, y va en segundos
+(`firebase-tools/lib/deploy/functions/runtimes/discovery/index.js:15`):
+
+```powershell
+$env:FUNCTIONS_DISCOVERY_TIMEOUT=300
+firebase deploy --only functions
+```
+
+Solo vive en esa ventana de PowerShell. Pasó el 2026-09-22 y con eso salió a la primera.
+
 Dos cosas que conviene saber antes:
 
 - El **reloj SÍ funciona en la web publicada** desde el 2026-09-21 (decisión de
