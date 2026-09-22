@@ -118,6 +118,16 @@ Atajos equivalentes definidos en `package.json`: `npm start`, `npm run web`,
 web como se publica y comprueba que arranca: una guarda mal puesta ya dejó una vez la
 web publicada en una página completamente en blanco, y en desarrollo no se notaba.
 
+**Si empaquetas a mano, pon `--clear`.** `expo export` reutiliza la caché de Metro, y
+las variables `EXPO_PUBLIC_*` se incrustan al TRANSFORMAR cada módulo, no al
+empaquetar. O sea que un `npm run demo:export` previo —que sí lleva
+`EXPO_PUBLIC_DEMO=1`— deja en la caché los módulos ya transformados en modo
+demostración, y el siguiente `npx expo export` los reutiliza aunque no le pases la
+variable: sale un build que se declara de producción y trae la demostración dentro,
+con el mismo hash de bundle que el de la demo. Los scripts de `package.json` ya llevan
+`--clear`; el que no lo lleva es el comando suelto que copia el CI, y en el CI no
+importa porque cada runner empieza con la caché vacía.
+
 **Los siete arneses de la demostración corren en el CI en cada push**, uno por
 runner: `demo`, `kiosco`, `reportes`, `inicio`, `tema`, `contraste` y `responsive`.
 Hasta ahora solo corrían a mano y eso costó caro: un commit dejó el reloj web sin
