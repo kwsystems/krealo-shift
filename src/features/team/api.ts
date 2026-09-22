@@ -421,7 +421,26 @@ export async function fetchUpcomingShifts(params: {
       .select('id, starts_at, ends_at, location_id, job_role_id, status')
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)
-      .neq('status', 'cancelled')
+      /*
+       * `in` Y NO `neq`, y no es una preferencia de estilo: es lo que hace que esta
+       * consulta se pueda ejecutar.
+       *
+       * `!=` cuenta como DESIGUALDAD en Firestore, y aqui ya hay otra —`>=` sobre
+       * `starts_at`—. Con dos campos en desigualdad, Firestore exige un indice propio
+       * con un orden muy concreto de campos, distinto del que este proyecto tiene
+       * declarado: la ficha del empleado respondia «Algo no salio bien» al abrir
+       * «Proximos turnos», con un FAILED_PRECONDITION que solo se ve en el servidor.
+       *
+       * Solo hay tres estados —`draft`, `published`, `cancelled`— asi que «distinto de
+       * cancelado» y «uno de los otros dos» son lo MISMO, y un `in` cuenta como
+       * igualdad. Con eso la consulta encaja en el indice que YA existe
+       * (`organization_id` + `employee_id` + `status` + `starts_at`) y no hace falta
+       * crear ninguno. Comprobado ejecutando las dos contra el Firestore de verdad.
+       *
+       * Si algun dia se añade un cuarto estado hay que añadirlo a esta lista. Es el
+       * precio de no tener que mantener un indice mas.
+       */
+      .in('status', ['draft', 'published'])
       .gte('starts_at', params.fromISO)
       .order('starts_at', { ascending: true })
       .limit(params.limit ?? 5),

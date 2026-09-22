@@ -97,7 +97,18 @@ function iniciales(nombre: string): string {
  * panel seria la lista de llaves de todas las tiendas.
  */
 export const activateKiosk = onCall(async (request) => {
-  const code = String(request.data?.code ?? '').trim();
+  /*
+   * `activationCode`, QUE ES LO QUE MANDA EL CLIENTE. Esto leia `code` y el resultado
+   * era que activar un reloj respondia 400 SIEMPRE: el campo llegaba vacio, fallaba la
+   * comprobacion de formato de abajo y salia un `invalid-argument`. Nadie podia montar
+   * un reloj, que es el unico camino para que alguien fiche.
+   *
+   * Es un desajuste heredado de la migracion —la funcion de Supabase se llamaba igual
+   * pero tomaba otro nombre de campo— y no hay compilador que lo vea: el cliente y la
+   * funcion se hablan por un objeto sin tipo compartido. La forma de verlo es
+   * comparar lo que uno manda con lo que la otra lee, que es lo que se hizo con todas.
+   */
+  const code = String(request.data?.activationCode ?? '').trim();
   const displayName = String(request.data?.displayName ?? 'iPad').trim() || 'iPad';
   const installationId = (request.data?.installationId as string | undefined) ?? null;
   const appVersion = (request.data?.appVersion as string | undefined) ?? null;
@@ -613,6 +624,21 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
   return { results: resultados, syncedAt: nowISO() };
 });
 
+/**
+ * La fecha de la jornada, en la zona de la TIENDA y no en UTC.
+ *
+ * Importa en los turnos de tarde: en Lima —UTC-5— un fichaje a las 20:00 del lunes es
+ * la 01:00 del martes en UTC. Cortar la cadena ISO daria el dia siguiente, y la
+ * solicitud aparecería en la Bandeja fechada un dia despues de cuando paso.
+ */
+function fechaLocal(iso: string | null, zona: string): string | null {
+  if (iso === null) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  // `en-CA` da exactamente `AAAA-MM-DD`, que es el formato que usa `target_date`.
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(d);
+}
+
 export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request) => {
   const kiosk = await authenticateKiosk(request.data);
   const employeeId = exigirTokenDeAccion(request.data, kiosk);
@@ -622,14 +648,29 @@ export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request
     throw new HttpsError('invalid-argument', 'Hay que explicar qué pasó.');
   }
 
+  const propuesta = (request.data?.proposedAt as string | undefined) ?? null;
+  const zonaDeLaSede =
+    ((await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data()?.timezone as
+      string | undefined) ?? 'America/Lima';
+
   const doc = await db.collection(COLLECTIONS.timeEditRequests).add({
     organization_id: kiosk.organizationId,
     employee_id: employeeId,
     location_id: kiosk.locationId,
     work_session_id: (request.data?.workSessionId as string | null) ?? null,
-    target_date: (request.data?.targetDate as string | null) ?? null,
+    /*
+     * `proposedAt`, QUE ES LO QUE MANDA EL RELOJ. Esto leia `proposedValue` y
+     * `targetDate`, que el cliente no envia nunca, asi que toda solicitud de «Olvide
+     * marcar» se guardaba con `proposed_value: {}` y `target_date: null`: la Bandeja
+     * enseñaba una peticion sin hora que aprobar y sin fecha a la que referirse.
+     *
+     * `proposed_value.proposedAt` es la clave exacta que lee la Bandeja al aprobar
+     * —ver `proposedStart` en `features/requests/api.ts`—, asi que se guarda con ese
+     * nombre y no con otro.
+     */
+    target_date: fechaLocal(propuesta, zonaDeLaSede),
     kind: String(request.data?.kind ?? 'correction'),
-    proposed_value: request.data?.proposedValue ?? {},
+    proposed_value: propuesta === null ? {} : { proposedAt: propuesta },
     reason,
     status: 'pending',
     reviewed_by: null,
