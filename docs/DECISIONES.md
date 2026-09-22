@@ -19,6 +19,44 @@ Formato de cada entrada: la decisión, el motivo, el costo aceptado y dónde viv
 
 ---
 
+## Producto
+
+### El reloj de la tienda es la web, no un iPad (2026-09-22)
+
+**Decisión.** Por indicación de Andree, el reloj es la aplicación web publicada, abierta
+con su enlace en el navegador del aparato que haga de reloj. Se acaba la vía del iPad:
+no hay compilación con EAS, ni App Store, ni aparato dedicado que comprar.
+
+**Motivo.** Sin build no hay reloj, ni bueno ni malo. Un reloj con límites conocidos vale
+más que ninguno, y la vía nativa exigía cuenta de Apple, un aparato y un ciclo de
+revisión antes de que nadie pudiera fichar por primera vez.
+
+**Costo aceptado, y es de verdad.** El modelo de seguridad descansaba en un objeto
+físico: un iPad en la pared, credencial en el Keychain y Acceso Guiado impidiendo salir
+de la app. Estar delante del reloj era, por sí solo, prueba de estar en la tienda. Con
+una dirección web eso deja de ser cierto.
+
+Lo que ocupa ese sitio es **la foto, que en web es obligatoria** —en el iPad era
+opcional—, y sigue haciendo falta activar el navegador con un código de un solo uso y
+acertar un PIN para cada acción. Lo que queda asumido: la credencial vive en
+`localStorage` en vez del Keychain, y un navegador activado y llevado a otro sitio sigue
+fichando, porque la foto muestra una cara y no un lugar. Si eso llega a importar, las
+salidas son geolocalización al fichar o restricción por IP de la tienda; ninguna está
+hecha.
+
+Tampoco se ficha sin red en web: la cola vive en memoria y no sobrevive a un recargado,
+así que se niega a la cara en vez de prometer un fichaje que se puede evaporar.
+
+**Dónde vive.** `src/lib/kiosk/disponibilidad.ts` tiene el porqué de cada límite;
+`SECURITY.md` («El reloj es un navegador, no un iPad atornillado») tiene el modelo de
+amenazas actualizado; el README, el alcance.
+
+**Lo que NO se borra por esto.** La app sigue siendo Expo y el CI sigue empaquetando
+para iOS: cuesta poco y deja la puerta abierta si algún día se quiere la vía nativa.
+Quitarlo sería cerrarla a cambio de nada.
+
+---
+
 ## Backend
 
 ### Todo el backend pasa de Supabase a Firebase (2026-09-21)

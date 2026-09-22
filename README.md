@@ -22,15 +22,23 @@ Lo que **sí** hace en esta etapa:
 - español (es-PE) e inglés completos, conmutables en caliente;
 - previsualización web para desarrollar y revisar desde Windows.
 
+**EL RELOJ ES LA WEB PUBLICADA** (decisión de Andree, 2026-09-22). Se abre con su
+enlace en el navegador del aparato que haga de reloj en la tienda, se activa una vez con
+un código, y a partir de ahí la gente ficha con su PIN. No hay aplicación nativa que
+instalar ni aparato dedicado que comprar.
+
 Lo que **no** hace, a propósito:
 
-- **no hay fichaje desde el celular del empleado.** El reloj es el iPad de la
-  tienda. Un empleado no necesita cuenta ni instalar nada;
-- no hay geolocalización ni mapas: el iPad ya está vinculado de forma segura a
-  una tienda concreta;
+- **un empleado no necesita cuenta ni instalar nada.** Ficha con su PIN en el reloj de
+  la tienda; el acceso con Google es solo para quien administra;
+- no hay geolocalización ni mapas. Con el iPad atornillado esto no hacía falta —el
+  aparato era la prueba de estar en la tienda—; **con un navegador esa prueba pasa a
+  ser la foto, que en web es obligatoria**. Lo que se gana y lo que se asume está en
+  `SECURITY.md`, en «El reloj es un navegador, no un iPad atornillado»;
 - no hay integración con Shopify, nómina ni chat (eso es P2);
-- la web es una herramienta de desarrollo, **no** un producto que se despliegue
-  ni un WebView metido dentro de iOS.
+- en web **no se ficha sin red**: la cola vive en memoria y no sobrevive a un recargado,
+  así que se prefiere negarlo a la cara antes que prometer un fichaje que se puede
+  evaporar.
 
 Ver `docs/DECISIONES.md` para el registro de decisiones técnicas y desviaciones,
 y `SECURITY.md` para el modelo de seguridad.

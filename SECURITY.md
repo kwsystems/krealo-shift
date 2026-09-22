@@ -20,29 +20,69 @@ Lo que hay que proteger, en orden de gravedad:
 
 Contra quién:
 
-| Actor                               | Qué podría intentar                                                 | Qué lo detiene                                                                                                                                                    |
-| ----------------------------------- | ------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Empleado curioso frente al kiosco   | ver la lista del personal, fichar por un compañero, salir de la app | el kiosco nunca muestra el equipo antes de validar un PIN; cada acción exige un token de 90 s ligado al empleado; Acceso guiado de iPadOS impide salir de la app  |
-| Empleado con el PIN de otro         | fichar en su nombre                                                 | el PIN es el único factor en el iPad: eso es una limitación aceptada del modelo kiosco. Se compensa con rotación de PIN, auditoría de cada evento y foto opcional |
-| Alguien con el iPad en la mano      | extraer la credencial y fichar desde fuera                          | la credencial vive en el Keychain (SecureStore); sin el token de acción de 90 s no puede fichar por nadie; revocar el dispositivo la anula al instante            |
-| Cliente malicioso con la `anon key` | leer datos de otra organización                                     | RLS: la `anon key` no otorga ningún dato por sí sola                                                                                                              |
-| Gerente que quiere más permisos     | editar su propio rol o ver otras tiendas                            | el rol se resuelve en el servidor; las políticas RLS y las guardas de esquema impiden la escalada                                                                 |
-| Persona con acceso al repositorio   | encontrar secretos                                                  | no hay secretos en Git: solo `.env.example` vacío                                                                                                                 |
+| Actor                                 | Qué podría intentar                                              | Qué lo detiene                                                                                                                                                        |
+| ------------------------------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Empleado curioso frente al reloj      | ver la lista del personal, fichar por un compañero               | el reloj nunca muestra el equipo antes de validar un PIN; cada acción exige un token de 90 s ligado al empleado                                                       |
+| Empleado con el PIN de otro           | fichar en su nombre                                              | el PIN es el único factor: limitación aceptada del modelo. Se compensa con rotación de PIN, auditoría de cada evento y **la foto, que en web es obligatoria**         |
+| Alguien con el navegador ya activado  | copiar la credencial del reloj y fichar desde fuera de la tienda | sin el token de acción de 90 s no puede fichar por nadie, y revocar el reloj anula la credencial al instante. **La foto es la única prueba de presencia — ver abajo** |
+| Cliente malicioso con la clave de API | leer datos de otra organización                                  | la `apiKey` de Firebase no es una credencial: identifica el proyecto. Lo que protege los datos son `firestore.rules` y las comprobaciones dentro de cada función      |
+| Gerente que quiere más permisos       | editar su propio rol o ver otras tiendas                         | el rol se resuelve en el servidor; `caller.ts` lo comprueba en cada función y nadie puede cambiarse el rol a sí mismo ni dar uno por encima del suyo                  |
+| Persona con acceso al repositorio     | encontrar secretos                                               | no hay secretos en Git: solo configuración de Firebase, que es pública por diseño                                                                                     |
 
-Fuera de alcance en P0/P1: fichaje desde teléfonos personales (no existe),
-geolocalización (no existe) y ataques a la infraestructura de Google o Apple.
+Fuera de alcance: geolocalización (no existe) y ataques a la infraestructura de Google.
+
+### El reloj es un navegador, no un iPad atornillado — qué cambia
+
+**Decisión de Andree (2026-09-22): el reloj de la tienda es la web publicada, abierta
+con su enlace.** No hay aplicación nativa ni aparato dedicado. Eso es un cambio del
+modelo de amenazas y conviene tenerlo escrito, no descubrirlo.
+
+**Lo que se pierde.** El modelo anterior descansaba en un objeto físico: un iPad en la
+pared, con la credencial en el Keychain y Acceso Guiado impidiendo salir de la app.
+Estar delante del reloj era, por sí solo, prueba de estar en la tienda. Con una
+dirección web eso deja de ser cierto: la URL es pública y el navegador puede ser
+cualquiera, en cualquier sitio.
+
+**Lo que sigue en pie, y no es poco:**
+
+- **La dirección no basta.** Un navegador tiene que activarse con un código de un solo
+  uso que emite un administrador, y lo que queda guardado es una credencial de
+  dispositivo. Sin ella el reloj no autentica.
+- **La credencial no basta.** Cada fichaje exige además un token de acción de 90
+  segundos que solo emite un PIN correcto.
+- **Se puede cortar.** Revocar el reloj desde Ajustes anula la credencial al instante.
+- **Y la foto es obligatoria en web**, a diferencia del iPad, donde era opcional. Es
+  deliberado: cuando el aparato dejó de ser la prueba de presencia, algo tenía que
+  ocupar ese sitio. Sin foto no hay fichaje.
+
+**Lo que queda asumido, y es decisión de negocio, no un fallo:**
+
+- La credencial vive en `localStorage`, al alcance de cualquier extensión del navegador
+  o de quien tenga acceso a ese perfil. En el iPad vivía en el Keychain.
+- **Un navegador activado y llevado a otro sitio sigue fichando.** Lo único que lo
+  frena es que la foto muestra una cara, no un lugar. Si esto llega a importar, las
+  salidas son pedir geolocalización al fichar o restringir por IP de la tienda —las dos
+  son trabajo y ninguna está hecha—.
+- En web no se ficha sin red, porque la cola vive en memoria y no sobrevive a un
+  recargado. Se prefiere negarlo a la cara antes que prometer un fichaje que se puede
+  evaporar.
+
+El porqué completo de cada punto está en `src/lib/kiosk/disponibilidad.ts`.
 
 ## Manejo de secretos
 
-- **Nada de secretos en el repositorio.** `.env` está en `.gitignore`;
-  `.env.example` se commitea vacío.
-- **Solo las variables `EXPO_PUBLIC_*` llegan al cliente**, y hay que tratarlas
-  como públicas: cualquiera que descargue el `.ipa` puede leerlas. Ahí solo van la
-  URL del proyecto y la `anon key`.
-- **La `service_role` nunca entra en la app.** Vive en los secretos de las Edge
-  Functions y, temporalmente, en la terminal de quien corre
-  `scripts/seed-demo-users.mjs`. Si aparece dentro de `app/`, `src/` o de una
-  variable `EXPO_PUBLIC_*`, es un incidente: hay que rotar esa credencial.
+- **Nada de secretos en el repositorio.** `.env` está en `.gitignore`.
+  `.env.example` **sí trae valores puestos, y es correcto**: la configuración de
+  Firebase es pública por diseño. `apiKey` no es una credencial, es el identificador
+  del proyecto ante la API, y viaja dentro del paquete web de cualquier forma.
+- **Solo las variables `EXPO_PUBLIC_*` llegan al cliente**, y hay que tratarlas como
+  públicas: cualquiera que abra la web puede leerlas con las herramientas del
+  navegador. Ahí va la configuración de Firebase y nada más.
+- **Ninguna clave de cuenta de servicio entra en la app.** Las Cloud Functions se
+  autentican solas dentro de Google; los scripts de `functions/scripts/` usan
+  `gcloud auth application-default login`. Si un `private_key` aparece dentro de
+  `app/`, `src/` o de una variable `EXPO_PUBLIC_*`, es un incidente: hay que rotar esa
+  credencial.
   La configuración de Firebase (`apiKey`, `appId`) NO entra en esa categoría: es
   pública por diseño y lo que protege los datos son las reglas y las funciones.
 - **`KIOSK_TOKEN_SECRET`** (32+ bytes aleatorios) firma los tokens de acción. Se
@@ -56,12 +96,13 @@ geolocalización (no existe) y ataques a la infraestructura de Google o Apple.
 
 ## PIN del empleado
 
-- Se guarda **solo el hash**: bcrypt con coste 12, generado dentro de Postgres
-  (`extensions.crypt` + `gen_salt('bf', 12)`) en `set_employee_pin`.
-- Nunca se devuelve en ninguna consulta: `employee_pin_credentials` tiene RLS con
-  `force row level security` y **ninguna política de lectura**, y además se
-  revocan los permisos de tabla a `anon` y `authenticated`. No se lee ni siendo
-  propietario de la organización.
+- Se guarda **solo el hash**: bcrypt, generado dentro de la Cloud Function
+  `setEmployeePin` (`functions/src/manager.ts`). Nunca lo calcula el cliente.
+- Nunca se devuelve en ninguna consulta: `firestore.rules` cierra
+  `employee_pin_credentials` a todo el mundo —sin política de lectura, ni siquiera
+  para el dueño de la organización— y solo el Admin SDK, que se salta las reglas, lo
+  alcanza desde dentro de `verifyPin`. **Hay una prueba automática que lo comprueba**
+  (`npm run emulador:check`), y falla si alguien abre esa colección.
 - Tras **5 intentos fallidos** el PIN queda bloqueado **15 minutos** en esa
   ubicación. El kiosco no revela a quién pertenece el PIN bloqueado.
 - La comparación ocurre en el servidor, dentro de una función `security definer`.
@@ -175,29 +216,40 @@ completo **nunca** sale de la base.
 fichando con normalidad online; para volver a validar PIN sin red hay que
 reactivarlo. La app lo dice en pantalla en vez de responder "PIN incorrecto".
 
-## RLS como barrera principal
+## Dónde vive la autorización, ahora que no hay RLS
 
-La autorización no vive en la interfaz. Vive en la base:
+La autorización no vive en la interfaz. Con Postgres vivía en las políticas RLS;
+desde la migración a Firebase vive en **dos sitios que hay que leer juntos**, porque
+ninguno cubre lo del otro:
 
-- **RLS habilitado en todas las tablas expuestas**, y `force row level security`
-  en las sensibles, para que ni el dueño de la tabla las lea sin política.
-- `employee_pin_credentials`, `kiosk_activation_codes` y `kiosk_devices` tienen
-  los permisos revocados para `anon` y `authenticated`. Los kioscos se
-  administran a través de una vista que no expone el hash.
-- **`time_events` y `audit_logs` son append-only**: triggers rechazan `update` y
-  `delete`. Los eventos crudos son la única prueba de lo que pasó, y una
-  corrección es una fila nueva en `time_adjustments`, no una edición.
-- Guardas de esquema para lo que la interfaz no puede garantizar: una
-  organización no se queda sin propietario, un turno publicado no se solapa ni se
-  borra, y publicar sella versión y fecha.
-- **Protección contra escalada de rol**: el rol se resuelve en el servidor. El
-  kiosco no deduce quién es gerente: `kiosk_employee_context` devuelve
-  `canManageLocation`, y la autorización de entrada temprana exige además que la
-  persona que autoriza sea distinta de la que ficha. Dejárselo deducir al cliente
-  habría convertido cualquier PIN en un PIN de gerente.
-- Las pruebas de aislamiento vivían en SQL y **todavía no se han reescrito** contra
-  el emulador de Firestore; era parte de
-  `./scripts/db-test.sh`.
+1. **`firestore.rules`**, para lo que el cliente lee directo. Cierra
+   `employee_pin_credentials` y `kiosk_device_secrets` a todo el mundo —sin política
+   de lectura, ni siquiera para el dueño—, hace `time_events` de solo lectura desde el
+   cliente, y termina con un `match /{document=**} { allow read, write: if false; }`
+   para que una colección nueva nazca cerrada.
+2. **`functions/src/shared/caller.ts`**, para todo lo que pasa por una Cloud Function.
+   Y esto NO es una segunda capa: **es la única**. El Admin SDK no evalúa
+   `firestore.rules` —las ignora por diseño, igual que `security definer` ignoraba la
+   RLS—, así que una función que no compruebe quién llama es una puerta abierta a toda
+   la base para cualquiera con una cuenta de Google. Por eso todas empiezan llamándolo.
+
+Lo demás que sostiene el modelo:
+
+- **`time_events` y `audit_logs` son append-only.** Los eventos crudos son la única
+  prueba de lo que pasó, y una corrección es una fila nueva en `time_adjustments`, no
+  una edición.
+- **Protección contra escalada de rol**: el rol se resuelve en el servidor. El reloj no
+  deduce quién es gerente —`verifyPin` devuelve `canManageLocation`— y la autorización
+  de entrada temprana exige que quien autoriza sea distinto de quien ficha. Dejárselo
+  deducir al cliente habría convertido cualquier PIN en un PIN de gerente.
+- Nadie puede cambiarse el rol a sí mismo ni dar uno por encima del suyo.
+
+**Y AHORA SE PRUEBA, que es lo que faltaba.** Las 265 aserciones SQL de
+`scripts/db-test.sh` se fueron con Postgres y durante un tiempo no hubo nada. Hoy
+`npm run emulador:check` ejercita las reglas contra el emulador —abre una sesión con un
+`uid` concreto y mira qué le deja hacer— y las comprobaciones de acceso de tres Cloud
+Functions, en CI. Sigue siendo menos cobertura que antes: **quedan 26 de las 29
+funciones sin una sola prueba**, y eso está anotado como tarea, no disimulado.
 
 ## Revocación de kioscos y rotación
 
@@ -505,9 +557,11 @@ envía quiere.
 
 ## Si un secreto se filtra
 
-1. **Rotar primero, investigar después.** `service_role` y `anon key` se
-   regeneran en _Project Settings → API_; `KIOSK_TOKEN_SECRET` con
-   `gcloud secrets versions add`.
+1. **Rotar primero, investigar después.** `KIOSK_TOKEN_SECRET` con
+   `gcloud secrets versions add` (y desplegar las funciones, que es lo que las hace
+   leer la versión nueva). Las claves de cuenta de servicio se revocan desde
+   _IAM → Cuentas de servicio_. La `apiKey` de Firebase **no hace falta rotarla**:
+   no es un secreto.
 2. Revocar los kioscos activos si la credencial pudo quedar expuesta.
 3. Revisar `audit_logs` y `time_events` del periodo sospechoso: son append-only,
    así que el rastro sigue ahí.
