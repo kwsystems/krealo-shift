@@ -152,6 +152,24 @@ export const setMemberRole = onCall(async (request) => {
   // Degradar al ultimo que manda deja la organizacion sin nadie que la administre.
   const mandan = await quienesMandan(organizationId);
   const bajaDeMando = RANGO[nuevoRol] < RANGO.admin;
+  /**
+   * ESTA GUARDA NO SE ALCANZA NUNCA, medido el 2026-09-22. Se deja y se explica en vez
+   * de borrarse porque quitarla es decision de quien escribio esto.
+   *
+   * Para llegar aqui hay que haber pasado `requireRole(['owner','admin'])` —o sea,
+   * estar dentro de `quienesMandan`— y no ser el objetivo, porque eso se rechaza antes.
+   * Con las dos cosas ciertas, `mandan` tiene DOS entradas como minimo y `<= 1` no puede
+   * cumplirse. Comprobado desactivandola: las doce pruebas de `members.test.ts` siguen
+   * en verde.
+   *
+   * El invariante que pretende proteger —que la empresa nunca se quede sin nadie que la
+   * administre— si se cumple, pero lo sostiene la comprobacion de «no te tocas a ti
+   * mismo» de unas lineas mas arriba. Eso es lo que fija la prueba.
+   *
+   * Conviene decidir: o se borra, o se hace alcanzable. Mientras siga asi, alguien puede
+   * quitar el «no te tocas a ti mismo» creyendo que esto lo cubre, y entonces el ultimo
+   * admin si podra dejar la organizacion sin llaves.
+   */
   if (bajaDeMando && mandan.length <= 1 && mandan.some((m) => m.userId === objetivo)) {
     throw new HttpsError(
       'failed-precondition',
@@ -212,6 +230,8 @@ export const revokeMember = onCall(async (request) => {
   }
 
   const mandan = await quienesMandan(organizationId);
+  // Tampoco se alcanza, y por el mismo motivo exacto que en `setMemberRole`: quien llama
+  // esta dentro de `mandan` y no es el objetivo, asi que `mandan` tiene dos o mas.
   if (mandan.length <= 1 && mandan.some((m) => m.userId === objetivo)) {
     throw new HttpsError(
       'failed-precondition',
