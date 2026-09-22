@@ -1,6 +1,6 @@
 import type { Almacen, Fila } from './postgrest';
 import { DEMO_LOCATION_1, TZ } from './seed';
-import { dateKeyOf } from '@/features/schedules/week';
+import { dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 
 /**
  * Tres días distintos en la misma demostración.
@@ -117,31 +117,114 @@ function cubrirTurnosDeHoy(almacen: Almacen): void {
  * ya han fichado hoy, así que «coger tres libres» encontraba una sola y el escenario
  * enseñaba «1 ausente» llamándose «día con ausentes».
  *
- * No se toca a quien está DENTRO ahora mismo: quitarle la sesión a alguien que la
- * pantalla enseña trabajando dejaría la demostración contradiciéndose a sí misma.
+ * SOLO EN LA SEDE QUE EL TABLERO ESTÁ MIRANDO. Sin ese filtro se descubrían tres turnos
+ * y la pantalla enseñaba dos, porque el tercero era de la otra sede y el tablero,
+ * correctamente, no lo cuenta. El escenario prometía tres ausentes y el arnés lo cazó:
+ * no era un fallo de la app, era el escenario sembrando donde no se mira.
+ *
+ * Y AHORA LAS GARANTIZA A CUALQUIER HORA Y CUALQUIER DÍA, que es lo que no hacía.
+ *
+ * El tablero solo cuenta como ausencia un turno de hoy QUE YA TERMINÓ sin que nadie
+ * fichara, y con razón: mientras el turno sigue abierto la persona todavía puede llegar.
+ * La versión anterior se limitaba a buscar esos turnos, y por eso `inicio:check` pasaba
+ * o fallaba según cuándo se corriera. Recorriendo la semilla hora a hora los siete días
+ * salen TRES agujeros, no uno:
+ *
+ *   1. ENTRE SEMANA, SOLO DE 20:00 UTC EN ADELANTE. Los turnos de la semilla acaban a
+ *      las 14:00 y las 20:00 UTC, así que antes no ha terminado ninguno. Medido: a las
+ *      13:59 UTC el escenario producía CERO ausencias y se veía exactamente igual que el
+ *      día tranquilo.
+ *   2. SÁBADO Y DOMINGO, NUNCA. El domingo la semilla no siembra —la tienda cierra— y el
+ *      sábado lo siembra EN BORRADOR, y el tablero solo mira turnos publicados. De las
+ *      05:00 UTC del sábado a las 05:00 UTC del lunes hay cero turnos del día de la
+ *      tienda: ni terminados ni abiertos.
+ *   3. Y EL DÍA DE LA TIENDA NO EMPIEZA CUANDO EL DEL PROCESO. La semilla arma sus días
+ *      con la hora local del proceso —UTC en el contenedor— y el tablero pregunta «¿es
+ *      hoy?» en la zona de la sede, cinco horas por detrás: la frontera está a las 05:00
+ *      UTC y corre qué turnos cuentan como de hoy.
+ *
+ * O sea que el arnés no fallaba de vez en cuando: pasaba de vez en cuando.
+ *
+ * Así que en vez de esperar que el calendario coopere, los turnos que hagan falta SE
+ * COLOCAN en el trozo de día que ya ha pasado: son datos sembrados y se pueden poner
+ * donde convenga. Se prefieren, en este orden, los que ya terminaron hoy (no hay que
+ * tocarlos), los de hoy que siguen abiertos, y los de los días de al lado —que es lo que
+ * salva el fin de semana—. Lo que NO se hace es bajar el número que el arnés exige, que
+ * es la forma fácil de que deje de fallar y también de que deje de comprobar.
+ *
+ * El domingo eso enseña turnos en un día en que la tienda cierra. Es a propósito: el
+ * escenario es un día de mentira pedido con `?escenario=ausentes` para ver la pantalla
+ * con ausencias, no una afirmación sobre el calendario de la tienda.
+ *
+ * Los huecos se reparten por lo que va de día en vez de amontonarse en el mismo minuto,
+ * y ninguno cae antes de la medianoche DE LA TIENDA: un turno que empezara ayer ya no
+ * sería «de hoy» para el tablero y volveríamos al punto 2.
  */
 function dejarSinCubrir(almacen: Almacen, cuantos: number): number {
   const ahora = new Date().toISOString();
+  const ahoraMs = Date.parse(ahora);
+  const medianoche = localDateTimeToInstant(dateKeyOf(ahora, TZ), '00:00', TZ);
+  const inicioDelDia = medianoche === null ? ahoraMs : Date.parse(medianoche);
+  const loQueVaDeDia = Math.max(0, ahoraMs - inicioDelDia);
 
-  /*
-   * SOLO EN LA SEDE QUE EL TABLERO ESTÁ MIRANDO. Sin este filtro se descubrían tres
-   * turnos y la pantalla enseñaba dos, porque el tercero era de la otra sede y el
-   * tablero, correctamente, no lo cuenta. El escenario prometía tres ausentes y el
-   * arnés lo cazó: no era un fallo de la app, era el escenario sembrando donde no se
-   * mira.
-   */
-  const candidatos: string[] = [];
-  for (const turno of almacen.get('shifts') ?? []) {
-    if (!esHoy(turno.starts_at) || turno.status !== 'published') continue;
-    if (turno.location_id !== DEMO_LOCATION_1) continue;
-    if (String(turno.ends_at) >= ahora) continue;
-    const quien = String(turno.employee_id);
-    if (candidatos.includes(quien)) continue;
-    candidatos.push(quien);
-    if (candidatos.length === cuantos) break;
+  const publicadosAqui = (almacen.get('shifts') ?? []).filter(
+    (turno) => turno.status === 'published' && turno.location_id === DEMO_LOCATION_1,
+  );
+  const distanciaAAhora = (turno: Fila) =>
+    Math.abs(Date.parse(String(turno.starts_at)) - ahoraMs) || Number.MAX_SAFE_INTEGER;
+
+  const yaSonAusencia = publicadosAqui.filter(
+    (turno) => esHoy(turno.starts_at) && String(turno.ends_at) < ahora,
+  );
+  const deHoyAbiertos = publicadosAqui.filter(
+    (turno) => esHoy(turno.starts_at) && String(turno.ends_at) >= ahora,
+  );
+  const deOtroDia = publicadosAqui
+    .filter((turno) => !esHoy(turno.starts_at))
+    .sort((a, b) => distanciaAAhora(a) - distanciaAAhora(b));
+
+  const faltan = new Set<string>();
+  const porColocar: Fila[] = [];
+  for (const grupo of [yaSonAusencia, deHoyAbiertos, deOtroDia]) {
+    for (const turno of grupo) {
+      if (faltan.size === cuantos) break;
+      const quien = String(turno.employee_id);
+      if (faltan.has(quien)) continue;
+      faltan.add(quien);
+      if (grupo !== yaSonAusencia) porColocar.push(turno);
+    }
   }
 
-  const faltan = new Set(candidatos);
+  if (porColocar.length > 0) {
+    const nuevasHoras = new Map<string, { starts_at: string; ends_at: string }>();
+    porColocar.forEach((turno, indice) => {
+      /*
+       * El reparto se REDONDEA HACIA ABAJO y se topa un milisegundo antes de `ahora`, y
+       * las dos cosas hacen falta: con `Math.round` y un día recién empezado —un
+       * milisegundo— dos de los tres turnos caían exactamente en `ahora`, y el tablero
+       * pide `ends_at < ahora`, no `<=`. Salían una ausencia de tres.
+       */
+      const fin =
+        inicioDelDia +
+        Math.min(
+          Math.max(0, loQueVaDeDia - 1),
+          Math.floor((loQueVaDeDia * (indice + 1)) / (porColocar.length + 1)),
+        );
+      const duraba = Date.parse(String(turno.ends_at)) - Date.parse(String(turno.starts_at));
+      const inicio = Math.max(inicioDelDia, fin - (Number.isFinite(duraba) ? duraba : 0));
+      nuevasHoras.set(String(turno.id), {
+        starts_at: new Date(inicio).toISOString(),
+        ends_at: new Date(fin).toISOString(),
+      });
+    });
+    almacen.set(
+      'shifts',
+      (almacen.get('shifts') ?? []).map((turno) => {
+        const cambio = nuevasHoras.get(String(turno.id));
+        return cambio === undefined ? turno : { ...turno, ...cambio };
+      }),
+    );
+  }
 
   /*
    * Se le quita TODO rastro de haber venido hoy: la sesión, la fila del resumen diario
@@ -168,7 +251,7 @@ function dejarSinCubrir(almacen: Almacen, cuantos: number): number {
       (fila) => !faltan.has(String(fila.employee_id)),
     ),
   );
-  return candidatos.length;
+  return faltan.size;
 }
 
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {

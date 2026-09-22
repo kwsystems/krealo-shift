@@ -20,7 +20,7 @@
  */
 import { mkdirSync } from 'node:fs';
 
-import { servirExport, cargarPlaywright } from './lib/arnes-web.mjs';
+import { servirExport, cargarPlaywright, entrarComoDemo } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 const CAPTURAS = process.argv[3] ?? '/tmp/krealo-inicio';
@@ -50,11 +50,10 @@ for (const escenario of ESCENARIOS) {
   const errores = [];
   pagina.on('pageerror', (e) => errores.push(String(e).slice(0, 200)));
 
-  const url = `${base}/?escenario=${escenario.nombre}`;
-  await pagina.goto(url, { waitUntil: 'networkidle' });
-  await pagina.waitForTimeout(1500);
-  await pagina.locator('[data-testid="sign-in-demo"]').click();
-  await pagina.waitForTimeout(3000);
+  // Se entra ESPERANDO POR LA PANTALLA y no por el reloj: antes eran 1.500 ms y 3.000 ms
+  // afinados en una máquina, y en un runner más lento se quedan cortos y el arnés mide
+  // una pantalla a medio montar. Ver `entrarComoDemo`.
+  await entrarComoDemo(pagina, base, { ruta: `/?escenario=${escenario.nombre}` });
 
   const marca = await pagina.locator(`[data-testid="${escenario.marca}"]`).count();
   if (marca === 0) {
