@@ -27,7 +27,8 @@
     "reportes:check": "node scripts/reportes-check.mjs dist-demo",
     "inicio:check": "node scripts/inicio-check.mjs dist-demo",
     "tema:check": "node scripts/tema-check.mjs dist-demo",
-    "contraste:check": "node scripts/contraste-check.mjs dist-demo"
+    "contraste:check": "node scripts/contraste-check.mjs dist-demo",
+    "responsive:check": "node scripts/responsive-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
