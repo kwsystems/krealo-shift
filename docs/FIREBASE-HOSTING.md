@@ -40,10 +40,24 @@ En PowerShell, dentro de la carpeta del proyecto:
 npm install -g firebase-tools    # una sola vez
 firebase login                   # una sola vez
 
+cp .env.example .env             # ANTES de compilar: sin esto se publica rota
 npm run web:deploy
 ```
 
 Al terminar, la consola imprime la URL (`https://<proyecto>.web.app`).
+
+**Sin `.env` el despliegue sale en verde y la web sale rota.** Las `EXPO_PUBLIC_*` se
+hornean en el paquete al compilar, así que `expo export` sin ellas produce un
+JavaScript perfecto que arranca la pantalla «Falta configuración del entorno». Pasó el
+2026-09-21 y por eso `despliegue:check` mira dentro del paquete publicado, no solo que
+los archivos se sirvan.
+
+Si el cambio tocó `functions/`, el alojamiento no basta:
+
+```powershell
+npm --prefix functions ci
+firebase deploy --only functions
+```
 
 ### Publicar la demostración, sin backend
 

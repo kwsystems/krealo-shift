@@ -299,13 +299,31 @@ En corto, una vez que exista el proyecto de Firebase:
 npm install -g firebase-tools   # una sola vez
 firebase login                  # una sola vez
 firebase use --add              # una sola vez: elige el proyecto
+
+cp .env.example .env            # ANTES de compilar. Ver el aviso de abajo.
 npm run web:deploy
+npm --prefix functions ci
+firebase deploy --only functions
 ```
+
+**EL `.env` NO ES OPCIONAL Y SU AUSENCIA NO DA ERROR.** Las `EXPO_PUBLIC_*` se hornean
+dentro del paquete al compilar; sin `.env`, `expo export` las hornea VACÍAS y termina
+en verde. Lo publicado no es la aplicación sino la pantalla «Falta configuración del
+entorno». Pasó el 2026-09-21. Por eso `despliegue:check` —que `web:deploy` ejecuta al
+final— mira ahora DENTRO del paquete publicado y falla si no encuentra la clave de API
+y el identificador del proyecto.
+
+**Y las funciones se despliegan aparte.** `web:deploy` publica solo el alojamiento; si
+el cambio tocó `functions/`, la web nueva acaba hablando con funciones viejas. Mirar
+`git log <ultimo-despliegue>..HEAD -- functions/` antes de decidir si hace falta.
 
 Dos cosas que conviene saber antes:
 
-- El **modo kiosco no funciona en la web publicada**, a propósito, y la app lo explica
-  en pantalla. El panel administrativo sí. El motivo está en
+- El **reloj SÍ funciona en la web publicada** desde el 2026-09-21 (decisión de
+  Joseph), con dos límites que la app aplica sola: en web la **foto es obligatoria**
+  —es la única prueba de que quien ficha estaba delante, porque la dirección se abre
+  desde cualquier sitio— y **no se ficha sin red**, porque la cola en web vive en
+  memoria y no sobrevive a un recargado. El porqué completo está en
   `src/lib/kiosk/disponibilidad.ts`.
 - **Recargar la página en una ruta interna** (`/team`, `/schedule`) depende del
   reenvío a `index.html` de `firebase.json`. Si alguien quita esa regla, la web
