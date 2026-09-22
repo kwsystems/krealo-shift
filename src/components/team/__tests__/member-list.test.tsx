@@ -85,4 +85,26 @@ describe('lista del equipo', () => {
 
     expect(screen.getByText(/08:30/)).toBeTruthy();
   });
+
+  /**
+   * SIN SEDE NO SE PUEDE FICHAR, y la fila tiene que decirlo.
+   *
+   * El reloj esta atado a una tienda y solo ofrece a quien trabaja alli, asi que un
+   * empleado sin sede existe y no puede trabajar. Ademas es el estado en el que los
+   * dejaba un guardado a medias, y durante un tiempo eran INVISIBLES: el filtro de la
+   * pantalla exigia que la sede elegida estuviera entre las suyas, y con cero sedes eso
+   * no se cumple en ninguna pestaña. Existian en la base y no habia forma de abrirlos.
+   */
+  it('avisa de quien no tiene ninguna sede', async () => {
+    await renderWithProviders(
+      <MemberList
+        members={[miembro(0)]}
+        recentMinutesByMember={new Map()}
+        jobRoleNames={new Map()}
+        onSelect={() => undefined}
+      />,
+    );
+
+    expect(screen.getByText('Sin sede: no puede fichar')).toBeTruthy();
+  });
 });

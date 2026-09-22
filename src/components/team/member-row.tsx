@@ -64,6 +64,16 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
             <AppText variant="help" tone="subtle">
               {puestos}
             </AppText>
+            {/*
+              Sin sede no puede fichar: el reloj esta atado a una tienda y solo ofrece a
+              quien trabaja alli. Asi que esto no es un dato que falte, es alguien que no
+              puede trabajar, y por eso se dice en la fila y no escondido en su ficha.
+            */}
+            {member.locationIds.length === 0 ? (
+              <AppText variant="help" tone="danger">
+                {t('team.noLocationWarning')}
+              </AppText>
+            ) : null}
           </Stack>
           <Stack gap={spacing.xs}>
             <StatusBadge

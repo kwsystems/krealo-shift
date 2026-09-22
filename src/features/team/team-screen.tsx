@@ -97,7 +97,21 @@ export function TeamScreen() {
     const needle = search.trim().toLocaleLowerCase();
 
     return team.members.filter((member) => {
-      if (scope.locationId !== null && !member.locationIds.includes(scope.locationId)) return false;
+      /*
+       * QUIEN NO TIENE NINGUNA SEDE SE VE SIEMPRE, y antes no se veia NUNCA.
+       *
+       * El filtro pedia que la sede elegida estuviera entre las suyas. Con cero sedes
+       * eso no se cumple en ninguna pestaña, asi que esos empleados existian en la base
+       * y eran inalcanzables desde la app: no se podian abrir, ni editar, ni desactivar.
+       * Y la propia app los fabricaba —un guardado a medias escribe la persona y falla
+       * al asignarle la sede—, o sea que creaba gente que luego no te dejaba arreglar.
+       *
+       * Se cuelan en todas las sedes a proposito: no pertenecen a ninguna, y son
+       * justamente los que hay que atender. La fila los marca como «Sin sede».
+       */
+      const sinSede = member.locationIds.length === 0;
+      if (!sinSede && scope.locationId !== null && !member.locationIds.includes(scope.locationId))
+        return false;
       if (statusFilter === 'active' && member.status === 'inactive') return false;
       if (statusFilter === 'inactive' && member.status !== 'inactive') return false;
       if (jobRoleFilter !== null && !member.jobRoleIds.includes(jobRoleFilter)) return false;

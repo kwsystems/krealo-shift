@@ -270,7 +270,8 @@
     "statusAll": "Todos",
     "statusFilter": "Estado",
     "unknownEmployee": "Empleado sin nombre",
-    "saveFailed": "No se pudo guardar el empleado"
+    "saveFailed": "No se pudo guardar el empleado",
+    "noLocationWarning": "Sin sede: no puede fichar"
   },
   "schedule": {
     "title": "Horario",

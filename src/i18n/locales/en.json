@@ -270,7 +270,8 @@
     "statusAll": "All",
     "statusFilter": "Status",
     "unknownEmployee": "Unnamed employee",
-    "saveFailed": "Could not save the employee"
+    "saveFailed": "Could not save the employee",
+    "noLocationWarning": "No location: cannot clock in"
   },
   "schedule": {
     "title": "Schedule",
