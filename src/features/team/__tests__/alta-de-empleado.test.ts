@@ -31,8 +31,9 @@ import {
   fetchEmployees,
   fetchJobRoles,
   fetchLocationAssignments,
+  updateEmployee,
 } from '../api';
-import { DEMO_LOCATION_1, DEMO_ORG_ID } from '@/lib/demo/seed';
+import { DEMO_LOCATION_1, DEMO_LOCATION_2, DEMO_ORG_ID } from '@/lib/demo/seed';
 
 describe('alta de un empleado', () => {
   it('lo que se crea se puede volver a leer, con sus sedes y sus puestos', async () => {
@@ -77,6 +78,62 @@ describe('alta de un empleado', () => {
       organizationId: DEMO_ORG_ID,
       employeeIds: [id],
     });
+    expect(suyos.map((fila) => fila.job_role_id)).toContain(puesto.id);
+  });
+
+  /**
+   * EDITAR ES EL CAMINO QUE BORRA, y por eso tiene prueba propia: guardar reemplaza las
+   * asignaciones borrando las viejas primero. Ese borrado es el que fallaba en el
+   * Firebase de verdad —la consulta que lo precede no acotaba por `organization_id` y la
+   * regla de lectura se apoya en ese campo, asi que la denegaban entera—.
+   *
+   * Aqui no hay reglas que denegar: el almacen de la demostracion no las tiene. Lo que
+   * si comprueba es que el resultado sea correcto, es decir que la vieja desaparezca y
+   * la nueva quede, que es la otra mitad de lo que puede salir mal al reemplazar.
+   */
+  it('editarlo cambia sus sedes: la vieja desaparece y la nueva queda', async () => {
+    const puestos = await fetchJobRoles(DEMO_ORG_ID);
+    const puesto = puestos[0]!;
+
+    const id = await createEmployee({
+      organizationId: DEMO_ORG_ID,
+      draft: {
+        fullName: 'Persona Que Cambia De Sede',
+        preferredName: null,
+        employeeNumber: 'E-998',
+        email: null,
+        locationIds: [DEMO_LOCATION_1],
+        jobRoleIds: [puesto.id],
+      },
+    });
+
+    await updateEmployee({
+      organizationId: DEMO_ORG_ID,
+      employeeId: id,
+      draft: {
+        fullName: 'Persona Que Cambia De Sede',
+        preferredName: null,
+        employeeNumber: 'E-998',
+        email: null,
+        locationIds: [DEMO_LOCATION_2],
+        jobRoleIds: [puesto.id],
+      },
+    });
+
+    const enLaVieja = await fetchLocationAssignments({
+      organizationId: DEMO_ORG_ID,
+      locationIds: [DEMO_LOCATION_1],
+    });
+    expect(enLaVieja.some((fila) => fila.employee_id === id)).toBe(false);
+
+    const enLaNueva = await fetchLocationAssignments({
+      organizationId: DEMO_ORG_ID,
+      locationIds: [DEMO_LOCATION_2],
+    });
+    expect(enLaNueva.some((fila) => fila.employee_id === id)).toBe(true);
+
+    // Y su puesto sigue ahi: reemplazar sedes no puede llevarse por delante los puestos.
+    const suyos = await fetchEmployeeJobRoles({ organizationId: DEMO_ORG_ID, employeeIds: [id] });
     expect(suyos.map((fila) => fila.job_role_id)).toContain(puesto.id);
   });
 });

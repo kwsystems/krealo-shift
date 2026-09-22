@@ -269,7 +269,8 @@
     "searchPlaceholder": "Name, number or email",
     "statusAll": "All",
     "statusFilter": "Status",
-    "unknownEmployee": "Unnamed employee"
+    "unknownEmployee": "Unnamed employee",
+    "saveFailed": "Could not save the employee"
   },
   "schedule": {
     "title": "Schedule",

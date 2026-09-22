@@ -229,8 +229,27 @@ async function replaceAssignments(params: {
   employeeId: string;
   locationIds: string[];
 }): Promise<void> {
+  /*
+   * EL BORRADO TAMBIEN ACOTA POR `organization_id`, y sin eso fallaba TODO.
+   *
+   * «Borrar donde employee_id = X» no existe en Firestore: el adaptador lo resuelve
+   * haciendo primero una CONSULTA DE LISTA y borrando lo que encuentra. Y la regla de
+   * lectura de esta coleccion se apoya en `organization_id`, asi que una consulta que
+   * no lo acota se DENIEGA ENTERA —las reglas no son filtros: Firestore tiene que poder
+   * demostrar con las condiciones de la propia consulta que todo lo que devuelve es
+   * legible—.
+   *
+   * O sea que el alta de un empleado reventaba aqui, en el paso de limpiar, antes de
+   * escribir una sola asignacion. Y como el error no se pintaba en ningun sitio, la
+   * hoja se quedaba quieta: «le doy guardar y no pasa nada», con un empleado huerfano
+   * por cada intento.
+   */
   await execute((db) =>
-    db.from(TABLES.employeeLocationAssignments).delete().eq('employee_id', params.employeeId),
+    db
+      .from(TABLES.employeeLocationAssignments)
+      .delete()
+      .eq('organization_id', params.organizationId)
+      .eq('employee_id', params.employeeId),
   );
   if (params.locationIds.length === 0) return;
 
@@ -253,8 +272,14 @@ async function replaceJobRoles(params: {
   employeeId: string;
   jobRoleIds: string[];
 }): Promise<void> {
+  // Mismo motivo que en las asignaciones de sede: la consulta que precede al borrado
+  // tiene que acotar lo que la regla lee.
   await execute((db) =>
-    db.from(TABLES.employeeJobRoles).delete().eq('employee_id', params.employeeId),
+    db
+      .from(TABLES.employeeJobRoles)
+      .delete()
+      .eq('organization_id', params.organizationId)
+      .eq('employee_id', params.employeeId),
   );
   if (params.jobRoleIds.length === 0) return;
 

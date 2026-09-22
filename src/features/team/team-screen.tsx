@@ -356,6 +356,7 @@ export function TeamScreen() {
           locations={locationOptions}
           jobRoles={jobRoleOptions}
           saving={mutations.create.isPending || mutations.update.isPending}
+          saveError={mutations.create.error ?? mutations.update.error}
           onSubmit={submitForm}
           onClose={() => setForm(null)}
         />

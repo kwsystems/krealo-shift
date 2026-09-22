@@ -269,7 +269,8 @@
     "searchPlaceholder": "Nombre, número o correo",
     "statusAll": "Todos",
     "statusFilter": "Estado",
-    "unknownEmployee": "Empleado sin nombre"
+    "unknownEmployee": "Empleado sin nombre",
+    "saveFailed": "No se pudo guardar el empleado"
   },
   "schedule": {
     "title": "Horario",

@@ -50,6 +50,7 @@ export function EmployeeFormSheet({
   locations,
   jobRoles,
   saving,
+  saveError,
   onSubmit,
   onClose,
 }: {
@@ -58,6 +59,19 @@ export function EmployeeFormSheet({
   locations: Option<string>[];
   jobRoles: Option<string>[];
   saving: boolean;
+  /**
+   * Lo que fallo al guardar, si fallo.
+   *
+   * NO EXISTIA, Y ESA AUSENCIA ES EL FALLO QUE MAS COSTO ENTENDER. La hoja solo sabia
+   * enseñar el giro de «guardando»: cuando el guardado reventaba —y reventaba SIEMPRE,
+   * por una consulta que las reglas denegaban— la hoja se quedaba exactamente igual que
+   * antes de pulsar. «Le doy guardar y no pasa nada» no era una exageracion: era la
+   * descripcion literal, y detras habia un empleado a medias por cada intento.
+   *
+   * Un guardado que falla en silencio es peor que uno que falla ruidosamente: invita a
+   * volver a pulsar, y cada pulsacion deja otro huerfano.
+   */
+  saveError?: unknown;
   onSubmit: (draft: EmployeeDraft) => void;
   onClose: () => void;
 }) {
@@ -101,13 +115,24 @@ export function EmployeeFormSheet({
       onClose={onClose}
       testID="employee-form-sheet"
       footer={
-        <PrimaryButton
-          label={t('common.save')}
-          onPress={handleSubmit}
-          loading={saving}
-          disabled={submitted && !canSubmit}
-          testID="employee-form-save"
-        />
+        <Stack gap={spacing.sm}>
+          {saveError === null || saveError === undefined ? null : (
+            <InlineNotice
+              tone="late"
+              icon="warning-outline"
+              title={t('team.saveFailed')}
+              body={saveError instanceof Error ? saveError.message : undefined}
+              testID="employee-form-error"
+            />
+          )}
+          <PrimaryButton
+            label={t('common.save')}
+            onPress={handleSubmit}
+            loading={saving}
+            disabled={submitted && !canSubmit}
+            testID="employee-form-save"
+          />
+        </Stack>
       }
     >
       <FormField
