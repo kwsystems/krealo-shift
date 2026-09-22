@@ -169,8 +169,15 @@ function crearRpc(almacen: Almacen) {
         return sinError(null);
       }
 
+      /*
+       * DEVUELVE EL PIN, como la funcion de verdad. Devolvia `null`, y desde que el
+       * servidor es quien lo sortea, el panel lee `data.pin`: en la demostracion salia
+       * «respuesta inesperada» al pulsar Reiniciar PIN. Es el mismo fallo que ya
+       * tuvieron aqui `verify-pin` y «olvide marcar», y se repite por el mismo motivo:
+       * una forma inventada que no se parece a la que el cliente valida.
+       */
       case 'set_employee_pin':
-        return sinError(null);
+        return sinError({ pin: '135791' });
 
       case 'approve_timesheet_period': {
         const id = argumentos.p_period_id;

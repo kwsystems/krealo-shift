@@ -8,6 +8,7 @@ import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
 import { auth, COLLECTIONS, db, nowISO } from './shared/admin';
 import {
   audit,
+  managesLocation,
   membershipOf,
   requireManagesLocation,
   requireRole,
@@ -15,6 +16,8 @@ import {
   soleMembership,
 } from './shared/caller';
 import { transition, type TimeEventType } from '../../src/domain/attendance-state-machine';
+import { generatePin } from '../../src/domain/pin';
+import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
 
 /**
  * Lo que la app llamaba con `db.rpc(...)`: las siete funciones del panel.
@@ -47,21 +50,138 @@ function textoRequerido(valor: unknown, campo: string): string {
  * intentos y sin dejar rastro, y seis digitos son un millon de combinaciones, cosa
  * de segundos en una maquina local. La auditoria anota QUE se cambio, nunca a que.
  */
+/**
+ * Las sedes de un empleado y la longitud de PIN que exigen sus teclados.
+ *
+ * Si trabaja en dos sedes con longitudes distintas no hay PIN posible —el teclado
+ * envia al llegar a SU longitud, asi que uno de los dos relojes nunca lo aceptaria—,
+ * y eso se dice en voz alta en vez de generar algo que va a fallar en una tienda.
+ */
+async function sedesYLongitud(
+  organizationId: string,
+  employeeId: string,
+): Promise<{ sedes: string[]; longitud: number }> {
+  const asignaciones = await db
+    .collection(COLLECTIONS.employeeLocations)
+    .where('organization_id', '==', organizationId)
+    .where('employee_id', '==', employeeId)
+    .get();
+
+  const sedes = [...new Set(asignaciones.docs.map((doc) => String(doc.data().location_id)))];
+  // Sin sede todavia no hay teclado que contentar: vale el valor de fabrica y ya se
+  // recalculara cuando se le asigne una. Dar error aqui bloquearia el alta de alguien
+  // a quien se le pone el PIN antes que la tienda.
+  if (sedes.length === 0) return { sedes, longitud: POLITICAS_POR_DEFECTO.pinLength };
+
+  const docs = await db.getAll(...sedes.map((id) => db.collection(COLLECTIONS.locations).doc(id)));
+  const longitudes = [...new Set(docs.map((doc) => politicasDe(doc.data() ?? {}).pinLength))];
+  if (longitudes.length > 1) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Sus sedes piden PIN de distinta longitud (${longitudes.join(' y ')} dígitos). ` +
+        'Igualalas antes de darle un PIN.',
+    );
+  }
+  return { sedes, longitud: longitudes[0] ?? POLITICAS_POR_DEFECTO.pinLength };
+}
+
+/**
+ * ¿Hay ya alguien en esas sedes con este PIN?
+ *
+ * HACE FALTA PORQUE EL RELOJ NO PREGUNTA QUIEN ERES. `verifyPin` prueba el PIN tecleado
+ * contra todos los de la sede y se queda con el PRIMERO que casa, asi que dos personas
+ * con el mismo PIN significan que una de las dos ficha SIEMPRE por la otra, en silencio
+ * y para siempre: las horas se le apuntan a quien no las trabajo y nadie se entera.
+ *
+ * Nada lo impedia: el PIN se sorteaba al azar y se guardaba. Con seis digitos y veinte
+ * personas la probabilidad es ~0,2%, pero el coste de que ocurra es que las horas de
+ * alguien acaben en la nomina de otro.
+ */
+async function pinYaUsado(sedes: string[], employeeId: string, pin: string): Promise<boolean> {
+  if (sedes.length === 0) return false;
+
+  // `in` admite 30 valores. Nadie trabaja en 30 sedes, pero el limite es del motor.
+  const companeros = new Set<string>();
+  for (const doc of (
+    await db
+      .collection(COLLECTIONS.employeeLocations)
+      .where('location_id', 'in', sedes.slice(0, 30))
+      .get()
+  ).docs) {
+    const otro = String(doc.data().employee_id);
+    if (otro !== employeeId) companeros.add(otro);
+  }
+  if (companeros.size === 0) return false;
+
+  const credenciales = await db.getAll(
+    ...[...companeros].map((id) => db.collection(COLLECTIONS.pinCredentials).doc(id)),
+  );
+  return credenciales.some((doc) => {
+    const hash = doc.data()?.pin_hash;
+    return typeof hash === 'string' && bcrypt.compareSync(pin, hash);
+  });
+}
+
+/**
+ * Fija el PIN de un empleado. El PIN EN CLARO NO SE GUARDA NI SE REGISTRA.
+ *
+ * Se guarda solo su hash bcrypt, en una coleccion que las reglas cierran a todo el
+ * mundo: devolverlo —o dejar leer el hash— permitiria atacarlo sin limite de
+ * intentos y sin dejar rastro, y seis digitos son un millon de combinaciones, cosa
+ * de segundos en una maquina local. La auditoria anota QUE se cambio, nunca a que.
+ *
+ * LO GENERA EL SERVIDOR Y YA NO EL PANEL. Antes el panel sorteaba el PIN y mandaba los
+ * digitos; el problema es que el panel no sabe dos cosas que hacen falta para que ese
+ * PIN sirva: cuantos digitos pide el teclado de la sede DE ESA PERSONA —usaba los de la
+ * sede que el gerente tuviera seleccionada— y si el PIN ya es de otro. Las dos se
+ * saben aqui, asi que aqui se decide, y el PIN en claro vuelve en la respuesta para
+ * enseñarlo una vez.
+ */
 export const setEmployeePin = onCall(async (request) => {
   const uid = requireUid(request);
   const employeeId = textoRequerido(request.data?.p_employee_id, 'p_employee_id');
-  const pin = textoRequerido(request.data?.p_pin, 'p_pin');
-
-  if (!/^\d{4,6}$/.test(pin)) {
-    throw new HttpsError('invalid-argument', 'El PIN debe tener entre 4 y 6 dígitos.');
-  }
-
   const empleadoRef = db.collection(COLLECTIONS.employees).doc(employeeId);
   const empleado = (await empleadoRef.get()).data();
   if (empleado === undefined) throw new HttpsError('not-found', 'Ese empleado no existe.');
 
-  const membership = await membershipOf(uid, empleado.organization_id as string);
+  const organizationId = empleado.organization_id as string;
+  const membership = await membershipOf(uid, organizationId);
   requireRole(membership, ['owner', 'admin', 'manager']);
+
+  const { sedes, longitud } = await sedesYLongitud(organizationId, employeeId);
+
+  /*
+   * QUE GESTIONE ALGUNA DE SUS SEDES. Esto solo miraba el rol, asi que un encargado de
+   * la sede A podia ponerle PIN a alguien de la sede B —y, sabiendo el PIN, fichar por
+   * el—. El ayudante existia desde siempre; aqui no se usaba.
+   *
+   * Sin sede asignada no hay ubicacion contra la que comprobar, y entonces solo pueden
+   * owner y admin: un encargado no tiene por que tocar a alguien que todavia no es de
+   * ninguna tienda.
+   */
+  if (sedes.length === 0) requireRole(membership, ['owner', 'admin']);
+  else if (!sedes.some((id) => managesLocation(membership, id))) {
+    throw new HttpsError('permission-denied', 'No administras ninguna de sus sedes.');
+  }
+
+  /*
+   * Se sortea hasta dar con uno libre. Veinte vueltas es de sobra: con seis digitos y
+   * una tienda de doscientas personas, la probabilidad de fallar veinte seguidas es de
+   * una entre 10^54. Y si pasara, es mejor un error que un PIN compartido.
+   *
+   * NO HAY FORMA DE ELEGIR EL PIN, a proposito. La habia —un `p_pin` opcional— y no la
+   * usaba nadie: el unico camino del panel es «Reiniciar PIN». Un parametro que nadie
+   * manda es una rama que nadie prueba, y en esta valia la pena menos que en ninguna,
+   * porque es por donde entraria un PIN elegido a mano tipo 1234.
+   */
+  let pin: string | null = null;
+  for (let intento = 0; intento < 20 && pin === null; intento += 1) {
+    const sorteado = generatePin(longitud, (n) => new Uint8Array(randomBytes(n)));
+    if (!(await pinYaUsado(sedes, employeeId, sorteado))) pin = sorteado;
+  }
+  if (pin === null) {
+    throw new HttpsError('resource-exhausted', 'No encontramos un PIN libre. Inténtalo otra vez.');
+  }
 
   await db
     .collection(COLLECTIONS.pinCredentials)
@@ -69,7 +189,7 @@ export const setEmployeePin = onCall(async (request) => {
     .set(
       {
         employee_id: employeeId,
-        organization_id: empleado.organization_id,
+        organization_id: organizationId,
         pin_hash: bcrypt.hashSync(pin, BCRYPT_ROUNDS),
         pin_length: pin.length,
         /*
@@ -88,14 +208,15 @@ export const setEmployeePin = onCall(async (request) => {
     );
 
   await audit({
-    organizationId: empleado.organization_id as string,
+    organizationId,
     actorUserId: uid,
     action: 'employee_pin_set',
     entityType: 'employee',
     entityId: employeeId,
   });
 
-  return null;
+  // El PIN en claro, UNA vez, para poder enseñarselo a la persona. No se registra.
+  return { pin };
 });
 
 // ---------------------------------------------------------------------------

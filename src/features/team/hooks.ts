@@ -167,7 +167,7 @@ export function useTeamMutations(organizationId: string | null) {
   });
 
   const resetPin = useMutation({
-    mutationFn: (params: { employeeId: string; pinLength: number }) => resetEmployeePin(params),
+    mutationFn: (params: { employeeId: string }) => resetEmployeePin(params),
   });
 
   /*

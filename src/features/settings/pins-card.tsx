@@ -61,11 +61,13 @@ export function PinsCard() {
   }, [employees.data, termino]);
 
   /*
-   * `scope.settings` y no `scope.location?.settings`: el alcance ya cae a
-   * `DEFAULT_LOCATION_SETTINGS` cuando la sede no trae ajustes o viene incompleta, así
-   * que aquí nunca hay un `null` que tratar. Es de donde lo lee también Equipo al
-   * reiniciar un PIN, y las dos pantallas tienen que coincidir: si una genera de seis
-   * y la otra de cuatro, el reloj rechaza uno de los dos y nadie sabe por qué.
+   * SOLO PARA ENSEÑARLA. Antes esta longitud se le pasaba al generador, y ahí estaba el
+   * fallo: es la de la sede que el gerente tenga SELECCIONADA, que no tiene por qué ser
+   * la de la persona a la que se le reinicia el PIN. Ahora el PIN lo sortea el servidor,
+   * que sí sabe cuál es la sede de esa persona.
+   *
+   * `scope.settings` y no `scope.location?.settings` porque el alcance ya cae a
+   * `DEFAULT_LOCATION_SETTINGS` cuando la sede no trae ajustes: aquí nunca hay `null`.
    */
   const longitud = scope.settings.pinLength;
 
@@ -159,7 +161,7 @@ export function PinsCard() {
                       label={t('team.resetPin')}
                       onPress={() =>
                         resetPin.mutate(
-                          { employeeId: persona.id, pinLength: longitud },
+                          { employeeId: persona.id },
                           {
                             onSuccess: (nuevo) =>
                               setPin({ valor: nuevo, nombre: persona.full_name }),

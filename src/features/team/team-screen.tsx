@@ -186,7 +186,7 @@ export function TeamScreen() {
 
   const resetPin = (member: TeamMember) => {
     mutations.resetPin.mutate(
-      { employeeId: member.id, pinLength: scope.settings.pinLength },
+      { employeeId: member.id },
       {
         onSuccess: (value) => {
           setSelectedId(null);

@@ -99,9 +99,13 @@ export function requireRole(membership: Membership, roles: readonly AppRole[]): 
  * alguien le asignara ubicaciones a mano. Un manager solo las suyas — es lo que
  * impide que el encargado de una tienda corrija las horas de otra.
  */
+export function managesLocation(membership: Membership, locationId: string): boolean {
+  if (membership.role === 'owner' || membership.role === 'admin') return true;
+  return membership.role === 'manager' && membership.managedLocationIds.includes(locationId);
+}
+
 export function requireManagesLocation(membership: Membership, locationId: string): void {
-  if (membership.role === 'owner' || membership.role === 'admin') return;
-  if (membership.role === 'manager' && membership.managedLocationIds.includes(locationId)) return;
+  if (managesLocation(membership, locationId)) return;
   throw new HttpsError('permission-denied', 'No administras esta ubicación.');
 }
 

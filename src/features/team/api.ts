@@ -1,10 +1,14 @@
-import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
 
-import { generatePin } from './pin';
-import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
+import {
+  AdminError,
+  execute,
+  requireClient,
+  selectRows,
+  toAdminError,
+} from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
@@ -375,27 +379,37 @@ export async function setEmployeeStatus(params: {
 }
 
 /**
- * Genera un PIN nuevo y lo guarda hasheado con `set_employee_pin`.
- * Devuelve el PIN en claro solo para mostrarlo una vez; no se persiste en la app.
+ * Pide un PIN nuevo para esa persona. Lo devuelve en claro para enseñarlo UNA vez.
+ *
+ * EL PIN LO SORTEA EL SERVIDOR, y antes lo sorteaba esta funcion. Cambio porque el
+ * panel no sabe las dos cosas de las que depende que ese PIN sirva para algo:
+ *
+ *   - CUANTOS DIGITOS pide el teclado de la sede DE ESA PERSONA. Aqui se usaba la
+ *     longitud de la sede que el gerente tuviera seleccionada, que no tiene por que
+ *     ser la suya. Y el teclado del reloj envia al llegar exactamente a su longitud,
+ *     sin boton de aceptar: con un PIN mas corto, la persona marca sus digitos y no
+ *     pasa NADA. Ni error, ni aviso.
+ *   - SI ESE PIN YA ES DE OTRO de la misma sede. El reloj no pregunta quien eres: se
+ *     queda con el primero que casa, asi que dos PIN iguales significan que una
+ *     persona ficha siempre por la otra.
+ *
+ * Las dos se saben en el servidor y ninguna aqui, asi que la decision se fue con
+ * ellas. Ver `setEmployeePin` en `functions/src/manager.ts`.
  */
-export async function resetEmployeePin(params: {
-  employeeId: string;
-  pinLength: number;
-}): Promise<string> {
-  const pin = generatePin(params.pinLength, (length) => Crypto.getRandomBytes(length));
-
+export async function resetEmployeePin(params: { employeeId: string }): Promise<string> {
   const db = requireClient();
   try {
-    const { error } = await db.rpc(RPC.setEmployeePin, {
+    const { data, error } = await db.rpc(RPC.setEmployeePin, {
       p_employee_id: params.employeeId,
-      p_pin: pin,
     });
     if (error !== null) throw toAdminError(error);
+
+    const parsed = z.object({ pin: z.string().min(4).max(6) }).safeParse(data);
+    if (!parsed.success) throw new AdminError('unexpectedShape', parsed.error.message);
+    return parsed.data.pin;
   } catch (error) {
     throw toAdminError(error);
   }
-
-  return pin;
 }
 
 const upcomingShiftSchema = z.object({

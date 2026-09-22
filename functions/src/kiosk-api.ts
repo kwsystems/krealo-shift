@@ -13,6 +13,8 @@ import {
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { membershipOf, requireManagesLocation, requireUid } from './shared/caller';
 import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
+import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
+import { politicasDe } from './shared/politicas';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
   authenticateKiosk,
@@ -46,35 +48,6 @@ const BCRYPT_ROUNDS = 10;
  * —la unica que atiende sin credencial previa— no tiene por que poder.
  */
 const OPCIONES_CON_SECRETO = { secrets: [KIOSK_TOKEN_SECRET] };
-const POLITICAS_POR_DEFECTO = {
-  pinLength: 6,
-  photoEnabled: false,
-  earlyClockInMinutes: 10,
-  lateGraceMinutes: 5,
-  allowUnscheduledShifts: true,
-  timeFormat: '24h' as const,
-  requiredBreakMinutes: 0,
-};
-
-function politicasDe(location: Record<string, unknown>) {
-  const settings = (location.settings ?? {}) as Record<string, unknown>;
-  return {
-    pinLength: Number(settings.pinLength ?? POLITICAS_POR_DEFECTO.pinLength),
-    photoEnabled: Boolean(settings.photoEnabled ?? POLITICAS_POR_DEFECTO.photoEnabled),
-    earlyClockInMinutes: Number(
-      settings.earlyClockInMinutes ?? POLITICAS_POR_DEFECTO.earlyClockInMinutes,
-    ),
-    lateGraceMinutes: Number(settings.lateGraceMinutes ?? POLITICAS_POR_DEFECTO.lateGraceMinutes),
-    allowUnscheduledShifts: Boolean(
-      settings.allowUnscheduledShifts ?? POLITICAS_POR_DEFECTO.allowUnscheduledShifts,
-    ),
-    timeFormat: (settings.timeFormat ?? POLITICAS_POR_DEFECTO.timeFormat) as '12h' | '24h',
-    requiredBreakMinutes: Number(
-      settings.requiredBreakMinutes ?? POLITICAS_POR_DEFECTO.requiredBreakMinutes,
-    ),
-  };
-}
-
 function iniciales(nombre: string): string {
   const partes = nombre.trim().split(/\s+/).filter(Boolean);
   const primera = partes[0]?.[0] ?? '?';
@@ -367,28 +340,23 @@ export const refreshKioskRoster = onCall(async (request) => {
 // PIN
 // ---------------------------------------------------------------------------
 
-const MAX_INTENTOS = 5;
-const BLOQUEO_MINUTOS = 5;
-
 /**
- * El limite de intentos se cuenta POR DISPOSITIVO, no por empleado, y la diferencia
- * importa en las dos direcciones.
+ * ¿Esta este reloj bloqueado por PIN equivocados?
  *
- * A favor: el ataque real es alguien de pie frente al iPad tecleando combinaciones,
- * y con bcrypt no se puede saber a quien pertenece un PIN fallido —no hay a quien
- * sumarle el intento—. Contar por aparato es lo unico que de verdad frena eso.
- *
- * En contra, y es el motivo de que NO se cuente por persona: si se pudiera bloquear
- * a un empleado concreto, cualquiera podria dejar a un companero sin fichar tecleando
- * cinco veces mal su PIN. Eso convierte una proteccion en un arma.
- *
- * Cinco minutos y no mas: esto pasa en el mostrador de una tienda al empezar el turno,
- * y un bloqueo largo por un dedo torpe deja a alguien sin marcar su entrada.
+ * La decision vive en `shared/bloqueo.ts`, que es puro y tiene prueba: aqui solo se
+ * lee el documento y se traduce a un error.
  */
 async function comprobarBloqueo(deviceId: string): Promise<void> {
   const dispositivo = (await db.collection(COLLECTIONS.kioskDevices).doc(deviceId).get()).data();
-  const hasta = dispositivo?.pin_locked_until;
-  if (typeof hasta === 'string' && new Date(hasta) > new Date()) {
+  const bloqueado = estaBloqueado(
+    {
+      intentos: Number(dispositivo?.pin_failed_attempts ?? 0),
+      ultimoFallo: (dispositivo?.pin_last_failed_at as string | null) ?? null,
+      bloqueadoHasta: (dispositivo?.pin_locked_until as string | null) ?? null,
+    },
+    Date.now(),
+  );
+  if (bloqueado) {
     throw new HttpsError(
       'resource-exhausted',
       'Demasiados intentos en este reloj. Espera unos minutos.',
@@ -400,13 +368,18 @@ async function anotarFallo(deviceId: string): Promise<void> {
   const ref = db.collection(COLLECTIONS.kioskDevices).doc(deviceId);
   await db.runTransaction(async (tx) => {
     const actual = (await tx.get(ref)).data() ?? {};
-    const intentos = Number(actual.pin_failed_attempts ?? 0) + 1;
+    const siguiente = trasUnFallo(
+      {
+        intentos: Number(actual.pin_failed_attempts ?? 0),
+        ultimoFallo: (actual.pin_last_failed_at as string | null) ?? null,
+        bloqueadoHasta: (actual.pin_locked_until as string | null) ?? null,
+      },
+      Date.now(),
+    );
     tx.update(ref, {
-      pin_failed_attempts: intentos,
-      pin_locked_until:
-        intentos >= MAX_INTENTOS
-          ? new Date(Date.now() + BLOQUEO_MINUTOS * 60_000).toISOString()
-          : null,
+      pin_failed_attempts: siguiente.intentos,
+      pin_last_failed_at: siguiente.ultimoFallo,
+      pin_locked_until: siguiente.bloqueadoHasta,
     });
   });
 }
@@ -426,24 +399,65 @@ export const verifyPin = onCall(OPCIONES_CON_SECRETO, async (request) => {
     .where('location_id', '==', kiosk.locationId)
     .get();
 
+  /*
+   * TODO DE UNA VEZ, y antes era un `get()` por persona DENTRO del bucle. Cada uno es
+   * un viaje de ida y vuelta a Firestore, asi que el teclado tardaba en proporcion a
+   * la plantilla de la tienda: medido contra produccion, 0,60 s con 2 personas y
+   * 1,67 s con 12 cuando el PIN no era de nadie —el peor caso, porque recorre la lista
+   * entera sin poder cortar—. `getAll` los trae en un solo viaje.
+   *
+   * Lo que sigue creciendo con la plantilla es bcrypt, y eso no tiene vuelta de hoja:
+   * sin saber quien teclea hay que probar contra todos, y que cada prueba sea cara es
+   * justo lo que impide reventar seis digitos por fuerza bruta.
+   */
+  const idsUnicos = [...new Set(asignaciones.docs.map((doc) => String(doc.data().employee_id)))];
+  const asignacionPorEmpleado = new Map(
+    asignaciones.docs.map((doc) => [String(doc.data().employee_id), doc.data()]),
+  );
+
   let employeeId: string | null = null;
   let asignacion: Record<string, unknown> | null = null;
 
-  for (const doc of asignaciones.docs) {
-    const candidato = doc.data().employee_id as string;
-    const credencial = (
-      await db.collection(COLLECTIONS.pinCredentials).doc(candidato).get()
-    ).data();
-    if (credencial === undefined) continue;
+  // `getAll` sin referencias lanza, y una sede recien abierta no tiene a nadie.
+  if (idsUnicos.length > 0) {
+    const credenciales = await db.getAll(
+      ...idsUnicos.map((id) => db.collection(COLLECTIONS.pinCredentials).doc(id)),
+    );
 
-    const bloqueado =
-      typeof credencial.locked_until === 'string' && new Date(credencial.locked_until) > new Date();
-    if (bloqueado) continue;
+    for (let i = 0; i < idsUnicos.length; i += 1) {
+      const credencial = credenciales[i]?.data();
+      if (credencial === undefined || typeof credencial.pin_hash !== 'string') continue;
 
-    if (bcrypt.compareSync(pin, String(credencial.pin_hash))) {
-      employeeId = candidato;
-      asignacion = doc.data();
-      break;
+      if (bcrypt.compareSync(pin, credencial.pin_hash)) {
+        employeeId = idsUnicos[i]!;
+        asignacion = asignacionPorEmpleado.get(employeeId) ?? null;
+        break;
+      }
+    }
+  }
+
+  /*
+   * QUE SIGA ACTIVO. Esto no se comprobaba, y `refreshKioskRoster` si lo hace: las dos
+   * mitades no coincidian. O sea que a quien desactivabas desaparecia de la lista del
+   * iPad —y de los verificadores sin conexion— pero SU PIN SEGUIA ABRIENDO EL RELOJ,
+   * porque el teclado no necesita la lista. Despedir a alguien no le quitaba las horas:
+   * comprobado contra produccion el 22-sep-2026.
+   *
+   * Y no basta con quitarle la sede al desactivar, porque `setEmployeeStatus` solo
+   * cambia el estado —a proposito, para no perder el historial de fichajes—. El sitio
+   * donde tiene que cortarse es este, que es por donde pasan todos.
+   *
+   * SE MIRA DESPUES DEL BUCLE Y SOLO DEL QUE ACERTO: una lectura en vez de una por
+   * persona. Dentro del bucle costaba 300 ms mas EN CADA FICHAJE de una tienda de doce.
+   * Lo unico que cambia es un caso que ya no deberia existir —dos personas con el mismo
+   * PIN, una desactivada y la otra no— porque ahora `setEmployeePin` no reparte PIN
+   * repetidos; y ahi lo correcto tambien es rechazar y arreglar el duplicado.
+   */
+  if (employeeId !== null) {
+    const empleado = (await db.collection(COLLECTIONS.employees).doc(employeeId).get()).data();
+    if (empleado === undefined || empleado.status !== 'active') {
+      employeeId = null;
+      asignacion = null;
     }
   }
 
