@@ -200,36 +200,42 @@ describe('contraste del kiosco', () => {
   /**
    * LO QUE NO ES TEXTO: la forma de la tecla y el punto del PIN.
    *
-   * WCAG 1.4.11 pide 3:1 a lo que hace falta ver para entender un control. Y aquí hay
-   * DEUDA, medida y anotada, que NO es del tema oscuro:
+   * WCAG 1.4.11 pide 3:1 a lo que hace falta ver para entender un control, y aquí había
+   * cuatro pares que no llegaban en NINGUNO de los dos temas —el oscuro no empeoró nada,
+   * llevaban fallando desde siempre—:
    *
    *   el aro del punto de PIN vacío, contra su relleno → 1,49 en claro · 1,39 en oscuro
    *   el aro del punto vacío, contra el fondo          → 1,35 en claro · 1,33 en oscuro
    *   el borde de la tecla, contra el fondo            → 1,15 en claro · 1,26 en oscuro
    *   la cara de la tecla, contra el fondo             → 1,10 en claro · 1,05 en oscuro
    *
-   * Los cuatro fallan en los DOS temas y llevan fallando desde siempre: el oscuro no
-   * empeoró nada. Lo que se lee es el dígito —15:1 y de 33 px—, y los puntos LLENOS sí
-   * se ven (4,50 en claro, 5,57 en oscuro); lo flojo es contar los que faltan.
+   * LOS DOS DEL PUNTO SE ARREGLARON el 2026-09-22: el aro pasó de `primary200` al acento,
+   * y con eso da 4,96 contra su relleno y 4,50 contra el fondo en claro (5,83 y 6,01 en
+   * oscuro). No se confunde con un punto lleno porque la diferencia no es el color: uno
+   * es un disco sólido y el otro un aro hueco. Y era lo que más dolía: los puntos vacíos
+   * son la única señal de cuántos dígitos faltan, y el reloj se lee de pie y con prisa.
    *
-   * No se arregla aquí porque arreglarlo cambia el aspecto del tema claro, que esta
-   * tarea no venía a tocar, y el antes/después de las dos versiones lo tiene que ver
-   * Andree: tarea KTyF83SqbWRoAEjnZmMB. Lo que sí se hace es que no pueda crecer en
-   * silencio: la prueba de abajo exige que sigan siendo exactamente estos cuatro.
+   * LOS DOS DE LA TECLA SIGUEN AQUÍ, y no por olvido: medido, no salen con un cambio de
+   * tono. La cara de la tecla es blanca sobre el fondo del reloj, y el paso más oscuro
+   * del abanico la deja en 1,49 —arrastrando de paso el punto lleno de 4,50 a 3,34—. Las
+   * salidas que quedan son subir el borde de las doce teclas, que convierte el teclado en
+   * una reja, o un fondo bastante más oscuro, que cambia el aspecto del reloj entero.
+   * Las dos son decisiones de diseño con su antes y después, no un número.
+   *
+   * Lo que se lee sí llega: el dígito da 15:1 y mide 33 px. Y lo que queda no puede
+   * crecer en silencio: la prueba de abajo exige que la deuda sean exactamente esos dos.
    */
   const NO_TEXTO: [string, ColorToken, ColorToken][] = [
     ['punto de PIN lleno contra el fondo', 'primary500', 'primary50'],
     ['punto de PIN en error contra el fondo', 'danger600', 'primary50'],
-    ['aro del punto vacío contra su relleno', 'primary200', 'surface'],
-    ['aro del punto vacío contra el fondo', 'primary200', 'primary50'],
+    ['aro del punto vacío contra su relleno', 'primary500', 'surface'],
+    ['aro del punto vacío contra el fondo', 'primary500', 'primary50'],
     ['borde de la tecla contra el fondo', 'border', 'primary50'],
     ['cara de la tecla contra el fondo', 'surface', 'primary50'],
   ];
 
   /** Los que ya fallaban en claro antes del modo oscuro. Tarea aparte, ver arriba. */
   const DEUDA_NO_TEXTUAL = [
-    'aro del punto vacío contra su relleno',
-    'aro del punto vacío contra el fondo',
     'borde de la tecla contra el fondo',
     'cara de la tecla contra el fondo',
   ];

@@ -207,12 +207,31 @@ const useEstilos = estilosDelTema((colors) => ({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  /*
+   * EL ARO DEL PUNTO VACÍO VA EN EL ACENTO, no en `primary200`.
+   *
+   * Con `primary200` el aro daba 1,35:1 contra el fondo del reloj y 1,49 contra su
+   * propio relleno: WCAG 1.4.11 pide 3:1 a lo que hay que ver para entender un control,
+   * y los puntos vacíos son la ÚNICA señal de cuántos dígitos faltan. El reloj es un
+   * iPad en la pared y se lee de pie, a un brazo y con prisa, así que contar los que
+   * faltan de un vistazo es justo lo que tiene que funcionar.
+   *
+   * No se confunde con un punto lleno porque la diferencia no es el color: uno es un
+   * DISCO sólido y el otro un ARO hueco de 2 px con el fondo de la tarjeta dentro. Ese
+   * contraste de forma es más fuerte que cualquier matiz, y así el aro puede usar el
+   * mismo acento y llegar a 4,50:1 en claro y 6,01 en oscuro.
+   *
+   * Lo que NO se tocó: el borde y la cara de la tecla siguen por debajo de 3:1 y no
+   * salen con un cambio de tono —medido: el mejor fondo del abanico deja la cara en
+   * 1,49—. Eso es una decisión de diseño con su propio antes y después, y sigue anotada
+   * como deuda en `src/theme/__tests__/tema.test.ts`.
+   */
   dot: {
     width: sizes.pinDot,
     height: sizes.pinDot,
     borderRadius: sizes.pinDot / 2,
     borderWidth: borderWidth.focus,
-    borderColor: colors.primary200,
+    borderColor: colors.primary500,
     backgroundColor: colors.surface,
   },
   dotFilled: {
