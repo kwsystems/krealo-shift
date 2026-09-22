@@ -141,14 +141,21 @@ const MINIMO_TACTIL = 44;
  * Al arreglar una, se borra su línea de aquí. Si el arreglo no fue completo, esto vuelve a
  * ponerse rojo, que es justo lo que se quiere.
  */
+/*
+ * LOS IDENTIFICADORES SON DE «Krealo Media», no de Universo Tutu. El trabajo de Krealo
+ * Shift se registraba alli por la excepcion temporal de empresa y el 22-sep-2026 se
+ * movio: los originales quedaron CERRADOS con una nota que apunta al reemplazo. Una
+ * linea de deuda que cita un id ya cerrado invita a borrarla —«si la tarea esta hecha,
+ * fuera»— y borrarla sin arreglar nada pone el arnes en rojo.
+ */
 const DEUDA = new Map([
   [
     'horario/scroller',
-    'la rejilla de la semana pide 1120 px y por debajo se arrastra (aESqWxTDqYkVatw5wXsv)',
+    'la rejilla de la semana pide 1120 px y por debajo se arrastra (tXdQjB2WZqydk1EyZmRt)',
   ],
   [
     'horario/fuera',
-    'la rejilla de la semana pide 1120 px y por debajo se arrastra (aESqWxTDqYkVatw5wXsv)',
+    'la rejilla de la semana pide 1120 px y por debajo se arrastra (tXdQjB2WZqydk1EyZmRt)',
   ],
 ]);
 
