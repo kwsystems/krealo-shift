@@ -33,6 +33,21 @@ const carpeta = mkdtempSync(join(tmpdir(), 'emulador-'));
 const informe = join(carpeta, 'jest.json');
 
 const jest = `npx jest -c jest.emulador.config.js --ci --json --outputFile=${informe}`;
+/*
+ * EN WINDOWS HACE FALTA SHELL, y no es un capricho. Desde Node 18.20 (CVE-2024-27980)
+ * `spawnSync` se NIEGA a ejecutar un `.cmd` sin `shell: true` y devuelve EINVAL; sin
+ * shell y sin la extension, devuelve ENOENT. Como el error no se miraba, las dos cosas
+ * salian como «el emulador no llego a lanzarlo», que manda a investigar el emulador
+ * —que estaba perfecto— en vez del lanzador. O sea que `npm run emulador:check`, la
+ * forma que el README documenta para correr esto en tu maquina, no funcionaba en
+ * Windows y encima mentia sobre el motivo.
+ *
+ * Con shell, la orden de Jest va ENTRECOMILLADA: `emulators:exec` la toma como UN
+ * argumento y el shell la partiria por los espacios.
+ */
+const enWindows = process.platform === 'win32';
+const orden = enWindows ? `"${jest}"` : jest;
+
 const emulador = spawnSync(
   'npx',
   [
@@ -42,10 +57,21 @@ const emulador = spawnSync(
     'firestore,storage',
     '--project',
     'demo-krealo-shift',
-    jest,
+    orden,
   ],
-  { stdio: 'inherit', shell: false },
+  { stdio: 'inherit', shell: enWindows },
 );
+
+/*
+ * SI NI SE PUDO LANZAR, decirlo. Un `spawnSync` que falla devuelve `error` y deja
+ * `status` en null; sin mirarlo, el fallo se disfrazaba del mensaje de mas abajo.
+ */
+if (emulador.error !== undefined) {
+  rmSync(carpeta, { recursive: true, force: true });
+  console.error('\nFALLA: no se pudo ejecutar «npx firebase emulators:exec».');
+  console.error(emulador.error.message);
+  process.exit(1);
+}
 
 let datos;
 try {
@@ -53,6 +79,10 @@ try {
 } catch {
   rmSync(carpeta, { recursive: true, force: true });
   console.error('\nFALLA: Jest no dejó informe. El emulador no llegó a lanzarlo.');
+  // La causa más común en una máquina de desarrollo: una corrida anterior dejó el
+  // emulador vivo y el puerto ocupado. En Windows pasa más, porque con `shell: true` la
+  // JVM queda fuera del árbol de procesos que Node cierra al salir.
+  console.error('Si arriba pone «port taken», queda un emulador de antes: ciérralo.');
   process.exit(1);
 }
 rmSync(carpeta, { recursive: true, force: true });
