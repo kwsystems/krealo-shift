@@ -73,17 +73,37 @@ describe('el documento que produce crear un turno', () => {
     expect(shiftRowSchema.safeParse(conTimestamp).success).toBe(false);
   });
 
-  /** Cada campo obligatorio, uno a uno: así el fallo dice cuál falta y no «algo». */
+  /**
+   * UN TURNO VIEJO —creado antes del arreglo, sin esos campos— TIENE QUE SEGUIR
+   * LEYENDOSE. Arreglar el escritor no arregla lo que ya está en la base, y un solo
+   * documento viejo tiraba la semana completa. Es el mismo patrón que `employeeSchema`
+   * adoptó después de romper la pantalla de Equipo.
+   */
   it.each(['publication_version', 'published_at', 'updated_at'])(
-    'sin «%s» no se puede leer',
+    'un turno sin «%s» se sigue leyendo, con su valor de reserva',
     (campo) => {
-      const incompleto: Record<string, unknown> = {
+      const viejo: Record<string, unknown> = {
         ...loQueEscribeCrearTurno,
         ...loQueAnadeElShim,
       };
-      delete incompleto[campo];
+      delete viejo[campo];
 
-      expect(shiftRowSchema.safeParse(incompleto).success).toBe(false);
+      const resultado = shiftRowSchema.safeParse(viejo);
+      expect(resultado.success).toBe(true);
     },
   );
+
+  /** Y el valor de reserva es el que corresponde, no cualquiera. */
+  it('un turno sin publicar nunca se lee como versión 0 y sin fecha', () => {
+    const sinPublicar: Record<string, unknown> = {
+      ...loQueEscribeCrearTurno,
+      ...loQueAnadeElShim,
+    };
+    delete sinPublicar.publication_version;
+    delete sinPublicar.published_at;
+
+    const resultado = shiftRowSchema.parse(sinPublicar);
+    expect(resultado.publication_version).toBe(0);
+    expect(resultado.published_at).toBeNull();
+  });
 });

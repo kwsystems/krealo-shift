@@ -40,9 +40,24 @@ export const shiftRowSchema = z.object({
   employee_note: z.string().nullable(),
   manager_note: z.string().nullable(),
   status: z.enum(shiftStatusValues),
-  publication_version: z.number().int(),
-  published_at: z.string().nullable(),
-  updated_at: z.string(),
+  /*
+   * `.default(...)` Y NO SOLO EL TIPO, por el mismo motivo que en `employeeSchema`: allí
+   * ya costó la pantalla de Equipo entera y la lección vale igual aquí.
+   *
+   * Un tipo a secas acepta el valor pero NO acepta que el campo no esté: llega
+   * `undefined` y Zod lo rechaza. Y `selectRows` no descarta la fila, lanza, así que un
+   * solo turno viejo tira la consulta de la SEMANA COMPLETA.
+   *
+   * Arreglar el escritor —abajo, en `createShift`— no arregla lo que ya está en la base.
+   * Esto sí, y además hace que un campo añadido en el futuro no tumbe la pantalla de
+   * quien todavía no lo tiene. Los dos lados, a propósito.
+   *
+   * `updated_at` cae a cadena vacía y nadie lo lee hoy: es metadato de auditoría. Mentir
+   * con una fecha inventada sería peor que admitir que no se sabe.
+   */
+  publication_version: z.number().int().default(0),
+  published_at: z.string().nullable().default(null),
+  updated_at: z.string().default(''),
 });
 
 export type ShiftRow = z.infer<typeof shiftRowSchema>;
