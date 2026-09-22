@@ -175,6 +175,13 @@ function KeypadKey({
         disabled ? styles.keyDisabled : null,
       ]}
     >
+      {/*
+        `enCajaFija` PARA «BORRAR»: la tecla es un círculo de `keySize` píxeles de
+        diámetro, así que su etiqueta no puede crecer con el ajuste de «tamaño del
+        texto» del sistema —crecer ahí dentro no la hace más legible, la saca—. Los
+        dígitos no lo necesitan: su `size` ya sale del diámetro, y eso basta. El porqué
+        largo está en `app-text.tsx`.
+      */}
       {icon ? (
         <Ionicons name={icon} size={26} color={colors.ink700} />
       ) : (
@@ -182,6 +189,7 @@ function KeypadKey({
           variant={variant === 'muted' ? 'help' : 'kioskTitle'}
           tone={variant === 'muted' ? 'muted' : 'default'}
           size={variant === 'muted' ? undefined : Math.round(keySize * 0.38)}
+          enCajaFija
           tabular
           numberOfLines={1}
         >
