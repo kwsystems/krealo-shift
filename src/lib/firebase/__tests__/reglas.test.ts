@@ -7,7 +7,17 @@ import {
   initializeTestEnvironment,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
-import { collection, doc, getDocs, limit, orderBy, query, where } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  limit,
+  orderBy,
+  query,
+  setDoc,
+  where,
+} from 'firebase/firestore';
 
 /**
  * Las reglas de Firestore, probadas de verdad (§22).
@@ -28,7 +38,7 @@ import { collection, doc, getDocs, limit, orderBy, query, where } from 'firebase
  *     firebase emulators:exec --only firestore "npx jest reglas"
  */
 
-const PROYECTO = 'krealo-shift-pruebas';
+const PROYECTO = 'demo-krealo-shift';
 const PUERTO = 8099;
 
 /** Los valores de Firestore van tipados en la REST; esto es solo el traductor. */
@@ -47,10 +57,27 @@ const UID = 'usuario-de-prueba';
 const ORG = 'krealo-demo';
 const SEDE = 'sede-principal';
 
-const hayEmulador = process.env.FIRESTORE_EMULATOR_HOST !== undefined;
-const describeSiHayEmulador = hayEmulador ? describe : describe.skip;
+/**
+ * SIN EMULADOR ESTO FALLA, Y ANTES SE SALTABA. El cambio es deliberado.
+ *
+ * Saltarse tenia sentido cuando este archivo corria dentro de `npm test`, que lo
+ * ejecuta todo el mundo: reventar por una herramienta opcional entrena a la gente a
+ * ignorar el rojo. Pero ahora vive en `jest.emulador.config.js` y solo se llega a el
+ * pidiendolo (`npm run reglas:check`), asi que llegar aqui sin emulador no es una
+ * maquina sin herramientas: es que el emulador no arranco. Y eso hay que verlo.
+ *
+ * Lo que se evita es justo lo que pasaba: el CI decia «8 skipped» y salia verde. Ocho
+ * pruebas que no corren y ocho que no existen protegen exactamente lo mismo.
+ */
+if (process.env.FIRESTORE_EMULATOR_HOST === undefined) {
+  it('el emulador de Firestore tiene que estar corriendo', () => {
+    throw new Error(
+      'Sin FIRESTORE_EMULATOR_HOST no hay nada que probar. Lanza: npm run reglas:check',
+    );
+  });
+}
 
-describeSiHayEmulador('reglas de Firestore', () => {
+describe('reglas de Firestore', () => {
   let entorno: RulesTestEnvironment;
 
   beforeAll(async () => {
@@ -155,12 +182,28 @@ describeSiHayEmulador('reglas de Firestore', () => {
       expect(resultado.docs[0]?.data().role).toBe('owner');
     });
 
-    it('lee su organización', async () => {
+    /**
+     * SE LEE EL DOCUMENTO, NO SE CONSULTA POR EL CAMPO, y la diferencia costo un panel.
+     *
+     * La regla es `allow read: if isMember(orgId)`, donde `orgId` es el id del
+     * DOCUMENTO. Una consulta `where('id','==',X)` filtra por un CAMPO, y ahi Firestore
+     * no puede demostrar que el resultado cumple la regla: deniega el `list` entero
+     * sobre un documento que ese mismo usuario si puede leer directo. El sintoma fue
+     * «Falta un permiso» con la membresia correcta en la base.
+     *
+     * Por eso `query.ts` convierte `.eq('id', X)` en un `getDoc`, y por eso esta prueba
+     * ejercita las DOS formas: que la buena pase y que la mala siga denegada. Sin la
+     * segunda mitad, alguien podria «arreglar» las reglas abriendo el `list` de
+     * organizaciones —que es justo lo que no hay que hacer— y esto seguiria en verde.
+     */
+    it('lee su organización por documento, y la consulta por campo sigue denegada', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
-      const resultado = await assertSucceeds(
-        getDocs(query(collection(db, 'organizations'), where('id', '==', ORG))),
-      );
-      expect(resultado.size).toBe(1);
+
+      const documento = await assertSucceeds(getDoc(doc(db, 'organizations', ORG)));
+      expect(documento.exists()).toBe(true);
+      expect(documento.data()?.name).toBe('Krealo Demo');
+
+      await assertFails(getDocs(query(collection(db, 'organizations'), where('id', '==', ORG))));
     });
 
     it('lista las ubicaciones de su organización', async () => {
@@ -203,7 +246,6 @@ describeSiHayEmulador('reglas de Firestore', () => {
 
     it('los fichajes son de solo lectura: nadie escribe un time_event', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
-      const { setDoc } = await import('firebase/firestore');
       await assertFails(
         setDoc(doc(db, 'time_events/inventado'), {
           organization_id: ORG,

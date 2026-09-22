@@ -29,7 +29,8 @@
     "tema:check": "node scripts/tema-check.mjs dist-demo",
     "contraste:check": "node scripts/contraste-check.mjs dist-demo",
     "responsive:check": "node scripts/responsive-check.mjs dist-demo",
-    "contratos:check": "node scripts/contratos-check.mjs"
+    "contratos:check": "node scripts/contratos-check.mjs",
+    "reglas:check": "node scripts/reglas-check.mjs"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

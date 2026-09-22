@@ -29,5 +29,20 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'mjs', 'json', 'node'],
 
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/**/*.d.ts', '!src/i18n/locales/**'],
-  testPathIgnorePatterns: ['/node_modules/', '/e2e/', '/dist/'],
+  /**
+   * LAS QUE NECESITAN EMULADOR VIVEN EN `jest.emulador.config.js` y aqui se excluyen.
+   *
+   * No es orden: es que no pueden correr aqui. Este `jest` usa el preset `jest-expo`,
+   * que reemplaza el `fetch` global por el polyfill de React Native, y con ese polyfill
+   * la libreria de reglas no puede hablar con el emulador. Dejarlas en esta lista solo
+   * servia para que Jest dijera «8 skipped» y el CI saliera verde sin haber probado
+   * nada. Se lanzan con `npm run reglas:check`, y el CI tiene su propio trabajo.
+   */
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '/e2e/',
+    '/dist/',
+    '/src/lib/firebase/__tests__/reglas.test.ts$',
+    '/__tests__/emulador/',
+  ],
 };

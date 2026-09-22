@@ -173,6 +173,56 @@ jobs:
       - name: Comprobar contratos cliente ↔ Cloud Functions
         run: node scripts/contratos-check.mjs
 
+  # LAS REGLAS DE FIRESTORE, EJERCITADAS DE VERDAD.
+  #
+  # Va en su propio trabajo porque necesita dos cosas que el de arriba no tiene: una
+  # JVM (el emulador de Firestore es Java) y un Jest sin el preset de Expo. El preset
+  # carga los polyfills de React Native en cualquier entorno, y uno de ellos reemplaza
+  # `fetch` por una versión que aquí devuelve una `Response` con `status` sin definir:
+  # con eso la librería de reglas no puede hablar con el emulador y las ocho pruebas
+  # fallan con «Emulator Hub at undefined», que parece que el emulador no arrancó.
+  #
+  # Antes esto no existía y las ocho se SALTABAN: el CI decía «8 skipped» y salía verde.
+  # Con Supabase la protección de los datos eran las RLS y 265 aserciones las
+  # ejercitaban; con Firestore la protección son estas reglas, y hasta hoy nadie las
+  # probaba. Un cambio que abriera una colección pasaba el CI sin despeinarse.
+  #
+  # `reglas-check.mjs` no se conforma con el código de salida: lee el informe de Jest y
+  # falla si alguna quedó pendiente o si no corrió ninguna.
+  reglas:
+    name: Reglas de Firestore en el emulador
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      # El emulador de Firestore es una JVM. Sin esto el trabajo muere con un mensaje
+      # sobre `java` que no menciona a Firebase por ningún lado.
+      - name: Preparar Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Explícito y no por `npx` a secas: así la versión queda en el registro del
+      # trabajo y una descarga fallida se ve como lo que es.
+      - name: Instalar la CLI de Firebase
+        run: npm install -g firebase-tools
+
+      - name: Ejercitar las reglas contra el emulador
+        run: npm run reglas:check
+
   arneses:
     name: 'Arnés: ${{ matrix.arnes.nombre }}'
     runs-on: ubuntu-latest
