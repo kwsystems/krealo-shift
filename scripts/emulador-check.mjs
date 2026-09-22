@@ -72,7 +72,7 @@ const {
  * se cuentan en ningun sitio. Lo unico que lo delataba era el codigo de salida. Se mira
  * aparte para que el mensaje diga lo que pasa de verdad.
  */
-if (numFailedTestSuites > 0) {
+if (numFailedTestSuites > 0 && numFailedTests === 0) {
   console.error(
     `\nFALLA: ${numFailedTestSuites} suite(s) no llegaron a ejecutarse. Suele ser un módulo que no se encuentra: revisa que estén instaladas las dependencias de functions/.`,
   );

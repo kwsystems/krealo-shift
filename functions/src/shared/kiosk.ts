@@ -155,9 +155,26 @@ export async function authenticateKiosk(payload: unknown): Promise<KioskContext>
     throw new HttpsError('permission-denied', 'Este reloj fue desactivado.');
   }
 
-  // Señal de vida, para la alerta de «reloj sin sincronizar». Se escribe sin
-  // esperar: que el fichaje no dependa de poder anotar la hora del último contacto.
-  void deviceDoc.ref.update({ last_seen_at: nowISO() });
+  /*
+   * Señal de vida, para la alerta de «reloj sin sincronizar». Se escribe SIN ESPERAR: el
+   * fichaje no puede depender de poder anotar la hora del último contacto.
+   *
+   * Y POR ESO MISMO NECESITA `.catch()`. Un `void promesa` a secas no es «ignorar el
+   * resultado», es dejar suelto un rechazo que nadie maneja, y en Node eso no se queda
+   * callado: sale por `unhandledRejection` en cualquier momento posterior, lejos de
+   * donde se originó, y en una Cloud Function puede llevarse la instancia por delante.
+   *
+   * Se vio en las pruebas y por eso está escrito: esta escritura sobrevivía al final de
+   * una prueba, la siguiente vaciaba la base, y el `NOT_FOUND` aterrizaba encima de una
+   * prueba que no tenía nada que ver. En la máquina de desarrollo pasaba por milímetros
+   * y en el CI —más lento— saltaba. Lo mismo puede pasar en producción con una escritura
+   * que falle por red: el error aparece en otro fichaje.
+   *
+   * El patrón es el que ya usa `revokeMember` con `revokeRefreshTokens`.
+   */
+  void deviceDoc.ref.update({ last_seen_at: nowISO() }).catch((error: unknown) => {
+    console.error('[krealo-shift] no se pudo anotar la señal de vida del reloj:', error);
+  });
 
   return {
     deviceId: deviceDoc.id,
