@@ -31,8 +31,22 @@ const employeeSchema = z.object({
   email: z.string().nullable(),
   employee_number: z.string().nullable(),
   status: z.enum(employeeStatusValues),
-  hire_date: z.string().nullable(),
-  user_id: docId().nullable(),
+  /*
+   * `.default(null)` Y NO SOLO `.nullable()`, y la diferencia rompio la pantalla de
+   * Equipo en produccion.
+   *
+   * `.nullable()` acepta `null` pero NO acepta que el campo no este: un documento sin
+   * `hire_date` llega como `undefined` y Zod lo rechaza. `createEmployee` nunca escribia
+   * estos dos campos, asi que TODO empleado dado de alta desde la app producia un
+   * documento que la propia app no podia volver a leer: «Algo no salio bien. La
+   * respuesta del servidor no es la esperada», sin nada en la consola.
+   *
+   * Se arregla en los dos lados a proposito. El escritor ya los escribe —abajo— pero eso
+   * no arregla las filas que ya estan en la base; esto si, y ademas hace que un campo
+   * añadido en el futuro no tumbe la pantalla de quien todavia no lo tiene.
+   */
+  hire_date: z.string().nullable().default(null),
+  user_id: docId().nullable().default(null),
 });
 
 export type Employee = z.infer<typeof employeeSchema>;
@@ -194,7 +208,24 @@ export type EmployeeDraft = {
 
 const insertedIdSchema = z.object({ id: docId() });
 
+/**
+ * LAS FILAS LLEVAN `organization_id`, Y NO LO LLEVABAN. Sin el, esto no funcionaba de
+ * dos formas a la vez:
+ *
+ *   1. LA REGLA LO DENIEGA. `allow create: if isStaff(request.resource.data
+ *      .organization_id)` con el campo ausente evalua `isStaff(undefined)`, que es
+ *      falso. Cada alta de empleado fallaba justo en este paso.
+ *   2. Y AUNQUE SE ESCRIBIERA, NADIE LA ENCONTRARIA: `fetchLocationAssignments` filtra
+ *      por `organization_id`, asi que una fila sin el es invisible para la consulta que
+ *      la busca. Una regla que se apoya en un campo obliga a que la consulta lo acote.
+ *
+ * `can_manage` tambien faltaba, y el esquema de lectura lo exige como booleano —ni
+ * siquiera nullable—, asi que una fila sin el tampoco se podia leer. Va en `false`:
+ * administrar una sede se concede por el ROL de la membresia, no por estar asignado a
+ * trabajar en ella.
+ */
 async function replaceAssignments(params: {
+  organizationId: string;
   employeeId: string;
   locationIds: string[];
 }): Promise<void> {
@@ -206,15 +237,19 @@ async function replaceAssignments(params: {
   await execute((db) =>
     db.from(TABLES.employeeLocationAssignments).insert(
       params.locationIds.map((locationId, index) => ({
+        organization_id: params.organizationId,
         employee_id: params.employeeId,
         location_id: locationId,
+        can_manage: false,
         is_primary: index === 0,
       })),
     ),
   );
 }
 
+/** Lo mismo que las asignaciones: sin `organization_id` ni se escribe ni se encuentra. */
 async function replaceJobRoles(params: {
+  organizationId: string;
   employeeId: string;
   jobRoleIds: string[];
 }): Promise<void> {
@@ -226,6 +261,7 @@ async function replaceJobRoles(params: {
   await execute((db) =>
     db.from(TABLES.employeeJobRoles).insert(
       params.jobRoleIds.map((jobRoleId, index) => ({
+        organization_id: params.organizationId,
         employee_id: params.employeeId,
         job_role_id: jobRoleId,
         is_primary: index === 0,
@@ -250,18 +286,30 @@ export async function createEmployee(params: {
         employee_number: draft.employeeNumber,
         email: draft.email,
         status: 'active',
+        // Explicitos aunque vayan en nulo: ver el comentario del esquema de arriba.
+        hire_date: null,
+        user_id: null,
       })
       .select('id')
       .single(),
   );
 
-  await replaceAssignments({ employeeId: inserted.id, locationIds: draft.locationIds });
-  await replaceJobRoles({ employeeId: inserted.id, jobRoleIds: draft.jobRoleIds });
+  await replaceAssignments({
+    organizationId,
+    employeeId: inserted.id,
+    locationIds: draft.locationIds,
+  });
+  await replaceJobRoles({
+    organizationId,
+    employeeId: inserted.id,
+    jobRoleIds: draft.jobRoleIds,
+  });
 
   return inserted.id;
 }
 
 export async function updateEmployee(params: {
+  organizationId: string;
   employeeId: string;
   draft: EmployeeDraft;
 }): Promise<void> {
@@ -279,8 +327,16 @@ export async function updateEmployee(params: {
       .eq('id', employeeId),
   );
 
-  await replaceAssignments({ employeeId, locationIds: draft.locationIds });
-  await replaceJobRoles({ employeeId, jobRoleIds: draft.jobRoleIds });
+  await replaceAssignments({
+    organizationId: params.organizationId,
+    employeeId,
+    locationIds: draft.locationIds,
+  });
+  await replaceJobRoles({
+    organizationId: params.organizationId,
+    employeeId,
+    jobRoleIds: draft.jobRoleIds,
+  });
 }
 
 /** Activar o desactivar sin borrar historial (§11.2). */

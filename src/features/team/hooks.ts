@@ -155,7 +155,8 @@ export function useTeamMutations(organizationId: string | null) {
   });
 
   const update = useMutation({
-    mutationFn: (params: { employeeId: string; draft: EmployeeDraft }) => updateEmployee(params),
+    mutationFn: (params: { employeeId: string; draft: EmployeeDraft }) =>
+      updateEmployee({ organizationId: organizationId ?? '', ...params }),
     onSuccess: invalidate,
   });
 
