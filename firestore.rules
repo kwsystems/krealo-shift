@@ -163,17 +163,34 @@ service cloud.firestore {
       allow delete: if false;    // un empleado con fichajes no se borra: pasa a inactive
     }
 
+    // EL BORRADO SE SEPARA, Y NO ES COSMETICA. Las dos reglas de abajo eran un `write`
+    // unico que leia `request.resource.data`, y en un BORRADO `request.resource` es
+    // NULO: la condicion falla y Firestore deniega. O sea que se podia asignar una sede
+    // o un puesto, pero no quitarlo.
+    //
+    // Eso no se notaba al dar de alta —no hay nada que borrar— pero rompia EDITAR: el
+    // guardado reemplaza las asignaciones borrando primero, asi que cambiarle la sede a
+    // alguien fallaba siempre. El resto de este archivo ya separa `create` de `update` y
+    // de `delete` por este mismo motivo; estas dos se habian quedado fuera.
+    //
+    // La autorizacion no se afloja: para borrar se exige lo mismo, leido del documento
+    // que YA existe, que es el unico sitio donde hay datos en un borrado.
     match /employee_location_assignments/{assignmentId} {
       allow read: if isMember(resource.data.organization_id);
-      allow write: if managesLocation(
+      allow create, update: if managesLocation(
         request.resource.data.organization_id,
         request.resource.data.location_id
+      );
+      allow delete: if managesLocation(
+        resource.data.organization_id,
+        resource.data.location_id
       );
     }
 
     match /employee_job_roles/{id} {
       allow read: if isMember(resource.data.organization_id);
-      allow write: if isStaff(request.resource.data.organization_id);
+      allow create, update: if isStaff(request.resource.data.organization_id);
+      allow delete: if isStaff(resource.data.organization_id);
     }
 
     // EL PIN NO SE LEE NUNCA DESDE EL CLIENTE, ni siquiera su hash, ni siquiera por el
