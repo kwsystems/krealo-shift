@@ -31,6 +31,18 @@ export const DEFAULT_LOCATION_SETTINGS = {
   allowUnscheduledShifts: true,
   timeFormat: '24h' as TimeFormatPreference,
   requiredBreakMinutes: 0,
+  /**
+   * Cuánto antes del fin del turno el reloj pregunta POR QUÉ se va (decisión de Andree,
+   * 2026-09-22: preguntar solo pasado un umbral).
+   *
+   * CERO LO APAGA, como `requiredBreakMinutes` y `photoRetentionDays`. Para preguntar
+   * prácticamente siempre se pone 1, no 0.
+   *
+   * Treinta es el valor que se propuso y con el que se decidió: media hora antes ya no
+   * es «se me adelantó el bus», es una ausencia que el gerente va a querer explicada.
+   * La regla está en `src/domain/early-departure-reason.ts`.
+   */
+  earlyDepartureReasonMinutes: 30,
   dailyOvertimeThresholdMinutes: 480,
   weeklyOvertimeThresholdMinutes: 2880,
   /** Descanso mínimo entre dos turnos antes de advertir (§11.3). */
@@ -85,6 +97,11 @@ const locationSettingsSchema = z
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.requiredBreakMinutes),
+    earlyDepartureReasonMinutes: z
+      .number()
+      .int()
+      .min(0)
+      .default(DEFAULT_LOCATION_SETTINGS.earlyDepartureReasonMinutes),
     dailyOvertimeThresholdMinutes: z
       .number()
       .int()

@@ -19,7 +19,7 @@ import * as SQLite from 'expo-sqlite';
  */
 
 const DATABASE_NAME = 'krealo-shift-offline.db';
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 let handle: SQLite.SQLiteDatabase | null = null;
 
@@ -127,6 +127,8 @@ create table if not exists outbox_time_events (
   break_type text,
   break_reason text,
   break_note text,
+  departure_reason text,
+  departure_note text,
   shift_id text,
   location_id text not null,
   occurred_at_device text not null,
@@ -314,6 +316,26 @@ export async function applyMigrations(
     );
     if (columns.length > 0) {
       for (const columna of ['break_reason', 'break_note']) {
+        if (!columns.some((column) => column.name === columna)) {
+          await database.execAsync(`alter table outbox_time_events add column ${columna} text`);
+        }
+      }
+    }
+  }
+
+  /*
+   * v4 → v5: la cola gana `departure_reason` y `departure_note`.
+   *
+   * Mismo molde que la anterior, y a propósito: un reloj que ya estaba activado tiene la
+   * tabla vieja, y `create table if not exists` no la toca. Sin esto, el primer fichaje
+   * sin conexión tras actualizar fallaría al insertar una columna que ahí no existe.
+   */
+  if (previous >= 1 && previous < 5) {
+    const columns = await database.getAllAsync<{ name: string }>(
+      "pragma table_info('outbox_time_events')",
+    );
+    if (columns.length > 0) {
+      for (const columna of ['departure_reason', 'departure_note']) {
         if (!columns.some((column) => column.name === columna)) {
           await database.execAsync(`alter table outbox_time_events add column ${columna} text`);
         }

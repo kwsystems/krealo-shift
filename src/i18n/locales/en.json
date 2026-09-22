@@ -159,7 +159,17 @@
     "photoRequiredTitle": "No photo, no clock-in here",
     "photoRequiredBody": "In a browser the photo is the only proof that you are at the store. Allow camera access and try again.",
     "photoRetry": "Try the photo again",
-    "webNeedsNetwork": "You cannot clock in from a browser while offline. Try again when you have a connection."
+    "webNeedsNetwork": "You cannot clock in from a browser while offline. Try again when you have a connection.",
+    "chooseDepartureReason": "Why are you leaving early?",
+    "departureHint": "Your shift ends at {{time}}. Say it now and your manager will not have to ask tomorrow.",
+    "departureAgreedEnd": "Agreed end of day",
+    "departureErrand": "Errand / another location",
+    "departureMedical": "Medical appointment",
+    "departurePermit": "Personal leave",
+    "departureEmergency": "Emergency",
+    "departureOther": "Other",
+    "departureNoteTitle": "What happened?",
+    "departureNotePlaceholder": "e.g. they called me from home"
   },
   "attendance": {
     "statusOffShift": "Off shift",
@@ -418,7 +428,8 @@
     "valueDidNotExist": "Didn't exist",
     "valueUnknownShape": "Unrecognized format",
     "changedBy": "Changed by",
-    "overtimeEquivalent": "Equivalent ×{{factor}} (reference)"
+    "overtimeEquivalent": "Equivalent ×{{factor}} (reference)",
+    "departureReason": "Reason for leaving"
   },
   "reports": {
     "title": "Reports",
@@ -699,7 +710,8 @@
     "addJobRoleName": "Name of the new job role",
     "addJobRolePlaceholder": "Cashier, Barista, Stockroom…",
     "addJobRoleSubmit": "Open role",
-    "addJobRoleDone": "Job role \"{{name}}\" is open. You can assign it when adding someone."
+    "addJobRoleDone": "Job role \"{{name}}\" is open. You can assign it when adding someone.",
+    "earlyDepartureReasonMinutes": "Ask for a reason when leaving this many minutes early"
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",

@@ -54,6 +54,8 @@ function sesion(
     unpaid_break_minutes: 0,
     net_minutes: 480,
     status: 'complete',
+    departure_reason: null,
+    departure_note: null,
     updated_at: '2026-09-14T21:00:00.000Z',
     ...parcial,
   };

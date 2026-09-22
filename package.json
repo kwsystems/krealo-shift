@@ -29,6 +29,7 @@
     "tema:check": "node scripts/tema-check.mjs dist-demo",
     "contraste:check": "node scripts/contraste-check.mjs dist-demo",
     "responsive:check": "node scripts/responsive-check.mjs dist-demo",
+    "salida:check": "node scripts/salida-check.mjs dist-demo",
     "contratos:check": "node scripts/contratos-check.mjs",
     "emulador:check": "node scripts/emulador-check.mjs"
   },

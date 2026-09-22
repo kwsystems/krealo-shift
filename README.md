@@ -137,11 +137,15 @@ con el mismo hash de bundle que el de la demo. Los scripts de `package.json` ya 
 `--clear`; el que no lo lleva es el comando suelto que copia el CI, y en el CI no
 importa porque cada runner empieza con la caché vacía.
 
-**Los siete arneses de la demostración corren en el CI en cada push**, uno por
-runner: `demo`, `kiosco`, `reportes`, `inicio`, `tema`, `contraste` y `responsive`.
+**Los ocho arneses de la demostración corren en el CI en cada push**, uno por
+runner: `demo`, `kiosco`, `reportes`, `inicio`, `tema`, `contraste`, `responsive` y
+`salida`.
 Hasta ahora solo corrían a mano y eso costó caro: un commit dejó el reloj web sin
 poder fichar —la foto de verificación fallaba siempre— y su CI estuvo en verde; lo
-destapó `kiosco:check` corrido a mano un día después. Correrlos en local sigue
+destapó `kiosco:check` corrido a mano un día después. El último, `salida`, vigila otro
+modo de fallo: que la hoja que pregunta por qué te vas antes de hora **aparezca**. El
+dato puede existir en los dos extremos y la pantalla no salir nunca — ya pasó cinco
+veces en este proyecto con campos que compilaban perfectamente. Correrlos en local sigue
 siendo lo suyo mientras se trabaja (son más rápidos que esperar al CI), pero ya no
 hace falta acordarse.
 

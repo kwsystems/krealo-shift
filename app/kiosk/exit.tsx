@@ -19,7 +19,7 @@ import {
   type PermissionLabel,
 } from '@/features/kiosk/permission-status';
 import { lastSyncFailure, refreshOfflinePackage, runSync } from '@/lib/offline/sync';
-import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
+import { politicasDelVinculo, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
@@ -95,7 +95,7 @@ export default function KioskExitScreen() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const policies = binding?.policies ?? DEFAULT_KIOSK_POLICIES;
+  const policies = politicasDelVinculo(binding);
   const timezone = binding?.timezone ?? 'America/Lima';
 
   const tryAuthorize = async (candidate: string) => {

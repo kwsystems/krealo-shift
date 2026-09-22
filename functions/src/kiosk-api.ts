@@ -655,6 +655,8 @@ export const submitTimeEvent = onCall(OPCIONES_CON_SECRETO, async (request) => {
     breakType: (request.data?.breakType as string | null) ?? null,
     breakReason: (request.data?.breakReason as string | null) ?? null,
     breakNote: (request.data?.breakNote as string | null) ?? null,
+    departureReason: (request.data?.departureReason as string | null) ?? null,
+    departureNote: (request.data?.departureNote as string | null) ?? null,
     occurredAt,
     occurredAtDevice: (request.data?.occurredAtDevice as string | null) ?? null,
     idempotencyKey,
@@ -773,6 +775,8 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
         breakType: evento.breakType ?? null,
         breakReason: evento.breakReason ?? null,
         breakNote: evento.breakNote ?? null,
+        departureReason: evento.departureReason ?? null,
+        departureNote: evento.departureNote ?? null,
         /*
          * AQUI SI MANDA EL RELOJ DEL IPAD, al reves que en un fichaje en linea. Es el
          * unico dato que hay de cuando paso: el servidor se entera horas despues, y

@@ -9,7 +9,8 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { Card, Row, Stack } from '@/components/ui/layout';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { BreakReason } from '@/domain/break-reason';
-import { breakReasonLabels } from '@/i18n/break-reason-labels';
+import type { EarlyDepartureReason } from '@/domain/early-departure-reason';
+import { breakReasonLabels, earlyDepartureReasonLabels } from '@/i18n/break-reason-labels';
 import { radii, shadows, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -107,10 +108,23 @@ export function BreakNoteSheet({
   visible,
   onSubmit,
   onCancel,
+  titleKey = 'kiosk.reasonNoteTitle',
+  placeholderKey = 'kiosk.reasonNotePlaceholder',
+  testIDPrefix = 'break-note',
 }: {
   visible: boolean;
   onSubmit: (note: string) => void;
   onCancel: () => void;
+  /*
+   * LA SALIDA ANTICIPADA REUTILIZA ESTA HOJA en vez de tener la suya. Es exactamente el
+   * mismo control —una línea obligatoria para «Otro»— y duplicarlo significaba duplicar
+   * el `maxLength`, el `returnKeyType`, el botón deshabilitado y el volver-a-la-lista al
+   * cancelar; cuatro cosas que se arreglan una vez y se olvidan en la copia. Solo cambian
+   * el título, el ejemplo y el `testID`.
+   */
+  titleKey?: string;
+  placeholderKey?: string;
+  testIDPrefix?: string;
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
@@ -132,9 +146,9 @@ export function BreakNoteSheet({
   };
 
   return (
-    <Sheet visible={visible} onClose={cancelar} testID="break-note-sheet">
+    <Sheet visible={visible} onClose={cancelar} testID={`${testIDPrefix}-sheet`}>
       <Stack gap={spacing.md}>
-        <AppText variant="section">{t('kiosk.reasonNoteTitle')}</AppText>
+        <AppText variant="section">{t(titleKey)}</AppText>
         <AppText variant="help" tone="muted">
           {t('kiosk.reasonNoteHint')}
         </AppText>
@@ -147,11 +161,11 @@ export function BreakNoteSheet({
           returnKeyType="done"
           onSubmitEditing={enviar}
           maxLength={NOTA_MAXIMA}
-          placeholder={t('kiosk.reasonNotePlaceholder')}
+          placeholder={t(placeholderKey)}
           placeholderTextColor={colors.ink500}
           style={styles.notaEntrada}
-          accessibilityLabel={t('kiosk.reasonNoteTitle')}
-          testID="break-note-input"
+          accessibilityLabel={t(titleKey)}
+          testID={`${testIDPrefix}-input`}
         />
         <PrimaryButton
           label={t('common.continue')}
@@ -159,9 +173,13 @@ export function BreakNoteSheet({
           onPress={enviar}
           disabled={!listo}
           size="kiosk"
-          testID="break-note-submit"
+          testID={`${testIDPrefix}-submit`}
         />
-        <GhostButton label={t('common.back')} onPress={cancelar} testID="break-note-cancel" />
+        <GhostButton
+          label={t('common.back')}
+          onPress={cancelar}
+          testID={`${testIDPrefix}-cancel`}
+        />
       </Stack>
     </Sheet>
   );
@@ -211,6 +229,60 @@ export function BreakReasonSheet({
             onPress={() => onSelect(reason)}
             size="kiosk"
             testID={`break-reason-${reason}`}
+          />
+        ))}
+        <GhostButton label={t('common.cancel')} onPress={onCancel} />
+      </Stack>
+    </Sheet>
+  );
+}
+
+/**
+ * Por qué te vas antes de que acabe tu turno.
+ *
+ * SOLO APARECE PASADO EL UMBRAL de la sede, que es la decisión que tomó Andree. Quien
+ * sale cinco minutos antes no ve esta hoja; quien se va cinco horas antes, sí.
+ *
+ * NO DICE SI CUENTA COMO TRABAJADO, y ahí se separa a propósito de la hoja de pausas.
+ * En una pausa el motivo se traduce a pagado o no pagado con lo que la empresa
+ * configuró, y enseñarlo es informar. Aquí no existe esa traducción: una salida
+ * anticipada resta horas de verdad, y poner «cuenta como trabajado» debajo de una
+ * opción sería enseñarle a quien se va cuál de las seis le conviene marcar.
+ *
+ * Dice a qué hora terminaba el turno, que es el dato que justifica la pregunta y evita
+ * la respuesta «pero si yo no salgo antes».
+ */
+export function EarlyDepartureReasonSheet({
+  visible,
+  options,
+  shiftEndsLabel,
+  onSelect,
+  onCancel,
+}: {
+  visible: boolean;
+  options: readonly EarlyDepartureReason[];
+  /** La hora de fin del turno, ya formateada por quien sabe el huso y el formato. */
+  shiftEndsLabel: string;
+  onSelect: (reason: EarlyDepartureReason) => void;
+  onCancel: () => void;
+}) {
+  const { t } = useTranslation();
+  const labels = earlyDepartureReasonLabels(t);
+
+  return (
+    <Sheet visible={visible} onClose={onCancel} testID="early-departure-sheet">
+      <Stack gap={spacing.md}>
+        <AppText variant="section">{t('kiosk.chooseDepartureReason')}</AppText>
+        <AppText variant="help" tone="muted">
+          {t('kiosk.departureHint', { time: shiftEndsLabel })}
+        </AppText>
+        {options.map((reason) => (
+          <SecondaryButton
+            key={reason}
+            label={labels[reason]}
+            onPress={() => onSelect(reason)}
+            size="kiosk"
+            testID={`departure-reason-${reason}`}
           />
         ))}
         <GhostButton label={t('common.cancel')} onPress={onCancel} />

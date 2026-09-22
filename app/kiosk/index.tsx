@@ -17,7 +17,7 @@ import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { verifyPinOffline } from '@/lib/offline/pin';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useResponsive } from '@/hooks/use-responsive';
-import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
+import { politicasDelVinculo, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { fontSize, sizes, spacing } from '@/theme/tokens';
@@ -90,7 +90,7 @@ export default function KioskIdleScreen() {
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const policies = binding?.policies ?? DEFAULT_KIOSK_POLICIES;
+  const policies = politicasDelVinculo(binding);
   const timezone = binding?.timezone ?? 'America/Lima';
   const pinLength = policies.pinLength;
 

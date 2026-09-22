@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
 
-import type { BreakReason } from '@/domain/break-reason';
+import { BREAK_REASONS, type BreakReason } from '@/domain/break-reason';
+import type { EarlyDepartureReason } from '@/domain/early-departure-reason';
 import { getDataClient } from '@/lib/firebase/query';
 import { SECURE_KEYS, secureStorage } from '@/lib/security/secure-storage';
 import type { KioskBinding } from '@/stores/kiosk-store';
@@ -48,6 +49,23 @@ const policiesSchema = z.object({
   allowUnscheduledShifts: z.boolean(),
   timeFormat: z.enum(['12h', '24h']),
   requiredBreakMinutes: z.number().int().min(0),
+  /*
+   * CON VALOR POR DEFECTO A PROPÓSITO. Un reloj ya instalado habla con el servidor que
+   * haya; si este campo fuera obligatorio, una respuesta de antes de que existiera no
+   * pasaría el esquema y el reloj dejaría de verificar PIN. Treinta es el mismo valor
+   * de fábrica que `DEFAULT_LOCATION_SETTINGS`.
+   */
+  earlyDepartureReasonMinutes: z.number().int().min(0).default(30),
+  /*
+   * ESTE FALTABA Y POR ESO NO FUNCIONABA. `KioskPolicies` lo declara y el reloj lo lee
+   * al pausar, pero como el esquema no lo parseaba, zod lo descartaba de la respuesta
+   * aunque el servidor lo mandara: la configuración de la sede no llegaba nunca y
+   * siempre ganaban los valores de fábrica.
+   *
+   * `catchall` no vale aquí: los motivos son una lista cerrada y una clave inventada
+   * debe caer, no colarse hasta el botón de pausa.
+   */
+  paidBreakReasons: z.record(z.enum(BREAK_REASONS), z.boolean()).optional(),
 });
 
 const activateResponseSchema = z.object({
@@ -344,6 +362,10 @@ export async function submitTimeEvent(params: {
   breakReason?: BreakReason;
   /** Obligatoria cuando el motivo es «Otro»: sin ella el servidor rechaza el evento. */
   breakNote?: string;
+  /** Por qué se va antes de su hora. Ver `src/domain/early-departure-reason.ts`. */
+  departureReason?: EarlyDepartureReason;
+  /** Obligatoria cuando el motivo de salida es «Otro». */
+  departureNote?: string;
   shiftId: string | null;
   idempotencyKey: string;
   occurredAtDevice: string;
@@ -408,6 +430,17 @@ export async function syncOfflineEvents(params: {
     employeeOpaqueId: string;
     eventType: TimeEventType;
     breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
+    /*
+     * LOS CUATRO MOTIVOS ESTABAN SIN DECLARAR. `toWirePayload` ya mandaba
+     * `breakReason` y `breakNote`, y aquí no figuraban: TypeScript no lo señala porque
+     * el objeto no llega como literal, así que el contrato decía una cosa y el cable
+     * llevaba otra. Si alguien limpiaba el servidor guiándose por esta lista, borraba
+     * campos que sí viajaban.
+     */
+    breakReason?: string;
+    breakNote?: string;
+    departureReason?: string;
+    departureNote?: string;
     shiftId: string | null;
     occurredAtDevice: string;
     deviceSequence: number;

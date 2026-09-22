@@ -16,6 +16,7 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
+import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
 import { dateKeyOf, localTimeOf, shiftInstants } from '@/features/schedules/week';
 import { readAdjustmentSide, type AdjustmentSide } from '@/features/timesheets/adjustment-summary';
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
@@ -144,6 +145,23 @@ export function SessionDetailSheet({
             <StatusBadge key={alert} label={t(alertLabelKey(alert))} tone="late" compact />
           ))}
         </Row>
+      ) : null}
+
+      {/*
+        LO QUE LA PERSONA YA CONTESTÓ AL IRSE, justo debajo de la marca que lo señala.
+        Sin esto el gerente ve «Salida anticipada» y tiene que preguntar mañana por algo
+        que el reloj ya preguntó ayer, y entonces la pregunta del reloj era un trámite
+        que no le ahorró nada a nadie.
+      */}
+      {session.departure_reason !== null ? (
+        <KeyValueRow
+          label={t('timesheet.departureReason')}
+          value={
+            session.departure_note === null || session.departure_note === ''
+              ? t(departureReasonLabelKey(session.departure_reason))
+              : `${t(departureReasonLabelKey(session.departure_reason))} · ${session.departure_note}`
+          }
+        />
       ) : null}
 
       <AppText variant="bodyStrong">{t('timesheet.rawEvents')}</AppText>

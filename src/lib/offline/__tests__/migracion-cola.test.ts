@@ -44,6 +44,8 @@ const COMPLETAS = [
   'break_type',
   'break_reason',
   'break_note',
+  'departure_reason',
+  'departure_note',
   'shift_id',
 ];
 
@@ -79,6 +81,30 @@ describe('migración de la cola de fichajes', () => {
     const { database, ejecutadas } = baseFalsa(COMPLETAS);
     await applyMigrations(database as never, 3);
     expect(ejecutadas.filter((sql) => sql.includes('outbox_time_events'))).toEqual([]);
+  });
+
+  /**
+   * v4 → v5, el mismo caso una versión más tarde: un reloj que se quedó en la versión
+   * del motivo de pausa y al que le faltan las dos columnas de la salida anticipada.
+   *
+   * Sin esta migración el primer fichaje sin conexión tras actualizar falla al insertar
+   * una columna que en ese aparato no existe —y falla EN EL RELOJ, con la cola detrás,
+   * que es el peor sitio donde puede fallar nada.
+   */
+  it('a una base de la versión anterior le añade las columnas de la salida anticipada', async () => {
+    const { database, ejecutadas } = baseFalsa([
+      'idempotency_key',
+      'event_type',
+      'break_type',
+      'break_reason',
+      'break_note',
+      'shift_id',
+    ]);
+    await applyMigrations(database as never, 4);
+
+    expect(ejecutadas).toContain('alter table outbox_time_events add column departure_reason text');
+    expect(ejecutadas).toContain('alter table outbox_time_events add column departure_note text');
+    expect(ejecutadas).not.toContain('alter table outbox_time_events add column break_reason text');
   });
 
   /**

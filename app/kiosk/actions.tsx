@@ -12,11 +12,18 @@ import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
+import {
+  EARLY_DEPARTURE_REASONS,
+  pideMotivoDeSalida,
+  requiresDepartureNote,
+  type EarlyDepartureReason,
+} from '@/domain/early-departure-reason';
 import { PhotoCapture, type PhotoResult } from '@/features/kiosk/photo-capture';
 import { RequestUpdatesCard } from '@/components/attendance/request-updates';
 import {
   BreakNoteSheet,
   BreakReasonSheet,
+  EarlyDepartureReasonSheet,
   ManagerOverrideSheet,
   PhotoNotice,
   RequiredBreakSheet,
@@ -42,7 +49,7 @@ import {
   secondaryEvent,
   transition,
 } from '@/domain/attendance-state-machine';
-import { DEFAULT_KIOSK_POLICIES, useKioskStore } from '@/stores/kiosk-store';
+import { politicasDelVinculo, useKioskStore } from '@/stores/kiosk-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { durations, sizes, spacing } from '@/theme/tokens';
@@ -81,6 +88,10 @@ type Sheet =
   /** Solo para «Otro»: el motivo ya está elegido y falta la explicación. */
   | { name: 'breakNote'; reason: BreakReason }
   | { name: 'requiredBreak' }
+  /** Se va antes de su hora y la sede quiere saber por qué. */
+  | { name: 'departureReason' }
+  /** Solo para «Otro»: el motivo de salida ya está elegido y falta la explicación. */
+  | { name: 'departureNote'; reason: EarlyDepartureReason }
   | { name: 'managerOverride' };
 
 type Step =
@@ -91,6 +102,8 @@ type Step =
       breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
       breakReason?: BreakReason;
       breakNote?: string;
+      departureReason?: EarlyDepartureReason;
+      departureNote?: string;
     }
   | {
       name: 'result';
@@ -159,7 +172,7 @@ export default function KioskActionsScreen() {
   /** Cambia al reintentar para REMONTAR la camara: el componente solo captura una vez. */
   const [intentoDeFoto, setIntentoDeFoto] = useState(0);
 
-  const policies = binding?.policies ?? DEFAULT_KIOSK_POLICIES;
+  const policies = politicasDelVinculo(binding);
   const timezone = binding?.timezone ?? 'America/Lima';
 
   /** Se ofrece la camara si la sede la pidio, o si el aparato la exige (web). */
@@ -248,6 +261,39 @@ export default function KioskActionsScreen() {
   const takenBreakMinutes = openSession?.takenBreakMinutes ?? 0;
   const missingRequiredBreak = requiredBreakMinutes > 0 && takenBreakMinutes < requiredBreakMinutes;
 
+  /**
+   * A qué hora termina el turno de quien está fichando.
+   *
+   * La sesión abierta manda sobre el turno seleccionado: al salir, lo que importa es el
+   * turno con el que se ENTRÓ, y la pantalla de acciones puede no tener ninguno
+   * seleccionado a esas alturas. `selectedShift` queda de reserva para el caso en que la
+   * sesión no traiga turno.
+   */
+  const finDelTurno = openSession?.shiftEndsAt ?? selectedShift?.endsAt ?? null;
+
+  const preguntarMotivoDeSalida = pideMotivoDeSalida({
+    ahora: now,
+    finDelTurno: finDelTurno === null ? null : new Date(finDelTurno),
+    umbralMinutos: policies.earlyDepartureReasonMinutes,
+  });
+
+  /**
+   * El tramo final de una salida, desde donde se llega por los dos caminos.
+   *
+   * Existe porque quien sale sin su descanso obligatorio pasa primero por esa hoja, y
+   * si el motivo de salida se preguntara solo en `startAction`, esa persona —que se va
+   * antes Y sin descanso, o sea justo el caso que más quiere entender un gerente— sería
+   * la única a la que no se le pregunta nada.
+   */
+  const continuarSalida = () => {
+    if (preguntarMotivoDeSalida) {
+      setSheet({ name: 'departureReason' });
+      return;
+    }
+    setSheet({ name: 'none' });
+    setStep({ name: 'confirm', event: 'clock_out' });
+  };
+
   const startAction = (event: TimeEventType) => {
     const result = transition(state, event);
     if (!result.allowed) {
@@ -267,6 +313,12 @@ export default function KioskActionsScreen() {
     // pregunta y la respuesta genera una solicitud auditable (§12).
     if (event === 'clock_out' && state === 'WORKING' && missingRequiredBreak) {
       setSheet({ name: 'requiredBreak' });
+      return;
+    }
+
+    // Se va antes de su hora y esta sede quiere saber por qué (§9.3).
+    if (event === 'clock_out') {
+      continuarSalida();
       return;
     }
 
@@ -316,7 +368,7 @@ export default function KioskActionsScreen() {
       return;
     }
     // Dice que no lo tomo: la salida sigue, y el gerente vera la sesion marcada.
-    setStep({ name: 'confirm', event: 'clock_out' });
+    continuarSalida();
   };
 
   /**
@@ -336,6 +388,8 @@ export default function KioskActionsScreen() {
         breakType: step.name === 'confirm' ? step.breakType : undefined,
         breakReason: step.name === 'confirm' ? step.breakReason : undefined,
         breakNote: step.name === 'confirm' ? step.breakNote : undefined,
+        departureReason: step.name === 'confirm' ? step.departureReason : undefined,
+        departureNote: step.name === 'confirm' ? step.departureNote : undefined,
         shiftId: selectedShift?.id ?? null,
         locationId: binding.locationId,
         pinVersion: verification.pinVersion,
@@ -449,6 +503,8 @@ export default function KioskActionsScreen() {
       breakType: step.name === 'confirm' ? step.breakType : undefined,
       breakReason: step.name === 'confirm' ? step.breakReason : undefined,
       breakNote: step.name === 'confirm' ? step.breakNote : undefined,
+      departureReason: step.name === 'confirm' ? step.departureReason : undefined,
+      departureNote: step.name === 'confirm' ? step.departureNote : undefined,
       shiftId: selectedShift?.id ?? null,
       idempotencyKey,
       occurredAtDevice: new Date().toISOString(),
@@ -908,6 +964,49 @@ export default function KioskActionsScreen() {
          * para todo.
          */
         onCancel={() => setSheet({ name: 'breakReason' })}
+      />
+
+      <EarlyDepartureReasonSheet
+        visible={sheet.name === 'departureReason'}
+        options={EARLY_DEPARTURE_REASONS}
+        shiftEndsLabel={
+          finDelTurno === null
+            ? ''
+            : formatClockTime(finDelTurno, timezone, policies.timeFormat, language)
+        }
+        onSelect={(reason) => {
+          if (requiresDepartureNote(reason)) {
+            setSheet({ name: 'departureNote', reason });
+            return;
+          }
+          setSheet({ name: 'none' });
+          setStep({ name: 'confirm', event: 'clock_out', departureReason: reason });
+        }}
+        /*
+         * Cancelar aquí NO ficha la salida: vuelve a la pantalla de acciones con la
+         * sesión como estaba. Es lo contrario de la hoja del descanso obligatorio, donde
+         * cancelar también cancela la salida, y por la misma razón: quien abre esta hoja
+         * todavía no ha confirmado nada.
+         */
+        onCancel={() => setSheet({ name: 'none' })}
+      />
+
+      <BreakNoteSheet
+        visible={sheet.name === 'departureNote'}
+        titleKey="kiosk.departureNoteTitle"
+        placeholderKey="kiosk.departureNotePlaceholder"
+        testIDPrefix="departure-note"
+        onSubmit={(note) => {
+          const reason = sheet.name === 'departureNote' ? sheet.reason : 'other';
+          setSheet({ name: 'none' });
+          setStep({
+            name: 'confirm',
+            event: 'clock_out',
+            departureReason: reason,
+            departureNote: note,
+          });
+        }}
+        onCancel={() => setSheet({ name: 'departureReason' })}
       />
 
       <RequiredBreakSheet

@@ -38,6 +38,9 @@ export type TimeEventInput = {
   breakType?: string | null;
   breakReason?: string | null;
   breakNote?: string | null;
+  /** Por que se fue antes de su hora. Solo en `clock_out`. */
+  departureReason?: string | null;
+  departureNote?: string | null;
   occurredAt: string;
   occurredAtDevice?: string | null;
   idempotencyKey: string;
@@ -145,6 +148,13 @@ export async function recordTimeEvent(input: TimeEventInput): Promise<{
     break_type: input.breakType ?? null,
     break_reason: input.breakReason ?? null,
     break_note: input.breakNote ?? null,
+    /*
+     * SOLO EN LA SALIDA. Guardarlos en cualquier evento invitaria a que una entrada
+     * llevara motivo de salida, y entonces un reporte que agrupe por motivo contaria
+     * cosas que no pasaron. La forma de la fila dice lo que puede haber pasado.
+     */
+    departure_reason: input.eventType === 'clock_out' ? (input.departureReason ?? null) : null,
+    departure_note: input.eventType === 'clock_out' ? (input.departureNote ?? null) : null,
     source: input.source ?? 'kiosk',
     occurred_at: input.occurredAt,
     occurred_at_device: input.occurredAtDevice ?? null,
@@ -295,6 +305,20 @@ export async function rebuildWorkSession(
         net_minutes: brutos === null ? null : brutos - noPagados,
         status: abierta ? 'open' : 'complete',
         flags: marcas,
+        /*
+         * POR QUE SE FUE ANTES, si lo dijo al fichar.
+         *
+         * Va en la SESION y no solo en el evento porque la hoja de horas lee sesiones:
+         * dejarlo unicamente en `time_events` significaria que el gerente ve la marca
+         * `early_departure` en la fila y tiene que abrir el detalle del evento para
+         * enterarse de que la persona ya habia contestado. Una explicacion que hay que
+         * ir a buscar no la lee nadie, y entonces se le pregunta al empleado para nada.
+         *
+         * `null` cuando no se pregunto, que es el caso normal: solo se pregunta pasado
+         * el umbral de la sede.
+         */
+        departure_reason: (salida?.departure_reason as string | null) ?? null,
+        departure_note: (salida?.departure_note as string | null) ?? null,
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       },

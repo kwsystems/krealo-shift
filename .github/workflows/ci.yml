@@ -276,6 +276,7 @@ jobs:
           - { id: tema, nombre: 'claro y oscuro sin mezclarse' }
           - { id: contraste, nombre: 'todo el texto se lee' }
           - { id: responsive, nombre: 'nada se sale ni se recorta' }
+          - { id: salida, nombre: 'el reloj pregunta por qué te vas antes de hora' }
 
     steps:
       - name: Traer el código

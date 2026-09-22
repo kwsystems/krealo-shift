@@ -698,6 +698,42 @@ que el repositorio pase a privado.
 
 - **Dónde:** `CLAUDE.md`, sección "Skills instalados".
 
+### El motivo de la salida anticipada no decide nómina
+
+El reloj pregunta por qué te vas cuando sales más de `earlyDepartureReasonMinutes`
+antes del fin de tu turno (30 por defecto, configurable por sede; 0 lo apaga). Los seis
+motivos —fin de jornada acordado, mandado / otra sede, cita médica, permiso personal,
+emergencia, otro— son **información para el gerente y nada más**: a diferencia de los
+motivos de pausa, no se traducen a pagado o no pagado.
+
+- **Motivo:** una salida anticipada resta horas de verdad. Dejar que quien se va elija
+  de una lista si esas horas se le pagan es pedirle que firme su propia planilla, y es
+  exactamente el error que ya se corrigió en las pausas —donde antes se le preguntaba al
+  empleado si su descanso era pagado— solo que con más dinero en juego.
+- **Costo:** el caso legítimo de «me mandaron al almacén, esas horas son trabajo» no se
+  resuelve solo. Lo resuelve el gerente reclasificando la salida como pausa, que ya sabe
+  si cuenta como trabajado y deja la corrección auditada con autor y motivo.
+- **Por qué el umbral es otro número que `lateGraceMinutes`:** la marca
+  `early_departure` aparece con cualquier salida temprana porque su costo lo paga el
+  gerente mirando una tabla. La pregunta lo paga el empleado delante de una cola.
+- **Dónde:** `src/domain/early-departure-reason.ts`.
+
+### Las políticas guardadas de un reloj se completan con las de fábrica
+
+`politicasDelVinculo` mezcla `DEFAULT_KIOSK_POLICIES` con lo que trae el vínculo
+guardado, en vez del `binding?.policies ?? DEFAULT_KIOSK_POLICIES` que había en las tres
+pantallas del reloj.
+
+- **Motivo:** ese `??` solo entra cuando NO hay vínculo. Un reloj ya montado tiene uno,
+  escrito el día de su activación, así que **cada política nueva vale `undefined` en los
+  aparatos que ya están en la tienda** — que son todos los que importan. La función que
+  dependa de ella no corre nunca, sin error y sin aviso, y funciona perfectamente en un
+  aparato recién activado, que es donde se prueba.
+- **Cómo se descubrió:** el umbral de salida anticipada no disparaba la pregunta. No era
+  la regla ni la pantalla: era que el vínculo guardado no traía el número.
+- **Dónde:** `src/stores/kiosk-store.ts`, con su prueba en
+  `src/stores/__tests__/politicas-del-vinculo.test.ts`.
+
 ---
 
 ## Cómo agregar una entrada

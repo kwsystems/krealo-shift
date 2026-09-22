@@ -30,6 +30,10 @@ export type OutboxEventInput = {
   breakReason?: import('@/domain/break-reason').BreakReason;
   /** Obligatoria cuando el motivo es «Otro». Ver `requiresNote`. */
   breakNote?: string;
+  /** Por qué se va antes de su hora. Ver `src/domain/early-departure-reason.ts`. */
+  departureReason?: import('@/domain/early-departure-reason').EarlyDepartureReason;
+  /** Obligatoria cuando el motivo de salida es «Otro». */
+  departureNote?: string;
   shiftId: string | null;
   locationId: string;
   pinVersion: number;
@@ -44,6 +48,8 @@ export type OutboxEvent = {
   breakType: BreakType | null;
   breakReason: import('@/domain/break-reason').BreakReason | null;
   breakNote: string | null;
+  departureReason: import('@/domain/early-departure-reason').EarlyDepartureReason | null;
+  departureNote: string | null;
   shiftId: string | null;
   locationId: string;
   occurredAtDevice: string;
@@ -67,6 +73,8 @@ type OutboxRow = {
   break_type: BreakType | null;
   break_reason: import('@/domain/break-reason').BreakReason | null;
   break_note: string | null;
+  departure_reason: import('@/domain/early-departure-reason').EarlyDepartureReason | null;
+  departure_note: string | null;
   shift_id: string | null;
   location_id: string;
   occurred_at_device: string;
@@ -91,6 +99,8 @@ function toEvent(row: OutboxRow): OutboxEvent {
     breakType: row.break_type,
     breakReason: row.break_reason,
     breakNote: row.break_note,
+    departureReason: row.departure_reason,
+    departureNote: row.departure_note,
     shiftId: row.shift_id,
     locationId: row.location_id,
     occurredAtDevice: row.occurred_at_device,
@@ -157,6 +167,11 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     // Y la nota, por lo mismo y con mas razon: es texto libre escrito por una persona
     // sobre por que se ausento, y es justo lo que alguien querria reescribir despues.
     input.breakNote ?? '',
+    // Y los dos de la salida anticipada, por lo mismo: el motivo por el que alguien se
+    // fue cinco horas antes es exactamente lo que querría cambiar quien tocara el
+    // SQLite del aparato.
+    input.departureReason ?? '',
+    input.departureNote ?? '',
     input.shiftId ?? '',
     input.locationId,
     occurredAtDevice,
@@ -168,10 +183,11 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
     await database.runAsync(
       `insert into outbox_time_events (
          idempotency_key, device_sequence, employee_opaque_id, event_type, break_type,
-         break_reason, break_note, shift_id, location_id, occurred_at_device,
+         break_reason, break_note, departure_reason, departure_note, shift_id,
+         location_id, occurred_at_device,
          device_timezone, device_offset_minutes, pin_version, photo_local_uri, signature,
          status, attempts, created_at
-       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
+       ) values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)`,
       idempotencyKey,
       deviceSequence,
       input.employeeOpaqueId,
@@ -179,6 +195,8 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
       input.breakType ?? null,
       input.breakReason ?? null,
       input.breakNote ?? null,
+      input.departureReason ?? null,
+      input.departureNote ?? null,
       input.shiftId,
       input.locationId,
       occurredAtDevice,

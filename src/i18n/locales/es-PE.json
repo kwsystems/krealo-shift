@@ -159,7 +159,17 @@
     "photoRequiredTitle": "Sin foto no se puede fichar aquí",
     "photoRequiredBody": "Desde un navegador la foto es la única prueba de que estás en el local. Permite el uso de la cámara y vuelve a intentarlo.",
     "photoRetry": "Volver a intentar la foto",
-    "webNeedsNetwork": "Sin conexión no se puede fichar desde el navegador. Vuelve a intentarlo cuando haya red."
+    "webNeedsNetwork": "Sin conexión no se puede fichar desde el navegador. Vuelve a intentarlo cuando haya red.",
+    "chooseDepartureReason": "¿Por qué sales antes?",
+    "departureHint": "Tu turno termina a las {{time}}. Dilo y tu gerente no tiene que preguntarte mañana.",
+    "departureAgreedEnd": "Fin de jornada acordado",
+    "departureErrand": "Mandado / otra sede",
+    "departureMedical": "Cita médica",
+    "departurePermit": "Permiso personal",
+    "departureEmergency": "Emergencia",
+    "departureOther": "Otro",
+    "departureNoteTitle": "¿Qué pasó?",
+    "departureNotePlaceholder": "Ej.: me llamaron de casa"
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",
@@ -418,7 +428,8 @@
     "valueDidNotExist": "No existía",
     "valueUnknownShape": "Formato no reconocido",
     "changedBy": "Modificado por",
-    "overtimeEquivalent": "Equivalente ×{{factor}} (referencia)"
+    "overtimeEquivalent": "Equivalente ×{{factor}} (referencia)",
+    "departureReason": "Motivo de la salida"
   },
   "reports": {
     "title": "Reportes",
@@ -699,7 +710,8 @@
     "addJobRoleName": "Nombre del puesto nuevo",
     "addJobRolePlaceholder": "Cajero, Barista, Almacén…",
     "addJobRoleSubmit": "Abrir puesto",
-    "addJobRoleDone": "Puesto «{{name}}» abierto. Ya se puede asignar al dar de alta a alguien."
+    "addJobRoleDone": "Puesto «{{name}}» abierto. Ya se puede asignar al dar de alta a alguien.",
+    "earlyDepartureReasonMinutes": "Preguntar motivo al salir antes de (minutos)"
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",

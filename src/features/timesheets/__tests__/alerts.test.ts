@@ -21,6 +21,8 @@ function session(overrides: Partial<WorkSession> & { id: string }): WorkSession 
     net_minutes: 480,
     status: 'complete',
     flags: [],
+    departure_reason: null,
+    departure_note: null,
     updated_at: '2026-08-27T22:00:01.000Z',
     ...overrides,
   };

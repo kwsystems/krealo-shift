@@ -357,13 +357,51 @@ function crearFunctions(almacen: Almacen) {
             },
             attendanceState: estado,
             allowedActions: accionesPermitidasDemo(estado),
-            eligibleShifts: [],
+            /*
+             * EL TURNO DE LA JORNADA QUE YA ESTÁ ABIERTA, y no una lista vacía.
+             *
+             * Con `[]` la pantalla de acciones decía «No tienes un turno programado»
+             * mientras la hoja de salida anticipada, justo debajo, decía «tu turno
+             * termina a las 23:24». Las dos leen la misma demostración y se
+             * contradecían, que es peor que no enseñar ninguna de las dos: quien mira la
+             * demostración no sabe cuál de las dos miente.
+             *
+             * Fuera de turno se queda vacía, que ahí sí es verdad.
+             */
+            eligibleShifts:
+              estado === 'OFF_SHIFT'
+                ? []
+                : [
+                    {
+                      id: 'demo-turno-abierto',
+                      startsAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
+                      endsAt: new Date(Date.now() + 5 * 3600_000).toISOString(),
+                      jobRoleName: 'Cajero',
+                      employeeNote: null,
+                      plannedUnpaidBreakMinutes: 60,
+                      changedSinceLastPublication: false,
+                    },
+                  ],
             openSession:
               estado === 'OFF_SHIFT'
                 ? null
                 : {
                     startedAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
-                    shiftEndsAt: null,
+                    /*
+                     * A QUE HORA TERMINA EL TURNO, y no `null` como estaba.
+                     *
+                     * Con `null` la demostración no podía enseñar dos cosas que la app
+                     * sí hace: el «tu turno termina a las …» de la confirmación, y la
+                     * pregunta de por qué te vas antes de hora. Las dos dependen de
+                     * este dato, así que con un `null` fijo quedaban invisibles —el
+                     * mismo patrón de «funciona en la demostración y no en la realidad»
+                     * que ya salió con `publication_version`, solo que al revés.
+                     *
+                     * Cinco horas por delante: Ana lleva tres trabajadas de un turno de
+                     * ocho, que es una jornada creíble y además deja la salida
+                     * claramente por encima del umbral de media hora.
+                     */
+                    shiftEndsAt: new Date(Date.now() + 5 * 3600_000).toISOString(),
                     takenBreakMinutes: 0,
                     requiredBreakMinutes: 0,
                     openBreak:
@@ -390,7 +428,10 @@ function crearFunctions(almacen: Almacen) {
             occurredAt: new Date().toISOString(),
             serverReceivedAt: new Date().toISOString(),
             flags: [],
-            summary: { shiftEndsAt: null, netMinutesToday: 0 },
+            summary: {
+              shiftEndsAt: new Date(Date.now() + 5 * 3600_000).toISOString(),
+              netMinutesToday: 180,
+            },
           });
         }
         /*

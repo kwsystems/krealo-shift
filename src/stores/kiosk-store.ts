@@ -25,6 +25,13 @@ export type KioskPolicies = {
   timeFormat: '12h' | '24h';
   requiredBreakMinutes: number;
   /**
+   * Cuánto antes del fin del turno se pregunta por qué se va. Cero lo apaga.
+   *
+   * Viaja en el binding por lo mismo que `paidBreakReasons`: el reloj tiene que poder
+   * decidirlo SIN RED. La regla vive en `src/domain/early-departure-reason.ts`.
+   */
+  earlyDepartureReasonMinutes: number;
+  /**
    * Qué motivos de pausa cuentan como trabajado en esta ubicación.
    *
    * Viaja en el binding y no se consulta al pausar: el kiosco tiene que poder decidirlo
@@ -45,8 +52,31 @@ export const DEFAULT_KIOSK_POLICIES: KioskPolicies = {
   allowUnscheduledShifts: true,
   timeFormat: '24h',
   requiredBreakMinutes: 0,
+  earlyDepartureReasonMinutes: 30,
   paidBreakReasons: DEFAULT_PAID_REASONS,
 };
+
+/**
+ * Las políticas de un vínculo guardado, COMPLETADAS con los valores de fábrica.
+ *
+ * POR QUÉ NO VALE `binding?.policies ?? DEFAULT_KIOSK_POLICIES`, que es lo que había en
+ * las tres pantallas del reloj. Ese `??` solo entra cuando NO HAY vínculo. Con un
+ * vínculo guardado —que es el caso de todos los relojes ya montados— se usa su objeto
+ * `policies` tal cual, y ese objeto se escribió el día de la activación: cualquier
+ * política añadida después vale `undefined` ahí dentro.
+ *
+ * Eso convierte cada política nueva en un campo muerto para los aparatos que ya están
+ * en la tienda, que son justo los que importan. Se descubrió con el umbral de salida
+ * anticipada: la pregunta no salía nunca y el motivo no era la regla ni la pantalla,
+ * era que el vínculo guardado no traía el número.
+ *
+ * Se mezcla en este orden —fábrica debajo, lo guardado encima— para que un valor que la
+ * sede sí configuró siga mandando.
+ */
+export function politicasDelVinculo(binding: KioskBinding | null): KioskPolicies {
+  if (binding === null) return DEFAULT_KIOSK_POLICIES;
+  return { ...DEFAULT_KIOSK_POLICIES, ...binding.policies };
+}
 
 export type KioskBinding = {
   deviceId: string;

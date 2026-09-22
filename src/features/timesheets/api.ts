@@ -50,6 +50,15 @@ const workSessionSchema = z.object({
   net_minutes: z.number().int().nullable(),
   status: z.enum(workSessionStatusValues),
   flags: z.array(z.string()),
+  /*
+   * Por qué se fue antes, si lo dijo al fichar. `null` es el caso normal: el reloj solo
+   * pregunta pasado el umbral de la sede, y una sesión de antes de que existiera esto
+   * tampoco lo trae. Por eso van con `default(null)` y no como obligatorios: una sola
+   * sesión vieja sin el campo tiraría `AdminError('unexpectedShape')` y con ella la
+   * consulta entera de la semana.
+   */
+  departure_reason: z.string().nullable().default(null),
+  departure_note: z.string().nullable().default(null),
   updated_at: z.string(),
 });
 
@@ -130,7 +139,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
