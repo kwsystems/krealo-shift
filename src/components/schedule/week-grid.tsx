@@ -1,4 +1,5 @@
-import { ScrollView, View } from 'react-native';
+import { useState } from 'react';
+import { ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { EmptyShiftSlot, ShiftCard } from './shift-card';
@@ -20,8 +21,39 @@ import { minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
  */
 
 /** Anchos derivados de la escala de espaciado, no números sueltos (§5). */
-const DAY_COLUMN_WIDTH = spacing.huge * 3;
 const NAME_COLUMN_WIDTH = spacing.huge * 3.5;
+
+/**
+ * ANCHO MÍNIMO de una columna de día, no su ancho fijo.
+ *
+ * Era `width` fijo, y con siete días más la columna de nombres la rejilla medía
+ * exactamente 1176 px SIEMPRE: en un iPad de 768 y en un monitor de 1920 igual. Las dos
+ * consecuencias, medidas:
+ *
+ *   - en 1920 sobraban 448 px de hueco a la derecha y las columnas seguían estrechas,
+ *     apretando los turnos sin ninguna razón;
+ *   - y al revés, el ancho no bajaba nunca, así que por debajo de 1176 la rejilla se
+ *     arrastra —eso sigue pasando y no lo arregla este cambio: ver abajo—.
+ *
+ * Ahora cada día pide `flex: 1` con este mínimo: reparte el ancho disponible cuando
+ * sobra, y cuando no llega se queda en el mínimo y la rejilla se arrastra. El mínimo es
+ * el ancho por debajo del cual la hora del turno ya no se lee, que es lo que de verdad
+ * lo fija: 144 px de columna menos 16 de la celda y menos 16 de la tarjeta dejan 112 px
+ * para un «03:00 – 09:00» que mide 104. Ocho de margen, no cero: ver `shift-card.tsx`.
+ *
+ * EL MÍNIMO SON 136 PX Y NO 144, y los ocho de diferencia son la semana entera en un
+ * monitor de 1440: ahí quedan 1144 px para la rejilla, que entre siete días y la
+ * columna de nombres dan 139,4 por día. Con 144 de mínimo el domingo se quedaba fuera
+ * por 32 px; con 136 cabe. Y 136 sigue siendo legible: descontando 16 de la celda y 16
+ * de la tarjeta quedan 104 px, y el texto más ancho que tiene que caber dentro es
+ * «Publicado» con 56. La hora ya no manda porque puede partirse en dos líneas.
+ *
+ * LO QUE ESTO NO ARREGLA, y está medido: en 1280, 1024 y 768 la rejilla sigue pidiendo
+ * 1120 px y se arrastra. Meter siete días en un portátil de 1280 pediría columnas de
+ * 116, y por debajo de 136 los turnos dejan de leerse. Eso ya no es un ancho que
+ * ajustar, es decidir cuántos días se ven a la vez, y tiene su propia tarea.
+ */
+const DAY_COLUMN_MIN_WIDTH = spacing.huge * 3 - spacing.sm;
 
 /**
  * Turno con su fecha local ya calculada, para no repetir la conversión de zona
@@ -65,9 +97,37 @@ export function WeekGrid({
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
+  /** Ancho que el `ScrollView` tiene de verdad en pantalla. 0 hasta el primer layout. */
+  const [anchoVisible, setAnchoVisible] = useState(0);
+
+  /*
+   * EL ANCHO DE COLUMNA SE CALCULA, y no se deja al flexbox. Lo intenté con `flex: 1`
+   * más `minWidth`, y con `minWidth: '100%'` en la fila: las dos veces las columnas
+   * salieron a 180 px en vez de a su mínimo de 144, y la rejilla creció de 1176 a 1426,
+   * o sea que se veían MENOS días que antes. La razón es que dentro de un `ScrollView`
+   * horizontal el contenedor de contenido se dimensiona a su CONTENIDO, así que
+   * `flexGrow` reparte el máximo intrínseco y un `100 %` se resuelve contra algo que ya
+   * depende del contenido. No hay forma de expresarlo en estilos.
+   *
+   * Con el ancho visible medido sí se puede decir exactamente lo que se quiere: reparte
+   * el hueco entre los días y nunca bajes del mínimo. Si no llega, la rejilla se
+   * arrastra, que es lo correcto —comprimir más dejaría los turnos ilegibles—.
+   */
+  const anchoDeDia =
+    anchoVisible === 0
+      ? DAY_COLUMN_MIN_WIDTH
+      : Math.max(
+          DAY_COLUMN_MIN_WIDTH,
+          Math.floor((anchoVisible - NAME_COLUMN_WIDTH) / Math.max(1, days.length)),
+        );
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.grid}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      contentContainerStyle={styles.grid}
+      onLayout={(evento: LayoutChangeEvent) => setAnchoVisible(evento.nativeEvent.layout.width)}
+    >
       <View>
         <Row gap={0} align="stretch">
           <View style={[styles.headerCell, styles.nameColumn]}>
@@ -80,7 +140,7 @@ export function WeekGrid({
               key={day}
               style={[
                 styles.headerCell,
-                styles.dayColumn,
+                { width: anchoDeDia },
                 day === todayKey ? styles.todayColumn : null,
               ]}
             >
@@ -109,7 +169,7 @@ export function WeekGrid({
                   key={`${row.employeeId}-${day}`}
                   style={[
                     styles.cell,
-                    styles.dayColumn,
+                    { width: anchoDeDia },
                     day === todayKey ? styles.todayColumn : null,
                   ]}
                 >
@@ -242,7 +302,7 @@ export function DayList({
 }
 
 const useEstilos = estilosDelTema((colors) => ({
-  grid: { paddingBottom: spacing.sm },
+  grid: { paddingBottom: spacing.sm, flexGrow: 1 },
   headerCell: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
@@ -256,8 +316,12 @@ const useEstilos = estilosDelTema((colors) => ({
     borderBottomColor: colors.border,
     gap: spacing.xs,
   },
-  nameColumn: { width: NAME_COLUMN_WIDTH },
-  dayColumn: { width: DAY_COLUMN_WIDTH },
+  nameColumn: { width: NAME_COLUMN_WIDTH, flexGrow: 0, flexShrink: 0 },
+  /*
+   * `flex: 1` con mínimo, y el mínimo manda: cuando siete mínimos más la columna de
+   * nombres no caben, `minWidth` gana al encogido y la rejilla se arrastra en vez de
+   * comprimir los turnos hasta que no se lean.
+   */
   todayColumn: { backgroundColor: colors.primary50 },
   dayBlock: {
     gap: spacing.sm,

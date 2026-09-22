@@ -121,8 +121,6 @@ const MINIMO_TACTIL = 44;
  * ponerse rojo, que es justo lo que se quiere.
  */
 const DEUDA = new Map([
-  ['horario/recorte/03:00 – 09:00', 'la hora de fin del turno se corta (loXyMQ1IxbuPHHDlhtl9)'],
-  ['horario/recorte/09:00 – 15:00', 'la hora de fin del turno se corta (loXyMQ1IxbuPHHDlhtl9)'],
   ['horario/scroller', 'la rejilla de la semana no cabe (gVCcKDjUCURro5u1FbNV)'],
   ['horario/fuera', 'la rejilla de la semana no cabe (gVCcKDjUCURro5u1FbNV)'],
   ['horas/scroller', 'el filtro de empleados es un carrusel (nhK2Ojc2qu0qqy2uRefc)'],
@@ -170,6 +168,35 @@ const MEDIR = (minimoTactil) => {
    * Un arnés que dice una cosa y compara otra es peor que uno que falla: se pierde la
    * confianza en la salida, que es lo único que tiene.
    */
+  /*
+   * CUÁNTO ANCHO PIDE DE VERDAD ESTE TEXTO, que no es su `scrollWidth`.
+   *
+   * `numberOfLines` de React Native se compila a `-webkit-line-clamp` con
+   * `overflow: hidden`, y ahí `scrollWidth` devuelve el ancho de la CAJA RECORTADA, no
+   * el del texto. Me costó un arreglo equivocado: el arnés dijo que a la hora de un
+   * turno le faltaban 2 px —102 visibles de 104— y al medirla de verdad le faltaban 44.
+   * Con 2 px se busca un relleno que sobre; con 44 se sabe que el texto no cabe en esa
+   * columna y hay que decidir otra cosa. El número cambia la decisión, así que tiene
+   * que ser el verdadero.
+   *
+   * Se clona el nodo, se le quita el recorte y se mide. Solo para los que ya salieron
+   * recortados, que son pocos: clonar los 300 elementos de una pantalla sería lento.
+   */
+  const anchoDeVerdad = (el) => {
+    const c = el.cloneNode(true);
+    c.style.position = 'absolute';
+    c.style.visibility = 'hidden';
+    c.style.width = 'auto';
+    c.style.maxWidth = 'none';
+    c.style.overflow = 'visible';
+    c.style.whiteSpace = 'nowrap';
+    c.style.webkitLineClamp = 'none';
+    document.body.appendChild(c);
+    const w = Math.ceil(c.getBoundingClientRect().width);
+    c.remove();
+    return w;
+  };
+
   const limpiar = (t) =>
     t
       .replace(/[\uE000-\uF8FF]/g, '')
@@ -208,7 +235,7 @@ const MEDIR = (minimoTactil) => {
     // 2. Texto recortado. Solo en hojas: un contenedor con scroll no es un texto cortado.
     if (el.children.length === 0 && texto.length > 0) {
       if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
-        recortes.push({ texto, visible: el.clientWidth, necesario: el.scrollWidth });
+        recortes.push({ texto, visible: el.clientWidth, necesario: anchoDeVerdad(el) });
       }
     }
 

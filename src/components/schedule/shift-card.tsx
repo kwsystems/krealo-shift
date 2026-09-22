@@ -84,7 +84,17 @@ export function ShiftCard({
         warnings.length > 0 ? styles.warned : null,
       ]}
     >
-      <AppText variant="bodyStrong" tabular numberOfLines={1}>
+      {/*
+        DOS LÍNEAS PARA LA HORA, y es lo que deja caber más días de la semana.
+        Con una sola línea el texto no puede partirse, así que el ancho mínimo del
+        turno es el de «03:00 – 09:00» completo —146 px medidos—, y ese mínimo sube
+        hasta la columna del día: 180 px, siete de ellas más los nombres son 1426 px
+        de rejilla, que no caben ni en un monitor de 1440. Dejándola partir por el
+        guion, el mínimo baja a media hora y la columna vuelve a su ancho de diseño.
+        La alternativa era recortar la hora, que es lo que hacía antes y es peor:
+        un turno sin hora de salida no dice a qué hora se sale.
+      */}
+      <AppText variant="bodyStrong" tabular numberOfLines={2}>
         {range}
       </AppText>
       {showEmployeeName && employeeName !== undefined ? (
@@ -197,7 +207,22 @@ const useEstilos = estilosDelTema((colors) => ({
     borderRadius: radii.input,
     borderWidth: borderWidth.hairline,
     borderColor: colors.border,
-    padding: spacing.md,
+    /*
+     * EL RELLENO HORIZONTAL BAJA UN PASO, y son los dos píxeles que le faltaban a la
+     * hora de salida. Con `padding: spacing.md` la tarjeta dejaba 102 px de texto en
+     * una columna de 144, y «03:00 – 09:00» mide 104: veinticuatro turnos de la semana
+     * se leían «03:00 – 09:…». Dos píxeles, en el único dato que hace que un turno sea
+     * un turno —cuándo entra y cuándo sale—, y encima en el lado de la salida.
+     *
+     * Se toca el relleno y no la hora: el formato sale de `formatShiftRange`, que usan
+     * también la ficha del empleado y el reloj de fichaje, donde sobra sitio y el guion
+     * con espacios se lee mejor. Estrechar el aire de una tarjeta es más barato que
+     * cambiar cómo se escribe una hora en toda la app.
+     *
+     * Vertical se queda en `md`: lo que faltaba era ancho.
+     */
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.sm,
     minHeight: sizes.touchTargetPreferred,
   },
   cancelled: { opacity: 0.55, borderStyle: 'dashed' },
