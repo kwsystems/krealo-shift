@@ -18,6 +18,7 @@ export function breakReasonLabels(t: TFunction): Record<BreakReason, string> {
     permit: t('kiosk.reasonPermit'),
     meeting: t('kiosk.reasonMeeting'),
     training: t('kiosk.reasonTraining'),
+    errand: t('kiosk.reasonErrand'),
     other: t('kiosk.reasonOther'),
   };
 }

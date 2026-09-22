@@ -147,6 +147,7 @@
     "reasonPermit": "Personal time",
     "reasonMeeting": "Meeting",
     "reasonTraining": "Training",
+    "reasonErrand": "Errand or assignment",
     "reasonOther": "Other",
     "reasonCountsAsWork": "Counts as worked",
     "reasonDoesNotCount": "Does not count as worked",

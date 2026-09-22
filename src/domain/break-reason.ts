@@ -18,7 +18,15 @@
  * No se mapean uno a uno —una reunión es trabajo y se paga, un permiso personal
  * normalmente no— y por eso son dos campos y no un enum con más valores.
  */
-export const BREAK_REASONS = ['meal', 'rest', 'permit', 'meeting', 'training', 'other'] as const;
+export const BREAK_REASONS = [
+  'meal',
+  'rest',
+  'permit',
+  'meeting',
+  'training',
+  'errand',
+  'other',
+] as const;
 
 export type BreakReason = (typeof BREAK_REASONS)[number];
 
@@ -30,10 +38,17 @@ export type BreakReason = (typeof BREAK_REASONS)[number];
  * decidir una aplicación (§13 es explícita en que no se codifica la ley de ningún país
  * como verdad universal).
  *
- * El criterio de los valores de abajo: una reunión, una charla y una capacitación SON
- * trabajo —te lo pide la empresa y no puedes irte— así que cuentan. La comida y el
- * permiso personal son tiempo propio, así que no. El descanso corto cuenta, que es lo
+ * El criterio de los valores de abajo: una reunión, una charla, una capacitación y un
+ * mandado SON trabajo —te lo pide la empresa y no puedes irte— así que cuentan. La comida
+ * y el permiso personal son tiempo propio, así que no. El descanso corto cuenta, que es lo
  * habitual y además lo que evita que la gente deje de registrarlo.
+ *
+ * `errand` ES EL QUE FALTABA, y se añadió el 2026-09-22 a pedido de Andree: «si sale para
+ * ir al almacén, pero está marcando porque está saliendo de la tienda». Ninguno de los
+ * seis anteriores decía eso. Sin él, quien se ausenta por un encargo de la empresa solo
+ * tenía «Otro» —que no cuenta como trabajado— o mentir eligiendo «Reunión». Las dos
+ * opciones ensucian el reporte de en qué se va el tiempo, y la primera además le quita
+ * horas a alguien que estaba trabajando.
  */
 export const DEFAULT_PAID_REASONS: Readonly<Record<BreakReason, boolean>> = {
   meal: false,
@@ -41,6 +56,7 @@ export const DEFAULT_PAID_REASONS: Readonly<Record<BreakReason, boolean>> = {
   permit: false,
   meeting: true,
   training: true,
+  errand: true,
   other: false,
 };
 

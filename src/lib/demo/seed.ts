@@ -91,7 +91,8 @@ const MOTIVOS_DEMO: readonly BreakReason[] = [
  *
  * Los números son los que se ven en una tienda de verdad: la comida es la pausa larga,
  * el descanso corto es corto, un permiso personal se lleva una hora, y una reunión o
- * una capacitación duran lo que duran.
+ * una capacitación duran lo que duran. Un mandado —ir al almacén, llevar algo a otra
+ * sede— se parece a una reunión en duración y, como ella, cuenta como trabajado.
  */
 const MINUTOS_POR_MOTIVO: Readonly<Record<BreakReason, number>> = {
   meal: 45,
@@ -99,6 +100,7 @@ const MINUTOS_POR_MOTIVO: Readonly<Record<BreakReason, number>> = {
   permit: 60,
   meeting: 25,
   training: 40,
+  errand: 30,
   other: 20,
 };
 

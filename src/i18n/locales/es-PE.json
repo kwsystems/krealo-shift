@@ -147,6 +147,7 @@
     "reasonPermit": "Permiso",
     "reasonMeeting": "Reunión o charla",
     "reasonTraining": "Capacitación",
+    "reasonErrand": "Mandado o encargo",
     "reasonOther": "Otro",
     "reasonCountsAsWork": "Cuenta como trabajado",
     "reasonDoesNotCount": "No cuenta como trabajado",
