@@ -348,7 +348,7 @@
     "retroactiveReadOnly": "Only an administrator can correct a past week.",
     "retroactiveTitle": "You are in a past week",
     "saveDraft": "Save draft",
-    "saveDraftHint": "Saved without publishing",
+    "saveDraftHint": "Saved without publishing. To let the team see it, publish from the schedule.",
     "shiftsCount_one": "{{count}} shift",
     "shiftsCount_other": "{{count}} shifts",
     "shortRestShort": "Short rest",

@@ -348,7 +348,7 @@
     "retroactiveReadOnly": "Solo un administrador puede corregir una semana pasada.",
     "retroactiveTitle": "Estás en una semana pasada",
     "saveDraft": "Guardar borrador",
-    "saveDraftHint": "Se guarda sin publicar",
+    "saveDraftHint": "Se guarda sin publicar. Para que el equipo lo vea, publica desde el horario.",
     "shiftsCount_one": "{{count}} turno",
     "shiftsCount_other": "{{count}} turnos",
     "shortRestShort": "Poco descanso",
