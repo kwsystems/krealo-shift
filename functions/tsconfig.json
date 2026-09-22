@@ -16,5 +16,8 @@
     "sourceMap": true
   },
   "include": ["src/**/*.ts", "../src/domain/**/*.ts"],
-  "exclude": ["../src/domain/__tests__/**"]
+  // Las pruebas NO se compilan aqui, y por dos motivos: las corre el jest de la raiz
+  // —con sus tipos, que este tsconfig no declara— y ademas lo que sale de `lib/` es lo
+  // que se despliega a Cloud Functions, donde una prueba no pinta nada.
+  "exclude": ["../src/domain/__tests__/**", "src/**/__tests__/**"]
 }

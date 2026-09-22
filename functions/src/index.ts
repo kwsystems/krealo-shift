@@ -38,6 +38,13 @@ export {
 
 export { claimInvitation, inviteMember } from './invitations';
 
+/*
+ * La unica funcion PROGRAMADA del proyecto: no la llama la app, la dispara Cloud
+ * Scheduler. Se exporta igual, porque el desplegador descubre las funciones por lo que
+ * se exporta desde aqui y sin esta linea sencillamente no existiria.
+ */
+export { purgarFotosDeFichaje } from './purga-fotos';
+
 export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './members';
 
 export {
