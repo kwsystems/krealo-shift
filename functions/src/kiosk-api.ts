@@ -201,8 +201,20 @@ export const activateKiosk = onCall(async (request) => {
       id: locationId,
       name: location.name,
       timezone: location.timezone ?? 'America/Lima',
-      policies: politicasDe(location),
     },
+    /*
+     * `policies` VA EN LA RAIZ, y estaba anidado dentro de `location`.
+     *
+     * El cliente valida la respuesta con Zod y su esquema lo espera aqui, como hermano
+     * de `location` —y la demostracion lo devuelve asi tambien, que es por lo que ahi
+     * si se podia activar un reloj—. Anidado, la validacion fallaba y el aparato veia
+     * «No pudimos completar la accion»... DESPUES de que el servidor hubiera creado el
+     * reloj y quemado el codigo. O sea que la activacion funcionaba y el unico que no
+     * se enteraba era el aparato que la pedia, que es el que necesita la credencial.
+     *
+     * De ahi que cada intento dejara un reloj mas en Ajustes y ninguno en el iPad.
+     */
+    policies: politicasDe(location),
   };
 });
 
