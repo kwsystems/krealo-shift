@@ -60,7 +60,7 @@ export function RankingBars({
   testID?: string;
 }) {
   const styles = useEstilos();
-  const { isCompact, isWide } = useResponsive();
+  const { isWide } = useResponsive();
   // Con `max` a cero todas las barras valen cero: se dividiría por cero y saldría NaN,
   // que en React Native no es una barra vacía sino un ancho inválido.
   const escala = max > 0 ? max : 1;
@@ -105,7 +105,20 @@ export function RankingBars({
           </View>
         );
 
-        const contenido = isCompact ? (
+        /*
+         * APILADO POR DEBAJO DE 768 PX, y antes era por debajo de 400. Esos 368 px de
+         * diferencia eran una banda —de 400 a 767— donde la fila iba en tres columnas
+         * con el nombre en 132 px FIJOS, y ahí no cabe un nombre real: «Héctor Ramírez
+         * Pinto» pide 160. El síntoma medido era del revés de lo esperado: a 390 px el
+         * nombre salía entero y a 414 px cortado. Una pantalla MÁS ANCHA mostraba MENOS.
+         *
+         * La causa no era el ancho de 132, era usar `isCompact` —un punto de corte de
+         * teléfono, 400 px— para decidir un layout que necesita 208 px solo para el
+         * nombre. El reparto en tres columnas pide sitio de verdad, y ese sitio solo
+         * existe a partir de `isWide`. Por debajo se apila, que cabe en cualquier ancho
+         * y no recorta a nadie.
+         */
+        const contenido = !isWide ? (
           <Stack gap={spacing.xs}>
             <Row justify="space-between" gap={spacing.sm}>
               <AppText variant="body" numberOfLines={1} style={styles.nombreAncho}>
@@ -124,7 +137,7 @@ export function RankingBars({
           </Stack>
         ) : (
           <Row gap={spacing.md}>
-            <View style={isWide ? styles.nombreAncho2 : styles.nombre}>
+            <View style={styles.nombreAncho2}>
               <AppText variant="body" numberOfLines={1}>
                 {row.label}
               </AppText>
@@ -174,12 +187,12 @@ const useEstilos = estilosDelTema((colors) => ({
   },
   filaElegida: { backgroundColor: colors.primary50 },
   /*
-   * El ancho del nombre no es uno solo, y no por gusto. Con 132 px fijos, en un monitor
-   * salia «Diego Paredes ...» y «Hector Ramirez...» cortados mientras sobraba media
-   * pantalla a la derecha; y en una ventana estrecha, 200 px fijos dejarian la barra
-   * sin sitio. Se vio en la captura del arnes, no leyendo el codigo.
+   * 208 px para el nombre, y solo donde hay sitio (`isWide`). Hubo un `nombre: 132` para
+   * las ventanas intermedias y era el fallo: a 414 px recortaba «Héctor Ramírez Pinto»
+   * mientras a 390 px, con el layout apilado, salía entero. Se borra en vez de
+   * ajustarse: un ancho fijo para el nombre solo tiene sentido cuando la fila va en tres
+   * columnas, y eso ahora es exactamente cuando `isWide`.
    */
-  nombre: { width: 132 },
   nombreAncho2: { width: 208 },
   nombreAncho: { flexShrink: 1 },
   valor: { width: 72, textAlign: 'right' },

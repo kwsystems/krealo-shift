@@ -7,7 +7,7 @@ lugar de escondidas en un commit.
 
 Formato de cada entrada: la decisión, el motivo, el costo aceptado y dónde vive.
 
-Última actualización: 2026-09-21.
+Última actualización: 2026-09-22.
 
 > **LAS RUTAS DE LAS ENTRADAS ANTERIORES A 2026-09-21 APUNTAN A ARCHIVOS BORRADOS.**
 > Casi todas dicen `supabase/migrations/…` o `supabase/functions/…`, y ese directorio
@@ -539,6 +539,47 @@ tres contradicciones entre ambos (radio de tarjetas, origen de los toasts y
 retícula de espaciado), resueltas a favor del documento más reciente.
 
 - **Dónde:** `docs/reference/README.md`.
+
+---
+
+### El contrato responsive: qué se soporta y qué no puede decidir un punto de quiebre (2026-09-22)
+
+**Decisión.** Se fija por escrito lo que el panel promete en cada ancho, porque no
+existía y eso costó dieciocho fallos que ningún chequeo veía. Seis reglas, y cada una
+sale de un fallo medido:
+
+1. **El ancho mínimo soportado del panel son 360 px.** 320 px queda fuera: un iPhone SE
+   de 2016 ya no recibe iOS actual, y el panel lo usa quien administra desde un iPad o un
+   ordenador. **El reloj de fichaje sí cabe en 320** y eso no cambia — es lo que usa el
+   equipo de la tienda, y `kiosco:check` lo comprueba en 320×568. Los dos mínimos son
+   distintos a propósito.
+2. **Un ancho mayor nunca puede mostrar menos que un ancho menor.** Pasaba dos veces: a
+   414 px se recortaba «Héctor Ramírez Pinto» y a 390 px no; a 414 px se recortaba
+   «dom 27» y a 390 px no.
+3. **Ningún texto se recorta sin que alguien lo haya decidido.** El recorte es una
+   decisión de diseño —una etiqueta corta elegida a mano—, no el resultado de que no
+   quepa. Veinticuatro turnos mostraban «03:00 – 09:…» y nadie lo había decidido.
+4. **Todo lo que se pulsa mide 44×44**, en el panel igual que en el kiosco. Las marcas de
+   un gráfico no son controles: les aplica el mínimo de WCAG 2.5.8, 24×24.
+5. **Un contenedor que se arrastra en horizontal lleva indicio visible**, o no se
+   arrastra. El filtro de empleados escondía seis de nueve sin decirlo.
+6. **Los puntos de quiebre deciden la FORMA de una pantalla, no si un texto cabe.** Si la
+   pregunta es «¿cabe esto aquí?», se mide el sitio donde va, no la ventana.
+
+**Motivo.** La regla 6 es la que de verdad importa y es la que faltaba. `breakpoints`
+existía con cuatro números y un comentario que los llamaba «iPhone SE», «iPhone moderno»,
+«iPad vertical» y «iPad horizontal»: nombres de aparatos, no reglas de contenido. Usarlos
+para decidir si un nombre cabe en una casilla produjo el síntoma más desconcertante de
+todos —una pantalla más ancha mostrando menos— dos veces en la misma pantalla.
+
+**Costo aceptado.** 320 px se queda sin arreglar, con sus cuatro fallos medidos y
+escritos. Si se decide soportarlo, hace falta un punto de quiebre por debajo de 360 y
+apretar cuatro pantallas.
+
+- **Dónde:** el contrato vive en el comentario de `breakpoints` en `src/theme/tokens.ts`,
+  junto a los números que gobierna. Lo comprueba `scripts/responsive-check.mjs`, que
+  mide ocho pantallas por siete anchos y distingue **deuda** (esto está mal y se va a
+  arreglar) de **exención razonada** (la regla no aplica a esto, y por qué).
 
 ---
 

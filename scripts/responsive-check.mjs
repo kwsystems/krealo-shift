@@ -121,30 +121,40 @@ const MINIMO_TACTIL = 44;
  * ponerse rojo, que es justo lo que se quiere.
  */
 const DEUDA = new Map([
-  ['horario/scroller', 'la rejilla de la semana no cabe (gVCcKDjUCURro5u1FbNV)'],
-  ['horario/fuera', 'la rejilla de la semana no cabe (gVCcKDjUCURro5u1FbNV)'],
-  ['horas/scroller', 'el filtro de empleados es un carrusel (nhK2Ojc2qu0qqy2uRefc)'],
-  ['horas/fuera', 'el filtro de empleados es un carrusel (nhK2Ojc2qu0qqy2uRefc)'],
-  ['horas/tactil/Ele', 'el chip del filtro corta el nombre (jAxDGi0czdJvd1R3YhGA)'],
+  [
+    'horario/scroller',
+    'la rejilla de la semana pide 1120 px y por debajo se arrastra (aESqWxTDqYkVatw5wXsv)',
+  ],
+  [
+    'horario/fuera',
+    'la rejilla de la semana pide 1120 px y por debajo se arrastra (aESqWxTDqYkVatw5wXsv)',
+  ],
+]);
+
+/**
+ * EXENCIONES RAZONADAS, que no son deuda.
+ *
+ * La diferencia importa: una línea de `DEUDA` dice «esto está mal y se va a arreglar», y
+ * al arreglarse se borra. Una de aquí dice «la regla general no aplica a esto, y por
+ * qué». Si se mezclaran, la lista de deuda nunca llegaría a cero y dejaría de significar
+ * nada.
+ *
+ * Las columnas del gráfico de la semana son la primera: son MARCAS DE DATOS, no botones.
+ * El mínimo táctil de 44 px que esta app se exige viene del teclado del reloj de
+ * fichaje, donde cada tecla es un control; aplicarlo a siete columnas de un gráfico
+ * obligaría a que el gráfico midiera 308 px solo de marcas, que en un teléfono de 360 no
+ * existen. El mínimo que sí les corresponde es el de WCAG 2.5.8 para objetivos —24×24
+ * px— y lo cumplen: miden 25×24 en el ancho más estrecho.
+ *
+ * Y se quedan en el recorrido del teclado a propósito: su `accessibilityLabel` es la
+ * única forma de que un lector de pantalla lea el valor de cada día. Lo que sí era un
+ * fallo es que pulsarlas con Enter no hiciera nada, y eso se arregló en el componente.
+ */
+const EXENCIONES = new Map([
   [
     'reportes/tactil/testid:day-column-',
-    'las columnas de día son focalizables y estrechas (zMeTpeHUPyTpTqcKK0gz)',
+    'marcas del gráfico: les aplica el mínimo de 24×24 de WCAG 2.5.8, y miden 25×24',
   ],
-  ['reportes/recorte/Bruno Salazar Nieto', 'el ranking corta los nombres (Q7N1ruDziEsMRMrzi15S)'],
-  ['reportes/recorte/Diego Paredes Vega', 'el ranking corta los nombres (Q7N1ruDziEsMRMrzi15S)'],
-  ['reportes/recorte/Héctor Ramírez Pinto', 'el ranking corta los nombres (Q7N1ruDziEsMRMrzi15S)'],
-  [
-    'reportes/recorte/44% del total · 2 pausas',
-    'el ranking corta el subtítulo (Q7N1ruDziEsMRMrzi15S)',
-  ],
-  [
-    'reportes/recorte/25% del total · 2 pausas',
-    'el ranking corta el subtítulo (Q7N1ruDziEsMRMrzi15S)',
-  ],
-  ['reportes/recorte/dom 27', 'las etiquetas de día se cortan (GiIhApo06ZGnVZdcZ2st)'],
-  ['reportes/recorte/mar 22', 'las etiquetas de día se cortan (GiIhApo06ZGnVZdcZ2st)'],
-  ['reportes/recorte/mié 23', 'las etiquetas de día se cortan (GiIhApo06ZGnVZdcZ2st)'],
-  ['reportes/recorte/sáb 26', 'las etiquetas de día se cortan (GiIhApo06ZGnVZdcZ2st)'],
 ]);
 
 /**
@@ -290,18 +300,20 @@ const navegador = await chromium.launch();
 
 const problemas = [];
 const deudaVista = new Set();
+const exencionesVistas = new Set();
 
 /** ¿Está esto excusado como deuda conocida? Devuelve el motivo o `undefined`. */
-const excusa = (pantalla, clase, detalle, testid) => {
-  const exacta = DEUDA.get(`${pantalla}/${clase}/${detalle}`);
+/** Busca una clave en un mapa, con las mismas tres formas que usa la deuda. */
+const buscar = (mapa, pantalla, clase, detalle, testid) => {
+  const exacta = mapa.get(`${pantalla}/${clase}/${detalle}`);
   if (exacta !== undefined) return exacta;
   // `*` excusa en cualquier pantalla: lo que está en la barra de navegación sale en todas.
-  const cualquierPantalla = DEUDA.get(`*/${clase}/${detalle}`);
+  const cualquierPantalla = mapa.get(`*/${clase}/${detalle}`);
   if (cualquierPantalla !== undefined) return cualquierPantalla;
   // Un grupo entero, por prefijo de testid. Las siete columnas de día son el mismo fallo,
   // y seis no tienen texto con el que nombrarlas; la séptima sí, y se escapaba.
   if (typeof testid === 'string') {
-    for (const [clave, motivo] of DEUDA) {
+    for (const [clave, motivo] of mapa) {
       const prefijo = `${pantalla}/${clase}/testid:`;
       if (clave.startsWith(prefijo) && testid.startsWith(clave.slice(prefijo.length))) {
         return motivo;
@@ -310,8 +322,17 @@ const excusa = (pantalla, clase, detalle, testid) => {
   }
   // Y por clase entera, para lo que desborda en bloque: una rejilla que no cabe se
   // reporta una vez, no una por celda.
-  const porClase = DEUDA.get(`${pantalla}/${clase}`);
+  const porClase = mapa.get(`${pantalla}/${clase}`);
   if (porClase !== undefined) return porClase;
+  return undefined;
+};
+
+/** Deuda conocida (se va a arreglar) o exención razonada (la regla no aplica). */
+const excusa = (pantalla, clase, detalle, testid) => {
+  const exenta = buscar(EXENCIONES, pantalla, clase, detalle, testid);
+  if (exenta !== undefined) return { motivo: exenta, exento: true };
+  const deuda = buscar(DEUDA, pantalla, clase, detalle, testid);
+  if (deuda !== undefined) return { motivo: deuda, exento: false };
   return undefined;
 };
 
@@ -354,13 +375,19 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
     }
 
     const m = await pagina.evaluate(MEDIR, MINIMO_TACTIL);
-    let conocidos = 0;
+    let deudas = 0;
+    let exentos = 0;
 
     const anotar = (clase, detalle, mensaje, testid) => {
-      const motivo = excusa(pantalla, clase, detalle, testid);
-      if (motivo !== undefined) {
-        conocidos += 1;
-        deudaVista.add(motivo);
+      const excusada = excusa(pantalla, clase, detalle, testid);
+      if (excusada !== undefined) {
+        if (excusada.exento) {
+          exentos += 1;
+          exencionesVistas.add(excusada.motivo);
+        } else {
+          deudas += 1;
+          deudaVista.add(excusada.motivo);
+        }
         return;
       }
       problemas.push(`${nombreAncho} (${ancho}px), ${pantalla}: ${mensaje}`);
@@ -400,12 +427,23 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
       );
     }
 
+    /*
+     * Se cuentan APARTE, y no por pedantería: decir «7 de deuda conocida» cuando son
+     * siete exenciones razonadas hace pensar que hay siete cosas por arreglar en esa
+     * pantalla. Quien lee esta salida decide con ella.
+     */
     const nuevos =
-      m.fuera.length + m.recortes.length + m.tactiles.length + m.scrollers.length - conocidos;
+      m.fuera.length +
+      m.recortes.length +
+      m.tactiles.length +
+      m.scrollers.length -
+      deudas -
+      exentos;
     console.log(
       `  ${String(ancho).padStart(4)} ${pantalla.padEnd(12)} ${String(m.medidos).padStart(4)} ` +
         `elementos, ${nuevos === 0 ? 'todo cabe y se lee' : `${nuevos} PROBLEMAS`}` +
-        `${conocidos > 0 ? ` (${conocidos} de deuda conocida)` : ''}`,
+        `${deudas > 0 ? ` (${deudas} de deuda conocida)` : ''}` +
+        `${exentos > 0 ? ` (${exentos} exentos por regla)` : ''}`,
     );
 
     /*
@@ -428,6 +466,9 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
 await navegador.close();
 await cerrar();
 
+for (const exento of exencionesVistas) {
+  console.log(`  exento por regla — ${exento}`);
+}
 for (const deuda of deudaVista) {
   console.log(`  deuda: se topó y se dejó pasar — ${deuda}`);
 }

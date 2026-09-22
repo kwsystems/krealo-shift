@@ -1,8 +1,8 @@
-import { Pressable, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, View, type LayoutChangeEvent } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
-import { useResponsive } from '@/hooks/use-responsive';
 import { chart, chartMarks, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -35,6 +35,15 @@ export type DayColumn = {
   isFuture?: boolean;
 };
 
+/**
+ * Ancho de etiqueta por debajo del cual la larga («dom 27») ya no cabe.
+ *
+ * Medido, no estimado: «dom 27» pide 42 px y es la más ancha de las siete en español.
+ * Se piden 46 para dejar cuatro de aire: un umbral que acierte justo al píxel vuelve a
+ * recortar en cuanto cambie una fuente o una traducción.
+ */
+const ANCHO_MINIMO_ETIQUETA_LARGA = 46;
+
 export function DayColumns({
   days,
   onPoint,
@@ -46,9 +55,27 @@ export function DayColumns({
   pointedKey?: string | null;
   testID?: string;
 }) {
-  const { isCompact } = useResponsive();
   const { colors } = useTheme();
   const styles = useEstilos();
+  /**
+   * Ancho de UNA columna, medido. 0 hasta el primer layout.
+   *
+   * SE MIDE EN VEZ DE DEDUCIRLO DEL ANCHO DE LA VENTANA, y ese era el fallo. La
+   * etiqueta se elegía con `isCompact`, o sea «la ventana mide menos de 400 px», y lo
+   * que decide si «dom 27» cabe no es la ventana: es su propia casilla, que son siete
+   * repartiéndose una tarjeta cuyo ancho depende del panel y de la barra lateral. El
+   * resultado medido era absurdo: a 390 px salía «D 27» y cabía, y a 414 px —más
+   * ancho— salía «dom 27» recortado a «dom…». Una pantalla mayor mostrando menos.
+   *
+   * Y SE MIDE LA CASILLA, NO LA FILA PARTIDA EN SIETE. Lo intenté así primero y a 430 px
+   * seguía recortando: la fila incluye los huecos entre etiquetas, así que dividirla
+   * entre siete daba 49 px donde la casilla real medía 38. Once píxeles de más, que son
+   * exactamente la diferencia entre caber y no caber.
+   *
+   * No oscila: la casilla es `flex: 1`, así que su ancho lo fija el reparto de la fila y
+   * no el texto que se elija.
+   */
+  const [anchoDeEtiqueta, setAnchoDeEtiqueta] = useState(0);
   const max = Math.max(...days.map((day) => day.value), 0);
   const escala = max > 0 ? max : 1;
   // Solo el máximo lleva número fijo; si empatan, el primero, para no rotular dos.
@@ -81,6 +108,18 @@ export function DayColumns({
               onHoverIn={() => onPoint?.(day)}
               onHoverOut={() => onPoint?.(null)}
               onPressIn={() => onPoint?.(day)}
+              /*
+               * `onPress` ADEMÁS de `onPressIn`, y no es redundante: era una parada del
+               * teclado que no hacía nada.
+               *
+               * `Pressable` en web se pinta con `tabindex`, así que estas siete columnas
+               * están en el recorrido del tabulador. Pero solo respondían a `onPressIn`
+               * y a `onHoverIn`, y ninguno de los dos se dispara con Enter: quien navega
+               * con teclado pasaba por siete paradas y pulsar no mostraba el valor. La
+               * alternativa —sacarlas del recorrido— era peor: su `accessibilityLabel`
+               * es la única forma de que un lector de pantalla lea el dato de cada día.
+               */
+              onPress={() => onPoint?.(day)}
               style={styles.columna}
             >
               <View style={styles.tapa}>
@@ -108,16 +147,33 @@ export function DayColumns({
       {/* Línea base: aquí apoyan las columnas, así que va pegada al trazado. */}
       <View style={styles.base} />
 
+      {/*
+        El ancho se toma de la fila de etiquetas y se divide entre los días: es el mismo
+        reparto que hace `justify="space-between"` con columnas de `flex: 1`.
+      */}
       <Row justify="space-between">
-        {days.map((day) => (
-          <View key={day.key} style={styles.etiqueta}>
+        {days.map((day, indice) => (
+          <View
+            key={day.key}
+            style={styles.etiqueta}
+            /*
+              Basta con medir la PRIMERA: las siete son `flex: 1` y se reparten la fila
+              a partes iguales. Medirlas todas serían siete `setState` por layout para
+              guardar el mismo número.
+            */
+            onLayout={
+              indice === 0
+                ? (evento: LayoutChangeEvent) => setAnchoDeEtiqueta(evento.nativeEvent.layout.width)
+                : undefined
+            }
+          >
             <AppText
               variant="label"
               tone={day.isFuture === true ? 'subtle' : 'muted'}
               style={day.isToday === true ? styles.hoy : undefined}
               numberOfLines={1}
             >
-              {isCompact ? day.tiny : day.short}
+              {anchoDeEtiqueta < ANCHO_MINIMO_ETIQUETA_LARGA ? day.tiny : day.short}
             </AppText>
           </View>
         ))}

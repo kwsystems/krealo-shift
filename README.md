@@ -214,7 +214,7 @@ web:
 npx expo start --web
 ```
 
-Se abre en Chrome o Edge. Para revisar el diseño responsive, usa las
+Se abre en Chrome o Edge. Para revisar el diseño responsive **a mano**, usa las
 herramientas de desarrollo del navegador (F12 → _Toggle device toolbar_) con
 viewports equivalentes a:
 
@@ -224,6 +224,27 @@ viewports equivalentes a:
 | iPhone moderno            | 393 × 852           |
 | iPad 10–11" vertical      | 834 × 1194          |
 | iPad 10–11" horizontal    | 1194 × 834          |
+
+Pero mirar no basta, y eso está medido: el panel llevaba meses con dieciocho
+fallos de ancho que ninguna revisión a ojo había encontrado, entre ellos un
+horario que mostraba «03:00 – 09:…» en un portátil y una barra de pestañas que
+decía «Hora…» al lado de «Horas». Mirar encuentra lo que revienta; lo que falta
+por dos píxeles se lee como «casi bien» y nadie lo reporta.
+
+Para eso está el arnés, que pregunta al navegador la coordenada de cada
+elemento en ocho pantallas × siete anchos:
+
+```bash
+npm run demo:export
+npm run responsive:check
+```
+
+Comprueba cuatro cosas: nada se sale de la ventana, ningún texto se recorta sin
+haberlo decidido, todo lo que se pulsa llega a 44 × 44, y ningún contenedor
+esconde contenido tras un arrastre sin indicio. **El ancho mínimo soportado del
+panel son 360 px**; el reloj de fichaje sí baja a 320 y eso lo comprueba
+`npm run kiosco:check`. Las seis reglas y su porqué están en
+`docs/DECISIONES.md` → «El contrato responsive».
 
 En la web se puede recorrer el flujo del kiosco (reposo, PIN, acciones,
 confirmación, resultado), el acceso administrativo, el cambio ES/EN y los

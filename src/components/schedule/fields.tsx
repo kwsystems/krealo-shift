@@ -201,7 +201,20 @@ export function SelectField<T extends string>({
           {emptyLabel}
         </AppText>
       ) : (
-        <ScrollView horizontal contentContainerStyle={styles.chipRow}>
+        /*
+          ENVUELVEN EN VARIAS LÍNEAS, y antes era un carrusel horizontal. El carrusel
+          escondía opciones sin decirlo: el filtro por empleado de Horas medía 834 px de
+          contenido en 288 visibles, así que se veían tres nombres de nueve y no había
+          ninguna señal de que la fila continuara. En un iPad —el aparato de la tienda—
+          filtrar por alguien que no aparece es imposible, y quien lo intenta concluye
+          que esa persona no está en el sistema. Medido en nueve anchos, de 320 a 1024.
+          Y no escala: con nueve empleados de demostración ya no cabía; una tienda real
+          tiene más.
+
+          Envolver no necesita indicio porque no esconde nada, y el alto no es escaso:
+          la página ya se desplaza en vertical.
+        */
+        <View style={styles.chipRow}>
           {options.map((option) => (
             <Chip
               key={option.value}
@@ -212,7 +225,7 @@ export function SelectField<T extends string>({
               testID={`${testID ?? 'select'}-${option.value}`}
             />
           ))}
-        </ScrollView>
+        </View>
       )}
     </View>
   );
@@ -677,12 +690,26 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.base,
     justifyContent: 'center',
   },
-  chipRow: { gap: spacing.sm, paddingVertical: spacing.xs },
+  chipRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: spacing.xs,
     minHeight: sizes.touchTargetMin,
+    /*
+     * ANCHO MÍNIMO TAMBIÉN, y no solo alto. El alto estaba desde el principio; el ancho
+     * faltaba, así que un chip con una etiqueta corta se quedaba por debajo del mínimo
+     * táctil: el del nombre preferido de Elena, «Ele», medía 43×44. Un píxel, pero el
+     * criterio es 44×44 y se aplica a los dos lados o no se aplica. Y nombres de tres
+     * letras hay: «Ana», «Ele», «Bob».
+     */
+    minWidth: sizes.touchTargetMin,
     paddingHorizontal: spacing.md,
     borderRadius: radii.pill,
     borderWidth: borderWidth.hairline,

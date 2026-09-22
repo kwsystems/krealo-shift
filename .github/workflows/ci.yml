@@ -147,6 +147,51 @@ jobs:
       - name: Compilar las Cloud Functions
         run: npx tsc -p functions --noEmit
 
+  responsive:
+    name: 'Anchos: nada se sale ni se recorta'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    # JOB APARTE Y NO UN PASO MÁS, por el reloj: el export de la demostración y las 56
+    # cargas de página son unos diez minutos, y metidos en `verificar` retrasarían el
+    # lint y las pruebas —que son lo primero que alguien quiere ver— esos diez minutos.
+    # Aquí corre en paralelo y no le cuesta tiempo a nadie.
+    #
+    # POR QUÉ HACE FALTA EN EL CI Y NO A MANO. El panel llevaba meses con dieciocho
+    # fallos de ancho: un horario que mostraba «03:00 – 09:…» en un portátil, una barra
+    # de pestañas que decía «Hora…» al lado de «Horas», un filtro que escondía seis
+    # empleados de nueve. Ninguno reventaba nada, así que ninguna revisión los vio, y
+    # los seis arneses de la demostración solo corrían cuando alguien se acordaba.
+    #
+    # DE MOMENTO SOLO ESTE. Los otros cinco —demo, kiosco, reportes, inicio, tema,
+    # contraste— siguen siendo manuales y eso tiene su propia tarea: usan esperas fijas
+    # afinadas en una máquina local, y en un runner compartido más lento alguna puede
+    # quedarse corta y dar rojos que no son de la app. Este ya espera por selector.
+    steps:
+      - name: Traer el código
+        uses: actions/checkout@v4
+
+      - name: Preparar Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Con `EXPO_PUBLIC_DEMO=1`: el arnés entra con el botón de demostración y mide las
+      # pantallas del panel con datos. Sin demo se quedaría midiendo el acceso siete
+      # veces, que es justo el engaño contra el que el arnés tiene guardas.
+      - name: Empaquetar la demostración
+        run: npm run demo:export
+
+      - name: Medir los anchos
+        run: npm run responsive:check
+
   flujos-e2e:
     name: Sintaxis de los flujos de Maestro
     runs-on: ubuntu-latest

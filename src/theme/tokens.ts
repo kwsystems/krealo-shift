@@ -305,15 +305,39 @@ export const durations = {
 /**
  * Puntos de quiebre por ancho disponible. Se usan para decidir densidad y
  * si el iPad muestra sidebar en vez de barra inferior (§6.3).
+ *
+ * PARA QUÉ SIRVEN Y PARA QUÉ NO, porque usarlos de más costó cuatro fallos.
+ *
+ * Sirven para decidir la FORMA de una pantalla: barra inferior o barra lateral, una
+ * columna o tres. No sirven para decidir si un texto cabe en una casilla. Eso se
+ * responde midiendo la casilla, no la ventana, y cuando se respondió con estos números
+ * salieron cosas absurdas: el ranking de Reportes recortaba «Héctor Ramírez Pinto» a
+ * 414 px y no a 390, y el gráfico de días recortaba «dom 27» a 414 y no a 390. Una
+ * pantalla más ANCHA mostrando MENOS, dos veces, por preguntarle a `regular: 400` algo
+ * que no sabe. Ver `ranking-bars.tsx` y `day-columns.tsx`, que ahora miden.
+ *
+ * ANCHO MÍNIMO SOPORTADO DEL PANEL: 360 px. Y es una decisión, no un descuido.
+ * A 320 px —un iPhone SE de 2016, que ya no recibe iOS actual— el panel tiene cuatro
+ * fallos medidos: la fila de estados de Inicio se sale 30 px, la barra de pestañas
+ * recorta tres etiquetas dejando «Hora…» al lado de «Horas», los chips de puesto de
+ * Equipo quedan en un carrusel y «Horas recientes» se sale de la ficha. Arreglarlos
+ * pide un punto de quiebre por debajo de 360 y apretar cuatro pantallas, para un
+ * teléfono que hoy no se compra. El panel lo usa quien administra, desde un iPad o un
+ * ordenador.
+ *
+ * EL RELOJ DE FICHAJE SÍ CABE EN 320 y eso no cambia: es lo que usa el equipo, y
+ * `kiosco:check` lo comprueba en 320×568 con 10 px de holgura. El mínimo del reloj y el
+ * del panel son distintos a propósito, porque los usa gente distinta en aparatos
+ * distintos.
  */
 export const breakpoints = {
-  /** iPhone SE y anchos pequeños. */
+  /** Por debajo de `regular`. El mínimo soportado del panel son 360 px. */
   compact: 0,
-  /** iPhone moderno. */
+  /** Donde caben tres columnas estrechas en una fila. */
   regular: 400,
-  /** iPad vertical. */
+  /** Donde cabe la barra lateral en vez de la inferior. */
   wide: 768,
-  /** iPad horizontal y ventanas de escritorio. */
+  /** Donde cabe una tabla ancha sin arrastrar. */
   extraWide: 1024,
 } as const;
 

@@ -108,6 +108,26 @@ function fechaClave(fecha: Date): string {
   return `${fecha.getFullYear()}-${mes}-${dia}`;
 }
 
+/*
+ * LOS NOMBRES SON EL CASO DE PRUEBA, no relleno, y por eso hay uno largo de verdad.
+ *
+ * Toda la auditoría de anchos del 2026-09-22 se midió contra esta lista, y los fallos
+ * que encontró —el ranking de Reportes recortando «Héctor Ramírez Pinto», el filtro de
+ * Horas escondiendo seis de nueve— salieron con nombres de 19 y 20 caracteres. Con
+ * nombres cortos, una pantalla puede parecer correcta y romperse el primer día en una
+ * tienda real.
+ *
+ * `Irene Vásquez Molina` pasa a `María Fernanda Velásquez Herrera`: 32 caracteres, dos
+ * nombres y dos apellidos, que es la forma normal de un nombre peruano completo. Se
+ * RENOMBRA en vez de añadir a alguien a propósito: añadir una decimotercera persona
+ * cambiaría las horas totales, las sumas del CSV y las filas del ranking, y con ellas
+ * media docena de arneses que comparan cifras. Renombrar deja todos los números
+ * idénticos y solo mueve el ancho, que es exactamente lo que se quiere medir.
+ *
+ * NINGUNO ES REAL. Este repositorio es público y los nombres de empleados de un cliente
+ * no entran aquí: son inventados con la forma de los de verdad, que para medir anchos es
+ * lo único que importa.
+ */
 const PERSONAS: { nombre: string; corto: string | null; puesto: number }[] = [
   { nombre: 'Ana Quispe Lara', corto: 'Ana', puesto: 1 },
   { nombre: 'Bruno Salazar Nieto', corto: null, puesto: 2 },
@@ -117,7 +137,7 @@ const PERSONAS: { nombre: string; corto: string | null; puesto: number }[] = [
   { nombre: 'Fabián Ríos Delgado', corto: null, puesto: 4 },
   { nombre: 'Gabriela Núñez Soto', corto: 'Gaby', puesto: 1 },
   { nombre: 'Héctor Ramírez Pinto', corto: null, puesto: 3 },
-  { nombre: 'Irene Vásquez Molina', corto: null, puesto: 2 },
+  { nombre: 'María Fernanda Velásquez Herrera', corto: null, puesto: 2 },
   { nombre: 'Julio Contreras Bravo', corto: 'Julio', puesto: 4 },
   { nombre: 'Karina Espinoza Luna', corto: null, puesto: 1 },
   { nombre: 'Luis Guerrero Pacheco', corto: null, puesto: 2 },
