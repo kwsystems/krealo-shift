@@ -83,6 +83,7 @@ npm run web                                             # la web contra Firebase
 npx expo-doctor                                         # revisa el proyecto Expo
 npx tsc --noEmit                                        # typecheck (TypeScript strict)
 npm test                                                # pruebas Jest
+npm run emulador:check                                  # reglas, purga y funciones, con emulador
 npx eslint .                                            # lint
 npx prettier --check .                                  # formato (npm run format lo arregla)
 npx tsc -p functions --noEmit                           # tipos del servidor
@@ -499,26 +500,43 @@ Cubren la máquina de estados de asistencia, las utilidades de tiempo (turnos qu
 cruzan medianoche, zonas horarias), la paridad de claves entre es-PE e inglés y
 los componentes del teclado de PIN y la cuenta regresiva.
 
-### Pruebas de las reglas de seguridad
+### Pruebas con emulador (reglas, purga y Cloud Functions)
 
 ```bash
-firebase emulators:exec --only firestore "npx jest --ci"
+npm run emulador:check
 ```
 
-**AQUÍ HABÍA 265 ASERCIONES SQL Y AHORA NO HAY NINGUNA, y conviene no fingir lo
-contrario.** Las políticas RLS se probaban contra un Postgres local con
-`scripts/db-test.sh`: se impersonaba a un usuario real y se comprobaba fila por fila
-qué podía ver. Ese arnés se fue con Postgres.
+Necesita Java —el emulador de Firestore es una JVM— y la CLI de Firebase. Levanta los
+emuladores de Firestore y Storage, corre las 42 pruebas y **comprueba que corrieron**:
+falla si alguna quedó pendiente o si una suite ni siquiera cargó. Lo segundo no es
+paranoia, es que ya pasó dos veces.
 
-Su equivalente es `@firebase/rules-unit-testing` sobre el emulador de Firestore, que
-hace exactamente lo mismo —abrir una sesión falsa con un `uid` concreto y ver qué le
-deja hacer `firestore.rules`—. **No está escrito todavía**, y es la deuda más grande
-que deja la migración: las reglas están razonadas y desplegadas, pero nada las
-vigila contra una edición futura.
+Qué cubren:
 
-Mientras tanto, lo que sí hay: `npm test` cubre la máquina de estados, las utilidades
-de tiempo, la paridad de idiomas y los componentes; y `npx tsc -p functions` cubre
-que el servidor compile.
+- **Las reglas de `firestore.rules`**, con `@firebase/rules-unit-testing`: abre una
+  sesión falsa con un `uid` concreto y mira qué le deja hacer. Que el hash del PIN no se
+  lea desde el cliente, que nadie escriba un fichaje a mano, que alguien de otra empresa
+  no vea tus sedes.
+- **La purga de fotos de fichaje**, borrando archivos de verdad contra el emulador de
+  Storage. La app promete que las fotos se borran a los N días y esto es lo que
+  respalda esa frase.
+- **Tres Cloud Functions**: `verifyPin` (el PIN de alguien desactivado no abre el reloj,
+  el bloqueo por intentos), `submitTimeEvent` (la idempotencia y la forma exacta que el
+  reloj valida) y `setMemberRole` (quién puede repartir el poder).
+
+**ESTO REEMPLAZA A LAS 265 ASERCIONES SQL, y no del todo.** Las políticas RLS se
+probaban contra un Postgres local con `scripts/db-test.sh`, fila por fila. Ese arnés se
+fue con Postgres, y lo de aquí cubre lo mismo en espíritu pero no en extensión: quedan
+26 de las 29 funciones sin una sola prueba. El que las escriba, que empiece por las que
+tocan horas o accesos.
+
+Y una advertencia por si alguien las mueve: **no pueden correr dentro de `npm test`**.
+Ese Jest usa el preset `jest-expo`, que carga los polyfills de React Native en cualquier
+entorno y reemplaza `fetch` por uno que aquí no funciona. Viven en
+`jest.emulador.config.js` por ese motivo, no por orden.
+
+Lo demás: `npm test` cubre la máquina de estados, las utilidades de tiempo, la paridad
+de idiomas y los componentes; y `npx tsc -p functions` cubre que el servidor compile.
 
 ### Pruebas de flujo (Maestro)
 
