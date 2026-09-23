@@ -108,37 +108,43 @@ export function ShiftCard({
         </AppText>
       ) : null}
 
-      <Row gap={spacing.xs} wrap>
-        <AppText variant="label" tone="subtle" tabular>
-          {minutesToHHmm(netMinutes)}
-        </AppText>
-        {shift.planned_unpaid_break_minutes > 0 ? (
-          <AppText variant="label" tone="subtle" tabular>
-            {`· ${t('schedule.breakShort', { minutes: shift.planned_unpaid_break_minutes })}`}
-          </AppText>
-        ) : null}
-      </Row>
+      {/*
+        LA DURACIÓN Y LA PAUSA SALEN DE LA TARJETA.
 
-      <StatusBadge
-        label={statusLabel}
-        compact
-        tone={
-          shift.status === 'published'
-            ? 'working'
-            : shift.status === 'cancelled'
-              ? 'offShift'
-              : 'info'
-        }
-        icon={
-          shift.status === 'published'
-            ? 'checkmark-circle'
-            : shift.status === 'cancelled'
+        Eran dos líneas más en una columna de 144 px, y «· 30 min de descanso» partía la
+        palabra por la mitad. Ninguna de las dos añade nada al ojear la semana: la duración
+        se deduce de la hora que está justo encima, y los minutos de pausa son un dato de
+        nómina que se consulta al abrir el turno, no al mirar el cuadro.
+
+        Las dos SIGUEN estando donde hacen falta: en la etiqueta accesible de esta misma
+        tarjeta —así que un lector de pantalla las lee— y en la hoja de detalle, que es
+        donde se editan. Y la columna de la persona sigue enseñando su total de la semana.
+      */}
+
+      {/*
+        LA INSIGNIA SOLO SALE CUANDO DICE ALGO.
+
+        Antes salía en TODOS los turnos, y la mayoría están publicados: siete columnas de
+        chips verdes «Publicado» repetidos, uno debajo de otro, que es ruido con forma de
+        información. Una señal que aparece en todo no señala nada.
+
+        Ahora aparece cuando el turno NO está en su estado normal: borrador, cambiado
+        después de publicar, o cancelado. O sea justo cuando hay que mirarlo.
+      */}
+      {shift.status === 'published' ? null : (
+        <StatusBadge
+          label={statusLabel}
+          compact
+          tone={shift.status === 'cancelled' ? 'offShift' : 'info'}
+          icon={
+            shift.status === 'cancelled'
               ? 'close-circle-outline'
               : isChanged
                 ? 'sync-outline'
                 : 'create-outline'
-        }
-      />
+          }
+        />
+      )}
 
       {warnings.length > 0 ? (
         <Row gap={spacing.xs}>
@@ -228,12 +234,23 @@ const useEstilos = estilosDelTema((colors) => ({
   cancelled: { opacity: 0.55, borderStyle: 'dashed' },
   warned: { borderColor: colors.warning600, borderWidth: borderWidth.focus },
   pressed: { opacity: 0.7 },
+  /*
+   * UN HUECO TIENE QUE VERSE COMO UN HUECO, y antes medía y pesaba igual que un turno:
+   * recuadro de trazo discontinuo del mismo tamaño, así que una semana cubierta parecía
+   * medio vacía —cuarenta y dos recuadros punteados compitiendo con los turnos de verdad—.
+   *
+   * Ahora se apoya en `hundido` sin trazo, que es lo que le quita el peso, y baja de
+   * `touchTargetPreferred` (48) al mínimo táctil (44).
+   *
+   * PROBÉ A DEJARLO EN 32 Y `responsive:check` LO TUMBÓ: «mide 192×32, por debajo del
+   * mínimo táctil de 44». Mi razonamiento era que 192 px de ancho compensaban el alto, y
+   * es falso —el dedo falla en la dimensión corta, no en el área— así que el alto se
+   * queda en 44 y la ligereza la da el color, que era la ganancia de verdad.
+   */
   slot: {
-    minHeight: sizes.touchTargetPreferred,
+    minHeight: sizes.touchTargetMin,
     borderRadius: radii.input,
-    borderWidth: borderWidth.hairline,
-    borderColor: colors.border,
-    borderStyle: 'dashed',
+    backgroundColor: colors.hundido,
     alignItems: 'center',
     justifyContent: 'center',
   },

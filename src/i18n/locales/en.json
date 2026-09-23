@@ -296,6 +296,7 @@
   },
   "schedule": {
     "title": "Schedule",
+    "weekTotalShort": "{{total}} this week",
     "weekOf": "Week of {{date}}",
     "goToThisWeek": "Go to this week",
     "previousWeek": "Previous week",
@@ -332,7 +333,6 @@
     "publishHistory": "Publish history",
     "addShiftFor": "Add a shift for {{name}} on {{date}}",
     "addShiftOn": "Add a shift on {{date}}",
-    "breakShort": "{{minutes}} min break",
     "cancelShift": "Cancel shift",
     "cancelShiftHint": "A published shift is not deleted: it is cancelled and stays in the history.",
     "cancelled": "Shift cancelled",

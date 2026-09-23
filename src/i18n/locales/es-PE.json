@@ -296,6 +296,7 @@
   },
   "schedule": {
     "title": "Horario",
+    "weekTotalShort": "{{total}} esta semana",
     "weekOf": "Semana del {{date}}",
     "goToThisWeek": "Ir a esta semana",
     "previousWeek": "Semana anterior",
@@ -332,7 +333,6 @@
     "publishHistory": "Historial de publicación",
     "addShiftFor": "Agregar turno a {{name}} el {{date}}",
     "addShiftOn": "Agregar turno el {{date}}",
-    "breakShort": "{{minutes}} min de descanso",
     "cancelShift": "Cancelar turno",
     "cancelShiftHint": "Un turno publicado no se elimina: se cancela y queda en el historial.",
     "cancelled": "Turno cancelado",

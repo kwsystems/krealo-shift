@@ -141,7 +141,7 @@ export function WeekGrid({
               style={[
                 styles.headerCell,
                 { width: anchoDeDia },
-                day === todayKey ? styles.todayColumn : null,
+                day === todayKey ? styles.cabeceraDeHoy : null,
               ]}
             >
               <AppText variant="label" tone={day === todayKey ? 'primary' : 'subtle'}>
@@ -157,22 +157,21 @@ export function WeekGrid({
               <AppText variant="bodyStrong" numberOfLines={2}>
                 {row.name}
               </AppText>
-              <AppText variant="label" tone="subtle" tabular>
-                {minutesToHHmm(row.scheduledMinutes)}
+              {/*
+                EL NÚMERO DICE QUÉ ES. Antes ponía «05:30» debajo del nombre y nada más:
+                quien lo ve por primera vez no sabe si son las horas de la semana, las de
+                hoy, las que lleva trabajadas o la hora de entrada. Cinco caracteres de
+                etiqueta resuelven una ambigüedad que obliga a preguntar.
+              */}
+              <AppText variant="label" tone="subtle" tabular numberOfLines={1}>
+                {t('schedule.weekTotalShort', { total: minutesToHHmm(row.scheduledMinutes) })}
               </AppText>
             </View>
 
             {days.map((day) => {
               const dayShifts = row.shifts.filter((shift) => shift.dateKey === day);
               return (
-                <View
-                  key={`${row.employeeId}-${day}`}
-                  style={[
-                    styles.cell,
-                    { width: anchoDeDia },
-                    day === todayKey ? styles.todayColumn : null,
-                  ]}
-                >
+                <View key={`${row.employeeId}-${day}`} style={[styles.cell, { width: anchoDeDia }]}>
                   <Stack gap={spacing.xs}>
                     {dayShifts.map((shift) => (
                       <ShiftCard
@@ -322,7 +321,23 @@ const useEstilos = estilosDelTema((colors) => ({
    * nombres no caben, `minWidth` gana al encogido y la rejilla se arrastra en vez de
    * comprimir los turnos hasta que no se lean.
    */
-  todayColumn: { backgroundColor: colors.primary50 },
+  /*
+   * HOY SE MARCA EN LA CABECERA, NO TIÑENDO LA COLUMNA ENTERA.
+   *
+   * El tinte bajaba por toda la columna hasta cortarse en seco donde acababa la última
+   * fila, así que parecía un bloque de color pegado a la rejilla más que «este es hoy». Y
+   * al teñir el fondo de las celdas competía con los propios turnos, que es lo que hay
+   * que mirar.
+   *
+   * Ahora la cabecera del día lleva el acento —fondo tenue y texto en color— y la columna
+   * se queda limpia. Un día se identifica por su rótulo, que es donde se mira para
+   * saber qué día es.
+   */
+  cabeceraDeHoy: {
+    backgroundColor: colors.primary50,
+    borderTopLeftRadius: radii.input,
+    borderTopRightRadius: radii.input,
+  },
   dayBlock: {
     gap: spacing.sm,
     backgroundColor: colors.surface,

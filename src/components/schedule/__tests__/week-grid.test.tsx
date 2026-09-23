@@ -65,10 +65,23 @@ describe('cuadrícula semanal', () => {
     );
 
     expect(view.getByText('Ana Torres')).toBeTruthy();
-    // 14:00 UTC son las 09:00 en Lima; 07:00 netas tras el descanso planificado.
+    // 14:00 UTC son las 09:00 en Lima.
     expect(view.getByText('09:00 – 17:00')).toBeTruthy();
-    // Aparece dos veces a propósito: en el turno y en el total de la fila.
-    expect(view.getAllByText('07:00')).toHaveLength(2);
+
+    /*
+     * EL TOTAL DE LA FILA, CON SU ETIQUETA. Antes esta prueba pedía «07:00» dos veces —en
+     * la tarjeta del turno y en el total de la persona— y las dos cambiaron el mismo día:
+     *
+     *  · la duración salió de la tarjeta, porque se deduce de la hora que tiene encima y
+     *    eran dos líneas más en una columna de 144 px;
+     *  · el total ganó su etiqueta, porque «05:30» suelto bajo un nombre no dice si son
+     *    las horas de la semana, las de hoy o la hora de entrada.
+     *
+     * Así que ahora se pide lo que de verdad tiene que verse, y de paso se fija la
+     * etiqueta: un total sin ella era la ambigüedad que obligaba a preguntar.
+     */
+    expect(view.getByText('07:00 esta semana')).toBeTruthy();
+    expect(view.queryByText('07:00')).toBeNull();
   });
 
   it('marca como cambiado un turno que ya estuvo publicado y volvió a borrador', async () => {
