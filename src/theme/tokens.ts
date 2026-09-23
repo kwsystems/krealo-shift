@@ -30,6 +30,24 @@ export const lightColors = {
   ink500: '#6F6B7A',
   surface: '#FFFFFF',
   canvas: '#F7F7FA',
+  /**
+   * LOS DOS PLANOS QUE FALTABAN, y su ausencia era el defecto de diseño número uno.
+   *
+   * Había UN solo plano (`surface`) y un borde de 1 px, así que todo acababa siendo la
+   * misma caja blanca con el mismo borde y el mismo radio: el aviso de «no llegó a su
+   * turno», las fichas de conteo, la gráfica y las filas de gente pesaban lo mismo. El
+   * ojo no tenía por dónde entrar. Medido en las capturas del 2026-09-23.
+   *
+   * `raised` va POR ENCIMA de `surface`: barras de control pegadas, la tarjeta de
+   * resultado del reloj, lo que flota. En el tema claro la elevación la da la sombra,
+   * no el color, así que vale blanco; en oscuro hace falta un paso más claro.
+   *
+   * `hundido` va DENTRO de `surface` para agrupar SIN otro borde. Es el que mata las
+   * cajas dentro de cajas: un grupo dentro de una tarjeta se separa con este plano y
+   * espacio, nunca con un segundo perfil.
+   */
+  raised: '#FFFFFF',
+  hundido: '#F4F3F8',
   border: '#E5E3EB',
   success50: '#EAF9F1',
   success600: '#157D56',
@@ -121,6 +139,14 @@ export const darkColors = {
   // La tarjeta es MÁS CLARA que el lienzo, igual que en claro es más clara que el gris
   // de fondo. La jerarquía se conserva aunque los valores se den la vuelta.
   surface: '#1C1A24',
+  /*
+   * En oscuro la sombra no se ve, así que la elevación TIENE que ser color: `raised` es
+   * un paso más claro que `surface` y `hundido` uno más oscuro, los dos afinados para
+   * seguir separándose de `canvas` (#131118) sin acercarse al borde.
+   */
+  raised: '#252230',
+  hundido: '#17151E',
+
   canvas: '#131118',
   border: '#332F3D',
   success50: '#12261D',
@@ -212,8 +238,27 @@ export const fontFamily = {
   medium: 'Inter_500Medium',
   semibold: 'Inter_600SemiBold',
   bold: 'Inter_700Bold',
-} as const;
 
+  /**
+   * ARCHIVO, la cara de los títulos y de las cifras que mandan (§ver docs/DISENO.md).
+   *
+   * POR QUÉ HACÍA FALTA UNA SEGUNDA CARA. Con Inter en los cuatro pesos, un título de 30
+   * px y un dato de 14 son el mismo dibujo a dos tamaños: correcto y anónimo. La app no
+   * tenía voz, y «demasiado básico» —las palabras de Andree— es exactamente eso.
+   *
+   * POR QUÉ ARCHIVO Y NO LA DE MODA. Bricolage Grotesque era la elección obvia del
+   * momento y por eso mismo se descartó: sus formas juguetonas no dicen nada de una
+   * tienda. Archivo es robusta y algo estrecha —voz de rótulo, de cartel de horario— y
+   * aguanta desde 11 px en una cabecera de columna hasta los 64 del reloj de la tienda.
+   *
+   * DÓNDE SE USA, y en ningún otro sitio: títulos de pantalla, la hora del kiosco y las
+   * cifras grandes. El texto corrido sigue en Inter, que para leer párrafos es mejor.
+   */
+  display: 'Archivo_600SemiBold',
+  displayBold: 'Archivo_700Bold',
+  /** Cabeceras de columna del libro de registro: van en versalitas con letra espaciada. */
+  displayMedium: 'Archivo_500Medium',
+} as const;
 export const fontWeight = {
   regular: '400',
   medium: '500',

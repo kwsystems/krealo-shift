@@ -116,23 +116,33 @@ export function AppText({
 }
 
 const styles = StyleSheet.create({
+  /*
+   * EL RELOJ Y LOS TITULOS VAN EN ARCHIVO, el resto en Inter.
+   *
+   * La hora del reloj es el objeto de esta app —§9.1 la pone como elemento dominante de
+   * la pantalla de reposo— y con Inter era un numero grande y nada mas. Archivo le da
+   * la voz de un cartel de horario, que es lo que es.
+   *
+   * `body`, `bodyStrong`, `help` y `label` NO cambian: para leer una frase Inter es
+   * mejor, y cambiarlas habria tocado las 54 pantallas sin ganar nada.
+   */
   kioskClock: {
-    fontFamily: fontFamily.bold,
+    fontFamily: fontFamily.displayBold,
     fontSize: fontSize.kioskClockMin,
     lineHeight: Math.round(fontSize.kioskClockMin * lineHeight.tight),
   },
   kioskTitle: {
-    fontFamily: fontFamily.semibold,
+    fontFamily: fontFamily.display,
     fontSize: fontSize.kioskTitleMin,
     lineHeight: Math.round(fontSize.kioskTitleMin * lineHeight.tight),
   },
   title: {
-    fontFamily: fontFamily.bold,
+    fontFamily: fontFamily.displayBold,
     fontSize: fontSize.titleMobileMin,
     lineHeight: Math.round(fontSize.titleMobileMin * lineHeight.tight),
   },
   section: {
-    fontFamily: fontFamily.semibold,
+    fontFamily: fontFamily.display,
     fontSize: fontSize.sectionMin,
     lineHeight: Math.round(fontSize.sectionMin * lineHeight.normal),
   },

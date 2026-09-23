@@ -60,6 +60,59 @@ for (const tema of ['light', 'dark']) {
   // lento se quedan cortos y el arnés mide una pantalla a medio montar. Ver `irA`.
   await entrarComoDemo(pagina, base);
 
+  /*
+   * LA CARA DE DISPLAY, CARGADA DE VERDAD Y PUESTA DONDE TOCA.
+   *
+   * Una fuente que no llega no rompe nada: el navegador cae a la del sistema y el título
+   * se ve «parecido». Es el fallo tipográfico clásico y no hay forma de verlo leyendo el
+   * código, porque el código está bien: lo que falta es el archivo en el paquete.
+   *
+   * Se comprueban las dos mitades, porque fallan por motivos distintos: que Archivo esté
+   * REGISTRADA en el documento (si no, no se empaquetó) y que el título la esté USANDO
+   * (si no, alguien cambió la variante en `app-text.tsx`). La primera vez que se midió
+   * esto, el elemento que encontré era el rastro de la cabecera a 12 px en Inter y por
+   * poco doy por bueno lo contrario de lo que pasaba; de ahí que se mire el tamaño.
+   */
+  if (tema === 'light') {
+    const tipografia = await pagina.evaluate(() => {
+      const familias = [...document.fonts].map((f) => `${f.family}:${f.status}`);
+      const titulo =
+        [...document.querySelectorAll('*')]
+          .map((e) => ({ e, s: getComputedStyle(e) }))
+          /*
+           * SIN ICONOS. Los iconos son texto de 24 px en la familia `ionicons`, así que
+           * el primer elemento grande de la pantalla era uno de ellos y este control
+           * fallaba culpando a la tipografía cuando el que estaba mal era el selector.
+           * Un glifo suelto no es un título: se piden varias letras y se descarta esa
+           * familia.
+           */
+          .filter(
+            ({ e, s }) =>
+              (e.textContent ?? '').trim().length > 3 &&
+              Number.parseFloat(s.fontSize) >= 24 &&
+              !s.fontFamily.toLowerCase().includes('ionicons'),
+          )
+          .map(({ s }) => ({ tam: s.fontSize, familia: s.fontFamily }))[0] ?? null;
+      return { registradas: familias.filter((f) => f.startsWith('Archivo')), titulo };
+    });
+
+    if (!tipografia.registradas.some((f) => f.endsWith(':loaded'))) {
+      problemas.push(
+        'Archivo está declarada pero NINGUNA pantalla la usa, o no llegó al paquete. ' +
+          'Las dos cosas dan el mismo síntoma porque el navegador solo descarga una ' +
+          'fuente cuando algo la pide, así que «unloaded» significa una de las dos. ' +
+          `Registradas: ${JSON.stringify(tipografia.registradas)}`,
+      );
+    } else if (tipografia.titulo === null) {
+      problemas.push('no encontré ningún texto de 24 px o más donde medir la cara de display');
+    } else if (!tipografia.titulo.familia.includes('Archivo')) {
+      problemas.push(
+        `el título de ${tipografia.titulo.tam} se pinta en «${tipografia.titulo.familia}» ` +
+          'y debería ser Archivo: alguien cambió la variante o la fuente no resolvió',
+      );
+    }
+  }
+
   for (const [nombre, ruta] of RUTAS) {
     await irA(pagina, base, ruta, { asentar: 500 });
 

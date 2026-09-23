@@ -7,6 +7,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import {
+  Archivo_500Medium,
+  Archivo_600SemiBold,
+  Archivo_700Bold,
+} from '@expo-google-fonts/archivo';
+import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
@@ -77,6 +82,17 @@ export default function RootLayout() {
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    /*
+     * ARCHIVO, la cara de los títulos y del reloj. Ver `fontFamily.display` en los
+     * tokens y `docs/DISENO.md` para el porqué de esta cara y no otra.
+     *
+     * Van los TRES pesos que los tokens nombran: si se carga uno de menos, el que falte
+     * cae a la fuente del sistema sin avisar y el título se ve en otra letra. Es de los
+     * fallos que no rompen nada y se ven raros.
+     */
+    Archivo_500Medium,
+    Archivo_600SemiBold,
+    Archivo_700Bold,
   });
 
   useEffect(() => {
