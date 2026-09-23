@@ -424,29 +424,44 @@ export type SyncOfflineResult = z.infer<typeof syncResultSchema>;
  * iPad guardo sin conexion. El servidor responde por evento y nunca descarta nada
  * en silencio (§17).
  */
+/**
+ * UN FICHAJE DE LA COLA, TAL COMO VIAJA. Es el contrato, y tiene nombre a propósito.
+ *
+ * ESTABA ESCRITO EN LÍNEA DENTRO DE `syncOfflineEvents`, y declaraba MENOS campos de los
+ * que el cable llevaba: `toWirePayload` ya mandaba `breakReason` y `breakNote` y aquí no
+ * figuraban. Funcionaba —el servidor los lee— pero el contrato escrito decía una cosa y
+ * el cable hacía otra, y alguien limpiando el servidor guiándose por esta lista habría
+ * borrado el manejo de campos que sí viajan.
+ *
+ * POR QUÉ TYPESCRIPT NO LO VEÍA, que es lo que hay que entender para que no vuelva: la
+ * comprobación de propiedades de más solo se aplica a objetos escritos como literal en
+ * el sitio. `toWirePayload` devuelve el suyo y se pasa por un `.map()`, así que el
+ * compilador no tenía dónde quejarse.
+ *
+ * LA SOLUCIÓN NO ES UN CHEQUEO NUEVO, ES DARLE NOMBRE AL TIPO. Con `toWirePayload`
+ * anotada para devolver esto, el compilador comprueba las dos direcciones en cada
+ * compilación: un campo que se manda y no está declarado aquí no compila, y quitar uno de
+ * aquí rompe donde se usa. Comprobado con los dos controles. Un guion que lo vigilara
+ * desde fuera sería más código para hacer peor lo que el compilador ya sabe hacer.
+ */
+export type EventoDeColaEnviado = {
+  idempotencyKey: string;
+  employeeOpaqueId: string;
+  eventType: TimeEventType;
+  breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
+  breakReason?: string;
+  breakNote?: string;
+  departureReason?: string;
+  departureNote?: string;
+  shiftId: string | null;
+  occurredAtDevice: string;
+  deviceSequence: number;
+  pinVersion: number;
+  offlineVerified: true;
+};
+
 export async function syncOfflineEvents(params: {
-  events: readonly {
-    idempotencyKey: string;
-    employeeOpaqueId: string;
-    eventType: TimeEventType;
-    breakType?: 'paid' | 'unpaid' | 'meal' | 'other';
-    /*
-     * LOS CUATRO MOTIVOS ESTABAN SIN DECLARAR. `toWirePayload` ya mandaba
-     * `breakReason` y `breakNote`, y aquí no figuraban: TypeScript no lo señala porque
-     * el objeto no llega como literal, así que el contrato decía una cosa y el cable
-     * llevaba otra. Si alguien limpiaba el servidor guiándose por esta lista, borraba
-     * campos que sí viajaban.
-     */
-    breakReason?: string;
-    breakNote?: string;
-    departureReason?: string;
-    departureNote?: string;
-    shiftId: string | null;
-    occurredAtDevice: string;
-    deviceSequence: number;
-    pinVersion: number;
-    offlineVerified: true;
-  }[];
+  events: readonly EventoDeColaEnviado[];
 }): Promise<KioskApiResult<SyncOfflineResult>> {
   return invoke('sync-offline-events', { events: params.events }, syncResultSchema);
 }

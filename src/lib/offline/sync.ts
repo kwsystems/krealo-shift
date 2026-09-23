@@ -16,7 +16,12 @@ import {
   firmaIntacta,
 } from './outbox';
 import { storeOfflineVerifiers } from './pin';
-import { attachPhoto, syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
+import {
+  attachPhoto,
+  syncOfflineEvents,
+  refreshKioskRoster,
+  type EventoDeColaEnviado,
+} from '@/features/kiosk/api';
 import { cacheRosterAndShifts } from '@/features/kiosk/offline-session';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { track, type SyncFailureReason } from '@/lib/analytics';
@@ -281,7 +286,17 @@ export async function runSync(): Promise<SyncOutcome> {
   }
 }
 
-function toWirePayload(event: OutboxEvent) {
+/**
+ * EL TIPO DE VUELTA ES LO QUE ATA ESTO AL CONTRATO, y por eso está anotado.
+ *
+ * Sin la anotación, esta función podía mandar campos que `EventoDeColaEnviado` no
+ * declara y TypeScript no decía nada: la comprobación de propiedades de más solo se
+ * aplica a literales escritos en el sitio, y este objeto se pasa por un `.map()`. Así
+ * viajaron `breakReason` y `breakNote` sin figurar en el contrato.
+ *
+ * Con el tipo puesto, el compilador vigila las dos direcciones en cada compilación.
+ */
+function toWirePayload(event: OutboxEvent): EventoDeColaEnviado {
   return {
     idempotencyKey: event.idempotencyKey,
     employeeOpaqueId: event.employeeOpaqueId,
