@@ -811,6 +811,28 @@ resuelve, no lo que se tecleó.
   principio. Mismo fallo, misma comprobación.
 - **Dónde:** `functions/src/shared/zonas.ts`.
 
+### Un campo que siempre vale lo mismo se acusa en el CI
+
+`campos-muertos-check.mjs` recorre `functions/src` y señala cualquier clave que nazca
+siempre con el mismo literal fijo —`null`, `[]`, `false`, `0`, `''`, `{}`— y en ningún
+sitio con otra cosa.
+
+- **Motivo:** en una semana aparecieron **seis** campos así, cada uno con pantalla del
+  cliente esperándolos: `flags`, `shiftEndsAt`, `openBreak`, `jobRoleName`,
+  `paidBreakReasons` y las políticas del vínculo del reloj. Nada los veía: TypeScript no
+  (cliente y funciones no comparten tipo, y `null` es válido), el linter tampoco (no hay
+  nada mal escrito), `contratos-check` compara nombres y no valores, y no había pruebas.
+  El único filtro era que alguien mirara la pantalla y notara que algo no sale nunca.
+- **La lista de excepciones lleva RAZÓN, no solo nombre.** Es la misma forma que la deuda
+  de contraste de `tema.test.ts`: un chequeo sin manera de decir «este ya lo miré y está
+  bien» se acaba apagando entero. Escribir el porqué es la parte que hace pensar.
+- **Lo que no puede hacer, dicho en el propio guion:** es lectura de texto, no un
+  compilador. Un campo llenado a través de una variable intermedia con un valor siempre
+  fijo se le escapa. Caza el patrón concreto que ya mordió seis veces.
+- **Dos gaps los encontraron los controles, no la lectura:** un campo anidado
+  (`summary: { shiftEndsAt: null }`) y un objeto vacío (`paidBreakReasons: {}`) se
+  escapaban en la primera versión.
+
 ---
 
 ## Cómo agregar una entrada

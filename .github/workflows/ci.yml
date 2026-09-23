@@ -173,6 +173,9 @@ jobs:
       - name: Comprobar contratos cliente ↔ Cloud Functions
         run: node scripts/contratos-check.mjs
 
+      - name: Comprobar que ningun campo nace muerto
+        run: node scripts/campos-muertos-check.mjs
+
   # LAS REGLAS DE FIRESTORE, EJERCITADAS DE VERDAD.
   #
   # Va en su propio trabajo porque necesita dos cosas que el de arriba no tiene: una
