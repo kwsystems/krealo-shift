@@ -380,23 +380,27 @@ export function ReportsScreen() {
             </AppText>
           </Stack>
 
-          <WeekNavigator
-            weekStart={weekStart}
-            language={language}
-            isCurrentWeek={weekOffset === 0}
-            onPrevious={() => setWeekOffset((valor) => valor - 1)}
-            onNext={() => setWeekOffset((valor) => valor + 1)}
-            onGoToCurrent={() => setWeekOffset(0)}
-          />
-
           {/*
-            Compartir vive JUNTO al periodo, no al final de la pantalla. Lo que se manda
-            es «esta semana», así que el botón tiene que estar donde se ve cuál es: al
+            EL PERIODO Y COMPARTIR, EN LA MISMA FILA.
+
+            «Compartir» vive junto al periodo y no al final de la pantalla, porque lo que
+            se manda es «esta semana» y el botón tiene que estar donde se ve cuál es: al
             final, después de cinco gráficos, ya nadie recuerda qué semana está mirando.
+            Eso ya estaba bien pensado; lo que estaba mal era que ocupara una fila entera
+            para un solo botón, justo debajo de otra fila con el navegador de semana.
+
             Deshabilitado mientras no hay nada que mandar, que es más honesto que
             compartir un archivo con solo la fila de cabecera.
           */}
-          <Row>
+          <Row gap={spacing.md} wrap align="center" justify="space-between">
+            <WeekNavigator
+              weekStart={weekStart}
+              language={language}
+              isCurrentWeek={weekOffset === 0}
+              onPrevious={() => setWeekOffset((valor) => valor - 1)}
+              onNext={() => setWeekOffset((valor) => valor + 1)}
+              onGoToCurrent={() => setWeekOffset(0)}
+            />
             <SecondaryButton
               label={t('reports.share')}
               onPress={() => setCompartirAbierto(true)}

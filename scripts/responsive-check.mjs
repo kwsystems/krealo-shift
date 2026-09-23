@@ -95,7 +95,13 @@ const PANTALLAS = [
   ['inicio', '/', 'Para que lo sepas'],
   ['equipo', '/team', 'Agregar empleado'],
   ['horario', '/schedule', 'Copiar semana anterior'],
-  ['horas', '/hours', 'Ir a esta semana'],
+  /*
+   * Horas se reconocía por «Ir a esta semana», y ese botón pasó a salir SOLO cuando no
+   * estás en la semana actual: un botón apagado ocupa el mismo sitio que uno que sirve y
+   * enseña una acción imposible. El marcador tiene que ser algo que la pantalla pinte
+   * SIEMPRE, no el texto de un control que el diseño puede esconder.
+   */
+  ['horas', '/hours', 'Horas netas'],
   ['reportes', '/reports', 'Mide presencia, no trabajo hecho'],
   ['solicitudes', '/requests', 'Correcciones de hora'],
   ['ajustes', '/settings', 'Cambia el idioma de esta app'],

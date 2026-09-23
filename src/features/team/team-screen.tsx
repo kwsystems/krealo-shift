@@ -17,7 +17,7 @@ import {
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { addDaysToKey, dateKeyOf } from '@/features/schedules/week';
 import { useRequests } from '@/features/requests/hooks';
 import { useJobRoles } from './hooks';
@@ -231,48 +231,56 @@ export function TeamScreen() {
             onRetry={scope.refetch}
           >
             <Stack gap={spacing.base} style={styles.flexOne}>
-              <FormField
-                label={t('common.search')}
-                value={search}
-                onChangeText={setSearch}
-                placeholder={t('team.searchPlaceholder')}
-                autoCapitalize="none"
-                testID="team-search"
-              />
-
-              {scope.locations.length > 1 ? (
-                <SelectField
-                  label={t('team.locations')}
-                  value={scope.locationId}
-                  options={locationOptions}
-                  onChange={scope.setLocationId}
-                  testID="team-location"
+              {/*
+                LOS CUATRO MANDOS EN UNA FILA, no en una pila de cuatro bloques a ancho
+                completo. Así estaba antes y la lista de gente —lo que se viene a ver a
+                esta pantalla— empezaba en y=510 de 768: el 66 % era mando. Medido, no
+                estimado.
+              */}
+              <BarraDeControl testID="team-controls">
+                <FormField
+                  label={t('common.search')}
+                  value={search}
+                  onChangeText={setSearch}
+                  placeholder={t('team.searchPlaceholder')}
+                  autoCapitalize="none"
+                  testID="team-search"
                 />
-              ) : null}
 
-              <SegmentedControl
-                label={t('team.statusFilter')}
-                value={statusFilter}
-                options={[
-                  { value: 'active', label: t('team.statusActive') },
-                  { value: 'inactive', label: t('team.statusInactive') },
-                  { value: 'all', label: t('team.statusAll') },
-                ]}
-                onChange={setStatusFilter}
-                testID="team-status-filter"
-              />
+                {scope.locations.length > 1 ? (
+                  <SelectField
+                    label={t('team.locations')}
+                    value={scope.locationId}
+                    options={locationOptions}
+                    onChange={scope.setLocationId}
+                    testID="team-location"
+                  />
+                ) : null}
 
-              {jobRoleOptions.length > 0 ? (
-                <SelectField
-                  label={t('team.jobRoles')}
-                  value={jobRoleFilter}
-                  options={jobRoleOptions}
-                  onChange={(value) =>
-                    setJobRoleFilter((current) => (current === value ? null : value))
-                  }
-                  testID="team-job-role-filter"
+                <SegmentedControl
+                  label={t('team.statusFilter')}
+                  value={statusFilter}
+                  options={[
+                    { value: 'active', label: t('team.statusActive') },
+                    { value: 'inactive', label: t('team.statusInactive') },
+                    { value: 'all', label: t('team.statusAll') },
+                  ]}
+                  onChange={setStatusFilter}
+                  testID="team-status-filter"
                 />
-              ) : null}
+
+                {jobRoleOptions.length > 0 ? (
+                  <SelectField
+                    label={t('team.jobRoles')}
+                    value={jobRoleFilter}
+                    options={jobRoleOptions}
+                    onChange={(value) =>
+                      setJobRoleFilter((current) => (current === value ? null : value))
+                    }
+                    testID="team-job-role-filter"
+                  />
+                ) : null}
+              </BarraDeControl>
 
               {feedback !== null ? (
                 <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />

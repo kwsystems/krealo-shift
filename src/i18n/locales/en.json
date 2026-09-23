@@ -347,7 +347,6 @@
     "overlapTitle": "Overlapping shifts",
     "pendingChanges_one": "{{count}} unpublished change",
     "pendingChanges_other": "{{count}} unpublished changes",
-    "pendingChangesHint": "While you edit, the schedule is saved as a draft. Your team sees the changes when you publish.",
     "publicationChanged_one": "{{count}} shift changed",
     "publicationChanged_other": "{{count}} shifts changed",
     "publicationVersion": "Publication {{version}}",

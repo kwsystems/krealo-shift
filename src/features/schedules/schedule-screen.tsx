@@ -43,14 +43,15 @@ import {
 } from '@/components/schedule/week-tools';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { AppText } from '@/components/ui/app-text';
-import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { useEmployeeNames, useJobRoles, useTeam } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { currentLanguage } from '@/i18n';
-import { spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { radii, spacing } from '@/theme/tokens';
 import { minutesToHHmm } from '@/utils/time';
 
 /**
@@ -71,6 +72,7 @@ type EditingState =
 
 export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const { t } = useTranslation();
+  const estilos = useEstilosDeHorario();
   const scope = useManagerScope();
   const { isWide } = useResponsive();
   const now = useLiveClock('minute');
@@ -293,6 +295,59 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
             onRetry={scope.refetch}
           >
             <Stack gap={spacing.lg}>
+              {/*
+                TODOS LOS MANDOS DE LA SEMANA EN UNA FILA.
+
+                Antes eran CUATRO bloques apilados —sede, navegador de semana, vista
+                semana/día y dos botones de acción— y con la tarjeta de publicar encima de
+                la rejilla, el horario empezaba en y=680 de 768: el 89 % de la pantalla era
+                mando y no se veía ni una fila de turnos sin desplazarse. Medido el
+                2026-09-23, y es el peor caso de toda la app.
+
+                «Copiar semana anterior» sale de aquí: se usa al empezar una semana, no en
+                cada visita, y vive en la hoja de copiar. «Agregar turno» se queda, porque
+                es la acción de esta pantalla.
+              */}
+              <Row gap={spacing.md} wrap align="center" justify="space-between">
+                <Row gap={spacing.md} wrap align="center">
+                  <WeekNavigator
+                    weekStart={weekStart}
+                    language={language}
+                    isCurrentWeek={weekOffset === 0}
+                    onPrevious={() => setWeekOffset((current) => current - 1)}
+                    onNext={() => setWeekOffset((current) => current + 1)}
+                    onGoToCurrent={() => setWeekOffset(0)}
+                  />
+                  <SegmentedControl
+                    label={t('schedule.viewLabel')}
+                    value={view}
+                    options={[
+                      { value: 'week', label: t('schedule.viewWeek') },
+                      { value: 'day', label: t('schedule.viewDay') },
+                    ]}
+                    onChange={setView}
+                    testID="schedule-view"
+                  />
+                </Row>
+
+                {readOnly ? null : (
+                  <Row gap={spacing.sm} wrap>
+                    <GhostButton
+                      label={t('schedule.copyPreviousWeek')}
+                      onPress={() => setCopyOpen(true)}
+                      fullWidth={false}
+                      testID="schedule-copy-week"
+                    />
+                    <SecondaryButton
+                      label={t('schedule.addShift')}
+                      onPress={() => openCreate({ dateKey: selectedDay })}
+                      fullWidth={false}
+                      testID="schedule-add-shift"
+                    />
+                  </Row>
+                )}
+              </Row>
+
               {scope.locations.length > 1 ? (
                 <SelectField
                   label={t('schedule.location')}
@@ -302,15 +357,6 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                   testID="schedule-location"
                 />
               ) : null}
-
-              <WeekNavigator
-                weekStart={weekStart}
-                language={language}
-                isCurrentWeek={weekOffset === 0}
-                onPrevious={() => setWeekOffset((current) => current - 1)}
-                onNext={() => setWeekOffset((current) => current + 1)}
-                onGoToCurrent={() => setWeekOffset(0)}
-              />
 
               {position === 'past' ? (
                 <InlineNotice
@@ -323,65 +369,42 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                 />
               ) : null}
 
-              <SegmentedControl
-                label={t('schedule.viewLabel')}
-                value={view}
-                options={[
-                  { value: 'week', label: t('schedule.viewWeek') },
-                  { value: 'day', label: t('schedule.viewDay') },
-                ]}
-                onChange={setView}
-                testID="schedule-view"
-              />
-
-              {readOnly ? null : (
-                <Row gap={spacing.sm} wrap>
-                  <SecondaryButton
-                    label={t('schedule.copyPreviousWeek')}
-                    onPress={() => setCopyOpen(true)}
-                    fullWidth={false}
-                    testID="schedule-copy-week"
-                  />
-                  <SecondaryButton
-                    label={t('schedule.addShift')}
-                    onPress={() => openCreate({ dateKey: selectedDay })}
-                    fullWidth={false}
-                    testID="schedule-add-shift"
-                  />
-                </Row>
-              )}
-
               {feedback !== null ? (
                 <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
               ) : null}
 
+              {/*
+                UNA BARRA, NO UNA TARJETA. Esto era una tarjeta con título, párrafo de
+                ayuda y dos botones debajo: 150 px de alto para comunicar un estado y
+                ofrecer una acción, justo encima de la rejilla que la persona ha venido a
+                ver. Un estado se enseña en una línea.
+
+                La frase de ayuda —«mientras editas, el horario se guarda como borrador»—
+                se cae: explica algo que ya dice el propio contador de cambios sin
+                publicar, y se leía una vez en la vida mientras ocupaba sitio para siempre.
+              */}
               {pendingIds.length > 0 && !readOnly ? (
-                <Card>
-                  <AppText variant="bodyStrong">
+                <Row gap={spacing.sm} wrap align="center" style={estilos.barraDePublicar}>
+                  <AppText variant="bodyStrong" style={estilos.creceEnLaBarra}>
                     {t('schedule.pendingChanges', { count: pendingIds.length })}
                   </AppText>
-                  <AppText variant="help" tone="subtle">
-                    {t('schedule.pendingChangesHint')}
-                  </AppText>
-                  <Row gap={spacing.sm} wrap>
-                    <PrimaryButton
-                      label={t('schedule.publish')}
-                      onPress={() => setPublishAllOpen(true)}
-                      fullWidth={false}
-                      loading={mutations.publish.isPending}
-                      testID="schedule-publish-all"
-                    />
-                    <SecondaryButton
-                      label={t('schedule.publishChangesOnly')}
-                      onPress={() => {
-                        setPickedIds(pendingIds);
-                        setPublishPickerOpen(true);
-                      }}
-                      fullWidth={false}
-                      testID="schedule-publish-some"
-                    />
-                  </Row>
-                </Card>
+                  <GhostButton
+                    label={t('schedule.publishChangesOnly')}
+                    onPress={() => {
+                      setPickedIds(pendingIds);
+                      setPublishPickerOpen(true);
+                    }}
+                    fullWidth={false}
+                    testID="schedule-publish-some"
+                  />
+                  <PrimaryButton
+                    label={t('schedule.publish')}
+                    onPress={() => setPublishAllOpen(true)}
+                    fullWidth={false}
+                    loading={mutations.publish.isPending}
+                    testID="schedule-publish-all"
+                  />
+                </Row>
               ) : null}
 
               <ScheduleWarnings warnings={analysis.warnings} />
@@ -670,3 +693,20 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
     </AppScreen>
   );
 }
+
+/**
+ * La barra de «cambios sin publicar»: un estado en una línea, no una tarjeta.
+ *
+ * Se apoya en `hundido` —el plano que agrupa dentro de una superficie sin dibujar otro
+ * marco— y se pega a la barra de control de arriba, que es donde la persona ya está
+ * mirando cuando acaba de mover un turno.
+ */
+const useEstilosDeHorario = estilosDelTema((colors) => ({
+  barraDePublicar: {
+    backgroundColor: colors.hundido,
+    borderRadius: radii.card,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+  },
+  creceEnLaBarra: { flexGrow: 1, flexShrink: 1 },
+}));

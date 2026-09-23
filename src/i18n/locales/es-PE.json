@@ -347,7 +347,6 @@
     "overlapTitle": "Turnos solapados",
     "pendingChanges_one": "{{count}} cambio sin publicar",
     "pendingChanges_other": "{{count}} cambios sin publicar",
-    "pendingChangesHint": "Mientras editas, el horario se guarda como borrador. El equipo verá los cambios cuando publiques.",
     "publicationChanged_one": "{{count}} turno cambiado",
     "publicationChanged_other": "{{count}} turnos cambiados",
     "publicationVersion": "Publicación {{version}}",

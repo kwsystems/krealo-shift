@@ -273,8 +273,19 @@ export const MARCADORES = {
    */
   '/': { testid: 'manager-home' },
   '/team': 'Agregar empleado',
-  '/schedule': 'Copiar semana anterior',
-  '/hours': 'Ir a esta semana',
+  /*
+   * HORARIO Y HORAS SE IDENTIFICAN POR `testID`, no por el texto de un botón, y la razón
+   * la enseñó un fallo real: el marcador de Horas era «Ir a esta semana», y el día que
+   * ese botón pasó a salir SOLO cuando no estás en la semana actual —un botón apagado
+   * ocupa el mismo sitio que uno que sirve, y enseña una acción imposible— los arneses
+   * se quedaron esperando un texto que ya no existía en la pantalla recién abierta.
+   *
+   * Un marcador tiene que ser lo que SIEMPRE está en esa pantalla. El texto de un control
+   * no lo es: cambia con el diseño, con el idioma y con el estado. El identificador de un
+   * filtro que la pantalla siempre pinta, sí.
+   */
+  '/schedule': { testid: 'schedule-view' },
+  '/hours': { testid: 'timesheet-status-filter' },
   '/reports': 'Mide presencia, no trabajo hecho',
   '/requests': 'Correcciones de hora',
   '/settings': 'Cambia el idioma de esta app',

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { Children, type ReactNode } from 'react';
 import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -203,4 +203,69 @@ const useEstilos = estilosDelTema((colors) => ({
     ...shadows.card,
   },
   row: { flexDirection: 'row' },
+  barra: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    /*
+     * ALINEADOS POR ARRIBA, que es donde están sus etiquetas. Con `flex-end` los mandos
+     * se alineaban por el suelo, así que el que tuviera dos filas de chips subía su
+     * etiqueta y las cuatro quedaban a alturas distintas: la fila se leía torcida sin
+     * que nada estuviera mal colocado.
+     */
+    alignItems: 'flex-start',
+    gap: spacing.md,
+  },
+  /*
+   * `flexBasis: 0` con `flexGrow: 1` reparte el sobrante a partes iguales; el `minWidth`
+   * que pone quien llama es lo que decide cuándo saltan de renglón en vez de estrujarse.
+   */
+  celdaDeBarra: { flexGrow: 1, flexBasis: 0 },
+  /* La acción no crece: mide lo que mide su etiqueta y se queda al final de la fila. */
+  accionDeBarra: { flexGrow: 0, marginLeft: 'auto' },
 }));
+
+/**
+ * LA BARRA DE CONTROL: los mandos de una pantalla en una fila, no en una pila.
+ *
+ * POR QUÉ EXISTE, medido y no opinado. En Equipo, a 1366×768, la lista de gente empezaba
+ * en y=510: el **66 % de la pantalla era mando**. Cuatro bloques a ancho completo, uno
+ * encima de otro —buscador, sede, estado, puesto— cada uno con su etiqueta arriba. En
+ * Reportes, el 59 %. Y en Horario, siete filas de mandos antes del primer turno.
+ *
+ * Lo caro no es cada control: es que cada uno ocupe el ancho entero y se apile. Puestos
+ * en fila, los mismos cuatro caben en uno o dos renglones y la pantalla empieza a servir
+ * para lo que se abrió.
+ *
+ * ENVUELVE CADA HIJO, y por eso no vale un `Row` pelado: dentro de una fila, un campo o
+ * un selector se estira o se encoge hasta lo ilegible según lo que tenga al lado. Aquí
+ * cada uno recibe la misma base flexible con un mínimo, así que crecen juntos y, cuando
+ * ya no caben, saltan de renglón en vez de estrujarse.
+ *
+ * `accion` va al final y separada: es la acción primaria de la pantalla —«Agregar
+ * empleado», «Agregar turno»— y tiene que leerse como una cosa distinta de los filtros,
+ * no como el quinto mando de la fila.
+ */
+export function BarraDeControl({
+  children,
+  accion,
+  minimoPorControl = 200,
+  testID,
+}: {
+  children: ReactNode;
+  accion?: ReactNode;
+  /** Ancho mínimo de cada control antes de saltar de renglón. */
+  minimoPorControl?: number;
+  testID?: string;
+}) {
+  const styles = useEstilos();
+  return (
+    <View style={styles.barra} testID={testID}>
+      {Children.map(children, (hijo) =>
+        hijo === null || hijo === undefined || hijo === false ? null : (
+          <View style={[styles.celdaDeBarra, { minWidth: minimoPorControl }]}>{hijo}</View>
+        ),
+      )}
+      {accion === undefined ? null : <View style={styles.accionDeBarra}>{accion}</View>}
+    </View>
+  );
+}
