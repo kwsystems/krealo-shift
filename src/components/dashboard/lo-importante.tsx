@@ -9,6 +9,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import type { ClaveAccionable, PrioridadDelDia } from '@/features/dashboard/prioridad';
 import {
   borderWidth,
+  shadows,
   fontSize,
   radii,
   sizes,
@@ -219,10 +220,7 @@ function Secundario({
   const etiqueta = t(`home.headline.${destacado.clave}`, { count: destacado.count });
 
   const contenido = (
-    <View
-      style={[styles.secundario, { borderColor: paleta.border }]}
-      testID={`hoy-secundario-${destacado.clave}`}
-    >
+    <View style={styles.secundario} testID={`hoy-secundario-${destacado.clave}`}>
       <Row gap={spacing.xs} align="center">
         <Ionicons name={ICONO[destacado.clave]} size={16} color={paleta.fg} />
         <AppText variant="bodyStrong" style={{ color: paleta.fg }}>
@@ -268,13 +266,26 @@ const useEstilos = estilosDelTema((colors) => ({
     borderWidth: borderWidth.hairline,
     padding: spacing.lg,
   },
+  /*
+   * UN PLANO, NO UN PERFIL. Antes era un recuadro con borde de 1 px del color de su
+   * estado, y ahí estaba media pantalla de Inicio: el aviso urgente con borde rojo, dos
+   * fichas con borde, tres fichas más con borde y la gráfica con borde. Seis recuadros
+   * del mismo peso, uno detrás de otro, sin decir cuál se mira primero.
+   *
+   * Ahora se apoyan en `surface` sobre el lienzo, que YA las separa, y la sombra suave
+   * hace el resto. El estado sigue leyéndose —el icono conserva su color y la etiqueta
+   * dice lo que es— que es lo que importa: el color nunca fue la única señal.
+   *
+   * El aviso grande SÍ conserva su borde de color, y es deliberado: si todo grita, nada
+   * grita. La audacia se gasta en un sitio.
+   */
   secundario: {
     minWidth: 132,
     gap: spacing.xs,
     borderRadius: radii.card,
-    borderWidth: borderWidth.hairline,
     backgroundColor: colors.surface,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.base,
+    ...shadows.card,
   },
 }));

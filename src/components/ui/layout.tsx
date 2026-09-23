@@ -3,7 +3,7 @@ import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, radii, shadows, spacing } from '@/theme/tokens';
+import { radii, shadows, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
 import type { ColorSet } from '@/theme/tokens';
@@ -178,13 +178,29 @@ export function Row({
 const useEstilos = estilosDelTema((colors) => ({
   flex: { flex: 1 },
   container: { width: '100%', alignSelf: 'center' },
+  /*
+   * UN PLANO SE VE PORQUE ES UN PLANO, no porque lleve un marco dibujado.
+   *
+   * La tarjeta se apoya en `surface` sobre el lienzo, y esa diferencia de tono ya la
+   * separa en los dos temas (en claro blanco sobre #F7F7FA, en oscuro #1C1A24 sobre
+   * #131118). La sombra remata en claro; en oscuro no se ve y no hace falta, porque ahí
+   * el salto de color es mayor.
+   *
+   * SE QUITA EL BORDE porque era la mitad del problema de «demasiado básico»: con un
+   * perfil de 1 px en la tarjeta, otro en cada ficha de dentro y otro en cada chip, la
+   * pantalla era una pila de marcos del mismo peso y no había forma de saber qué mirar
+   * primero. Las fichas de dato se pasaron a plano el mismo día; dejar la tarjeta con
+   * marco habría dejado dos lenguajes conviviendo, que es peor que el problema original.
+   *
+   * Lo que SÍ conserva marco, y a propósito: el aviso importante de Inicio y el botón de
+   * peligro. Ahí el marco de color es información, no decoración.
+   */
   card: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,
-    borderWidth: borderWidth.hairline,
-    borderColor: colors.border,
     padding: spacing.lg,
     gap: spacing.md,
+    ...shadows.card,
   },
   row: { flexDirection: 'row' },
 }));

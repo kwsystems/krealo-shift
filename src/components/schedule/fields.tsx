@@ -125,15 +125,7 @@ export function StatTile({
   const styles = useEstilos();
   const palette = tone === undefined ? null : paletaDeEstado(colors)[tone];
   const content = (
-    <View
-      style={[
-        styles.tile,
-        {
-          backgroundColor: colors.surface,
-          borderColor: palette === null ? colors.border : palette.border,
-        },
-      ]}
-    >
+    <View style={styles.tile}>
       <Row gap={spacing.xs}>
         {icon !== undefined ? (
           <Ionicons name={icon} size={16} color={palette === null ? colors.ink500 : palette.fg} />
@@ -680,15 +672,34 @@ const useEstilos = estilosDelTema((colors) => ({
    * cifras y no como tarjetas sueltas.
    */
   tileWrap: { flexGrow: 1, flexBasis: 132, minWidth: 132 },
+  /*
+   * PLANO, NO PERFIL. Era un recuadro con borde de 1 px del color de su estado, y tres
+   * de estas seguidas convertían Inicio en una fila de marcos de colores que competían
+   * con el aviso de verdad —el de «no llegó a su turno»—. Medido en las capturas del
+   * 2026-09-23: seis recuadros del mismo peso, uno detrás de otro.
+   *
+   * Se apoya en `surface` sobre el lienzo, que ya las separa, más una sombra suave. El
+   * estado se sigue leyendo por el icono y por la etiqueta, que es lo que hay que
+   * conservar: el color nunca fue la única señal, y quien no distingue el verde del
+   * ámbar leía la etiqueta antes y la sigue leyendo ahora.
+   */
   tile: {
     flex: 1,
+    minWidth: 132,
+    /*
+     * LA ALTURA MÍNIMA NO ES ADORNO: sin ella la ficha se colapsa y la tarjeta de abajo
+     * se le monta encima. Lo comprobé rompiéndolo sin querer —quité el estilo entero
+     * para cambiar el fondo y me llevé esto por delante— y la captura siguiente enseñaba
+     * las tres fichas aplastadas con el número cortado.
+     */
     minHeight: sizes.touchTargetPreferred + spacing.lg,
+    justifyContent: 'center',
     gap: spacing.xs,
     borderRadius: radii.card,
-    borderWidth: borderWidth.hairline,
+    backgroundColor: colors.surface,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.base,
-    justifyContent: 'center',
+    ...shadows.card,
   },
   chipRow: {
     flexDirection: 'row',
@@ -724,18 +735,40 @@ const useEstilos = estilosDelTema((colors) => ({
   chipPressed: { backgroundColor: colors.primary100 },
   toggleRow: { minHeight: sizes.touchTargetPreferred },
   toggleText: { flex: 1, gap: spacing.xs },
+  /*
+   * MIDE LO QUE MIDE SU CONTENIDO, y antes ocupaba el ancho entero.
+   *
+   * Con `flex: 1` en cada segmento y sin `alignSelf`, el control de dos opciones
+   * «Semana / Día» se estiraba a los 1140 px del panel: un mando enorme para elegir
+   * entre dos cosas, que además empujaba la rejilla del horario más abajo todavía.
+   * Medido en la captura de 1440x900 del 2026-09-23.
+   *
+   * `flexWrap` para que en un teléfono estrecho con cuatro opciones envuelva en vez de
+   * comprimir las etiquetas hasta partirlas.
+   *
+   * Y SIN BORDE: se apoya en `hundido`, el plano nuevo. Un control dentro de una tarjeta
+   * que trae su propio perfil es la caja dentro de la caja; el plano hundido lo agrupa
+   * igual de claro y no añade una línea más a la pantalla.
+   */
   segmentWrapper: {
     flexDirection: 'row',
-    backgroundColor: colors.canvas,
+    alignSelf: 'flex-start',
+    flexWrap: 'wrap',
+    maxWidth: '100%',
+    backgroundColor: colors.hundido,
     borderRadius: radii.button,
-    borderWidth: borderWidth.hairline,
-    borderColor: colors.border,
     padding: spacing.xs,
     gap: spacing.xs,
   },
   segment: {
-    flex: 1,
     minHeight: sizes.touchTargetMin,
+    /*
+     * ANCHO MÍNIMO TÁCTIL, no solo alto. Al quitar el `flex: 1` que estiraba los
+     * segmentos, una etiqueta corta se quedó en 35 px de ancho —«Día», medido por
+     * `responsive:check` a 1920 px— o sea un objetivo por debajo del mínimo de 44. Alto
+     * suficiente y ancho insuficiente sigue siendo un botón que se falla al tocarlo.
+     */
+    minWidth: sizes.touchTargetMin,
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: radii.input,
