@@ -100,7 +100,7 @@ node scripts/generar-iconos.mjs                         # regenera icono, splash
 node scripts/render-check.mjs <dir-export>               # ¿pinta cada ruta sin errores de consola?
 node scripts/interaccion-check.mjs <dir-export>          # abre la app y la USA: teclea un PIN, toca botones
 node scripts/a11y-check.mjs <dir-export>                # contraste, nombres, objetivos táctiles, texto 150%
-node scripts/e2e-ids-check.mjs                          # testIDs referenciados que ya no existen
+node scripts/campos-muertos-check.mjs                    # campos que nacen con un valor fijo y nadie llena
 node scripts/coherencia-check.mjs                       # claves i18n huérfanas y controles que no hacen nada
 node scripts/capturas-store.mjs <dir-export>            # capturas para la App Store, en los tamaños exactos
 node functions/scripts/sembrar.mjs                      # crea las colecciones de Firestore
@@ -550,10 +550,17 @@ entorno y reemplaza `fetch` por uno que aquí no funciona. Viven en
 Lo demás: `npm test` cubre la máquina de estados, las utilidades de tiempo, la paridad
 de idiomas y los componentes; y `npx tsc -p functions` cubre que el servidor compile.
 
-### Pruebas de flujo (Maestro)
+### Los ocho recorridos críticos
 
-Los ocho flujos críticos están en `e2e/` como especificaciones YAML de Maestro.
-Cómo instalarlo, cómo correrlos y qué requisitos tienen: `e2e/README.md`.
+Estaban en `e2e/` como flujos de Maestro y **nunca se ejecutaron**: Maestro maneja un
+simulador o un aparato real, no hay simulador de iOS en un runner de Linux, y desde que
+el reloj es la web tampoco hay aplicación nativa que manejar. Ocho pruebas que no corren
+protegen lo mismo que ocho que no existen.
+
+Los recorridos siguen vivos en `docs/RECORRIDOS.md`, cada uno con **lo que de verdad lo
+cubre hoy** y, donde no hay nada, dicho sin adornos. Quedan dos huecos escritos: copiar y
+publicar una semana de horario, y el viaje completo sin red —que además no se puede
+probar, porque fichar sin red no existe en web.
 
 ## Modo kiosco de verdad: Acceso guiado de iPadOS
 
@@ -700,7 +707,7 @@ no tenerla, porque se usa para decidir qué hacer.
   sincronización y la validación del PIN sin conexión están implementadas
   (`src/lib/offline/`) y con pruebas, pero el flujo completo —cortar la red,
   fichar, recuperarla y comprobar que sincroniza **una sola vez**— solo se puede
-  confirmar en un iPad real: es el flujo E2E 2 de `e2e/`;
+  confirmar en un iPad real: es el recorrido 2 de `docs/RECORRIDOS.md`;
 - **`EAS_PROJECT_ID`**: sin él la app no puede pedir token de push, y el panel lo
   dice con un aviso honesto en vez de un botón que fallaría;
 - **capturas para la App Store del PANEL administrativo**: `scripts/capturas-store.mjs`
@@ -782,7 +789,6 @@ app/            rutas de Expo Router: kiosco, acceso y panel administrativo
 src/            componentes, dominio, i18n, stores, tema y utilidades
 functions/      Cloud Functions, reglas de negocio del servidor y scripts de arranque
 scripts/        comprobaciones del paquete web (render, a11y, contraste, interaccion)
-e2e/            flujos críticos como especificaciones de Maestro
 docs/           DECISIONES.md y referencias de diseño de solo lectura
 assets/         iconos, splash y fuentes
 app.config.ts   única fuente de configuración: nombre, bundle id, permisos, plugins
@@ -796,6 +802,6 @@ eas.json        perfiles development, preview y production
 | `SECURITY.md`        | modelo de amenazas, secretos, PIN, credenciales del kiosco, retención, reporte |
 | `docs/DECISIONES.md` | decisiones técnicas y desviaciones, con su motivo                              |
 | `firestore.rules`    | el modelo de permisos, y las tres diferencias con RLS que importan             |
-| `e2e/README.md`      | cómo correr los flujos de Maestro y qué falta para que pasen                   |
+| `docs/RECORRIDOS.md` | los ocho recorridos críticos y qué los cubre hoy                               |
 | `docs/reference/`    | referencias de diseño traídas del Publisher, de solo lectura                   |
 | `CLAUDE.md`          | reglas del proyecto y de gestión de tareas para agentes                        |

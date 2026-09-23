@@ -61,7 +61,7 @@ jobs:
       # estaban sin formatear: eso hace que `npm run format` —que el README documenta—
       # produzca un diff enorme de ruido a quien lo ejecute por primera vez.
       # `.prettierignore` deja fuera lo que no es codigo del proyecto: los 219 skills,
-      # las referencias de diseno, el instalador generado y los flujos de Maestro.
+      # las referencias de diseno y el instalador generado.
       - name: Formato
         run: npx prettier --check .
 
@@ -144,12 +144,6 @@ jobs:
       # equivocado no rompe ninguna prueba, solo se ve raro en un iPad.
       - name: Comprobar que los iconos estan al dia
         run: node scripts/generar-iconos.mjs --verificar
-
-      # Que los flujos de e2e/ apunten a testID que existen. No hay simulador de iOS
-      # aqui, asi que los flujos no se ejecutan: sin esto, un id mal escrito no se
-      # detecta nunca y e2e/ pasa a ser documentacion equivocada.
-      - name: Comprobar los testID de los flujos
-        run: node scripts/e2e-ids-check.mjs
 
       # Lo declarado que nadie usa, y los controles que no hacen nada. Las dos cosas se
       # encontraron a mano despues de meses, y tres de las claves huerfanas no eran
@@ -316,46 +310,3 @@ jobs:
           name: capturas-inicio
           path: capturas
           if-no-files-found: warn
-
-  flujos-e2e:
-    name: Sintaxis de los flujos de Maestro
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-
-    steps:
-      - name: Traer el código
-        uses: actions/checkout@v4
-
-      # No se ejecutan los flujos —eso necesita un simulador de iOS y un build—
-      # pero un YAML roto se detecta aquí y no cuando alguien intenta correrlos.
-      # Los flujos son dos documentos YAML (cabecera + comandos), así que se leen
-      # con `safe_load_all`; los subflujos son un solo documento.
-      - name: Validar el YAML
-        run: |
-          python3 - <<'PY'
-          import glob
-          import sys
-          import yaml
-
-          errores = []
-          archivos = sorted(glob.glob('e2e/**/*.yaml', recursive=True))
-          if not archivos:
-              sys.exit('No se encontró ningún flujo en e2e/')
-
-          for ruta in archivos:
-              try:
-                  documentos = list(yaml.safe_load_all(open(ruta, encoding='utf-8')))
-              except yaml.YAMLError as error:
-                  errores.append(f'{ruta}: {error}')
-                  continue
-              if not documentos:
-                  errores.append(f'{ruta}: archivo vacío')
-                  continue
-              print(f'ok  {ruta}  ({len(documentos)} documento(s))')
-
-          if errores:
-              print('\nFallos:')
-              for error in errores:
-                  print(f'  {error}')
-              sys.exit(1)
-          PY

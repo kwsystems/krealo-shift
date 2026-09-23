@@ -854,6 +854,26 @@ defecto. `default_locale` se queda donde estaba.
   al lado: el control lo desmintió, porque al hacer que el hook ignorara la sede la prueba
   seguía pasando. Una regla probada por su copia no está probada.
 
+### Los ocho flujos de Maestro se borran; los recorridos se quedan escritos
+
+`e2e/` fuera, y con él `e2e-ids-check.mjs` y el trabajo de CI que validaba su sintaxis.
+Los ocho recorridos pasan a `docs/RECORRIDOS.md` con lo que de verdad los cubre hoy.
+
+- **Motivo:** nunca se ejecutaron. Maestro maneja un simulador o un aparato real, no hay
+  simulador de iOS en un runner de Linux, y desde que el reloj es la web tampoco hay
+  aplicación nativa que manejar. **Ocho pruebas que no corren protegen exactamente lo
+  mismo que ocho que no existen**, y encima gastaban dos pasos de CI validando los
+  `testID` y el YAML de algo que no se ejecuta.
+- **Por qué no se portan a Playwright (la opción 2):** al mirar uno por uno, seis de los
+  ocho ya están cubiertos por las pruebas con emulador y los arneses de Chromium.
+  Portarlos sería reescribir cobertura que ya existe. Los otros dos se quedan como huecos
+  **escritos**, que es más de lo que había.
+- **Los dos huecos:** copiar y publicar una semana de horario (recorrido 6), y el viaje
+  completo sin red (recorrido 2) — este último no se puede probar hoy porque
+  `permiteFicharSinRed` es `false` en web; vuelve el día que haya app nativa.
+- **Costo aceptado:** se pierde el YAML. No se pierde el pensamiento, que era lo que
+  valía.
+
 ---
 
 ## Cómo agregar una entrada
