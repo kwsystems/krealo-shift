@@ -833,6 +833,27 @@ sitio con otra cosa.
   (`summary: { shiftEndsAt: null }`) y un objeto vacío (`paidBreakReasons: {}`) se
   escapaban en la primera versión.
 
+### El inicio de semana baja a la sede; el idioma se queda en la empresa
+
+`weekStartsOn` pasa a ser un ajuste de cada sede, con `null` = «igual que la empresa» por
+defecto. `default_locale` se queda donde estaba.
+
+- **Motivo del primero:** decide dónde empieza y acaba cada semana en Horario y en Horas,
+  o sea sobre qué rango se cuentan las horas extra semanales. Es un número que sale en
+  dinero, y con tiendas en Perú y Canadá la convención puede no coincidir.
+- **Motivo del segundo:** cada aparato ya puede cambiar el idioma por su cuenta con el
+  selector del reloj, y la elección se queda en ese aparato. Bajarlo a la sede sería
+  añadir un ajuste para algo que ya tiene salida.
+- **Por qué `null` y no un día de fábrica:** una sede creada antes de que esto existiera
+  no trae el campo. Si cayera al lunes por defecto, una empresa configurada a domingo
+  vería cambiar sus semanas —y sus horas extra— sin que nadie tocara nada.
+- **`??` y no `||`:** el domingo es `0`. Con `||`, una sede configurada en domingo caería
+  a la de la empresa. Hay prueba de eso.
+- **La regla vive fuera del hook** (`inicioDeSemanaDe`) para poder probarla de verdad. La
+  primera versión la dejaba dentro del `return` y la prueba reescribía la misma expresión
+  al lado: el control lo desmintió, porque al hacer que el hook ignorara la sede la prueba
+  seguía pasando. Una regla probada por su copia no está probada.
+
 ---
 
 ## Cómo agregar una entrada

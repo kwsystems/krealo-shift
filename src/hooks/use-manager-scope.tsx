@@ -22,6 +22,25 @@ import { TABLES } from '@/lib/firebase/tables';
  * estado local; el resto lo gobierna TanStack Query.
  */
 
+/**
+ * De quién es el inicio de semana: de la sede si lo tiene puesto, y si no de la empresa.
+ *
+ * ESTÁ FUERA DEL HOOK A PROPÓSITO, y es la diferencia entre una prueba que mide y una
+ * que se mide a sí misma. La primera versión dejaba la expresión dentro del `return` del
+ * hook y la prueba reescribía la misma regla al lado: el control lo desmintió —al hacer
+ * que el hook ignorara la sede, la prueba seguía pasando tan contenta—. Una regla
+ * probada por su copia no está probada.
+ *
+ * `??` Y NO `||`, que aquí no es estilo: el domingo es `0`, y con `||` una sede
+ * configurada en domingo caería a la de la empresa.
+ */
+export function inicioDeSemanaDe(
+  deLaSede: number | null | undefined,
+  deLaEmpresa: number | null | undefined,
+): number {
+  return deLaSede ?? deLaEmpresa ?? 1;
+}
+
 export const DEFAULT_LOCATION_SETTINGS = {
   pinLength: 6,
   photoEnabled: false,
@@ -31,6 +50,22 @@ export const DEFAULT_LOCATION_SETTINGS = {
   allowUnscheduledShifts: true,
   timeFormat: '24h' as TimeFormatPreference,
   requiredBreakMinutes: 0,
+  /**
+   * El día en que empieza la semana EN ESTA SEDE, o `null` para seguir a la empresa.
+   *
+   * `null` POR DEFECTO Y NO UN DÍA CONCRETO. Decide dónde empieza y acaba cada semana en
+   * Horario y en Horas, o sea sobre qué rango se calculan las horas extra semanales. Si
+   * una sede creada antes de que esto existiera pasara a valer 1 de golpe, una empresa
+   * configurada a domingo vería cambiar sus semanas —y sus horas extra— sin que nadie
+   * tocara nada. `null` significa «lo que diga la empresa», que es lo que pasaba hasta
+   * hoy y por tanto lo que no rompe nada.
+   *
+   * Se baja a la sede porque con tiendas en dos países la convención puede no coincidir,
+   * y esto es un número que sale en dinero. El idioma, en cambio, se queda en la empresa:
+   * cada aparato ya puede cambiarlo por su cuenta con el selector del reloj, así que no
+   * hacía falta.
+   */
+  weekStartsOn: null as number | null,
   /**
    * Cuánto antes del fin del turno el reloj pregunta POR QUÉ se va (decisión de Andree,
    * 2026-09-22: preguntar solo pasado un umbral).
@@ -102,6 +137,7 @@ const locationSettingsSchema = z
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.earlyDepartureReasonMinutes),
+    weekStartsOn: z.number().int().min(0).max(6).nullable().default(null),
     dailyOvertimeThresholdMinutes: z
       .number()
       .int()
@@ -396,6 +432,6 @@ export function useManagerScope(): ManagerScope {
     timezone: location?.timezone ?? organization?.default_timezone ?? 'America/Lima',
     timeFormat: location?.settings.timeFormat ?? DEFAULT_LOCATION_SETTINGS.timeFormat,
     settings: location?.settings ?? DEFAULT_LOCATION_SETTINGS,
-    weekStartsOn: organization?.week_starts_on ?? 1,
+    weekStartsOn: inicioDeSemanaDe(location?.settings.weekStartsOn, organization?.week_starts_on),
   };
 }

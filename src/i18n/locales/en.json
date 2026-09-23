@@ -719,7 +719,9 @@
     "earlyDepartureReasonMinutes": "Ask for a reason when leaving this many minutes early",
     "locationTimezone": "Time zone for this location",
     "locationTimezoneHint": "Decides which day each shift belongs to in reports. e.g. {{ejemplos}}",
-    "timezoneInvalid": "That time zone does not exist. Write it as \"Region/City\", not \"GMT-5\"."
+    "timezoneInvalid": "That time zone does not exist. Write it as \"Region/City\", not \"GMT-5\".",
+    "locationWeekStartsOn": "Week starts on (this location)",
+    "weekStartsOnInherit": "Same as the company"
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",

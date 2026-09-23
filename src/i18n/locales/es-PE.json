@@ -719,7 +719,9 @@
     "earlyDepartureReasonMinutes": "Preguntar motivo al salir antes de (minutos)",
     "locationTimezone": "Zona horaria de esta sede",
     "locationTimezoneHint": "Decide a qué día pertenece cada jornada en los reportes. Ej.: {{ejemplos}}",
-    "timezoneInvalid": "Esa zona horaria no existe. Escríbela como «Región/Ciudad», no como «GMT-5»."
+    "timezoneInvalid": "Esa zona horaria no existe. Escríbela como «Región/Ciudad», no como «GMT-5».",
+    "locationWeekStartsOn": "La semana empieza en (esta sede)",
+    "weekStartsOnInherit": "Igual que la empresa"
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",

@@ -492,6 +492,34 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
         testID="location-unscheduled"
       />
 
+      {/*
+        EL INICIO DE SEMANA DE ESTA SEDE, con «Igual que la empresa» de primera opción y
+        por defecto.
+
+        Decide dónde empieza y acaba cada semana en Horario y en Horas, o sea sobre qué
+        rango se cuentan las horas extra semanales: es un número que sale en dinero. Se
+        baja a la sede porque con tiendas en dos países la convención puede no coincidir,
+        y heredar de la empresa sigue siendo lo normal.
+      */}
+      <SelectField
+        label={t('settings.locationWeekStartsOn')}
+        value={settings.weekStartsOn === null ? '' : String(settings.weekStartsOn)}
+        options={[
+          { value: '', label: t('settings.weekStartsOnInherit') },
+          ...[0, 1, 2, 3, 4, 5, 6].map((day) => ({
+            value: String(day),
+            label: t(`settings.weekDay${day}`),
+          })),
+        ]}
+        onChange={(valor) =>
+          setSettings((current) => ({
+            ...current,
+            weekStartsOn: valor === '' ? null : Number(valor),
+          }))
+        }
+        testID="location-week-start"
+      />
+
       <SegmentedControl
         label={t('settings.timeFormat')}
         value={settings.timeFormat}
