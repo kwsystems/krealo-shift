@@ -871,3 +871,139 @@ export const managerReclassifyDeparture = onCall(async (request) => {
 
   return { minutes: minutos, breakType, workSessionId: sesionCortada.docs[0]?.id ?? null };
 });
+
+// ---------------------------------------------------------------------------
+// Publicar el horario de una semana
+// ---------------------------------------------------------------------------
+
+/**
+ * Publica los turnos de una semana y SELLA su version en el servidor (§11.3 pasos 6-7).
+ *
+ * POR QUE EXISTE ESTA FUNCION. El cliente publicaba por su cuenta: ponia los turnos en
+ * `published` e insertaba la fila de publicacion con la version siguiente. Lo que NUNCA
+ * escribia era la version EN EL TURNO, y de eso depende la etiqueta «Cambiado»:
+ *
+ *     shift.status === 'draft' && shift.publication_version > 0
+ *
+ * O sea «esto ya estuvo publicado y ahora vuelve a ser borrador». Sin el sello, esa
+ * condicion no se cumplia jamas y un turno que moviste DESPUES de publicarlo se veia
+ * exactamente igual que uno nuevo. Quien mira el horario no distinguia «esto es nuevo»
+ * de «esto cambio y el equipo ya lo habia visto de otra forma», que es justo la
+ * diferencia que importa antes de volver a publicar.
+ *
+ * EN LA DEMOSTRACION SI SALIA, porque la semilla escribe `publication_version: 7` a mano.
+ * Otro caso de algo que funciona en la demostracion y no en la realidad.
+ *
+ * Y POR QUE NO SE ARREGLO EN EL CLIENTE, que era un `update` mas: porque el propio
+ * comentario de `publishShifts` decia que la version «la pone un trigger de la base, no
+ * el cliente: las tardanzas se miden contra el turno publicado vigente y esa version no
+ * puede depender de lo que envie una app». Ese trigger era de Postgres y se fue con la
+ * migracion a Firebase sin que nada lo reemplazara. El comentario seguia describiendo un
+ * mecanismo que ya no existia. Esto es ese reemplazo.
+ *
+ * TODO EN UNA TRANSACCION, y no es adorno: la version siguiente se calcula leyendo la
+ * ultima. Dos gerentes publicando la misma semana a la vez leerian las dos la misma y
+ * escribirian las dos la misma, y entonces habria dos publicaciones distintas diciendo
+ * ser la numero 4.
+ */
+export const publishShiftsForWeek = onCall(async (request) => {
+  const uid = requireUid(request);
+  const locationId = textoRequerido(request.data?.p_location_id, 'p_location_id');
+  const weekStart = textoRequerido(request.data?.p_week_start, 'p_week_start');
+  const shiftIds = Array.isArray(request.data?.p_shift_ids)
+    ? (request.data.p_shift_ids as string[])
+    : [];
+
+  if (shiftIds.length === 0) {
+    throw new HttpsError('invalid-argument', 'No hay turnos que publicar.');
+  }
+
+  const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+  if (location === undefined) throw new HttpsError('not-found', 'Esa ubicación no existe.');
+
+  const organizationId = location.organization_id as string;
+  const membership = await membershipOf(uid, organizationId);
+  requireManagesLocation(membership, locationId);
+
+  const version = await db.runTransaction(async (tx) => {
+    /*
+     * TODAS LAS LECTURAS ANTES QUE LAS ESCRITURAS: Firestore lo exige dentro de una
+     * transaccion, y saltarselo no da un error claro sino uno sobre el orden.
+     */
+    const publicaciones = await tx.get(
+      db
+        .collection(COLLECTIONS.shiftPublications)
+        .where('organization_id', '==', organizationId)
+        .where('location_id', '==', locationId)
+        .where('week_starts_on', '==', weekStart)
+        .orderBy('publication_version', 'desc')
+        .limit(1),
+    );
+
+    const turnos = await Promise.all(
+      shiftIds.map((id) => tx.get(db.collection(COLLECTIONS.shifts).doc(id))),
+    );
+
+    const siguiente = Number(publicaciones.docs[0]?.data().publication_version ?? 0) + 1;
+    const ahora = nowISO();
+
+    const publicados: string[] = [];
+    for (const doc of turnos) {
+      const turno = doc.data();
+      if (turno === undefined) continue;
+
+      /*
+       * QUE EL TURNO SEA DE ESTA SEDE, comprobado aqui y no confiando en la lista que
+       * manda el cliente. Sin esto, alguien que gestiona una tienda podria publicar —y
+       * sellar— turnos de otra pasando sus ids.
+       */
+      if (turno.location_id !== locationId) {
+        throw new HttpsError('permission-denied', 'Ese turno no es de esta ubicación.');
+      }
+      // Solo los borradores: republicar uno ya publicado subiria su version sin motivo.
+      if (turno.status !== 'draft') continue;
+
+      tx.update(doc.ref, {
+        status: 'published',
+        /*
+         * EL SELLO, que es todo el punto de esta funcion. `publication_version` en el
+         * TURNO es lo que hace que la etiqueta «Cambiado» pueda salir algun dia: al
+         * editarlo despues, el turno vuelve a `draft` y conserva esta version, y esa
+         * combinacion es la que la pantalla busca.
+         */
+        publication_version: siguiente,
+        published_at: ahora,
+        updated_by: uid,
+        updated_at: ahora,
+      });
+      publicados.push(doc.id);
+    }
+
+    if (publicados.length === 0) {
+      throw new HttpsError('failed-precondition', 'Ninguno de esos turnos estaba en borrador.');
+    }
+
+    tx.create(db.collection(COLLECTIONS.shiftPublications).doc(), {
+      organization_id: organizationId,
+      location_id: locationId,
+      week_starts_on: weekStart,
+      publication_version: siguiente,
+      published_by: uid,
+      published_at: ahora,
+      changed_shift_ids: publicados,
+      created_at: ahora,
+    });
+
+    return { version: siguiente, publicados: publicados.length };
+  });
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'shifts_published',
+    entityType: 'location',
+    entityId: locationId,
+  });
+
+  return version;
+});

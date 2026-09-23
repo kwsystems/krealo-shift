@@ -139,6 +139,17 @@ export const RPC = {
    * `time_adjustments`, como toda corrección.
    */
   managerReclassifyDeparture: 'manager_reclassify_departure',
+  /**
+   * Publicar el horario de una semana (§11.3 pasos 6-7).
+   *
+   * LA VERSIÓN LA SELLA EL SERVIDOR. El cliente publicaba por su cuenta y nunca escribía
+   * `publication_version` en el turno, así que la etiqueta «Cambiado» —que es
+   * `status === 'draft' && publication_version > 0`— no podía salir jamás. Y no se
+   * arregló con un `update` más desde el panel porque el propio código decía que esa
+   * versión no puede depender de lo que envíe una app: las tardanzas se miden contra el
+   * turno publicado vigente.
+   */
+  publishShiftsForWeek: 'publish_shifts_for_week',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

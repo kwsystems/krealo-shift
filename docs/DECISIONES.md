@@ -874,6 +874,30 @@ Los ocho recorridos pasan a `docs/RECORRIDOS.md` con lo que de verdad los cubre 
 - **Costo aceptado:** se pierde el YAML. No se pierde el pensamiento, que era lo que
   valía.
 
+### Publicar el horario lo hace el servidor, y sella la versión en el turno
+
+`publishShiftsForWeek` es una Cloud Function que, en una transacción, pasa los turnos a
+`published`, les escribe `publication_version` y `published_at`, y crea la fila de
+publicación.
+
+- **Motivo:** el cliente publicaba por su cuenta y **nunca escribía la versión en el
+  turno**. De eso depende la etiqueta «Cambiado» (`status === 'draft' &&
+  publication_version > 0`), así que esa condición no se cumplía jamás y un turno movido
+  después de publicarlo se veía igual que uno nuevo. En la demostración sí salía, porque
+  la semilla escribe la versión a mano — otro «funciona en la demo y no en la realidad».
+- **Por qué no se arregló con un `update` más en el cliente:** el comentario que había en
+  `publishShifts` decía que la versión «la pone un trigger de la base, no el cliente: las
+  tardanzas se miden contra el turno publicado vigente y esa versión no puede depender de
+  lo que envíe una app». Tenía razón. Ese trigger era de Postgres y se fue con la
+  migración sin que nada lo reemplazara; esta función es el reemplazo.
+- **De paso arregla una carrera:** la versión siguiente se calculaba leyendo la última,
+  sin transacción. Dos gerentes publicando la misma semana a la vez leían las dos la misma
+  y escribían las dos la misma.
+- **No se confía en la lista de ids del cliente:** cada turno se comprueba que sea de esa
+  sede. Sin eso, quien gestiona una tienda podría publicar y sellar turnos de otra.
+- **Un turno ya publicado no se resella:** subirle la versión no significaría nada y
+  ensuciaría `changed_shift_ids`.
+
 ---
 
 ## Cómo agregar una entrada

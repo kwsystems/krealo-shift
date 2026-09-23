@@ -3,9 +3,15 @@ import { z } from 'zod';
 import { docId } from '@/lib/firebase/ids';
 
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
-import { AdminError, execute, selectRows } from '@/hooks/use-admin-query';
+import {
+  AdminError,
+  execute,
+  requireClient,
+  selectRows,
+  toAdminError,
+} from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
-import { TABLES } from '@/lib/firebase/tables';
+import { RPC, TABLES } from '@/lib/firebase/tables';
 
 /**
  * Turnos y publicaciones (§11.3).
@@ -316,9 +322,21 @@ export async function copyPreviousWeek(params: {
 /**
  * Publica los turnos indicados y deja constancia de qué cambió (§11.3 pasos 6-7).
  *
- * La versión de publicación de cada turno la pone un trigger de la base, no el
- * cliente: las tardanzas se miden contra el turno publicado vigente y esa
- * versión no puede depender de lo que envíe una app.
+ * LO HACE TODO EL SERVIDOR, en una transacción. Antes se hacía aquí: se ponían los
+ * turnos en `published` y se insertaba la fila de publicación con la versión siguiente.
+ * Faltaba lo importante —sellar `publication_version` EN EL TURNO— y de eso depende la
+ * etiqueta «Cambiado», que por tanto no salía nunca en producción.
+ *
+ * No se arregló añadiendo un `update` más aquí, y esa fue la decisión: el comentario que
+ * había en esta misma función decía que la versión «la pone un trigger de la base, no el
+ * cliente: las tardanzas se miden contra el turno publicado vigente y esa versión no
+ * puede depender de lo que envíe una app». Tenía razón. Ese trigger era de Postgres y se
+ * fue con la migración a Firebase sin que nada lo reemplazara; `publishShiftsForWeek` es
+ * el reemplazo.
+ *
+ * Y de paso arregla una carrera que había: la versión siguiente se calculaba leyendo la
+ * última, sin transacción. Dos gerentes publicando la misma semana a la vez leían las dos
+ * la misma y escribían las dos la misma.
  */
 export async function publishShifts(params: {
   organizationId: string;
@@ -326,30 +344,19 @@ export async function publishShifts(params: {
   weekStart: string;
   shiftIds: string[];
 }): Promise<void> {
-  const { organizationId, locationId, weekStart, shiftIds } = params;
-  if (shiftIds.length === 0) return;
+  if (params.shiftIds.length === 0) return;
 
-  await execute((db) =>
-    db
-      .from(TABLES.shifts)
-      .update({ status: 'published', updated_by: actorId() })
-      .in('id', shiftIds)
-      .eq('status', 'draft'),
-  );
-
-  const previous = await fetchPublications({ organizationId, locationId, weekStart });
-  const nextVersion = (previous[0]?.publication_version ?? 0) + 1;
-
-  await execute((db) =>
-    db.from(TABLES.shiftPublications).insert({
-      organization_id: organizationId,
-      location_id: locationId,
-      week_starts_on: weekStart,
-      publication_version: nextVersion,
-      published_by: actorId(),
-      changed_shift_ids: shiftIds,
-    }),
-  );
+  const db = requireClient();
+  try {
+    const { error } = await db.rpc(RPC.publishShiftsForWeek, {
+      p_location_id: params.locationId,
+      p_week_start: params.weekStart,
+      p_shift_ids: params.shiftIds,
+    });
+    if (error !== null) throw toAdminError(error);
+  } catch (error) {
+    throw toAdminError(error);
+  }
 }
 
 export async function fetchPublications(params: {
