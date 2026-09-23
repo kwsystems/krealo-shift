@@ -900,6 +900,52 @@ publication_version > 0`), así que esa condición no se cumplía jamás y un tu
 
 ---
 
+## Dos empresas en una sola app: cómo se llega a la segunda (2026-09-23)
+
+Andree tiene dos negocios —Universo Tutu en Perú, Univers Toutou en Canadá— y preguntó
+cómo se manejarían hoy. Se podía contestar «la base lo soporta» y sería verdad y no
+serviría: faltaban las dos puertas, y las dos son de las que no dan error.
+
+- **No había alta de empresa.** `firestore.rules` dice `allow create, delete: if false`
+  sobre `organizations` con el comentario «solo servidor», y en el servidor no había nada
+  que la creara: dos lecturas de `COLLECTIONS.organizations` en todo el proyecto y ningún
+  `create`. La empresa que existe se escribió a mano en la consola de Firebase.
+  Ahora es `createOrganization`, y **solo puede llamarla quien ya es `owner` de otra
+  empresa activa**. Dejarla abierta a cualquier usuario autenticado la convertiría en un
+  formulario para crear empresas infinitas desde la consola del navegador; esta app es la
+  herramienta de una agencia, no un producto de autoservicio. El primer dueño de todos
+  sigue creándose a mano, y es correcto: una función que conceda el primer permiso la
+  puede llamar cualquiera.
+- **Y aunque existiera, no se llegaba.** El panel leía tus membresías con `.limit(1)`
+  ordenado por `created_at` ascendente: se quedaba con la **más vieja** y descartaba el
+  resto en silencio. La segunda empresa era invisible —ni un error, ni una pista— y no
+  había selector en ninguna pantalla.
+
+**`soleMembership` se borró, no se arregló.** Se llamaba literalmente «la única
+membresía» y era la trampa misma: con dos no falla, contesta sobre la equivocada. Su uso
+en `viewTimeAdjustmentsWithAuthor` habría devuelto el historial de correcciones **vacío,
+sin error**, al mirar la hoja de horas de la segunda empresa. Ahora la organización sale
+de la sesión que se pide y la membresía se comprueba allí.
+
+- **La elección se guarda en el dispositivo**, en las preferencias, no en un `useState`:
+  con estado local el selector funcionaba hasta que recargabas, y en web «recargar» es
+  cada pestaña nueva. La tarea lo decía sin rodeos: «si cada recarga vuelve a la primera,
+  el selector no sirve de nada».
+- **De paso, `persist` dejó de construirse a mano en cada setter.** Eran tres campos
+  repetidos cuatro veces; con el cuarto se vuelve una trampa, porque el setter que
+  olvidara uno lo **borraría** del almacenamiento sin fallar en nada: cambiar el tema te
+  devolvería a la primera empresa, con la causa a cuatro funciones del síntoma.
+- **Lo que NO arregla nada, aunque parezca:** olvidar la sede al cambiar de empresa. Lo
+  escribí como la razón de que no se rompa y probé a quitarlo: todo siguió en verde,
+  porque la validez de la sede elegida ya se comprueba contra la lista de la empresa
+  actual. La línea se queda por intención y limpieza, no por seguridad.
+
+Lo que sigue siendo decisión de Andree —una empresa con cinco sedes ahora o dos de
+verdad, si hace falta francés, y cómo se llama la única mientras tanto— está en la tarea
+de definición del Publisher, no aquí.
+
+---
+
 ## Cómo agregar una entrada
 
 Una decisión entra acá si alguien podría querer revertirla sin conocer el motivo:

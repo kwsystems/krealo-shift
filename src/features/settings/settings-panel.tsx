@@ -207,6 +207,26 @@ function OrganizationCard({
 
   return (
     <FormCard collapsible title={t('settings.organization')}>
+      {/*
+        EL SELECTOR DE EMPRESA, y solo si hay MÁS DE UNA.
+        Con una sola es un desplegable de un elemento: ruido que sugiere que hay algo que
+        elegir cuando no lo hay. Y hasta el 2026-09-23 no podía existir por otra razón: el
+        panel leía tus membresías con `.limit(1)` ordenado por fecha y se quedaba con la
+        más vieja, así que una segunda empresa era invisible aunque existiera.
+      */}
+      {scope.organizations.length > 1 ? (
+        <SelectField
+          label={t('settings.organizationPick')}
+          value={scope.organization?.id ?? ''}
+          options={scope.organizations.map((empresa) => ({
+            value: empresa.id,
+            label: empresa.name,
+          }))}
+          onChange={scope.setOrganizationId}
+          testID="organization-pick"
+        />
+      ) : null}
+
       <FormField
         label={t('settings.orgName')}
         value={name}
@@ -298,7 +318,171 @@ function OrganizationCard({
         loading={mutations.saveOrganization.isPending}
         testID="org-save"
       />
+
+      {/*
+        DAR DE ALTA OTRA EMPRESA. Solo el propietario, porque es la única puerta de
+        creación que hay y no puede quedar abierta: la función del servidor comprueba lo
+        mismo antes de escribir nada, y esto es lo que evita ofrecer un botón que va a
+        contestar «no tienes permiso».
+
+        Hasta hoy no existía de ninguna forma: la regla de Firestore dice «solo
+        servidor» y en el servidor no había nada que la creara, así que la empresa que
+        hay se escribió a mano en la consola de Firebase. Andree tiene dos negocios
+        —Perú y Canadá— y el segundo no tenía por dónde entrar.
+      */}
+      {scope.role === 'owner' ? <NuevaEmpresa /> : null}
     </FormCard>
+  );
+}
+
+/**
+ * El formulario de alta de empresa.
+ *
+ * SEPARADO EN SU PROPIO COMPONENTE porque tiene cinco estados propios y la tarjeta de
+ * organización ya tiene cuatro: juntos, un `setState` de este repintaría el formulario
+ * de al lado y sería fácil confundir los campos de una empresa con los de la otra
+ * leyendo el código.
+ *
+ * NO CAMBIA A LA EMPRESA NUEVA AL CREARLA, a propósito. Quien la crea está configurando
+ * la que tiene delante; saltar de empresa por haber rellenado un formulario dejaría la
+ * pantalla hablando de otro negocio sin haberlo pedido. Aparece en el selector, que es
+ * donde se elige.
+ */
+function NuevaEmpresa() {
+  const { t } = useTranslation();
+  const scope = useManagerScope();
+  const mutations = useSettingsMutations(scope.organization?.id ?? null);
+
+  const [nombre, setNombre] = useState('');
+  const [zona, setZona] = useState('');
+  const [sede, setSede] = useState('');
+  const [locale, setLocale] = useState<(typeof SUPPORTED_LANGUAGES)[number]>(
+    SUPPORTED_LANGUAGES[0],
+  );
+  const [inicioDeSemana, setInicioDeSemana] = useState('1');
+  const [creada, setCreada] = useState<string | null>(null);
+
+  /*
+   * LA ZONA SE PIDE VACÍA, sin proponer la de la empresa que estás mirando. Es la misma
+   * lección que la sede nueva, y aquí más fuerte: una empresa nueva casi siempre está
+   * en OTRO país —es el motivo para tener dos— así que rellenarla con Lima acertaría
+   * justo en el caso que no existe.
+   */
+  const zonaValida = esZonaValida(zona);
+
+  const dias = [0, 1, 2, 3, 4, 5, 6].map((dia) => ({
+    value: String(dia),
+    label: t(`settings.weekDay${dia}` as const),
+  }));
+
+  return (
+    <Stack gap={spacing.sm}>
+      <AppText variant="bodyStrong">{t('settings.addOrganization')}</AppText>
+      <AppText variant="help" tone="subtle">
+        {t('settings.addOrganizationHint')}
+      </AppText>
+
+      <FormField
+        label={t('settings.orgName')}
+        value={nombre}
+        onChangeText={setNombre}
+        testID="org-new-name"
+      />
+      <FormField
+        label={t('settings.timezone')}
+        value={zona}
+        onChangeText={setZona}
+        autoCapitalize="none"
+        error={zona === '' || zonaValida ? undefined : t('settings.timezoneInvalid')}
+        testID="org-new-timezone"
+      />
+      <AppText variant="help" tone="subtle">
+        {t('settings.locationTimezoneHint', { ejemplos: ZONAS_DE_EJEMPLO.join(' · ') })}
+      </AppText>
+
+      {/*
+        LA PRIMERA SEDE SE PIDE AQUÍ porque una empresa sin sedes no sirve para nada:
+        no se puede fichar, ni programar un turno, ni activar un reloj. Crearla vacía
+        dejaría a quien la creó en un panel que no hace nada y sin pista de por qué.
+      */}
+      <FormField
+        label={t('settings.addOrganizationFirstLocation')}
+        value={sede}
+        onChangeText={setSede}
+        testID="org-new-location"
+      />
+
+      <SegmentedControl
+        label={t('settings.defaultLocale')}
+        value={locale}
+        options={SUPPORTED_LANGUAGES.map((code) => ({
+          value: code,
+          label: code === 'es-PE' ? t('common.spanish') : t('common.english'),
+        }))}
+        onChange={(valor) => setLocale(valor as (typeof SUPPORTED_LANGUAGES)[number])}
+        testID="org-new-locale"
+      />
+
+      {/*
+        EL INICIO DE SEMANA SE PREGUNTA, no se hereda. Perú empieza el lunes y en Canadá
+        el domingo es lo habitual, y de esto dependen los totales semanales de la nómina:
+        heredarlo de la empresa que estás mirando pondría las horas de Canadá en semanas
+        peruanas sin decir nada.
+      */}
+      <SelectField
+        label={t('settings.weekStartsOn')}
+        value={inicioDeSemana}
+        options={dias}
+        onChange={setInicioDeSemana}
+        testID="org-new-week-start"
+      />
+
+      {creada !== null ? (
+        <InlineNotice
+          tone="working"
+          icon="checkmark-circle"
+          title={t('settings.addOrganizationDone', { nombre: creada })}
+          body={t('settings.addOrganizationDoneBody')}
+        />
+      ) : null}
+      {mutations.addOrganization.error !== null ? (
+        <InlineNotice
+          tone="late"
+          icon="warning-outline"
+          title={t('states.errorTitle')}
+          body={t('settings.saveFailed')}
+        />
+      ) : null}
+
+      <PrimaryButton
+        label={t('settings.addOrganizationSubmit')}
+        disabled={nombre.trim() === '' || sede.trim() === '' || !zonaValida}
+        loading={mutations.addOrganization.isPending}
+        onPress={() => {
+          const nombreLimpio = nombre.trim();
+          setCreada(null);
+          mutations.addOrganization.mutate(
+            {
+              name: nombreLimpio,
+              timezone: zona,
+              firstLocationName: sede.trim(),
+              locale,
+              weekStartsOn: Number(inicioDeSemana),
+            },
+            {
+              onSuccess: () => {
+                setCreada(nombreLimpio);
+                setNombre('');
+                setZona('');
+                setSede('');
+                scope.refetch();
+              },
+            },
+          );
+        }}
+        testID="org-new-submit"
+      />
+    </Stack>
   );
 }
 

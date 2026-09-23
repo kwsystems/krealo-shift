@@ -202,6 +202,64 @@ function crearRpc(almacen: Almacen) {
       case 'set_employee_pin':
         return sinError({ pin: '135791' });
 
+      /**
+       * EL ALTA DE EMPRESA SE SIMULA DE VERDAD: escribe las tres filas.
+       *
+       * Aquí no vale el `{ ok: true }` que valen las de miembros. Devolver un
+       * identificador inventado sin escribir nada dejaría la pantalla diciendo «"X"
+       * creada, ya sale en el selector» y el selector sin ella: dos textos de la misma
+       * pantalla contradiciéndose, que es peor que no simular la función. Y es justo lo
+       * que alguien querría comprobar aquí —tener dos empresas y cambiar de una a
+       * otra— porque es la pregunta que originó todo esto.
+       *
+       * Las tres filas son las mismas que escribe la transacción del servidor: empresa,
+       * membresía de dueño y primera sede. Sin la membresía la empresa existiría y no
+       * habría forma de entrar en ella, que es el fallo que se acaba de arreglar en el
+       * código de verdad.
+       *
+       * Y VA EN `crearRpc`, NO EN `crearFunctions`. La primera versión estaba en el
+       * segundo y no se llamaba nunca: `db.rpc` despacha por el nombre en snake_case y
+       * `functions.invoke` por el camelCase, así que el botón daba «algo no salió bien»
+       * en la demostración. Lo cazó el arnés del navegador, no el compilador: los dos
+       * despachadores toman un string.
+       */
+      case 'create_organization': {
+        const organizationId = `demo-org-${Date.now()}`;
+        const locationId = `demo-sede-${Date.now()}`;
+        const zona = String(argumentos.p_timezone ?? 'America/Lima');
+
+        filas('organizations').push({
+          id: organizationId,
+          name: String(argumentos.p_name ?? 'Empresa nueva'),
+          default_locale: String(argumentos.p_locale ?? 'es'),
+          default_timezone: zona,
+          week_starts_on: Number(argumentos.p_week_starts_on ?? 1),
+          logo_path: null,
+        });
+
+        filas('organization_memberships').push({
+          organization_id: organizationId,
+          user_id: DEMO_USER_ID,
+          role: 'owner',
+          status: 'active',
+          // POSTERIOR a la de la empresa sembrada: así la de siempre sigue siendo la
+          // primera y crear una no te cambia el panel de debajo de los pies.
+          created_at: new Date().toISOString(),
+        });
+
+        filas('locations').push({
+          id: locationId,
+          organization_id: organizationId,
+          name: String(argumentos.p_first_location_name ?? 'Sede'),
+          address: '',
+          timezone: zona,
+          is_active: true,
+          settings: {},
+        });
+
+        return sinError({ organizationId, locationId });
+      }
+
       case 'approve_timesheet_period': {
         const id = argumentos.p_period_id;
         almacen.set(
@@ -788,7 +846,6 @@ function crearFunctions(almacen: Almacen) {
         case 'revokeMember':
         case 'cancelInvitation':
           return sinError({ ok: true });
-
         default:
           return {
             data: null,

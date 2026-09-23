@@ -150,6 +150,17 @@ export const RPC = {
    * turno publicado vigente.
    */
   publishShiftsForWeek: 'publish_shifts_for_week',
+  /**
+   * Alta de empresa (2026-09-23, la segunda empresa de Andree).
+   *
+   * NO EXISTIA NADA QUE CREARA UNA ORGANIZACION. Las reglas de Firestore dicen
+   * `allow create, delete: if false` sobre `organizations` —«solo servidor»— y en el
+   * servidor no habia ninguna funcion que lo hiciera: la empresa que hay hoy se
+   * escribio a mano en la consola de Firebase. Solo la puede llamar quien ya es
+   * `owner` de otra empresa activa, y crea organizacion + membresia de dueño +
+   * primera sede en una sola transaccion.
+   */
+  createOrganization: 'create_organization',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

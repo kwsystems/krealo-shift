@@ -1,4 +1,4 @@
-# Los ocho recorridos que hay que proteger
+# Los nueve recorridos que hay que proteger
 
 Esto era `e2e/`: ocho flujos de Maestro que describían los recorridos que no se pueden
 romper nunca. Estaban bien pensados y **jamás se ejecutaron**: Maestro maneja un
@@ -75,15 +75,39 @@ La navegación —que la ruta no se pinte— es una comodidad; la barrera es la 
 de empleado no crea sesión de Firebase en ningún momento, así que no hay nada que pueda
 autorizar.
 
+## 9. Tener dos empresas: crear la segunda, entrar en ella y que se recuerde
+
+**Cubierto, y es nuevo del 2026-09-23.** No estaba en los ocho de Maestro porque hasta
+ese día la app no lo permitía: no había función que creara una empresa —la que existe se
+escribió a mano en la consola de Firebase— y el panel leía tus membresías con `.limit(1)`
+ordenado por fecha, así que se quedaba con la más vieja y la segunda era invisible.
+
+Lo cubren tres capas, y hacen falta las tres:
+
+- `dos-empresas.test.ts` contra el emulador: que `createOrganization` escriba empresa,
+  membresía de dueño y primera sede en una transacción, que solo pueda llamarla quien ya
+  es dueño de otra, que rechace una zona horaria que `Intl` no acepta, y que
+  `viewTimeAdjustmentsWithAuthor` conteste sobre la empresa de la SESIÓN con un usuario
+  que pertenece a dos —el caso que ninguna prueba tenía antes—.
+- `empresa-elegida` y `empresa-recordada` por unidades: la regla que elige empresa, y que
+  la elección sobreviva a una recarga sin que cambiar el tema la borre.
+- `empresas:check` en Chromium: que el selector NO salga con una sola empresa, que el
+  alta esté a la vista, que crear una la deje elegible, que elegirla cambie la cabecera
+  del panel —empresa y sede— y que la elección siga guardada después de recargar.
+
+La tercera capa es la que encontró el fallo real: el alta simulada de la demostración
+estaba en el despachador equivocado y el botón daba «algo no salió bien». Los dos
+despachadores toman un string, así que el compilador no tenía nada que decir.
+
 ---
 
 ## Lo que queda sin red y por qué se dice aquí
 
-| Recorrido     | Estado                                                           |
-| ------------- | ---------------------------------------------------------------- |
-| 1, 3, 4, 5, 7 | cubiertos con emulador y/o Chromium                              |
-| 8             | cubierto por las reglas, que es la barrera real                  |
-| 6             | **sin cubrir**: nadie copia y publica una semana en un navegador |
-| 2             | **imposible hoy**: fichar sin red no existe en web               |
+| Recorrido        | Estado                                                           |
+| ---------------- | ---------------------------------------------------------------- |
+| 1, 3, 4, 5, 7, 9 | cubiertos con emulador y/o Chromium                              |
+| 8                | cubierto por las reglas, que es la barrera real                  |
+| 6                | **sin cubrir**: nadie copia y publica una semana en un navegador |
+| 2                | **imposible hoy**: fichar sin red no existe en web               |
 
 Dos huecos, los dos escritos. Es más de lo que había cuando existían los ocho ficheros.

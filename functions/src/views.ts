@@ -3,13 +3,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { COLLECTIONS, db } from './shared/admin';
 import { tipoEfectivo } from './shared/eventos';
 import { zonaSegura } from './shared/zonas';
-import {
-  membershipOf,
-  requireManagesLocation,
-  requireRole,
-  requireUid,
-  soleMembership,
-} from './shared/caller';
+import { membershipOf, requireManagesLocation, requireRole, requireUid } from './shared/caller';
 
 /**
  * Las cinco VISTAS de Postgres, servidas como funciones.
@@ -203,7 +197,23 @@ export const viewTimeAdjustmentsWithAuthor = onCall(async (request) => {
   const sessionIds = valorDe(peticion, 'work_session_id', 'in');
   if (!Array.isArray(sessionIds) || sessionIds.length === 0) return [];
 
-  const membership = await soleMembership(uid);
+  /*
+   * LA ORGANIZACION SALE DE LAS SESIONES QUE SE PIDEN, no de «la unica membresia».
+   *
+   * Esto usaba `soleMembership`, que se queda con la MAS VIEJA de las membresias activas
+   * y descarta el resto en silencio. Con una sola organizacion daba igual; con dos, quien
+   * pertenece a las dos miraria la hoja de horas de la segunda y esta consulta filtraria
+   * por la PRIMERA: el historial de correcciones saldria vacio, sin error y sin pista.
+   * No es una fuga —el filtro sigue atando a una organizacion— pero es contestar sobre
+   * otra cosa, que es el patron que este proyecto lleva toda la semana persiguiendo.
+   *
+   * Se lee una sesion, se mira de quien es, y se comprueba la membresia ALLI.
+   */
+  const primera = await db.collection(COLLECTIONS.workSessions).doc(String(sessionIds[0])).get();
+  const organizationId = primera.data()?.organization_id as string | undefined;
+  if (organizationId === undefined) return [];
+
+  const membership = await membershipOf(uid, organizationId);
   requireRole(membership, ['owner', 'admin', 'manager']);
 
   /**
@@ -221,7 +231,7 @@ export const viewTimeAdjustmentsWithAuthor = onCall(async (request) => {
   for (const trozo of trozos) {
     const encontrados = await db
       .collection(COLLECTIONS.timeAdjustments)
-      .where('organization_id', '==', membership.organizationId)
+      .where('organization_id', '==', organizationId)
       .where('work_session_id', 'in', trozo)
       .get();
     for (const doc of encontrados.docs) filas.push({ id: doc.id, ...doc.data() });

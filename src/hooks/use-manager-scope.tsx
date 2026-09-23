@@ -8,6 +8,7 @@ import { track } from '@/lib/analytics';
 import { AdminError, ADMIN_LIST_STALE_MS, selectRows } from '@/hooks/use-admin-query';
 import { callFunction } from '@/lib/firebase/functions';
 import { getDataClient } from '@/lib/firebase/query';
+import { usePreferencesStore } from '@/stores/preferences-store';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
 import type { TimeFormatPreference } from '@/utils/time';
 import { TABLES } from '@/lib/firebase/tables';
@@ -209,11 +210,41 @@ export type ManagerScopeData = {
   organization: ManagerOrganization;
   role: AppRole;
   locations: ManagerLocation[];
+  /** Todas las empresas a las que perteneces, para el selector. */
+  organizations: { id: string; name: string; role: AppRole }[];
 };
 
-export const managerScopeKey = ['manager', 'scope'] as const;
+/*
+ * LA EMPRESA ELEGIDA FORMA PARTE DE LA CLAVE. Sin ella, cambiar de empresa devolvería lo
+ * que hay en caché de la anterior y la pantalla enseñaría la gente de una con el nombre
+ * de la otra.
+ */
+export const managerScopeKey = (organizationId: string | null) =>
+  ['manager', 'scope', organizationId] as const;
 
-async function fetchManagerScope(): Promise<ManagerScopeData> {
+/**
+ * Cuál de tus empresas mira el panel: la elegida si sigue siendo tuya, y si no la más
+ * antigua —la que enseñaba antes de que se pudiera elegir, así que quien tiene una sola
+ * no nota el cambio—.
+ *
+ * VIVE FUERA DEL HOOK PARA QUE UNA PRUEBA PUEDA MORDERLA. La regla de dos líneas es
+ * justo donde se esconde el fallo interesante: si volviera a quedarse con la primera
+ * pasara lo que pasara, el selector se movería y la pantalla no. Una prueba que copiara
+ * la expresión en vez de importarla no vería eso —ya me pasó esta semana con el inicio
+ * de semana— así que la expresión existe una sola vez y las dos partes usan esta.
+ *
+ * `elegida` que ya no está entre las tuyas cae a la más antigua a propósito: es lo que
+ * ocurre cuando te revocan el acceso a la empresa que tenías abierta, y dejar la
+ * elección colgando enseñaría un panel vacío en vez de la empresa que sí te queda.
+ */
+export function membresiaElegida<T extends { organization_id: string }>(
+  membresias: readonly T[],
+  elegida: string | null,
+): T | undefined {
+  return membresias.find((m) => m.organization_id === elegida) ?? membresias[0];
+}
+
+async function fetchManagerScope(organizationIdElegida: string | null): Promise<ManagerScopeData> {
   const db = getDataClient();
   const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
 
@@ -227,17 +258,24 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
    */
   if (userId === null) throw new AdminError('forbidden', 'NO_SESSION');
 
+  /*
+   * TODAS LAS MEMBRESÍAS ACTIVAS, no solo la primera.
+   *
+   * Esto tenía un `.limit(1)` ordenado por fecha de alta ascendente: se quedaba con la
+   * MÁS VIEJA y descartaba el resto sin decir nada. Con dos empresas eso significaba que
+   * la segunda era INVISIBLE —ni un error, ni una pista— y que el selector de empresa no
+   * podía existir aunque se pintara.
+   */
   const memberships = await selectRows(z.array(membershipSchema), (client) =>
     client
       .from(TABLES.organizationMemberships)
       .select('organization_id, role')
       .eq('user_id', userId)
       .eq('status', 'active')
-      .order('created_at', { ascending: true })
-      .limit(1),
+      .order('created_at', { ascending: true }),
   );
 
-  let membership = memberships[0];
+  let membership = membresiaElegida(memberships, organizationIdElegida);
 
   /**
    * ANTES DE RENDIRSE, MIRAR SI HAY UNA INVITACIÓN ESPERANDO.
@@ -259,11 +297,10 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
           .from(TABLES.organizationMemberships)
           .select('organization_id, role')
           .eq('status', 'active')
-          .order('created_at', { ascending: true })
-          .limit(1);
+          .order('created_at', { ascending: true });
         return userId === null ? query : query.eq('user_id', userId);
       });
-      membership = reintento[0];
+      membership = membresiaElegida(reintento, organizationIdElegida);
     }
   }
 
@@ -306,19 +343,40 @@ async function fetchManagerScope(): Promise<ManagerScopeData> {
    */
   track({ name: 'login_succeeded', role: membership.role });
 
-  return { organization, role: membership.role, locations };
+  /*
+   * LA LISTA DE EMPRESAS PARA EL SELECTOR. Son una lectura por empresa y con dos o tres
+   * no se nota; si algún día alguien pertenece a veinte, esto es lo primero que hay que
+   * mirar. Se pide el nombre y nada más: el selector no necesita el resto.
+   */
+  const organizations = await Promise.all(
+    memberships.map(async (m) => {
+      if (m.organization_id === membership.organization_id) {
+        return { id: organization.id, name: organization.name, role: m.role };
+      }
+      const [otra] = await selectRows(
+        z.array(z.object({ id: docId(), name: z.string() })),
+        (client) =>
+          client.from(TABLES.organizations).select('id, name').eq('id', m.organization_id),
+      );
+      return { id: m.organization_id, name: otra?.name ?? '', role: m.role };
+    }),
+  );
+
+  return { organization, role: membership.role, locations, organizations };
 }
 
 type ScopeContextValue = {
   query: ReturnType<typeof useManagerScopeQuery>;
   locationId: string | null;
   setLocationId: (id: string) => void;
+  organizationId: string | null;
+  setOrganizationId: (id: string) => void;
 };
 
-function useManagerScopeQuery() {
+function useManagerScopeQuery(organizationId: string | null = null) {
   return useQuery({
-    queryKey: managerScopeKey,
-    queryFn: fetchManagerScope,
+    queryKey: managerScopeKey(organizationId),
+    queryFn: () => fetchManagerScope(organizationId),
     staleTime: 5 * ADMIN_LIST_STALE_MS,
   });
 }
@@ -336,8 +394,13 @@ function useManagerScopeQuery() {
  */
 export function useManagerMembership(enabled: boolean) {
   return useQuery({
-    queryKey: managerScopeKey,
-    queryFn: fetchManagerScope,
+    /*
+     * SIN EMPRESA ELEGIDA, a proposito: esto corre en el arranque, antes de que haya
+     * panel donde elegir. Resuelve el rol de la empresa por defecto —la mas antigua— que
+     * es lo unico que hace falta para decidir si se montan las pestañas.
+     */
+    queryKey: managerScopeKey(null),
+    queryFn: () => fetchManagerScope(null),
     staleTime: 5 * ADMIN_LIST_STALE_MS,
     enabled,
     // Sin membresía o sin permiso, reintentar da el mismo resultado.
@@ -348,7 +411,20 @@ export function useManagerMembership(enabled: boolean) {
 const ScopeContext = createContext<ScopeContextValue | null>(null);
 
 export function ManagerScopeProvider({ children }: { children: ReactNode }) {
-  const query = useManagerScopeQuery();
+  /*
+   * LA EMPRESA ELEGIDA VIVE EN LAS PREFERENCIAS DEL DISPOSITIVO, no en un `useState`.
+   *
+   * Con estado local el selector funcionaba hasta que recargabas, y entonces volvías a
+   * la primera empresa. La tarea lo decía sin rodeos: «si cada recarga vuelve a la
+   * primera, el selector no sirve de nada». Y no es solo la recarga —en web es cada
+   * pestaña nueva—.
+   *
+   * No hay carrera con la hidratación: `app/_layout.tsx` hace `await hydratePreferences()`
+   * antes de dar por listo el arranque, y hasta entonces no se monta ninguna pantalla.
+   */
+  const chosenOrganizationId = usePreferencesStore((s) => s.managerOrganizationId);
+  const setChosenOrganizationId = usePreferencesStore((s) => s.setManagerOrganizationId);
+  const query = useManagerScopeQuery(chosenOrganizationId);
   const [chosenLocationId, setChosenLocationId] = useState<string | null>(null);
 
   const value = useMemo<ScopeContextValue>(() => {
@@ -363,8 +439,26 @@ export function ManagerScopeProvider({ children }: { children: ReactNode }) {
       query,
       locationId: isChosenValid ? chosenLocationId : (fallback?.id ?? null),
       setLocationId: setChosenLocationId,
+      organizationId: chosenOrganizationId,
+      /*
+       * AL CAMBIAR DE EMPRESA SE OLVIDA LA SEDE ELEGIDA.
+       *
+       * Y NO ES LO QUE EVITA EL FALLO, aunque lo primero que escribí aquí decía que sí:
+       * probé a quitar esta línea y el arnés siguió en verde, porque `isChosenValid` —seis
+       * líneas más abajo— ya descarta una sede que no esté en la lista de la empresa
+       * nueva. O sea que el caso está cubierto dos veces y esta es la segunda.
+       *
+       * Se queda porque deja de guardar un identificador que ya no significa nada y
+       * porque dice la intención en el sitio donde se cambia de empresa, no a seis líneas.
+       * Lo que NO hay que creer es que quitarla rompa algo: no lo hace, y dejarlo escrito
+       * al revés habría mandado a buscar el fallo al lugar equivocado.
+       */
+      setOrganizationId: (id: string) => {
+        void setChosenOrganizationId(id);
+        setChosenLocationId(null);
+      },
     };
-  }, [query, chosenLocationId]);
+  }, [query, chosenLocationId, chosenOrganizationId, setChosenOrganizationId]);
 
   return <ScopeContext.Provider value={value}>{children}</ScopeContext.Provider>;
 }
@@ -377,6 +471,9 @@ export type ManagerScope = {
   role: AppRole | null;
   /** Propietario y administrador: pueden cambiar configuración y semanas pasadas. */
   isAdmin: boolean;
+  /** Todas las empresas a las que perteneces. Con una sola, el selector no se pinta. */
+  organizations: { id: string; name: string; role: AppRole }[];
+  setOrganizationId: (id: string) => void;
   locations: ManagerLocation[];
   locationId: string | null;
   location: ManagerLocation | null;
@@ -401,6 +498,8 @@ export function useManagerScope(): ManagerScope {
       organization: null,
       role: null,
       isAdmin: false,
+      organizations: [],
+      setOrganizationId: () => undefined,
       locations: [],
       locationId: null,
       location: null,
@@ -425,6 +524,8 @@ export function useManagerScope(): ManagerScope {
     organization,
     role,
     isAdmin: role === 'owner' || role === 'admin',
+    organizations: query.data?.organizations ?? [],
+    setOrganizationId: context.setOrganizationId,
     locations,
     locationId,
     location,

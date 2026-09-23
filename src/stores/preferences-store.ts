@@ -17,6 +17,16 @@ type PersistedPreferences = {
   timeFormat: TimeFormatPreference;
   /** Claro, oscuro o seguir al sistema. Ver `@/theme/use-theme`. */
   theme: ThemePreference;
+  /**
+   * Cuál de tus empresas tenías abierta en el panel. `null` = la de siempre.
+   *
+   * SE GUARDA PORQUE UN SELECTOR QUE SE OLVIDA NO SIRVE: si cada recarga volviera a
+   * la primera empresa, elegir la segunda sería un gesto que hay que repetir en cada
+   * pestaña que abras, y el trabajo de verdad —mirar las horas de Canadá— pasaría por
+   * volver a elegir cada vez. Es del dispositivo, no de la cuenta: es una comodidad
+   * de esta pantalla, no un permiso.
+   */
+  managerOrganizationId: string | null;
 };
 
 type PreferencesState = PersistedPreferences & {
@@ -26,6 +36,7 @@ type PreferencesState = PersistedPreferences & {
   toggleLanguage: () => Promise<void>;
   setTimeFormat: (format: TimeFormatPreference) => Promise<void>;
   setTheme: (theme: ThemePreference) => Promise<void>;
+  setManagerOrganizationId: (organizationId: string | null) => Promise<void>;
 };
 
 /** es-PE arranca en 24 horas (§2). */
@@ -39,10 +50,30 @@ const DEFAULTS: PersistedPreferences = {
    * preferencia personal de quien mira la pantalla, y esa ya la expresó en su sistema.
    */
   theme: 'system',
+  managerOrganizationId: null,
 };
 
-async function persist(next: PersistedPreferences): Promise<void> {
-  await secureStorage.setJson(SECURE_KEYS.preferences, next);
+/**
+ * Guarda TODO lo persistible leyéndolo del estado, no de una lista escrita a mano.
+ *
+ * ANTES CADA SETTER CONSTRUÍA EL OBJETO: `persist({ language, timeFormat, theme })`,
+ * cuatro veces. Con tres campos ya era repetición; con el cuarto se convierte en una
+ * trampa: el setter que olvidara uno no fallaría ni al compilar —el objeto sería
+ * completo y válido— y el efecto sería BORRAR lo guardado de ese campo. O sea que
+ * cambiar el tema te devolvería a la primera empresa, y el síntoma aparecería lejos
+ * de la causa.
+ *
+ * Se llama DESPUÉS de `set`, porque en Zustand `set` es sincrónico y `get()` ya
+ * devuelve el valor nuevo.
+ */
+async function persistirActual(state: PreferencesState): Promise<void> {
+  const guardable: PersistedPreferences = {
+    language: state.language,
+    timeFormat: state.timeFormat,
+    theme: state.theme,
+    managerOrganizationId: state.managerOrganizationId,
+  };
+  await secureStorage.setJson(SECURE_KEYS.preferences, guardable);
 }
 
 export const usePreferencesStore = create<PreferencesState>((set, get) => ({
@@ -67,15 +98,16 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const language = stored?.language ?? DEFAULT_LANGUAGE;
     const timeFormat = stored?.timeFormat ?? DEFAULTS.timeFormat;
     const theme = stored?.theme ?? DEFAULTS.theme;
+    const managerOrganizationId = stored?.managerOrganizationId ?? DEFAULTS.managerOrganizationId;
 
     await changeLanguage(language);
-    set({ language, timeFormat, theme, hydrated: true });
+    set({ language, timeFormat, theme, managerOrganizationId, hydrated: true });
   },
 
   setLanguage: async (language) => {
     await changeLanguage(language);
     set({ language });
-    await persist({ language, timeFormat: get().timeFormat, theme: get().theme });
+    await persistirActual(get());
   },
 
   toggleLanguage: async () => {
@@ -85,7 +117,7 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
 
   setTimeFormat: async (timeFormat) => {
     set({ timeFormat });
-    await persist({ language: get().language, timeFormat, theme: get().theme });
+    await persistirActual(get());
   },
 
   setTheme: async (theme) => {
@@ -93,6 +125,15 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     // que se toca, no cuando el almacenamiento conteste. Si guardar falla, lo que se
     // pierde es que se recuerde mañana, no que funcione hoy.
     set({ theme });
-    await persist({ language: get().language, timeFormat: get().timeFormat, theme });
+    await persistirActual(get());
+  },
+
+  /*
+   * Igual que el tema: se aplica antes de guardar. Si el almacenamiento falla, cambias
+   * de empresa ahora y lo que se pierde es que se recuerde mañana.
+   */
+  setManagerOrganizationId: async (managerOrganizationId) => {
+    set({ managerOrganizationId });
+    await persistirActual(get());
   },
 }));

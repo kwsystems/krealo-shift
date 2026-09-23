@@ -113,6 +113,41 @@ export async function createLocation(params: {
 }
 
 /**
+ * Crear una empresa entera, con su primera sede y contigo como dueño.
+ *
+ * VA POR LA FUNCION, no por un `insert`, y no es una preferencia de estilo: la regla de
+ * Firestore sobre `organizations` es `allow create, delete: if false`, así que un insert
+ * desde aquí no fallaría en el tipo ni en la revisión —fallaría en producción, con
+ * permisos, en el único momento en que alguien intenta usarlo.
+ *
+ * La zona se valida ANTES de llamar, como en `createLocation`, para dar el error en el
+ * formulario en vez de un `invalid-argument` del servidor; el servidor la vuelve a
+ * validar porque una comprobación que solo vive en el cliente no es una comprobación.
+ */
+export async function createOrganizationWithFirstLocation(params: {
+  name: string;
+  timezone: string;
+  firstLocationName: string;
+  locale: string;
+  weekStartsOn: number;
+}): Promise<{ organizationId: string; locationId: string }> {
+  const timezone = zonaCanonica(params.timezone);
+  if (timezone === null) throw toAdminError({ code: '23514', message: 'INVALID_TIMEZONE' });
+
+  const db = requireClient();
+  const { data, error } = await db.rpc(RPC.createOrganization, {
+    p_name: params.name.trim(),
+    p_timezone: timezone,
+    p_first_location_name: params.firstLocationName.trim(),
+    p_locale: params.locale,
+    p_week_starts_on: params.weekStartsOn,
+  });
+  if (error !== null) throw toAdminError(error);
+
+  return z.object({ organizationId: z.string().min(1), locationId: z.string().min(1) }).parse(data);
+}
+
+/**
  * Cerrar o reabrir una sede. NO existe borrarla, y no es un olvido.
  *
  * La regla lo prohíbe expresamente (`allow delete: if false`) porque una sede tiene

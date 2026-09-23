@@ -232,8 +232,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
 
-    # LOS SIETE ARNESES DE LA DEMOSTRACIÓN. `responsive` ya estaba; los otros SEIS
-    # entran aquí, y hasta ahora solo corrían cuando alguien se acordaba.
+    # LOS ARNESES DE LA DEMOSTRACIÓN. `responsive` ya estaba; los demás entraron aquí
+    # después, y hasta entonces solo corrían cuando alguien se acordaba.
     #
     # POR QUÉ ESTABAN FUERA Y POR QUÉ ENTRAN AHORA. `verificar` recorre la app SIN modo
     # demostración: comprueba que las pantallas se pintan, que responden y que son
@@ -256,7 +256,7 @@ jobs:
     # marcador— con el número solo como techo, así que una máquina lenta tarda más en
     # vez de fallar. Ver `esperarPantalla` en scripts/lib/arnes-web.mjs.
     #
-    # UNO POR RUNNER Y NO SIETE PASOS EN UNO, por el reloj: en serie son unos quince
+    # UNO POR RUNNER Y NO TODOS EN UN PASO, por el reloj: en serie son unos quince
     # minutos y así son unos seis, porque el empaquetado (~1,5 min) es lo único que se
     # repite. `fail-fast: false` porque cuando se rompe algo de verdad se rompe en
     # varios a la vez, y verlos todos dice qué pasó mucho mejor que ver el primero.
@@ -274,6 +274,7 @@ jobs:
           - { id: contraste, nombre: 'todo el texto se lee' }
           - { id: responsive, nombre: 'nada se sale ni se recorta' }
           - { id: salida, nombre: 'el reloj pregunta por qué te vas antes de hora' }
+          - { id: empresas, nombre: 'dos empresas: crear la segunda, entrar y que se recuerde' }
 
     steps:
       - name: Traer el código

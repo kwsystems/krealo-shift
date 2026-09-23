@@ -13,7 +13,6 @@ import {
   requireManagesLocation,
   requireRole,
   requireUid,
-  soleMembership,
 } from './shared/caller';
 import { transition, type TimeEventType } from '../../src/domain/attendance-state-machine';
 import { generatePin } from '../../src/domain/pin';
@@ -576,10 +575,23 @@ export const revokeAllSessions = onCall(async (request) => {
   const uid = requireUid(request);
   await auth.revokeRefreshTokens(uid);
 
-  const membership = await soleMembership(uid).catch(() => null);
-  if (membership !== null) {
+  /*
+   * SE ANOTA EN TODAS SUS ORGANIZACIONES, no solo en una.
+   *
+   * Esto usaba `soleMembership`, que se queda con la mas vieja. Cerrar las sesiones las
+   * cierra en TODAS partes —es una sola sesion de Firebase— asi que anotarlo en una sola
+   * dejaria a las demas con un hueco en su registro justo donde alguien perdio el acceso.
+   * Y un registro de auditoria incompleto es peor que uno vacio: parece completo.
+   */
+  const membresias = await db
+    .collection(COLLECTIONS.memberships)
+    .where('user_id', '==', uid)
+    .where('status', '==', 'active')
+    .get();
+
+  for (const doc of membresias.docs) {
     await audit({
-      organizationId: membership.organizationId,
+      organizationId: doc.data().organization_id as string,
       actorUserId: uid,
       action: 'sessions_revoked_everywhere',
       entityType: 'user',
@@ -1006,4 +1018,127 @@ export const publishShiftsForWeek = onCall(async (request) => {
   });
 
   return version;
+});
+
+// ---------------------------------------------------------------------------
+// Alta de empresa
+// ---------------------------------------------------------------------------
+
+/**
+ * Crear una organizacion nueva, con su primera sede y su dueño.
+ *
+ * NO HABIA FORMA DE HACERLO. Las reglas dicen `allow create, delete: if false` sobre
+ * `organizations` con el comentario «alta y baja de empresa: solo servidor», y en el
+ * servidor no habia nada que la creara: se busco `COLLECTIONS.organizations` en todas las
+ * funciones y solo habia DOS lecturas. La organizacion que existe hoy se escribio a mano
+ * en la consola de Firestore, y la segunda habria tenido que escribirse igual.
+ *
+ * QUIEN PUEDE LLAMARLA, que era la pregunta abierta de la tarea: SOLO alguien que ya es
+ * `owner` de otra organizacion. Dejarla abierta a cualquier usuario autenticado
+ * convertiria esto en un formulario para crear empresas infinitas desde la consola del
+ * navegador, y esta app no es un producto de autoservicio: es la herramienta de una
+ * agencia. Cerrarla asi permite exactamente lo que hacia falta —que Andree cree la
+ * segunda— y nada mas.
+ *
+ * EL PRIMER OWNER DE TODOS sigue creandose a mano, y es correcto: no puede haber una
+ * funcion que conceda el primer permiso, porque entonces cualquiera podria llamarla.
+ *
+ * TODO EN UNA TRANSACCION: una organizacion sin dueño no la puede arreglar nadie desde la
+ * app —no tendria a quien dejar entrar— y una membresia apuntando a una organizacion que
+ * no se creo es peor todavia.
+ */
+export const createOrganization = onCall(async (request) => {
+  const uid = requireUid(request);
+  const nombre = textoRequerido(request.data?.p_name, 'p_name');
+  const zona = textoRequerido(request.data?.p_timezone, 'p_timezone');
+  const sede = textoRequerido(request.data?.p_first_location_name, 'p_first_location_name');
+  const locale = (request.data?.p_locale as string | undefined) ?? 'es-PE';
+  const inicioDeSemana = Number(request.data?.p_week_starts_on ?? 1);
+
+  /*
+   * LA ZONA SE COMPROBARA AQUI TAMBIEN, no solo en el panel. `Intl` lanza con una zona
+   * que no existe y el servidor la usa para agrupar jornadas por dia: una organizacion
+   * que naciera con la zona mal escrita tendria Horas y Reportes rotos desde el minuto
+   * uno. Ver `shared/zonas.ts` y la decision de la zona por sede.
+   */
+  let zonaCanonica: string;
+  try {
+    zonaCanonica = new Intl.DateTimeFormat('en-CA', { timeZone: zona }).resolvedOptions().timeZone;
+  } catch {
+    throw new HttpsError('invalid-argument', `«${zona}» no es una zona horaria válida.`);
+  }
+
+  if (!Number.isInteger(inicioDeSemana) || inicioDeSemana < 0 || inicioDeSemana > 6) {
+    throw new HttpsError('invalid-argument', 'El día de inicio de semana tiene que ser 0-6.');
+  }
+
+  /*
+   * LA PUERTA. Tiene que ser owner de ALGUNA organizacion activa. Se mira antes de tocar
+   * nada: una comprobacion de permiso despues de escribir no es una comprobacion.
+   */
+  const suyas = await db
+    .collection(COLLECTIONS.memberships)
+    .where('user_id', '==', uid)
+    .where('status', '==', 'active')
+    .get();
+
+  const esDueñoDeAlguna = suyas.docs.some((doc) => doc.data().role === 'owner');
+  if (!esDueñoDeAlguna) {
+    throw new HttpsError(
+      'permission-denied',
+      'Solo el propietario de una empresa existente puede crear otra.',
+    );
+  }
+
+  const organizationId = db.collection(COLLECTIONS.organizations).doc().id;
+  const locationId = db.collection(COLLECTIONS.locations).doc().id;
+  const ahora = nowISO();
+
+  await db.runTransaction(async (tx) => {
+    tx.create(db.collection(COLLECTIONS.organizations).doc(organizationId), {
+      id: organizationId,
+      name: nombre.trim(),
+      default_locale: locale,
+      default_timezone: zonaCanonica,
+      week_starts_on: inicioDeSemana,
+      logo_path: null,
+      created_at: ahora,
+      created_by: uid,
+    });
+
+    /*
+     * El id de la membresia es `{orgId}_{uid}`, igual que en las reglas y en
+     * `membershipOf`. No es una convencion cualquiera: las reglas lo dan por hecho para
+     * poder comprobar la pertenencia con una lectura de documento en vez de una consulta.
+     */
+    tx.create(db.collection(COLLECTIONS.memberships).doc(`${organizationId}_${uid}`), {
+      user_id: uid,
+      organization_id: organizationId,
+      role: 'owner',
+      status: 'active',
+      managed_location_ids: [],
+      created_at: ahora,
+    });
+
+    tx.create(db.collection(COLLECTIONS.locations).doc(locationId), {
+      id: locationId,
+      organization_id: organizationId,
+      name: sede.trim(),
+      address: '',
+      timezone: zonaCanonica,
+      is_active: true,
+      settings: {},
+      created_at: ahora,
+    });
+  });
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'organization_created',
+    entityType: 'organization',
+    entityId: organizationId,
+  });
+
+  return { organizationId, locationId };
 });

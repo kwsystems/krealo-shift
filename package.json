@@ -30,6 +30,7 @@
     "contraste:check": "node scripts/contraste-check.mjs dist-demo",
     "responsive:check": "node scripts/responsive-check.mjs dist-demo",
     "salida:check": "node scripts/salida-check.mjs dist-demo",
+    "empresas:check": "node scripts/empresas-check.mjs dist-demo",
     "contratos:check": "node scripts/contratos-check.mjs",
     "campos:check": "node scripts/campos-muertos-check.mjs",
     "emulador:check": "node scripts/emulador-check.mjs"

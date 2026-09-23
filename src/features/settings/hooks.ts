@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createActivationCode,
   createLocation,
+  createOrganizationWithFirstLocation,
   fetchKioskDevices,
   fetchNotificationPreferences,
   revokeKioskDevice,
@@ -87,6 +88,25 @@ export function useSettingsMutations(organizationId: string | null) {
     onSuccess: invalidateScope,
   });
 
+  /**
+   * Dar de alta una EMPRESA entera. Antes esto se hacía a mano en la consola de
+   * Firestore, porque no existía ni la función.
+   *
+   * No invalida solo el alcance: al aparecer una empresa nueva cambia la LISTA de
+   * empresas, que es lo que decide si el selector se pinta. Sin esto habría que
+   * recargar para poder entrar en la que acabas de crear.
+   */
+  const addOrganization = useMutation({
+    mutationFn: (variables: {
+      name: string;
+      timezone: string;
+      firstLocationName: string;
+      locale: string;
+      weekStartsOn: number;
+    }) => createOrganizationWithFirstLocation(variables),
+    onSuccess: invalidateScope,
+  });
+
   /** Cerrar o reabrir. Borrar no existe: el porqué está en `setLocationActive`. */
   const toggleLocation = useMutation({
     mutationFn: (variables: { locationId: string; isActive: boolean }) =>
@@ -133,6 +153,7 @@ export function useSettingsMutations(organizationId: string | null) {
     saveOrganization,
     saveLocation,
     addLocation,
+    addOrganization,
     toggleLocation,
     generateCode,
     revokeKiosk,

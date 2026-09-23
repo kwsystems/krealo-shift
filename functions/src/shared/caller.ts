@@ -68,22 +68,16 @@ export async function membershipOf(uid: string, organizationId: string): Promise
   };
 }
 
-/** La organizacion de quien llama, cuando la peticion no la trae. */
-export async function soleMembership(uid: string): Promise<Membership> {
-  const found = await db
-    .collection(COLLECTIONS.memberships)
-    .where('user_id', '==', uid)
-    .where('status', '==', 'active')
-    .orderBy('created_at', 'asc')
-    .limit(1)
-    .get();
-
-  const doc = found.docs[0];
-  if (doc === undefined) {
-    throw new HttpsError('permission-denied', 'No perteneces a ninguna organización.');
-  }
-  return membershipOf(uid, doc.data().organization_id as string);
-}
+/*
+ * AQUI VIVIA `soleMembership`, y se borro el 2026-09-23 al preparar el soporte de dos
+ * empresas.
+ *
+ * Buscaba la membresia activa MAS VIEJA y devolvia esa. Con una sola organizacion era
+ * correcto; con dos es la trampa exacta que este proyecto lleva persiguiendo: no falla,
+ * contesta sobre la organizacion equivocada. Sus dos usos se arreglaron —uno saca la
+ * organizacion de los datos que se piden y el otro recorre todas— y la funcion se fue
+ * con ellos, para que nadie la vuelva a coger por tener un nombre que suena razonable.
+ */
 
 export function requireRole(membership: Membership, roles: readonly AppRole[]): void {
   if (!roles.includes(membership.role)) {
