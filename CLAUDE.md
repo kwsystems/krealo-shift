@@ -109,6 +109,63 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
   primeros 2000 caracteres coinciden byte a byte y el resto se perdió. Dejó 27 de
   las 43 tareas del proyecto cortadas a media palabra.
 
+## Despliegue (2026-09-23)
+
+Producción: <https://krealo-shift.web.app>. Proyecto de Firebase `krealo-shift`, funciones
+en `southamerica-east1`.
+
+**La credencial va en la variable de entorno `FIREBASE_SERVICE_ACCOUNT`** — el contenido
+de un JSON de cuenta de servicio, nunca en el repositorio, que es público. Para usarla:
+escribirla a un fichero del contenedor con permisos 600 y apuntar
+`GOOGLE_APPLICATION_CREDENTIALS` ahí. Si la variable no existe, el despliegue no se puede
+hacer desde la sesión y hay que pedírselo a Andree; no hay otra credencial.
+
+**El orden es funciones primero y web después, y no es indiferente:** al revés, los
+navegadores reciben la versión nueva llamando a funciones que aún no existen en el
+servidor. Al revés no rompe nada, porque la web vieja no sabe que las nuevas existen.
+
+```
+npx firebase deploy --only functions --project krealo-shift --non-interactive
+npm run web:build
+npx firebase deploy --only hosting --project krealo-shift --non-interactive
+npm run despliegue:check
+```
+
+Las reglas de Firestore y Storage se suben **solo si cambiaron** (`--only
+firestore:rules,firestore:indexes,storage`): mirar el diff antes, no desplegarlas por
+costumbre.
+
+**Y verificar contra la URL publicada, no contra el resultado del comando.** `despliegue:check`
+compara los archivos servidos con `dist/`; además conviene bajar el paquete de
+`/_expo/static/js/web/*.js` y buscar dentro algo que solo exista en el trabajo nuevo. «Deploy
+complete» dice que subió algo, no que subiera lo que tú crees.
+
+### Los ocho roles de la cuenta de servicio
+
+Los ocho hacen falta, y tres sorprenden: las funciones son de **2.ª generación**, o sea
+Cloud Run compilado con Cloud Build y guardado en Artifact Registry.
+
+| Rol                             | Sin él falla                       |
+| ------------------------------- | ---------------------------------- |
+| Firebase Admin                  | hosting y reglas                   |
+| Cloud Functions Admin           | crear o actualizar funciones       |
+| Cloud Run Admin                 | 2.ª generación                     |
+| Artifact Registry Administrator | la imagen de cada despliegue       |
+| Cloud Build Editor              | la compilación previa              |
+| Service Account User            | actuar como la cuenta de ejecución |
+| Secret Manager Admin            | leer `KIOSK_TOKEN_SECRET`          |
+| Cloud Scheduler Admin           | reprogramar `purgarFotosDeFichaje` |
+
+Los dos últimos NO se deducen leyendo el código: los encontró un despliegue real, uno por
+intento. El del secreto porque las funciones del kiosco firman sus tokens con
+`defineSecret('KIOSK_TOKEN_SECRET')`, así que **cualquier** despliegue de funciones tiene
+que leer ese secreto, aunque la función que cambie no lo use.
+
+`firebase login:ci` todavía funciona y sería más rápido, pero **no**: firebase-tools avisa
+de que está deprecado, y ese token vale por la cuenta de Google entera —también
+`krealo-publisher` y `claw`, donde hay material de clientes—, mientras que la cuenta de
+servicio solo alcanza a `krealo-shift`.
+
 ## Skills instalados (`.claude/skills/`) — 219
 
 > **Estado:** los 219 están en disco y funcionando, pero **no commiteados todavía**.
