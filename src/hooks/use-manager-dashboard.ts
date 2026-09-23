@@ -57,6 +57,28 @@ export const dashboardKeys = {
   pendingRequests: (locationId: string) => ['dashboard', 'pendingRequests', locationId] as const,
 };
 
+/**
+ * Una fila de la franja del día: quién, su turno y lo que de verdad fichó.
+ *
+ * Se calcula aquí, junto a los contadores, PORQUE SALE DE LOS MISMOS DATOS que ya están
+ * cargados —los turnos de la semana y las sesiones de la semana— y calcularlo en la
+ * pantalla obligaría a repetir el filtrado por día y por sede en otro sitio. Dos copias de
+ * una regla de fecha es exactamente donde nacen los desajustes entre dos pantallas que
+ * dicen mirar lo mismo.
+ *
+ * El NOMBRE no viene aquí a propósito: vive en el listado de personas, que ya está
+ * cacheado por otras pantallas (`useEmployeeNames`). Cargarlo otra vez desde el tablero
+ * sería una consulta más para un dato que la app ya tiene.
+ */
+export type FranjaDeHoy = {
+  employeeId: string;
+  /** El turno publicado de hoy, si lo hay. */
+  turno: { desde: Date; hasta: Date } | null;
+  /** La jornada de hoy. `hasta: null` significa que sigue dentro. */
+  trabajado: { desde: Date; hasta: Date | null } | null;
+  estado: 'normal' | 'tarde' | 'pausa';
+};
+
 export type RightNowEntry = {
   employeeId: string;
   name: string;
@@ -82,6 +104,7 @@ export type ManagerDashboard = {
   scheduledMinutesThisWeek: number;
   workedMinutesThisWeek: number;
   rightNow: RightNowEntry[];
+  franjas: FranjaDeHoy[];
 };
 
 /** Ventana en la que un turno cuenta como "próximo a entrar". */
@@ -241,6 +264,72 @@ export function useManagerDashboard(params: {
       }
     }
 
+    /*
+     * LAS FRANJAS DE HOY. Una por persona que tenga turno hoy, jornada hoy, o esté dentro
+     * ahora mismo: las tres cosas, porque quien no vino también tiene que aparecer —su
+     * carril vacío ES la información— y quien fichó sin turno también.
+     */
+    const franjasPorEmpleado = new Map<string, FranjaDeHoy>();
+
+    const deHoy = (iso: string) => dateKeyOf(iso, timezone) === todayKey;
+
+    for (const shift of todaysShifts) {
+      franjasPorEmpleado.set(shift.employee_id, {
+        employeeId: shift.employee_id,
+        turno: { desde: new Date(shift.starts_at), hasta: new Date(shift.ends_at) },
+        trabajado: null,
+        estado: 'normal',
+      });
+    }
+
+    for (const session of sessions) {
+      if (!deHoy(session.starts_at)) continue;
+      const previa = franjasPorEmpleado.get(session.employee_id);
+      franjasPorEmpleado.set(session.employee_id, {
+        employeeId: session.employee_id,
+        turno: previa?.turno ?? null,
+        trabajado: {
+          desde: new Date(session.starts_at),
+          hasta: session.ends_at === null ? null : new Date(session.ends_at),
+        },
+        estado: previa?.estado ?? 'normal',
+      });
+    }
+
+    /*
+     * Quien está DENTRO ahora manda sobre la sesión guardada: su jornada sigue abierta, y
+     * el estado de descanso solo se sabe aquí.
+     */
+    for (const row of live) {
+      const previa = franjasPorEmpleado.get(row.employee_id);
+      franjasPorEmpleado.set(row.employee_id, {
+        employeeId: row.employee_id,
+        turno: previa?.turno ?? null,
+        trabajado: { desde: new Date(row.starts_at), hasta: null },
+        estado: row.attendance_state === 'ON_BREAK' ? 'pausa' : 'normal',
+      });
+    }
+
+    /*
+     * TARDE se decide con la MISMA tolerancia que usan los contadores de arriba, no con
+     * «entró un minuto después». Si la franja llamara tarde a alguien que el contador no
+     * cuenta como tardanza, la pantalla se contradiría a sí misma a dos centímetros de
+     * distancia.
+     */
+    const franjas = [...franjasPorEmpleado.values()]
+      .map((franja) => {
+        if (franja.turno === null || franja.trabajado === null || franja.estado === 'pausa') {
+          return franja;
+        }
+        const retraso = (franja.trabajado.desde.getTime() - franja.turno.desde.getTime()) / 60_000;
+        return retraso > lateGraceMinutes ? { ...franja, estado: 'tarde' as const } : franja;
+      })
+      .sort((a, b) => {
+        const refA = (a.turno ?? a.trabajado)?.desde.getTime() ?? 0;
+        const refB = (b.turno ?? b.trabajado)?.desde.getTime() ?? 0;
+        return refA - refB;
+      });
+
     const incompleteCount = sessions.filter(
       (session) =>
         session.status === 'needs_review' ||
@@ -286,6 +375,7 @@ export function useManagerDashboard(params: {
       scheduledMinutesThisWeek,
       workedMinutesThisWeek,
       rightNow,
+      franjas,
     };
   }, [
     workingNow,

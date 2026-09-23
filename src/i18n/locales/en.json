@@ -1,5 +1,16 @@
 {
+  "band": {
+    "title": "The day at a glance",
+    "hint": "The light line is the shift; the solid one is what was actually clocked.",
+    "onTime": "Clocked in on time and is on shift.",
+    "late": "Clocked in later than their shift.",
+    "noShow": "Had a shift and has not clocked in.",
+    "unscheduled": "Clocked in without a scheduled shift.",
+    "nothing": "No shift or clock-in today.",
+    "empty": "No shifts or clock-ins at this location today."
+  },
   "common": {
+    "unknown": "Unnamed",
     "appName": "Krealo Shift",
     "ok": "OK",
     "cancel": "Cancel",
@@ -191,7 +202,6 @@
     "workingNow": "Working now",
     "onBreakNow": "On break",
     "upcoming": "Clocking in soon",
-    "scheduledVsWorked": "Scheduled vs worked",
     "rightNow": "Right now",
     "scheduledHours": "Scheduled",
     "workedHours": "Worked",

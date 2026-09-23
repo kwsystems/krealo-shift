@@ -66,6 +66,68 @@ for (const escenario of ESCENARIOS) {
   }
 
   /*
+   * LA FRANJA DEL DÍA SE PINTA DE VERDAD, no solo existe en el código.
+   *
+   * Esta comprobación está aquí por el historial de este proyecto: SEIS veces un campo
+   * existía en el servidor, existía en el cliente, compilaba, y no se pintaba nunca
+   * —`flags`, `shiftEndsAt`, `openBreak`, `jobRoleName`, `paidBreakReasons` y las
+   * políticas del kiosco—. La franja es lo mismo en potencia: UI nueva sobre un dato
+   * nuevo (`dashboard.franjas`). Si ese dato volviera vacío, Inicio diría «hoy no hay
+   * turnos ni fichajes» con toda la calma del mundo y nadie lo notaría.
+   *
+   * Se mide lo que de verdad importa: que haya filas y que dentro haya algo PINTADO. Un
+   * carril sin ancho es una franja que existe y no dice nada, que es el fallo que se
+   * vigila.
+   */
+  const franjaDelDia = await pagina.evaluate(() => {
+    const filas = [...document.querySelectorAll('[data-testid^="band-row-"]')];
+    const conPlan = filas.filter((f) => f.querySelector('[data-testid$="-plan"]') !== null);
+    const conReal = filas.filter((f) => f.querySelector('[data-testid$="-real"]') !== null);
+    return {
+      filas: filas.length,
+      conPlan: conPlan.length,
+      /* Turno sin fichaje: el carril vacío. Es el caso que la franja existe para enseñar. */
+      planSinReal: conPlan.filter((f) => f.querySelector('[data-testid$="-real"]') === null).length,
+      conReal: conReal.length,
+      vacio: document.querySelector('[data-testid="band-empty"]') !== null,
+    };
+  });
+
+  /*
+   * NO SE ACEPTA EL ESTADO VACÍO COMO APROBADO, y la primera versión de esta comprobación
+   * sí lo hacía: probé a dejar `franjasDeHoy` en `[]` —el fallo exacto que se vigila— y el
+   * arnés siguió en verde, porque la pantalla enseñaba «hoy no hay turnos» y yo lo había
+   * dado por bueno. En la demostración SIEMPRE hay turnos sembrados, así que un vacío es
+   * un fallo del dato, no un día tranquilo.
+   */
+  if (franjaDelDia.filas === 0) {
+    problemas.push(
+      `escenario «${escenario.nombre}»: la franja del día no tiene ni una fila` +
+        (franjaDelDia.vacio
+          ? ' y enseña su estado vacío, pero la demostración siembra turnos todos los días:' +
+            ' el dato llegó vacío y la pantalla lo dijo como si fuera normal.'
+          : '. O falta la tarjeta, o no se montó.'),
+    );
+  } else if (franjaDelDia.conPlan === 0 && franjaDelDia.conReal === 0) {
+    problemas.push(
+      `escenario «${escenario.nombre}»: hay ${franjaDelDia.filas} fila(s) y ningún tramo ` +
+        'pintado. Una franja que existe y no dice nada es el fallo de campo muerto.',
+    );
+  }
+
+  /*
+   * Y EN EL DÍA CON AUSENTES, el carril vacío tiene que verse. Es la razón de ser de la
+   * franja: «tenía turno y no ha fichado» sin leer una sola hora.
+   */
+  if (escenario.nombre === 'ausentes' && franjaDelDia.filas > 0 && franjaDelDia.planSinReal === 0) {
+    problemas.push(
+      'escenario «ausentes»: ninguna fila enseña turno SIN fichaje, que es justo lo que ' +
+        'este día tiene que hacer visible. O el dato de las ausencias no llega a la ' +
+        'franja, o el carril se está pintando con relleno.',
+    );
+  }
+
+  /*
    * Y que el escenario entregue LO QUE PROMETE SU NOMBRE. El titular correcto no basta:
    * un «día con ausentes» que enseña «1 ausente» tiene el titular bien y el escenario
    * mal, y así pasó —dos de las tres personas sembradas ya habían fichado, y las seis

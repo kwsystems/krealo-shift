@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 
@@ -11,13 +12,24 @@ import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { LoImportanteDeHoy } from '@/components/dashboard/lo-importante';
 import { prioridadDelDia } from '@/features/dashboard/prioridad';
-import { useManagerDashboard, type RightNowEntry } from '@/hooks/use-manager-dashboard';
+import { FilaDeFranja, FranjaDeUnDia } from '@/components/franja/franja-del-dia';
+import { ventanaDelDia } from '@/domain/franja-del-dia';
+import {
+  useManagerDashboard,
+  type FranjaDeHoy,
+  type RightNowEntry,
+} from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useNetworkStore } from '@/stores/network-store';
 import { spacing } from '@/theme/tokens';
 import { currentLanguage } from '@/i18n';
-import { formatClockTime, formatLongDate, minutesToHHmm } from '@/utils/time';
+import {
+  formatClockTime,
+  formatLongDate,
+  minutesToHHmm,
+  type TimeFormatPreference,
+} from '@/utils/time';
 
 /**
  * Inicio administrativo (§11.1).
@@ -48,6 +60,26 @@ export default function ManagerHomeScreen() {
   });
 
   const names = useEmployeeNames(scope.organization?.id ?? null);
+
+  /*
+   * LA VENTANA DE LA FRANJA SALE DE LA JORNADA REAL, no de «las 24 horas del día». Una
+   * tienda que abre de 8 a 18 gastaría dos tercios de la franja en horas en las que no
+   * pasa nada, y comprimiría los turnos justo en la parte que importa.
+   */
+  const franjasDeHoy = dashboard.franjas;
+  /*
+   * `ahora` SE MEMORIZA, y no es una micro-optimización: `new Date(now)` crea un objeto
+   * nuevo en cada render, así que usarlo como dependencia de la ventana la recalcularía
+   * siempre y el `useMemo` no serviría de nada. `now` viene del reloj vivo y cambia una
+   * vez por minuto, que es exactamente cada cuánto tiene sentido mover la marca.
+   */
+  const ahora = useMemo(() => new Date(now), [now]);
+  const ventana = useMemo(() => {
+    const intervalos = franjasDeHoy.flatMap((franja) =>
+      [franja.turno, franja.trabajado].filter((i) => i !== null),
+    );
+    return ventanaDelDia(intervalos, ahora) ?? { desde: ahora, hasta: ahora };
+  }, [franjasDeHoy, ahora]);
 
   /*
    * Los cinco conteos que piden una acción, ordenados por lo que cuesta ignorarlos.
@@ -182,8 +214,48 @@ export default function ManagerHomeScreen() {
                   </Row>
                 </Stack>
 
+                {/*
+                  LA FRANJA DEL DÍA, en el sitio donde antes había una barra de progreso
+                  sin escala: «80:03 / 132:00» y un relleno morado que no decía contra qué
+                  se medía. La franja sí lo dice, porque enseña el turno y lo fichado sobre
+                  la MISMA regla: tarde es que el macizo empiece más adentro, y no vino es
+                  un carril vacío.
+
+                  El total de la semana se queda debajo, en texto: sigue haciendo falta,
+                  pero es un dato de cierre de semana y no lo que se mira a media mañana.
+                */}
                 <Card>
-                  <AppText variant="bodyStrong">{t('admin.scheduledVsWorked')}</AppText>
+                  <AppText variant="bodyStrong">{t('band.title')}</AppText>
+                  <AppText variant="help" tone="subtle">
+                    {t('band.hint')}
+                  </AppText>
+
+                  {franjasDeHoy.length === 0 ? (
+                    <AppText variant="help" tone="subtle" testID="band-empty">
+                      {t('band.empty')}
+                    </AppText>
+                  ) : (
+                    <Stack gap={spacing.sm} testID="band-list">
+                      {franjasDeHoy.map((franja) => (
+                        <FilaDeFranja
+                          key={franja.employeeId}
+                          nombre={names.get(franja.employeeId) ?? t('common.unknown')}
+                          detalle={detalleDeFranja(franja, scope.timezone, scope.timeFormat)}
+                          testID={`band-row-${franja.employeeId}`}
+                        >
+                          <FranjaDeUnDia
+                            ventana={ventana}
+                            turno={franja.turno}
+                            trabajado={franja.trabajado}
+                            ahora={ahora}
+                            estado={franja.estado}
+                            testID={`band-${franja.employeeId}`}
+                          />
+                        </FilaDeFranja>
+                      ))}
+                    </Stack>
+                  )}
+
                   <LimitBar
                     label={`${t('admin.workedHours')} · ${t('admin.scheduledHours')}`}
                     value={dashboard.workedMinutesThisWeek}
@@ -297,4 +369,28 @@ export default function ManagerHomeScreen() {
       </ResponsiveContainer>
     </AppScreen>
   );
+}
+
+/**
+ * La hora que hay que leer en una fila de la franja.
+ *
+ * NO REPITE LO QUE LA FRANJA YA DICE. La forma enseña si llegó tarde o si no vino; lo que
+ * el texto añade es el dato exacto que hace falta para actuar —a qué hora entró, o a qué
+ * hora tenía que haber entrado— porque para llamar a alguien no sirve «más adentro».
+ */
+function detalleDeFranja(
+  franja: FranjaDeHoy,
+  zona: string,
+  timeFormat: TimeFormatPreference,
+): string | undefined {
+  /*
+   * LA ZONA VA SEGUNDA, no el formato. La primera versión pasaba «24h» donde iba la zona
+   * horaria, así que `inZone` recibía una zona inválida y todas las filas enseñaban
+   * «--:--». Compilaba —los dos parámetros son `string`— y solo se vio mirando la
+   * pantalla: es justo el fallo que ningún tipo atrapa.
+   */
+  const hora = (fecha: Date) => formatClockTime(fecha.toISOString(), zona, timeFormat);
+  if (franja.trabajado !== null) return hora(franja.trabajado.desde);
+  if (franja.turno !== null) return hora(franja.turno.desde);
+  return undefined;
 }

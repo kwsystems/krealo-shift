@@ -215,6 +215,12 @@ export const borderWidth = {
  * El objetivo táctil mínimo es 44×44, pero preferimos 52×52.
  */
 export const sizes = {
+  /**
+   * Alto de la franja del día. 10 px: suficiente para distinguir carril de relleno de un
+   * vistazo, y lo bastante fina para que una lista de doce personas siga siendo una lista
+   * y no doce gráficos.
+   */
+  franjaAlto: 10,
   buttonMobile: 52,
   buttonKiosk: 64,
   touchTargetMin: 44,

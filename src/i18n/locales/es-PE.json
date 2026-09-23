@@ -1,5 +1,16 @@
 {
+  "band": {
+    "title": "El día, de un vistazo",
+    "hint": "La línea clara es el turno; la maciza, lo que se fichó de verdad.",
+    "onTime": "Entró a su hora y sigue el turno.",
+    "late": "Entró más tarde que su turno.",
+    "noShow": "Tenía turno y no ha fichado.",
+    "unscheduled": "Fichó sin turno programado.",
+    "nothing": "Sin turno ni fichaje hoy.",
+    "empty": "Hoy no hay turnos ni fichajes en esta sede."
+  },
   "common": {
+    "unknown": "Sin nombre",
     "appName": "Krealo Shift",
     "ok": "Aceptar",
     "cancel": "Cancelar",
@@ -191,7 +202,6 @@
     "workingNow": "Trabajando ahora",
     "onBreakNow": "En descanso",
     "upcoming": "Próximos a entrar",
-    "scheduledVsWorked": "Programadas frente a registradas",
     "rightNow": "Ahora mismo",
     "scheduledHours": "Programadas",
     "workedHours": "Registradas",
