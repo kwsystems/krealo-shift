@@ -139,7 +139,26 @@ export default function KioskIdleScreen() {
           sessionStartedAt: result.data.openSession?.startedAt ?? null,
           takenBreakMinutes: result.data.openSession?.takenBreakMinutes ?? 0,
         }).catch(() => undefined);
-        router.push('/kiosk/actions');
+        /*
+         * `replace` Y NO `push`, y las dos veces que se entra aqui.
+         *
+         * `actions.tsx` vuelve al reposo con `router.replace('/kiosk')`, que SUSTITUYE
+         * la entrada de arriba de la pila. Con un `push` al entrar, la pila quedaba
+         * [/kiosk, /kiosk/actions] y al volver [/kiosk, /kiosk]: la pantalla de reposo
+         * original se quedaba montada debajo, invisible, con su reloj repintandose cada
+         * segundo en un aparato que no se apaga en todo el dia.
+         *
+         * Medido en Chromium: antes de fichar habia 1 pantalla de reposo montada,
+         * despues 2. Se estabilizaba en 2 —no crecia sin fin— pero son dos temporizadores
+         * corriendo para nada, y cualquier prueba que busque un elemento del reloj por
+         * `testID` encuentra el invisible y falla con un mensaje que no se parece a la
+         * causa. Eso ya costo un rato al escribir el arnes de la salida anticipada.
+         *
+         * Con `replace` la pila se queda en profundidad 1 y el `replace` de vuelta la
+         * deja igual. `/kiosk/forgot` y `/kiosk/help` se siguen empujando DESDE acciones,
+         * asi que conservan su propia entrada y su `router.back()` sigue funcionando.
+         */
+        router.replace('/kiosk/actions');
         return;
       }
 
@@ -181,7 +200,8 @@ export default function KioskIdleScreen() {
                 pinVersion: offline.pinVersion,
                 session,
               });
-              router.push('/kiosk/actions');
+              // Mismo motivo que arriba: `replace` para que la pila no crezca.
+              router.replace('/kiosk/actions');
               return;
             }
 

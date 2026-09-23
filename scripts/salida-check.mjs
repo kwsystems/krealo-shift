@@ -247,6 +247,74 @@ async function hastaLasAcciones(pagina) {
   await ctx.close();
 }
 
+// ---------------------------------------------------------------------------
+// 4. Fichar no deja pantallas colgadas
+// ---------------------------------------------------------------------------
+//
+// EL RELOJ NO SE APAGA EN TODO EL DIA, y la pantalla de reposo repinta su reloj cada
+// segundo. Con `push` al entrar y `replace` al volver, la pila crecia y quedaba una
+// pantalla de reposo montada e invisible por debajo: dos temporizadores corriendo, uno
+// de ellos para nada.
+//
+// Y ademas envenena cualquier prueba: un `testID` del reloj pasa a encontrar DOS
+// elementos, uno invisible, y los clics se van al que no se ve. Costo un rato descubrirlo
+// al escribir este mismo arnes.
+{
+  const caso = 'fichar no deja pantallas de reposo colgadas';
+  const ctx = await navegador.newContext({ viewport: { width: 1024, height: 1366 } });
+  const pagina = await ctx.newPage();
+
+  const contar = () =>
+    pagina.evaluate(() => document.querySelectorAll('[data-testid="kiosk-idle"]').length);
+
+  await sembrarKiosco(pagina);
+  await pagina.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+  /*
+   * SE ESPERA A QUE LA PANTALLA ESTÉ, no un número de milisegundos. Con una espera fija
+   * de 1200 ms una pasada contó CERO pantallas de reposo antes de fichar, y cero contra
+   * cero habría dado este caso por bueno sin medir nada. Un arnés que puede pasar por
+   * llegar temprano no es un arnés.
+   */
+  await pagina
+    .locator('[data-testid="kiosk-idle"]')
+    .first()
+    .waitFor({ timeout: 20000 })
+    .catch(() => undefined);
+  const antes = await contar();
+
+  if (antes !== 1) {
+    // No es un fallo del reloj: es que el arnés no está midiendo lo que cree.
+    fallar(caso, `al abrir el reloj esperaba 1 pantalla de reposo montada y conté ${antes}`);
+  } else if (!(await hastaLasAcciones(pagina))) {
+    fallar(caso, 'no llegué a fichar');
+  } else {
+    // Volver a reposo: se ficha la salida y se espera a que el reloj vuelva solo.
+    await pagina.locator('[data-testid="kiosk-action-clock_out"]:visible').click();
+    const hoja = pagina.locator('[data-testid="early-departure-sheet"]:visible');
+    await hoja.waitFor({ timeout: 10000 }).catch(() => undefined);
+    if ((await hoja.count()) > 0) {
+      await pagina.locator('[data-testid="departure-reason-agreed_end"]:visible').click();
+    }
+    await pagina
+      .locator('[data-testid="kiosk-result"]:visible')
+      .waitFor({ timeout: 20000 })
+      .catch(() => undefined);
+    await teclearPin(pagina).catch(() => undefined);
+
+    const despues = await contar();
+    if (despues > antes) {
+      fallar(
+        caso,
+        `antes de fichar había ${antes} pantalla(s) de reposo montada(s) y después ${despues}: ` +
+          'la pila del reloj está creciendo',
+      );
+    } else {
+      pasa(caso, `${antes} montada(s) antes de fichar y ${despues} después: no crece`);
+    }
+  }
+  await ctx.close();
+}
+
 await navegador.close();
 await cerrar();
 
