@@ -882,7 +882,7 @@ publicación.
 
 - **Motivo:** el cliente publicaba por su cuenta y **nunca escribía la versión en el
   turno**. De eso depende la etiqueta «Cambiado» (`status === 'draft' &&
-  publication_version > 0`), así que esa condición no se cumplía jamás y un turno movido
+publication_version > 0`), así que esa condición no se cumplía jamás y un turno movido
   después de publicarlo se veía igual que uno nuevo. En la demostración sí salía, porque
   la semilla escribe la versión a mano — otro «funciona en la demo y no en la realidad».
 - **Por qué no se arregló con un `update` más en el cliente:** el comentario que había en
