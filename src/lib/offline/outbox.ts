@@ -124,9 +124,108 @@ function toEvent(row: OutboxRow): OutboxEvent {
  * sino detectar que el archivo de la base local se manipuló entre el momento en
  * que se guardó el evento y el momento en que se envió.
  */
+/**
+ * EL TEXTO QUE SE FIRMA, en un solo sitio.
+ *
+ * Estaba escrito a mano dentro de `enqueueEvent`, y eso bastaba mientras nadie
+ * verificara. Al empezar a verificar deja de bastar: firmar y comprobar tienen que armar
+ * la MISMA cadena, y dos copias se separan en cuanto se añade un campo —ya se añadieron
+ * cuatro: el motivo de pausa, la nota, y los dos de la salida anticipada—. Con dos copias
+ * el día que alguien añada la quinta, TODA la cola pasaría a no verificar y el reloj
+ * mandaría a revisión fichajes buenos.
+ *
+ * Van TODOS los campos del evento que una persona querría cambiar, y por eso: el
+ * instante, a quién pertenece, qué marcó, y el motivo y la nota que escribió sobre por
+ * qué se ausentaba.
+ */
+export function cuerpoFirmado(evento: {
+  idempotencyKey: string;
+  deviceSequence: number;
+  employeeOpaqueId: string;
+  eventType: string;
+  breakType: string | null;
+  breakReason: string | null;
+  breakNote: string | null;
+  departureReason: string | null;
+  departureNote: string | null;
+  shiftId: string | null;
+  locationId: string;
+  occurredAtDevice: string;
+}): string {
+  return [
+    evento.idempotencyKey,
+    evento.deviceSequence,
+    evento.employeeOpaqueId,
+    evento.eventType,
+    evento.breakType ?? '',
+    evento.breakReason ?? '',
+    evento.breakNote ?? '',
+    evento.departureReason ?? '',
+    evento.departureNote ?? '',
+    evento.shiftId ?? '',
+    evento.locationId,
+    evento.occurredAtDevice,
+  ].join('|');
+}
+
 async function signEvent(payload: string): Promise<string> {
   const deviceKey = (await secureStorage.get(SECURE_KEYS.kioskDeviceKey)) ?? '';
   return Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, `${deviceKey}|${payload}`);
+}
+
+/**
+ * ¿Sigue este fichaje como se guardó?
+ *
+ * LA FIRMA SE CALCULABA Y NO LA LEÍA NADIE. Se buscó en todo `src/` y `functions/src/`:
+ * `toWirePayload` no la manda, `syncOfflineEvents` no la recibe, y nada la recalculaba
+ * para comparar. Era un hash que se escribía y nadie miraba nunca, mientras su propio
+ * comentario decía que servía para «detectar que el archivo de la base local se manipuló
+ * entre el momento en que se guardó el evento y el momento en que se envió».
+ *
+ * Eso no ocurría. Un evento cuyo instante se cambiara a mano en el SQLite del aparato se
+ * sincronizaba igual, y el servidor lo aceptaba como bueno.
+ *
+ * Y ADEMÁS EMPUJABA A EQUIVOCARSE: cada campo nuevo se fue añadiendo al texto firmado con
+ * un comentario explicando por qué había que firmarlo. Se pagaba el coste y se razonaba
+ * sobre una garantía que no existía.
+ */
+export async function firmaIntacta(evento: OutboxEvent): Promise<boolean> {
+  const esperada = await signEvent(
+    cuerpoFirmado({
+      idempotencyKey: evento.idempotencyKey,
+      deviceSequence: evento.deviceSequence,
+      employeeOpaqueId: evento.employeeOpaqueId,
+      eventType: evento.eventType,
+      breakType: evento.breakType,
+      breakReason: evento.breakReason,
+      breakNote: evento.breakNote,
+      departureReason: evento.departureReason,
+      departureNote: evento.departureNote,
+      shiftId: evento.shiftId,
+      locationId: evento.locationId,
+      occurredAtDevice: evento.occurredAtDevice,
+    }),
+  );
+  return esperada === evento.signature;
+}
+
+/**
+ * Aparta un fichaje que no cuadra con su firma.
+ *
+ * NO SE BORRA Y NO SE MANDA. Borrarlo destruiría la única prueba de que alguien tocó la
+ * base; mandarlo sería aceptar como bueno justo lo que se acaba de detectar como
+ * manipulado. Se queda en la cola marcado para que un gerente lo mire, que es lo mismo
+ * que se hace con una transición imposible al sincronizar.
+ */
+export async function apartarPorFirma(idempotencyKey: string): Promise<void> {
+  const database = await openOfflineDatabase();
+  await database.runAsync(
+    `update outbox_time_events
+        set status = 'needs_review', server_reason = ?, next_attempt_at = null
+      where idempotency_key = ?`,
+    'firma_no_coincide',
+    idempotencyKey,
+  );
 }
 
 /** Secuencia monótona por instalación. Nunca se reinicia mientras el kiosco viva. */
@@ -155,27 +254,20 @@ export async function enqueueEvent(input: OutboxEventInput): Promise<OutboxEvent
   const deviceOffsetMinutes = -now.getTimezoneOffset();
   const deviceTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone ?? 'America/Lima';
 
-  const payload = [
+  const payload = cuerpoFirmado({
     idempotencyKey,
     deviceSequence,
-    input.employeeOpaqueId,
-    input.eventType,
-    input.breakType ?? '',
-    // El motivo entra en la firma: si no, seria el unico campo del evento que se
-    // podria cambiar en el SQLite del dispositivo sin invalidarla.
-    input.breakReason ?? '',
-    // Y la nota, por lo mismo y con mas razon: es texto libre escrito por una persona
-    // sobre por que se ausento, y es justo lo que alguien querria reescribir despues.
-    input.breakNote ?? '',
-    // Y los dos de la salida anticipada, por lo mismo: el motivo por el que alguien se
-    // fue cinco horas antes es exactamente lo que querría cambiar quien tocara el
-    // SQLite del aparato.
-    input.departureReason ?? '',
-    input.departureNote ?? '',
-    input.shiftId ?? '',
-    input.locationId,
+    employeeOpaqueId: input.employeeOpaqueId,
+    eventType: input.eventType,
+    breakType: input.breakType ?? null,
+    breakReason: input.breakReason ?? null,
+    breakNote: input.breakNote ?? null,
+    departureReason: input.departureReason ?? null,
+    departureNote: input.departureNote ?? null,
+    shiftId: input.shiftId ?? null,
+    locationId: input.locationId,
     occurredAtDevice,
-  ].join('|');
+  });
 
   const signature = await signEvent(payload);
 

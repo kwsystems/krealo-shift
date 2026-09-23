@@ -12,6 +12,8 @@ import {
   markPhotoFailed,
   markPhotoUploaded,
   pendingPhotos,
+  apartarPorFirma,
+  firmaIntacta,
 } from './outbox';
 import { storeOfflineVerifiers } from './pin';
 import { attachPhoto, syncOfflineEvents, refreshKioskRoster } from '@/features/kiosk/api';
@@ -166,17 +168,37 @@ export async function runSync(): Promise<SyncOutcome> {
       return SIN_TRABAJO;
     }
 
-    await markSending(batch.map((event) => event.idempotencyKey));
+    /*
+     * SE COMPRUEBA LA FIRMA ANTES DE MANDAR NADA, y esto no existía: la firma se
+     * calculaba al encolar y no la leía nadie nunca. Ver `firmaIntacta`.
+     *
+     * Lo que no cuadra NO se manda y NO se borra: se aparta para que un gerente lo mire.
+     * Mandarlo sería aceptar como bueno lo que se acaba de detectar como tocado; borrarlo
+     * destruiría la única prueba de que alguien tocó la base del aparato.
+     */
+    const intactos = [];
+    for (const evento of batch) {
+      if (await firmaIntacta(evento)) intactos.push(evento);
+      else await apartarPorFirma(evento.idempotencyKey);
+    }
+
+    if (intactos.length === 0) {
+      await refreshQueueIndicators();
+      store.setSyncing(false);
+      return { ...SIN_TRABAJO, needsAttention: batch.length };
+    }
+
+    await markSending(intactos.map((event) => event.idempotencyKey));
 
     const result = await syncOfflineEvents({
-      events: batch.map(toWirePayload),
+      events: intactos.map(toWirePayload),
     });
 
     if (!result.ok) {
       // Sin red o servidor caído: se marca el intento y se reprograma con backoff.
       // Los eventos siguen en la cola; ninguno se pierde.
       const reason = result.error.kind === 'offline' ? 'sin_conexion' : result.error.kind;
-      for (const event of batch) {
+      for (const event of intactos) {
         await markAttemptFailed(event.idempotencyKey, reason);
       }
       await refreshQueueIndicators();
@@ -189,7 +211,7 @@ export async function runSync(): Promise<SyncOutcome> {
        */
       track({ name: 'sync_failed', reason: motivoDeAnalitica(result.error.kind) });
       return {
-        attempted: batch.length,
+        attempted: intactos.length,
         accepted: 0,
         needsAttention: 0,
         offline: result.error.kind === 'offline',
@@ -214,7 +236,7 @@ export async function runSync(): Promise<SyncOutcome> {
     // Un evento del lote sobre el que el servidor no dijo nada NO se da por
     // enviado: se reprograma. El silencio no es una confirmación.
     const answered = new Set(result.data.results.map((item) => item.idempotencyKey));
-    for (const event of batch) {
+    for (const event of intactos) {
       if (!answered.has(event.idempotencyKey)) {
         await markAttemptFailed(event.idempotencyKey, 'sin_respuesta_del_servidor');
       }
@@ -234,14 +256,18 @@ export async function runSync(): Promise<SyncOutcome> {
     track({
       name: 'sync_completed',
       accepted,
-      pending: Math.max(0, batch.length - accepted - attention),
-      needsReview: attention,
+      pending: Math.max(0, intactos.length - accepted - attention),
+      /*
+       * Los apartados por firma cuentan como trabajo para un gerente, igual que una
+       * transición imposible: son fichajes que existen y que nadie ha resuelto.
+       */
+      needsReview: attention + (batch.length - intactos.length),
     });
 
     return {
       attempted: batch.length,
       accepted,
-      needsAttention: attention,
+      needsAttention: attention + (batch.length - intactos.length),
       offline: false,
       failure: null,
     };
