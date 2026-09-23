@@ -1,6 +1,7 @@
 import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
+import type { BreakReason } from '@/domain/break-reason';
 import { docId } from '@/lib/firebase/ids';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
@@ -72,6 +73,19 @@ const timeEventSchema = z.object({
   occurred_at: z.string(),
   source: z.enum(['kiosk', 'manager', 'import']),
   is_offline: z.boolean(),
+  /*
+   * El tipo con el que CUENTA este fichaje, si el gerente lo reclasificó.
+   *
+   * `event_type` sigue siendo lo que la persona marcó y es lo que se enseña en «Fichajes
+   * en crudo»: un fichaje no se edita nunca. Esto es lo otro —cómo se cuenta— y va con
+   * `default(null)` porque ningún fichaje anterior a la función lo trae, y un esquema
+   * estricto tumbaría la consulta entera de la semana por una fila vieja.
+   */
+  reclassified_as: z
+    .enum(['clock_in', 'break_start', 'break_end', 'clock_out'])
+    .nullable()
+    .default(null),
+  break_reason: z.string().nullable().default(null),
 });
 
 export type TimeEvent = z.infer<typeof timeEventSchema>;
@@ -158,7 +172,9 @@ export async function fetchTimeEvents(params: {
   return selectRows(z.array(timeEventSchema), (db) =>
     db
       .from(TABLES.timeEvents)
-      .select('id, employee_id, event_type, break_type, occurred_at, source, is_offline')
+      .select(
+        'id, employee_id, event_type, break_type, occurred_at, source, is_offline, reclassified_as, break_reason',
+      )
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)
       .gte('occurred_at', params.fromISO)
@@ -416,6 +432,36 @@ export async function addManualTimeEvent(params: {
       throw toAdminError({ code: 'shape', message: 'UNEXPECTED_SHAPE' });
     }
     return { eventId: row.event_id, workSessionId: row.work_session_id };
+  } catch (error) {
+    throw toAdminError(error);
+  }
+}
+
+/**
+ * «Esa salida no fue fin de jornada: se fue al almacén y volvió.»
+ *
+ * Convierte la salida y la entrada siguiente en una pausa con motivo. El servidor hace
+ * todo el trabajo —marcar los dos fichajes, fundir las dos sesiones en una y dejar la
+ * corrección auditada— porque decidir aquí cuántos minutos cuentan como trabajados
+ * sería poner una regla de nómina en el cliente.
+ */
+export async function reclassifyDeparture(params: {
+  eventId: string;
+  breakReason: BreakReason;
+  reason: string;
+}): Promise<{ minutes: number; breakType: string }> {
+  const reason = params.reason.trim();
+  if (reason.length === 0) throw toAdminError({ code: '23514', message: 'REASON_REQUIRED' });
+
+  const db = requireClient();
+  try {
+    const { data, error } = await db.rpc(RPC.managerReclassifyDeparture, {
+      p_event_id: params.eventId,
+      p_break_reason: params.breakReason,
+      p_reason: reason,
+    });
+    if (error !== null) throw toAdminError(error);
+    return (data ?? { minutes: 0, breakType: 'unpaid' }) as { minutes: number; breakType: string };
   } catch (error) {
     throw toAdminError(error);
   }

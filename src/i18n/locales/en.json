@@ -429,7 +429,12 @@
     "valueUnknownShape": "Unrecognized format",
     "changedBy": "Changed by",
     "overtimeEquivalent": "Equivalent ×{{factor}} (reference)",
-    "departureReason": "Reason for leaving"
+    "departureReason": "Reason for leaving",
+    "countedAsBreak": "Counted as a break · {{reason}}",
+    "reclassifyDeparture": "This was not the end of the day",
+    "reclassifyHelp": "It becomes a break from that clock-out to the next clock-in. The punches are not touched: who corrected it is recorded.",
+    "reclassifyDefaultReason": "Manager reclassified the clock-out as a break",
+    "reclassified": "Done: that clock-out now counts as a break"
   },
   "reports": {
     "title": "Reports",

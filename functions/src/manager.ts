@@ -17,7 +17,12 @@ import {
 } from './shared/caller';
 import { transition, type TimeEventType } from '../../src/domain/attendance-state-machine';
 import { generatePin } from '../../src/domain/pin';
+import { estaReclasificado, tipoEfectivo } from './shared/eventos';
 import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
+import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
+
+/** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
+const DESCANSO_MINIMO_POR_DEFECTO = 660;
 
 /**
  * Lo que la app llamaba con `db.rpc(...)`: las siete funciones del panel.
@@ -628,4 +633,241 @@ export const syncManagedLocations = onCall(async (request) => {
   await objetivo.ref.update({ managed_location_ids: asignaciones, updated_at: nowISO() });
 
   return { managedLocationIds: asignaciones };
+});
+
+// ---------------------------------------------------------------------------
+// Reclasificar una salida que en realidad fue una ausencia por trabajo
+// ---------------------------------------------------------------------------
+
+/**
+ * «Esa salida no fue fin de jornada: se fue al almacen y volvio.» (Andree, 2026-09-22)
+ *
+ * EL CASO REAL. Alguien se ausenta por un encargo de la empresa y marca SALIDA, porque
+ * en el momento no sabia que lo correcto era una pausa —o habia cola, o simplemente no
+ * lo penso—. Al volver marca ENTRADA. El resultado son dos jornadas cortadas y un hueco
+ * en medio que el sistema cuenta como tiempo propio, cuando era trabajo.
+ *
+ * QUE HACE: convierte ese par salida+entrada en una PAUSA con motivo. La opcion B de las
+ * dos que habia, y la elegida porque NO AÑADE UN CONCEPTO NUEVO: usa la pausa, que ya
+ * existe y ya sabe si cuenta como trabajado segun lo que la sede configuro.
+ *
+ * QUE NO HACE: tocar los fichajes. No se edita ninguno y no se borra ninguno. Los dos
+ * eventos siguen diciendo `clock_out` y `clock_in` —es lo que la persona marco, y es lo
+ * que se enseña en «Fichajes en crudo»— y ganan un `reclassified_as` que solo mira el
+ * calculo. Ver `shared/eventos.ts`.
+ *
+ * TRES COSAS QUE SE RECHAZAN, y cada una por una razon concreta:
+ *  - que el evento no sea una salida: no hay nada que convertir;
+ *  - que no haya una entrada despues: seria una pausa sin final, o sea una persona que
+ *    figura descansando para siempre;
+ *  - que ya este reclasificado: hacerlo dos veces sumaria la pausa dos veces.
+ */
+export const managerReclassifyDeparture = onCall(async (request) => {
+  const uid = requireUid(request);
+  const eventId = textoRequerido(request.data?.p_event_id, 'p_event_id');
+  const breakReason = textoRequerido(request.data?.p_break_reason, 'p_break_reason');
+  const reason = textoRequerido(request.data?.p_reason, 'p_reason');
+
+  const salidaRef = db.collection(COLLECTIONS.timeEvents).doc(eventId);
+  const salidaDoc = await salidaRef.get();
+  const salida = salidaDoc.data();
+  if (salida === undefined) throw new HttpsError('not-found', 'Ese fichaje no existe.');
+
+  const organizationId = salida.organization_id as string;
+  const employeeId = salida.employee_id as string;
+  const locationId = salida.location_id as string;
+
+  const membership = await membershipOf(uid, organizationId);
+  requireManagesLocation(membership, locationId);
+
+  const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+  const locationSettings = ((location ?? {}).settings ?? {}) as Record<string, unknown>;
+
+  if (tipoEfectivo(salida) !== 'clock_out') {
+    throw new HttpsError('failed-precondition', 'Ese fichaje no es una salida.');
+  }
+  if (estaReclasificado(salida)) {
+    throw new HttpsError('failed-precondition', 'Esa salida ya se reclasifico.');
+  }
+
+  /*
+   * LA ENTRADA DE VUELTA ES LA SIGUIENTE, no una cualquiera. Se busca por instante y se
+   * comprueba que de verdad sea una entrada: si el siguiente fichaje fuera otra cosa, el
+   * par no formaria una pausa y convertirlo dejaria la jornada peor de como estaba.
+   */
+  const siguientes = await db
+    .collection(COLLECTIONS.timeEvents)
+    .where('employee_id', '==', employeeId)
+    .where('occurred_at', '>', salida.occurred_at)
+    .orderBy('occurred_at', 'asc')
+    .limit(1)
+    .get();
+
+  const vueltaDoc = siguientes.docs[0];
+  const vuelta = vueltaDoc?.data();
+  if (vueltaDoc === undefined || vuelta === undefined || tipoEfectivo(vuelta) !== 'clock_in') {
+    throw new HttpsError(
+      'failed-precondition',
+      'No hay una entrada despues de esa salida: sin vuelta no hay pausa que crear.',
+    );
+  }
+
+  const minutos = Math.floor(
+    (new Date(String(vuelta.occurred_at)).getTime() -
+      new Date(String(salida.occurred_at)).getTime()) /
+      60000,
+  );
+
+  /*
+   * NO SE PUEDE CONVERTIR UN HUECO DE UNA NOCHE ENTERA, y esto no estaba y era un fallo
+   * de verdad: «la entrada siguiente» de quien sale a las 21:00 un lunes es la de las
+   * 09:00 del martes. Sin este limite, reclasificar la salida del lunes creaba una pausa
+   * de doce horas y fundia dos jornadas distintas en una sola de veinticuatro. Con
+   * `errand` —que cuenta como trabajado— eso son doce horas regaladas de un clic.
+   *
+   * EL LIMITE ES EL DESCANSO MINIMO ENTRE TURNOS de la sede, y no un numero nuevo: ese
+   * valor ya significa exactamente «a partir de aqui esto es tiempo libre entre dos
+   * jornadas y no un rato fuera». Once horas de fabrica.
+   */
+  const descansoMinimo = Number(
+    (locationSettings.minimumRestMinutes as number | undefined) ?? DESCANSO_MINIMO_POR_DEFECTO,
+  );
+  if (minutos >= descansoMinimo) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Entre esa salida y la vuelta pasa mas que el descanso minimo entre turnos: ' +
+        'son dos jornadas distintas, no una ausencia.',
+    );
+  }
+
+  /*
+   * PAGADO O NO LO DECIDE LA SEDE, no el gerente que corrige ni el motivo por si solo.
+   * Es la misma regla que en el reloj y vive en un solo sitio: si aqui se decidiera
+   * aparte, la misma pausa contaria distinto segun quien la creo.
+   */
+  const pagados = politicasDe(location ?? {}).paidBreakReasons;
+  const breakType =
+    (pagados[breakReason] ??
+    (DEFAULT_PAID_REASONS as Record<string, boolean>)[breakReason] ??
+    false)
+      ? 'paid'
+      : 'unpaid';
+
+  const sesionCortada = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('clock_out_event_id', '==', eventId)
+    .limit(1)
+    .get();
+  const sesionSiguiente = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('clock_in_event_id', '==', vueltaDoc.id)
+    .limit(1)
+    .get();
+
+  await db.runTransaction(async (tx) => {
+    tx.update(salidaRef, {
+      reclassified_as: 'break_start',
+      break_reason: breakReason,
+      break_type: breakType,
+      reclassified_by: uid,
+      reclassified_at: nowISO(),
+    });
+    tx.update(vueltaDoc.ref, {
+      reclassified_as: 'break_end',
+      reclassified_by: uid,
+      reclassified_at: nowISO(),
+    });
+
+    /*
+     * LAS DOS SESIONES SE FUNDEN EN UNA, a mano y solo estas dos.
+     *
+     * Reconstruir todo desde los eventos habria sido mas elegante y es lo que dice el
+     * comentario de `rebuildWorkSession`, pero HOY LA PROYECCION NO ES PURA:
+     * `managerAdjustTime` escribe las correcciones de hora DENTRO de la sesion, no en
+     * los eventos. Una reconstruccion general las borraria todas sin avisar. Asi que se
+     * toca lo justo: la sesion cortada se alarga hasta el final de la siguiente y la
+     * siguiente desaparece.
+     */
+    const cortada = sesionCortada.docs[0];
+    const siguiente = sesionSiguiente.docs[0];
+
+    if (cortada !== undefined && siguiente !== undefined) {
+      const a = cortada.data();
+      const b = siguiente.data();
+
+      const brutos =
+        b.ends_at === null
+          ? null
+          : Math.floor(
+              (new Date(String(b.ends_at)).getTime() - new Date(String(a.starts_at)).getTime()) /
+                60000,
+            );
+      const pagadosMin =
+        Number(a.paid_break_minutes ?? 0) +
+        Number(b.paid_break_minutes ?? 0) +
+        (breakType === 'paid' ? minutos : 0);
+      const noPagadosMin =
+        Number(a.unpaid_break_minutes ?? 0) +
+        Number(b.unpaid_break_minutes ?? 0) +
+        (breakType === 'paid' ? 0 : minutos);
+
+      tx.update(cortada.ref, {
+        ends_at: b.ends_at ?? null,
+        clock_out_event_id: b.clock_out_event_id ?? null,
+        gross_minutes: brutos,
+        paid_break_minutes: pagadosMin,
+        unpaid_break_minutes: noPagadosMin,
+        net_minutes: brutos === null ? null : brutos - noPagadosMin,
+        status: b.ends_at === null ? 'open' : 'complete',
+        /*
+         * LA MARCA DE SALIDA ANTICIPADA SE VA, y es media razon para existir de todo
+         * esto: la persona no se fue antes, siguio trabajando en otro sitio. Dejarla
+         * seria seguir señalando en la hoja de horas algo que el gerente acaba de
+         * explicar.
+         */
+        flags: (Array.isArray(a.flags) ? a.flags : []).filter(
+          (marca: unknown) => marca !== 'early_departure',
+        ),
+        departure_reason: null,
+        departure_note: null,
+        recomputed_at: nowISO(),
+        updated_at: nowISO(),
+      });
+      tx.delete(siguiente.ref);
+    }
+
+    /**
+     * LA CORRECCION ES UNA FILA NUEVA con su autor y su motivo, como todas: es lo que
+     * vale ante una inspeccion, y es lo unico que distingue una correccion legitima de
+     * alguien regalandose horas.
+     */
+    tx.create(db.collection(COLLECTIONS.timeAdjustments).doc(), {
+      organization_id: organizationId,
+      work_session_id: sesionCortada.docs[0]?.id ?? null,
+      target_type: 'time_event',
+      target_id: eventId,
+      before_value: { event_type: 'clock_out', occurred_at: salida.occurred_at },
+      after_value: {
+        reclassified_as: 'break_start',
+        break_reason: breakReason,
+        break_type: breakType,
+        minutes: minutos,
+        paired_event_id: vueltaDoc.id,
+      },
+      reason,
+      created_by: uid,
+      created_at: nowISO(),
+      channel: 'manager_app',
+    });
+  });
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'departure_reclassified_as_break',
+    entityType: 'time_event',
+    entityId: eventId,
+  });
+
+  return { minutes: minutos, breakType, workSessionId: sesionCortada.docs[0]?.id ?? null };
 });

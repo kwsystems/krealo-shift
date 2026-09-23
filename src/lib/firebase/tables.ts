@@ -130,6 +130,15 @@ export const RPC = {
    * no en el actual, porque una corrección casi siempre se pone en el pasado.
    */
   managerAddTimeEvent: 'manager_add_time_event',
+  /**
+   * «Esa salida fue al almacén, no a casa» (§11.4, pedido de Andree 2026-09-22).
+   *
+   * Convierte una salida y la entrada siguiente en una PAUSA con motivo. NO edita ni
+   * borra ningún fichaje: los dos siguen diciendo lo que la persona marcó y ganan un
+   * `reclassified_as` que solo mira el cálculo de horas. El motivo y el autor quedan en
+   * `time_adjustments`, como toda corrección.
+   */
+  managerReclassifyDeparture: 'manager_reclassify_departure',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

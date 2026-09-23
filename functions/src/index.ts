@@ -30,6 +30,7 @@ export {
   revokeKioskDevice,
   managerAdjustTime,
   managerAddTimeEvent,
+  managerReclassifyDeparture,
   approveTimesheetPeriod,
   exportTimesheetRows,
   revokeAllSessions,

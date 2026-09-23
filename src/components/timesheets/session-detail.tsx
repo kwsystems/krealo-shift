@@ -13,10 +13,11 @@ import {
   type Option,
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
-import { PrimaryButton } from '@/components/ui/buttons';
+import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
-import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
+import { BREAK_REASONS, type BreakReason } from '@/domain/break-reason';
+import { breakReasonLabels, departureReasonLabelKey } from '@/i18n/break-reason-labels';
 import { dateKeyOf, localTimeOf, shiftInstants } from '@/features/schedules/week';
 import { readAdjustmentSide, type AdjustmentSide } from '@/features/timesheets/adjustment-summary';
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
@@ -55,6 +56,7 @@ export function SessionDetailSheet({
   saving,
   conflict,
   onSubmitCorrection,
+  onReclassifyDeparture,
   onClose,
 }: {
   session: WorkSession;
@@ -72,6 +74,13 @@ export function SessionDetailSheet({
     newEndsAt: string | null;
     reason: string;
   }) => void;
+  /**
+   * Reclasificar una salida como pausa: «se fue al almacén, no se fue a casa».
+   *
+   * Opcional a propósito. La hoja de sesión se usa también donde no hay forma de
+   * corregir —o donde quien mira no manda en esa sede— y ahí el botón no debe salir.
+   */
+  onReclassifyDeparture?: (params: { eventId: string; breakReason: BreakReason }) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -83,6 +92,8 @@ export function SessionDetailSheet({
   );
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  /** El fichaje que se está reclasificando, o `null` si la hoja está cerrada. */
+  const [reclasificando, setReclasificando] = useState<string | null>(null);
 
   const reasonValid = reason.trim().length >= 3;
 
@@ -172,13 +183,72 @@ export function SessionDetailSheet({
       ) : (
         <Stack gap={spacing.xs}>
           {events.map((event) => (
-            <KeyValueRow
-              key={event.id}
-              label={`${t(EVENT_LABEL_KEYS[event.event_type])}${
-                event.is_offline ? ` · ${t('timesheet.fromOffline')}` : ''
-              }`}
-              value={formatClockTime(event.occurred_at, timezone, timeFormat, language)}
-            />
+            <Stack key={event.id} gap={spacing.xs}>
+              <KeyValueRow
+                label={`${t(EVENT_LABEL_KEYS[event.event_type])}${
+                  event.is_offline ? ` · ${t('timesheet.fromOffline')}` : ''
+                }`}
+                value={formatClockTime(event.occurred_at, timezone, timeFormat, language)}
+              />
+              {/*
+                LO QUE SE MARCÓ ARRIBA, CÓMO SE CUENTA ABAJO. Nunca se sustituye la
+                etiqueta: la fila sigue diciendo «Salida» porque eso es lo que la persona
+                hizo, y esta línea añade en qué se convirtió. Tapar la primera con la
+                segunda sería reescribir el registro en la pantalla, que es lo mismo que
+                el proyecto se prohíbe hacer en la base.
+              */}
+              {event.reclassified_as !== null ? (
+                <AppText variant="help" tone="muted">
+                  {t('timesheet.countedAsBreak', {
+                    reason:
+                      event.break_reason === null
+                        ? t('kiosk.reasonOther')
+                        : breakReasonLabels(t)[event.break_reason as BreakReason],
+                  })}
+                </AppText>
+              ) : onReclassifyDeparture === undefined ||
+                event.event_type !== 'clock_out' ? null : reclasificando === event.id ? (
+                /*
+                  LOS MOTIVOS SALEN AQUÍ, pegados al fichaje que se está cambiando, y no
+                  al final de la hoja. La primera versión los ponía abajo del todo: se
+                  pulsaba «No fue fin de jornada» y no pasaba nada visible, porque la
+                  lista aparecía fuera de la pantalla, debajo del formulario de corregir.
+                  Un control que responde donde no estás mirando es un control que no
+                  responde.
+
+                  Y son los motivos de PAUSA, no los de salida anticipada: lo que se
+                  crea aquí es una pausa, y así la empresa ya sabe si esos minutos
+                  cuentan como trabajados sin una segunda tabla de equivalencias.
+                */
+                <Stack gap={spacing.xs}>
+                  <AppText variant="help" tone="muted">
+                    {t('timesheet.reclassifyHelp')}
+                  </AppText>
+                  {BREAK_REASONS.map((motivo) => (
+                    <SecondaryButton
+                      key={motivo}
+                      label={breakReasonLabels(t)[motivo]}
+                      onPress={() => {
+                        onReclassifyDeparture({ eventId: event.id, breakReason: motivo });
+                        setReclasificando(null);
+                      }}
+                      testID={`reclassify-reason-${motivo}`}
+                    />
+                  ))}
+                  <GhostButton
+                    label={t('common.cancel')}
+                    onPress={() => setReclasificando(null)}
+                    testID="reclassify-cancel"
+                  />
+                </Stack>
+              ) : (
+                <GhostButton
+                  label={t('timesheet.reclassifyDeparture')}
+                  onPress={() => setReclasificando(event.id)}
+                  testID={`reclassify-${event.id}`}
+                />
+              )}
+            </Stack>
           ))}
         </Stack>
       )}

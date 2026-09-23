@@ -1,3 +1,4 @@
+import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
 import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
@@ -48,6 +49,17 @@ function sesionDemo() {
 
 function sinError<T>(data: T) {
   return { data, error: null };
+}
+
+/**
+ * Un rechazo de la demostración, con la forma que el cliente sabe leer.
+ *
+ * DEVOLVER `sinError(null)` CUANDO ALGO NO SE PUEDE HACER ES MENTIR: la pantalla dice
+ * «listo» y no ha pasado nada. Es el mismo fallo que ya tuvieron aquí `verify-pin` y
+ * «olvidé marcar» con formas inventadas, solo que más silencioso.
+ */
+function conError(mensaje: string) {
+  return { data: null, error: { code: 'failed-precondition', message: mensaje } };
 }
 
 function minutosEntre(desde: string, hasta: string): number {
@@ -215,6 +227,130 @@ function crearRpc(almacen: Almacen) {
           }),
         );
         return sinError(null);
+      }
+
+      /**
+       * Reclasificar una salida como pausa, en la demostración.
+       *
+       * Marca los dos fichajes y funde las dos sesiones, igual que el servidor. NO es
+       * una versión simplificada por comodidad: si la demostración devolviera «listo»
+       * sin mover los minutos, enseñaría una corrección que no corrige, y quien la vea
+       * creerá que la app hace algo que no hace. Ya pasó con otras respuestas inventadas
+       * de este mismo archivo.
+       */
+      case 'manager_reclassify_departure': {
+        const idSalida = argumentos.p_event_id;
+        const eventos = filas('time_events');
+        const salida = eventos.find((fila) => fila.id === idSalida);
+        if (salida === undefined) return conError('Ese fichaje no existe.');
+
+        const posteriores = eventos
+          .filter(
+            (fila) =>
+              fila.employee_id === salida.employee_id &&
+              String(fila.occurred_at) > String(salida.occurred_at),
+          )
+          .sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)));
+        const vuelta = posteriores[0];
+        if (vuelta === undefined || vuelta.event_type !== 'clock_in') {
+          return conError('No hay una entrada después de esa salida.');
+        }
+
+        const motivo = String(argumentos.p_break_reason ?? 'other');
+        const pagada = DEFAULT_PAID_REASONS[motivo as BreakReason] ?? false;
+        const minutos = minutosEntre(String(salida.occurred_at), String(vuelta.occurred_at));
+
+        /*
+         * EL MISMO LÍMITE QUE EL SERVIDOR, y aquí importa especialmente: en la
+         * demostración cada día es UNA jornada, así que «la entrada siguiente» de
+         * cualquier salida es siempre la del día siguiente. Sin este control la
+         * demostración enseñaría una corrección que el servidor rechaza, que es peor que
+         * no enseñarla — quien la pruebe aquí la creerá posible allá.
+         */
+        const DESCANSO_MINIMO = 660;
+        if (minutos >= DESCANSO_MINIMO) {
+          return conError(
+            'Entre esa salida y la vuelta pasa más que el descanso mínimo entre turnos: ' +
+              'son dos jornadas distintas, no una ausencia.',
+          );
+        }
+
+        almacen.set(
+          'time_events',
+          eventos.map((fila) => {
+            if (fila.id === idSalida) {
+              return {
+                ...fila,
+                reclassified_as: 'break_start',
+                break_reason: motivo,
+                break_type: pagada ? 'paid' : 'unpaid',
+              };
+            }
+            if (fila.id === vuelta.id) return { ...fila, reclassified_as: 'break_end' };
+            return fila;
+          }),
+        );
+
+        const sesiones = filas('work_sessions');
+        /*
+         * Por id de evento primero y por hora si no lo hay: la semilla de la
+         * demostración no guarda `clock_out_event_id` en sus sesiones, y buscar solo por
+         * id no encontraría nada — o sea que se marcarían los fichajes y los minutos no
+         * se moverían, que es exactamente la clase de media verdad que esto evita.
+         */
+        const cortada =
+          sesiones.find((fila) => fila.clock_out_event_id === idSalida) ??
+          sesiones.find(
+            (fila) =>
+              fila.employee_id === salida.employee_id && fila.ends_at === salida.occurred_at,
+          );
+        const siguiente =
+          sesiones.find((fila) => fila.clock_in_event_id === vuelta.id) ??
+          sesiones.find(
+            (fila) =>
+              fila.employee_id === vuelta.employee_id && fila.starts_at === vuelta.occurred_at,
+          );
+
+        if (cortada !== undefined && siguiente !== undefined) {
+          const fin = siguiente.ends_at as string | null;
+          const brutos = fin === null ? null : minutosEntre(String(cortada.starts_at), fin);
+          const noPagados =
+            Number(cortada.unpaid_break_minutes ?? 0) +
+            Number(siguiente.unpaid_break_minutes ?? 0) +
+            (pagada ? 0 : minutos);
+          const pagados =
+            Number(cortada.paid_break_minutes ?? 0) +
+            Number(siguiente.paid_break_minutes ?? 0) +
+            (pagada ? minutos : 0);
+
+          almacen.set(
+            'work_sessions',
+            sesiones
+              .filter((fila) => fila.id !== siguiente.id)
+              .map((fila) =>
+                fila.id !== cortada.id
+                  ? fila
+                  : {
+                      ...fila,
+                      ends_at: fin,
+                      clock_out_event_id: siguiente.clock_out_event_id ?? null,
+                      gross_minutes: brutos,
+                      paid_break_minutes: pagados,
+                      unpaid_break_minutes: noPagados,
+                      net_minutes: brutos === null ? null : brutos - noPagados,
+                      status: fin === null ? 'open' : 'complete',
+                      flags: (Array.isArray(fila.flags) ? fila.flags : []).filter(
+                        (marca) => marca !== 'early_departure',
+                      ),
+                      departure_reason: null,
+                      departure_note: null,
+                      updated_at: new Date().toISOString(),
+                    },
+              ),
+          );
+        }
+
+        return sinError({ minutes: minutos, breakType: pagada ? 'paid' : 'unpaid' });
       }
 
       case 'manager_add_time_event': {

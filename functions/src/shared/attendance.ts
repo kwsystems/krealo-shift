@@ -7,6 +7,7 @@ import {
   type TimeEventType,
 } from '../../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './admin';
+import { tipoEfectivo } from './eventos';
 import { marcasDeLaSesion } from './marcas';
 import { politicasDe } from './politicas';
 
@@ -83,7 +84,7 @@ export async function attendanceStateAt(
       return porInstante !== 0 ? porInstante : Number(a.seq ?? 0) - Number(b.seq ?? 0);
     });
 
-  return reduceEvents(ordenados.map((row) => row.event_type as TimeEventType)).state;
+  return reduceEvents(ordenados.map((row) => tipoEfectivo(row))).state;
 }
 
 /** Numero de secuencia global creciente. Es el `seq` de Postgres. */
@@ -208,7 +209,7 @@ export async function rebuildWorkSession(
   let inicio: Record<string, unknown> | undefined;
   const desdeUltimaEntrada: Record<string, unknown>[] = [];
   for (const evento of eventos) {
-    if (evento.event_type === 'clock_in') {
+    if (tipoEfectivo(evento) === 'clock_in') {
       inicio = evento;
       desdeUltimaEntrada.length = 0;
     }
@@ -216,7 +217,7 @@ export async function rebuildWorkSession(
   }
   if (inicio === undefined) return;
 
-  const salida = desdeUltimaEntrada.find((evento) => evento.event_type === 'clock_out');
+  const salida = desdeUltimaEntrada.find((evento) => tipoEfectivo(evento) === 'clock_out');
   const abierta = salida === undefined;
 
   let pagados = 0;
@@ -224,8 +225,8 @@ export async function rebuildWorkSession(
   let pausaAbierta: Record<string, unknown> | null = null;
 
   for (const evento of desdeUltimaEntrada) {
-    if (evento.event_type === 'break_start') pausaAbierta = evento;
-    if (evento.event_type === 'break_end' && pausaAbierta !== null) {
+    if (tipoEfectivo(evento) === 'break_start') pausaAbierta = evento;
+    if (tipoEfectivo(evento) === 'break_end' && pausaAbierta !== null) {
       const minutos = Math.floor(
         (new Date(String(evento.occurred_at)).getTime() -
           new Date(String(pausaAbierta.occurred_at)).getTime()) /
@@ -361,14 +362,15 @@ export async function pausaAbiertaDe(
   let abierta: { startedAt: string; breakType: string } | null = null;
   for (const evento of eventos) {
     // Una entrada nueva empieza otra jornada: lo de antes ya no cuenta.
-    if (evento.event_type === 'clock_in' || evento.event_type === 'clock_out') abierta = null;
-    if (evento.event_type === 'break_start') {
+    const tipo = tipoEfectivo(evento);
+    if (tipo === 'clock_in' || tipo === 'clock_out') abierta = null;
+    if (tipo === 'break_start') {
       abierta = {
         startedAt: String(evento.occurred_at),
         breakType: String(evento.break_type ?? 'unpaid'),
       };
     }
-    if (evento.event_type === 'break_end') abierta = null;
+    if (tipo === 'break_end') abierta = null;
   }
 
   return abierta;

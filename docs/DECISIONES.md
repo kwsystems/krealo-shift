@@ -734,6 +734,48 @@ pantallas del reloj.
 - **Dónde:** `src/stores/kiosk-store.ts`, con su prueba en
   `src/stores/__tests__/politicas-del-vinculo.test.ts`.
 
+### Un fichaje no se edita: se reclasifica
+
+Para convertir una salida en pausa —«se fue al almacén, no se fue a casa»— los dos
+fichajes se quedan intactos y ganan un campo `reclassified_as`. El evento sigue diciendo
+`clock_out` para siempre; el cálculo de horas usa `tipoEfectivo()`.
+
+- **Motivo:** la regla de oro del proyecto es que `time_events` es append-only, porque el
+  evento crudo es la única prueba de lo que pasó y reescribirlo borra la diferencia entre
+  un error honesto y un fraude. Dos verdades distintas conviven porque son dos preguntas
+  distintas: **qué hizo la persona** (lo que marcó) y **cómo se cuenta** (lo que el
+  gerente corrigió). La pantalla enseña las dos, una debajo de la otra, nunca una en
+  lugar de la otra.
+- **Costo:** todo sitio que decida algo según el tipo tiene que usar `tipoEfectivo()`.
+  Son 14 y están en `shared/attendance.ts` y `views.ts`. Uno solo leyendo `event_type` a
+  pelo bastaría para que Horas y Reportes dijeran cosas distintas del mismo día.
+- **Dónde:** `functions/src/shared/eventos.ts`.
+
+### La reclasificación funde las dos sesiones a mano, no reconstruyendo
+
+`managerReclassifyDeparture` alarga la sesión cortada y borra la siguiente, en lugar de
+recalcular todo desde los eventos.
+
+- **Motivo:** reconstruir sería lo elegante y es lo que promete el comentario de
+  `rebuildWorkSession`, pero **hoy la proyección no es pura**: `managerAdjustTime`
+  escribe las correcciones de hora DENTRO de `work_sessions`, no en los eventos. Una
+  reconstrucción general las borraría todas, sin avisar y sin forma de recuperarlas.
+- **Costo:** dos caminos que calculan minutos de sesión en vez de uno. Vale la pena hasta
+  que las correcciones de hora vivan también en los eventos.
+
+### El hueco reclasificable se limita con el descanso mínimo entre turnos
+
+No se puede convertir en pausa un hueco igual o mayor que `minimumRestMinutes` (11 h de
+fábrica, configurable por sede).
+
+- **Motivo:** «la entrada siguiente» de quien sale a las 21:00 un lunes es la de las 09:00
+  del martes. Sin límite, reclasificar la salida del lunes creaba una pausa de doce horas
+  y fundía dos jornadas en una de veinticuatro — y con un motivo que cuenta como
+  trabajado, son doce horas regaladas de un clic.
+- **Por qué ese número y no uno nuevo:** `minimumRestMinutes` ya significa exactamente
+  «a partir de aquí esto es tiempo libre entre dos jornadas», y ya lo configura cada sede.
+- **Dónde:** `functions/src/manager.ts`, con sus dos pruebas de emulador.
+
 ---
 
 ## Cómo agregar una entrada

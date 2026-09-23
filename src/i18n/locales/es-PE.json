@@ -429,7 +429,12 @@
     "valueUnknownShape": "Formato no reconocido",
     "changedBy": "Modificado por",
     "overtimeEquivalent": "Equivalente ×{{factor}} (referencia)",
-    "departureReason": "Motivo de la salida"
+    "departureReason": "Motivo de la salida",
+    "countedAsBreak": "Se cuenta como pausa · {{reason}}",
+    "reclassifyDeparture": "No fue fin de jornada",
+    "reclassifyHelp": "Se convierte en una pausa desde esa salida hasta la entrada siguiente. Los fichajes no se tocan: queda escrito quién lo corrigió.",
+    "reclassifyDefaultReason": "El gerente reclasificó la salida como pausa",
+    "reclassified": "Listo: esa salida ahora cuenta como pausa"
   },
   "reports": {
     "title": "Reportes",

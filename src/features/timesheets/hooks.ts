@@ -1,9 +1,11 @@
+import type { BreakReason } from '@/domain/break-reason';
 import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   addManualTimeEvent,
   adjustWorkSession,
+  reclassifyDeparture,
   approvePeriod,
   createManualEntryRequest,
   ensurePeriod,
@@ -257,5 +259,11 @@ export function useTimesheetMutations(params: {
     onSuccess: invalidate,
   });
 
-  return { adjust, manualEntry, addEvent, approve, reopen };
+  const reclassify = useMutation({
+    mutationFn: (variables: { eventId: string; breakReason: BreakReason; reason: string }) =>
+      reclassifyDeparture(variables),
+    onSuccess: invalidate,
+  });
+
+  return { adjust, manualEntry, addEvent, approve, reopen, reclassify };
 }

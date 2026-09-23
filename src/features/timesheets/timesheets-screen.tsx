@@ -502,6 +502,24 @@ export function TimesheetsScreen() {
           language={language}
           saving={mutations.adjust.isPending}
           conflict={conflict}
+          /*
+           * Sin comprobación de permiso aquí, igual que el formulario de corrección de
+           * arriba: quien manda es el servidor, que exige mandar en esa sede. Y a esta
+           * pantalla solo se llega por `(manager)`, con la sede elegida de entre las
+           * propias, así que el caso de alguien que ve el botón y no puede usarlo no
+           * existe por la ruta normal.
+           */
+          onReclassifyDeparture={({ eventId, breakReason }) =>
+            mutations.reclassify.mutate(
+              { eventId, breakReason, reason: t('timesheet.reclassifyDefaultReason') },
+              {
+                onSuccess: () => {
+                  setSelected(null);
+                  setFeedback(t('timesheet.reclassified'));
+                },
+              },
+            )
+          }
           onSubmitCorrection={({ newStartsAt, newEndsAt, reason }) =>
             mutations.adjust.mutate(
               {

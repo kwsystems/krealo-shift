@@ -1,6 +1,7 @@
 import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/https';
 
 import { COLLECTIONS, db } from './shared/admin';
+import { tipoEfectivo } from './shared/eventos';
 import {
   membershipOf,
   requireManagesLocation,
@@ -105,9 +106,9 @@ export const viewEmployeesWorkingNow = onCall(async (request) => {
 
       const ultimaPausa = eventos.docs
         .map((e) => e.data())
-        .find((e) => e.event_type === 'break_start' || e.event_type === 'break_end');
+        .find((e) => tipoEfectivo(e) === 'break_start' || tipoEfectivo(e) === 'break_end');
 
-      const enPausa = ultimaPausa?.event_type === 'break_start';
+      const enPausa = ultimaPausa !== undefined && tipoEfectivo(ultimaPausa) === 'break_start';
 
       return {
         work_session_id: doc.id,
@@ -266,7 +267,8 @@ export const viewBreakTimeByReason = onCall(async (request) => {
   const porEmpleado = new Map<string, Record<string, unknown>[]>();
   for (const doc of eventos.docs) {
     const evento = doc.data();
-    if (evento.event_type !== 'break_start' && evento.event_type !== 'break_end') continue;
+    const tipo = tipoEfectivo(evento);
+    if (tipo !== 'break_start' && tipo !== 'break_end') continue;
     const lista = porEmpleado.get(evento.employee_id as string) ?? [];
     lista.push(evento);
     porEmpleado.set(evento.employee_id as string, lista);
@@ -277,7 +279,9 @@ export const viewBreakTimeByReason = onCall(async (request) => {
   for (const [employeeId, lista] of porEmpleado) {
     let inicio: Record<string, unknown> | null = null;
     for (const evento of lista) {
-      if (evento.event_type === 'break_start') {
+      // `tipoEfectivo` otra vez y no la variable de arriba: ahi hay un `tipo` distinto
+      // —el `break_type` de nomina— y el compilador lo cazo al primer intento.
+      if (tipoEfectivo(evento) === 'break_start') {
         inicio = evento;
         continue;
       }
