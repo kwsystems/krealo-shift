@@ -7,7 +7,11 @@ coverage/
 
 # Los 219 skills instalados. NO son codigo del proyecto: vienen tal cual de
 # kwsystems/claw y de krealo-publisher, y reformatearlos ensuciaria cualquier
-# comparacion con su origen. Ademas hoy estan excluidos de git.
+# comparacion con su origen.
+#
+# (Decia «ademas hoy estan excluidos de git», que dejo de ser cierto: 225 archivos
+# de skills estan commiteados. El motivo de arriba se sostiene solo, asi que la
+# exclusion se queda; lo que se fue es la frase que era falsa.)
 .claude/
 
 # Flujos de Maestro. Los consume Maestro, no nuestra cadena de herramientas, y aqui no

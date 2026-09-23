@@ -203,10 +203,19 @@ servicio solo alcanza a `krealo-shift`.
 > 1443 archivos —tokens, JWT, claves de AWS y Google, bloques de clave privada— y
 > **no hay ninguna**.
 >
-> Aun así **siguen sin commitear los 198**, a la espera de que Andree decida: subir
+> Aun así **la mayoría sigue sin commitear**, a la espera de que Andree decida: subir
 > material interno de la agencia a un repositorio PÚBLICO es su decisión, no mía, y
 > él ya había decidido esperar a que el repo pasara a privado. Ver la pregunta
 > abierta en la tarea de skills del Publisher.
+>
+> **Corregido el 2026-09-23: «no commiteados» ya no es cierto del todo.** Medido con
+> `git ls-files`: hay **225 archivos commiteados**, 42 carpetas en `.claude/skills/` y
+> 26 en `.agents/skills/`, de 245 que hay en disco. Son todos skills de diseño y
+> animación genéricos —animate, apple-design, brandkit, gsap-\*, ui-ux-pro-max…— y se
+> comprobó uno a uno que **ninguno lleva nombre de cliente de la agencia** ni material
+> confidencial. Los 21 con clientes reales siguen fuera, que es lo que importaba.
+> La decisión de Andree sigue abierta y ahora incluye qué hacer con estos que ya están
+> dentro.
 
 Traídos de `kwsystems/krealo-publisher` (16, commit `fff45b1`) y de
 `kwsystems/claw`, el workspace de OpenClaw (203, commit `0175864`), desde
