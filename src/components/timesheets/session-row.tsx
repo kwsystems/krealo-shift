@@ -1,12 +1,13 @@
-import { Pressable, StyleSheet } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { Card, Row, Stack } from '@/components/ui/layout';
+import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { SupportedLanguage } from '@/i18n';
+import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 
@@ -69,6 +70,7 @@ export function SessionRow({
   testID?: string;
 }) {
   const { t } = useTranslation();
+  const styles = useEstilos();
 
   const start = formatClockTime(session.starts_at, timezone, timeFormat, language);
   const end =
@@ -86,7 +88,7 @@ export function SessionRow({
       testID={testID}
       style={({ pressed }) => [pressed ? styles.pressed : null]}
     >
-      <Card>
+      <View style={styles.fila}>
         <Row justify="space-between" gap={spacing.md} align="flex-start">
           <Stack gap={spacing.xs}>
             <AppText variant="bodyStrong">{employeeName}</AppText>
@@ -119,11 +121,23 @@ export function SessionRow({
             ))}
           </Row>
         ) : null}
-      </Card>
+      </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
+const useEstilos = estilosDelTema((colors) => ({
   pressed: { opacity: 0.7 },
-});
+  /*
+   * LA FILA ES UNA FILA DE TABLA, no una tarjeta. Comparte superficie con sus vecinas y
+   * las separa una regla fina (`SeparadorDeRegistro`, en la lista). Antes cada una traía
+   * su propia `Card`: quince sesiones eran quince planos flotando, cada uno pagando
+   * relleno, sombra y hueco justo en la pantalla donde más falta hace el alto.
+   */
+  fila: {
+    backgroundColor: colors.surface,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.lg,
+    gap: spacing.sm,
+  },
+}));

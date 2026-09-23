@@ -5,6 +5,7 @@ import { SessionRow } from './session-row';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { SupportedLanguage } from '@/i18n';
+import { SeparadorDeRegistro } from '@/components/ui/layout';
 import { spacing } from '@/theme/tokens';
 import type { TimeFormatPreference } from '@/utils/time';
 
@@ -87,6 +88,7 @@ export function SessionList({
       renderItem={renderItem}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
+      ItemSeparatorComponent={SeparadorDeRegistro}
       style={styles.lista}
       contentContainerStyle={styles.contenido}
       testID={testID}
@@ -99,5 +101,9 @@ const keyExtractor = (session: WorkSession) => session.id;
 
 const styles = StyleSheet.create({
   lista: { flex: 1 },
-  contenido: { gap: spacing.sm, paddingBottom: spacing.xl },
+  /*
+   * SIN HUECO ENTRE FILAS: las separa una regla, no un vacío. El hueco era lo que hacía
+   * que quince sesiones parecieran quince objetos sueltos en vez de una hoja.
+   */
+  contenido: { paddingBottom: spacing.xl },
 });

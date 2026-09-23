@@ -3,7 +3,7 @@ import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useResponsive } from '@/hooks/use-responsive';
-import { radii, shadows, spacing } from '@/theme/tokens';
+import { borderWidth, radii, shadows, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
 import type { ColorSet } from '@/theme/tokens';
@@ -203,6 +203,7 @@ const useEstilos = estilosDelTema((colors) => ({
     ...shadows.card,
   },
   row: { flexDirection: 'row' },
+  separadorDeRegistro: { height: borderWidth.hairline, backgroundColor: colors.border },
   barra: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -268,4 +269,21 @@ export function BarraDeControl({
       {accion === undefined ? null : <View style={styles.accionDeBarra}>{accion}</View>}
     </View>
   );
+}
+
+/**
+ * LA SEPARACIÓN DE UN LIBRO DE REGISTRO: una regla fina entre filas, nada más.
+ *
+ * POR QUÉ. Cada fila de Horas y de Equipo venía envuelta en su propia `Card`, así que una
+ * hoja de quince sesiones eran quince planos flotando con su sombra y su hueco: una tabla
+ * convertida en una pila de cajas. Y cuesta caro en lo que más falta hace ahí —el alto de
+ * pantalla— porque cada caja paga su relleno, su sombra y el hueco con la siguiente.
+ *
+ * En un libro de registro las filas comparten superficie y las separa una línea. Se lee
+ * mejor por la misma razón por la que una tabla se lee mejor que quince fichas: el ojo
+ * recorre una columna en vez de saltar entre objetos.
+ */
+export function SeparadorDeRegistro() {
+  const styles = useEstilos();
+  return <View style={styles.separadorDeRegistro} />;
 }

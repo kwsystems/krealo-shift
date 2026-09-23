@@ -73,5 +73,9 @@ const keyExtractor = (member: TeamMember) => member.id;
 
 const styles = StyleSheet.create({
   lista: { flex: 1 },
-  contenido: { gap: spacing.sm, paddingBottom: spacing.xl },
+  /*
+   * SIN HUECO ENTRE FILAS: las separa una regla, no un vacío. El hueco era lo que hacía
+   * que quince sesiones parecieran quince objetos sueltos en vez de una hoja.
+   */
+  contenido: { paddingBottom: spacing.xl },
 });

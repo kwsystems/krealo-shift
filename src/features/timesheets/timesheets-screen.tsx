@@ -30,7 +30,7 @@ import { ManualEntrySheet, SessionDetailSheet } from '@/components/timesheets/se
 import { SessionList } from '@/components/timesheets/session-list';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import {
   addWeeks,
@@ -45,7 +45,8 @@ import { adminErrorKind } from '@/hooks/use-admin-query';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { currentLanguage } from '@/i18n';
-import { spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { radii, spacing } from '@/theme/tokens';
 import { minutesToHHmm } from '@/utils/time';
 
 /**
@@ -60,6 +61,7 @@ type StatusFilter = 'all' | 'needsReview' | 'approved';
 
 export function TimesheetsScreen() {
   const { t } = useTranslation();
+  const estilosDelPeriodo = useEstilosDeHoras();
   const scope = useManagerScope();
   const language = currentLanguage();
   const now = useLiveClock('minute');
@@ -277,19 +279,13 @@ export function TimesheetsScreen() {
               }
               header={
                 <Stack gap={spacing.lg} style={estilos.cabecera}>
-                  {scope.locations.length > 1 ? (
-                    <SelectField
-                      label={t('schedule.location')}
-                      value={scope.locationId}
-                      options={scope.locations.map((location) => ({
-                        value: location.id,
-                        label: location.name,
-                      }))}
-                      onChange={scope.setLocationId}
-                      testID="timesheet-location"
-                    />
-                  ) : null}
-
+                  {/*
+                    LA SEMANA ARRIBA Y LOS FILTROS EN UNA FILA. Eran CUATRO bloques a ancho
+                    completo apilados —sede, semana, empleado, estado— y detrás seis fichas
+                    de totales y la tarjeta del periodo, así que la primera fila de la hoja
+                    empezaba pasados los 790 px. En una hoja de horas lo que se viene a ver
+                    son las filas.
+                  */}
                   <WeekNavigator
                     weekStart={weekStart}
                     language={language}
@@ -299,28 +295,43 @@ export function TimesheetsScreen() {
                     onGoToCurrent={() => setWeekOffset(0)}
                   />
 
-                  <SelectField
-                    label={t('schedule.employee')}
-                    value={employeeFilter}
-                    options={employeeOptions}
-                    onChange={(value) =>
-                      setEmployeeFilter((current) => (current === value ? null : value))
-                    }
-                    emptyLabel={t('team.noEmployeesForLocation')}
-                    testID="timesheet-employee-filter"
-                  />
+                  <BarraDeControl testID="timesheet-controls">
+                    {scope.locations.length > 1 ? (
+                      <SelectField
+                        label={t('schedule.location')}
+                        value={scope.locationId}
+                        options={scope.locations.map((location) => ({
+                          value: location.id,
+                          label: location.name,
+                        }))}
+                        onChange={scope.setLocationId}
+                        testID="timesheet-location"
+                      />
+                    ) : null}
 
-                  <SegmentedControl
-                    label={t('timesheet.statusFilter')}
-                    value={statusFilter}
-                    options={[
-                      { value: 'all', label: t('team.statusAll') },
-                      { value: 'needsReview', label: t('timesheet.statusNeedsReview') },
-                      { value: 'approved', label: t('timesheet.statusApproved') },
-                    ]}
-                    onChange={setStatusFilter}
-                    testID="timesheet-status-filter"
-                  />
+                    <SelectField
+                      label={t('schedule.employee')}
+                      value={employeeFilter}
+                      options={employeeOptions}
+                      onChange={(value) =>
+                        setEmployeeFilter((current) => (current === value ? null : value))
+                      }
+                      emptyLabel={t('team.noEmployeesForLocation')}
+                      testID="timesheet-employee-filter"
+                    />
+
+                    <SegmentedControl
+                      label={t('timesheet.statusFilter')}
+                      value={statusFilter}
+                      options={[
+                        { value: 'all', label: t('team.statusAll') },
+                        { value: 'needsReview', label: t('timesheet.statusNeedsReview') },
+                        { value: 'approved', label: t('timesheet.statusApproved') },
+                      ]}
+                      onChange={setStatusFilter}
+                      testID="timesheet-status-filter"
+                    />
+                  </BarraDeControl>
 
                   <Row gap={spacing.sm} wrap align="flex-start">
                     <StatTile
@@ -391,76 +402,85 @@ export function TimesheetsScreen() {
                     />
                   </Row>
 
-                  <Card>
-                    <Row justify="space-between" gap={spacing.md} wrap align="center">
-                      <Stack gap={spacing.xs}>
-                        <AppText variant="bodyStrong">{t('timesheet.period')}</AppText>
-                        <AppText variant="help" tone="subtle" tabular>
-                          {`${from} – ${to}`}
-                        </AppText>
-                      </Stack>
-                      <StatusBadge
-                        label={
-                          periodStatus === 'approved'
-                            ? t('timesheet.statusApproved')
-                            : periodStatus === 'reopened'
-                              ? t('timesheet.statusReopened')
-                              : t('timesheet.statusOpen')
-                        }
-                        tone={periodStatus === 'approved' ? 'working' : 'info'}
-                        icon={
-                          periodStatus === 'approved' ? 'checkmark-circle' : 'lock-open-outline'
-                        }
-                        compact
-                      />
-                    </Row>
+                  {/*
+                    LAS ACCIONES DEL PERIODO, SIN TARJETA Y SIN REPETIR LA SEMANA.
 
-                    <Row gap={spacing.sm} wrap>
-                      {periodStatus === 'approved' ? (
-                        <SecondaryButton
-                          label={t('timesheet.reopenPeriod')}
-                          onPress={() => {
-                            const periodId = period.data?.id;
-                            if (periodId === undefined) return;
-                            mutations.reopen.mutate(
-                              { periodId },
-                              { onSuccess: () => setFeedback(t('timesheet.reopened')) },
-                            );
-                          }}
-                          fullWidth={false}
-                          loading={mutations.reopen.isPending}
-                          testID="timesheet-reopen"
-                        />
-                      ) : (
-                        <PrimaryButton
-                          label={t('timesheet.approvePeriod')}
-                          hint={t('timesheet.approveHint')}
-                          onPress={() =>
-                            mutations.approve.mutate(undefined, {
-                              onSuccess: () => setFeedback(t('timesheet.approved')),
-                            })
-                          }
-                          fullWidth={false}
-                          loading={mutations.approve.isPending}
-                          disabled={!scope.isAdmin}
-                          testID="timesheet-approve"
-                        />
-                      )}
-                      <SecondaryButton
-                        label={t('timesheet.exportCsv')}
-                        onPress={() => exportCsv.mutate()}
-                        fullWidth={false}
-                        loading={exportCsv.isPending}
-                        testID="timesheet-export"
-                      />
-                      <SecondaryButton
-                        label={t('timesheet.addManualEntry')}
-                        onPress={() => setManualOpen(true)}
-                        fullWidth={false}
-                        testID="timesheet-manual"
-                      />
-                    </Row>
+                    Esto era una tarjeta con el rótulo «Periodo», las fechas
+                    «2026-09-21 – 2026-09-27» y su insignia, encima de los botones. Las
+                    fechas ya las dice el navegador de semana dos filas más arriba, con
+                    palabras en vez de números («Semana del 21 de septiembre»), así que la
+                    tarjeta gastaba 150 px en repetir lo que ya estaba dicho —justo encima
+                    de la hoja, que es lo que se viene a ver: la primera fila empezaba
+                    pasados los 790 px de 768 de pantalla—.
 
+                    Lo que SÍ aportaba se queda: la insignia de estado del periodo
+                    —abierto, aprobado, reabierto— que no está en ningún otro sitio, y los
+                    botones.
+                  */}
+                  <Row
+                    gap={spacing.sm}
+                    wrap
+                    align="center"
+                    style={estilosDelPeriodo.barraDelPeriodo}
+                  >
+                    <StatusBadge
+                      label={
+                        periodStatus === 'approved'
+                          ? t('timesheet.statusApproved')
+                          : periodStatus === 'reopened'
+                            ? t('timesheet.statusReopened')
+                            : t('timesheet.statusOpen')
+                      }
+                      tone={periodStatus === 'approved' ? 'working' : 'info'}
+                      icon={periodStatus === 'approved' ? 'checkmark-circle' : 'lock-open-outline'}
+                      compact
+                    />
+                    {periodStatus === 'approved' ? (
+                      <SecondaryButton
+                        label={t('timesheet.reopenPeriod')}
+                        onPress={() => {
+                          const periodId = period.data?.id;
+                          if (periodId === undefined) return;
+                          mutations.reopen.mutate(
+                            { periodId },
+                            { onSuccess: () => setFeedback(t('timesheet.reopened')) },
+                          );
+                        }}
+                        fullWidth={false}
+                        loading={mutations.reopen.isPending}
+                        testID="timesheet-reopen"
+                      />
+                    ) : (
+                      <PrimaryButton
+                        label={t('timesheet.approvePeriod')}
+                        hint={t('timesheet.approveHint')}
+                        onPress={() =>
+                          mutations.approve.mutate(undefined, {
+                            onSuccess: () => setFeedback(t('timesheet.approved')),
+                          })
+                        }
+                        fullWidth={false}
+                        loading={mutations.approve.isPending}
+                        disabled={!scope.isAdmin}
+                        testID="timesheet-approve"
+                      />
+                    )}
+                    <SecondaryButton
+                      label={t('timesheet.exportCsv')}
+                      onPress={() => exportCsv.mutate()}
+                      fullWidth={false}
+                      loading={exportCsv.isPending}
+                      testID="timesheet-export"
+                    />
+                    <SecondaryButton
+                      label={t('timesheet.addManualEntry')}
+                      onPress={() => setManualOpen(true)}
+                      fullWidth={false}
+                      testID="timesheet-manual"
+                    />
+                  </Row>
+
+                  <>
                     {mutations.approve.error !== null ? (
                       <InlineNotice
                         tone="late"
@@ -477,7 +497,7 @@ export function TimesheetsScreen() {
                         body={t('timesheet.exportFailedBody')}
                       />
                     ) : null}
-                  </Card>
+                  </>
 
                   {feedback !== null ? (
                     <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
@@ -623,3 +643,17 @@ const estilos = StyleSheet.create({
   // de dos fichajes seguidos.
   cabecera: { paddingBottom: spacing.md },
 });
+
+/**
+ * La barra de acciones del periodo. Se apoya en `hundido` —el plano que agrupa dentro de
+ * una superficie sin dibujar otro marco— para que se lea como una sola cosa sin volver a
+ * ser la tarjeta que era.
+ */
+const useEstilosDeHoras = estilosDelTema((colors) => ({
+  barraDelPeriodo: {
+    backgroundColor: colors.hundido,
+    borderRadius: radii.card,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
+  },
+}));
