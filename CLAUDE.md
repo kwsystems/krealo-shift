@@ -140,6 +140,30 @@ compara los archivos servidos con `dist/`; además conviene bajar el paquete de
 `/_expo/static/js/web/*.js` y buscar dentro algo que solo exista en el trabajo nuevo. «Deploy
 complete» dice que subió algo, no que subiera lo que tú crees.
 
+### La cuenta es `claude-deploy`, y equivocarse de cuenta cuesta una tarde
+
+`claude-deploy@krealo-shift.iam.gserviceaccount.com` (client id `100447285964677052031`).
+Se creó el 2026-09-23 para esto y no ejecuta nada: solo despliega.
+
+**NO es `krealo-shift@appspot.gserviceaccount.com`.** Esa es la cuenta por defecto de App
+Engine, o sea la identidad con la que **se ejecutan** las funciones, y no debería poder
+desplegar nada. El botón «Generar nueva clave privada» de la consola de **Firebase**
+(Configuración del proyecto → Cuentas de servicio) devuelve siempre esa, nunca
+`claude-deploy`: la clave de `claude-deploy` se saca en la consola de **Cloud** →
+Cuentas de servicio → esa fila → pestaña Keys. Se confundieron las dos el primer día y el
+síntoma fue engañoso, porque la del appspot _sí_ desplegaba —tenía los roles— así que
+todo parecía correcto salvo el detalle de que la clave era la equivocada.
+
+Los roles van sobre `claude-deploy` **a nivel de proyecto**, no sobre un recurso concreto:
+así `iam.serviceAccounts.ActAs` alcanza a la cuenta con la que corren las funciones. Sin
+eso el despliegue para con `Missing permissions required for functions deploy`.
+
+**`firebase projects:list` devuelve «No projects found» con esta cuenta, y no significa
+nada.** Listar proyectos pide un permiso de organización que una cuenta de servicio no
+tiene y que desplegar no necesita: medido el 2026-09-23, con el listado vacío y el
+despliegue de funciones y hosting completo. No usar ese comando para comprobar la
+credencial — usar un despliegue.
+
 ### Los ocho roles de la cuenta de servicio
 
 Los ocho hacen falta, y tres sorprenden: las funciones son de **2.ª generación**, o sea
