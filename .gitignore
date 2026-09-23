@@ -64,5 +64,13 @@ e2e/artifacts/
 # Cache del CLI de Firebase: lista de archivos ya subidos a Hosting.
 .firebase/
 
-# Registro del emulador de Firestore: es un artefacto local.
+# Registros del emulador y del CLI de Firebase: artefactos locales.
+#
+# `firebase-debug.log` lo escribe CUALQUIER orden del CLI que falle —lo dejó una
+# comprobacion de credenciales— y lleva dentro la traza de la peticion. No es un
+# secreto, pero tampoco es del proyecto, y este repositorio es publico.
 firestore-debug.log
+firebase-debug.log
+ui-debug.log
+pubsub-debug.log
+database-debug.log
