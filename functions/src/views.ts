@@ -2,6 +2,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 
 import { COLLECTIONS, db } from './shared/admin';
 import { tipoEfectivo } from './shared/eventos';
+import { zonaSegura } from './shared/zonas';
 import {
   membershipOf,
   requireManagesLocation,
@@ -44,7 +45,8 @@ function textoRequerido(peticion: PeticionVista, field: string, op = 'eq'): stri
 /** El dia local de un instante, en la zona de la ubicacion. */
 function claveDeDia(iso: string, timezone: string): string {
   return new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
+    // Una zona mal escrita en la base tumbaba la consulta entera. Ver `shared/zonas.ts`.
+    timeZone: zonaSegura(timezone, 'claveDeDia'),
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',

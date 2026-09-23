@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Linking } from 'react-native';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
+import { esZonaValida, zonaCanonica, ZONAS_DE_EJEMPLO } from '@/domain/zona-horaria';
 
 import { useKioskDevices, useNotificationPreferences, useSettingsMutations } from './hooks';
 import {
@@ -185,10 +186,20 @@ function OrganizationCard({
     label: t(`settings.weekDay${day}`),
   }));
 
+  /*
+   * LA ZONA DE LA EMPRESA TAMPOCO SE COMPROBABA, y este campo existe desde el principio.
+   * Se guardaba `timezone.trim()` tal cual, así que una zona mal escrita aquí rompía
+   * Horas y Reportes de cualquier sede que no tuviera la suya propia — y hasta hoy
+   * ninguna la tenía. Salió al bajar la zona a la sede; se arregla aquí de paso porque
+   * es el mismo fallo y la misma comprobación.
+   */
+  const zonaCanonicaOrg = zonaCanonica(timezone);
+  const zonaOrgValida = zonaCanonicaOrg !== null;
+
   const patch: OrganizationPatch = {
     name: name.trim(),
     default_locale: locale,
-    default_timezone: timezone.trim(),
+    default_timezone: zonaCanonicaOrg ?? timezone.trim(),
     week_starts_on: Number(weekStartsOn),
   };
 
@@ -244,6 +255,7 @@ function OrganizationCard({
         value={timezone}
         onChangeText={setTimezone}
         autoCapitalize="none"
+        error={zonaOrgValida ? undefined : t('settings.timezoneInvalid')}
         testID="org-timezone"
       />
       <AppText variant="help" tone="subtle">
@@ -282,7 +294,7 @@ function OrganizationCard({
             },
           });
         }}
-        disabled={!canEdit || !nameValid}
+        disabled={!canEdit || !nameValid || !zonaOrgValida}
         loading={mutations.saveOrganization.isPending}
         testID="org-save"
       />
@@ -350,9 +362,27 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
   const [address, setAddress] = useState(location.address);
   const [aCerrar, setACerrar] = useState(false);
   const [nuevaSede, setNuevaSede] = useState('');
+  /*
+   * La zona de la empresa como punto de partida de una sede nueva, no la de la sede que
+   * tengas seleccionada. Acierta cuando todas las tiendas están en el mismo país, que es
+   * el caso normal, y no arrastra la de Lima a una tienda de Toronto solo porque estabas
+   * mirando Lima.
+   */
+  const zonaDeLaEmpresa = scope.organization?.default_timezone ?? 'America/Lima';
+  const [nuevaZona, setNuevaZona] = useState(zonaDeLaEmpresa);
+  const nuevaZonaValida = esZonaValida(nuevaZona);
   const [nuevaDireccion, setNuevaDireccion] = useState('');
   const [abierta, setAbierta] = useState<string | null>(null);
   const [settings, setSettings] = useState<LocationSettings>(location.settings);
+  const [timezone, setTimezone] = useState(location.timezone);
+  /*
+   * Se comprueba MIENTRAS SE ESCRIBE y bloquea el guardar. Dejar pasar una zona que no
+   * existe no falla al guardar: falla después, al abrir Horas o Reportes de esta sede,
+   * con un error que no menciona la zona por ningún lado. El servidor lo rechaza
+   * también —la comprobación vive en `src/domain/zona-horaria.ts` y la usan los dos—
+   * pero para entonces ya no hay nadie delante que sepa qué quiso escribir.
+   */
+  const zonaValida = esZonaValida(timezone);
   const [numbers, setNumbers] = useState<Record<NumericSettingKey, string>>({
     photoRetentionDays: String(location.settings.photoRetentionDays),
     earlyClockInMinutes: String(location.settings.earlyClockInMinutes),
@@ -419,6 +449,28 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
         onChangeText={setAddress}
         testID="location-address"
       />
+
+      {/*
+        LA ZONA HORARIA DE ESTA SEDE, y va aquí arriba con el nombre y la dirección
+        porque es de la misma clase: dónde está la tienda. No es una tolerancia que se
+        afina, es un dato que o está bien o todo lo que se calcule debajo está mal.
+
+        Hasta hoy no existía: solo se podía poner la de la empresa, así que una sede
+        creada desde la app heredaba la de la sede que estuviera seleccionada al crearla
+        y no había forma de corregirla. Con tiendas en dos países eso significa que las
+        de uno agrupan sus jornadas por el día del otro.
+      */}
+      <FormField
+        label={t('settings.locationTimezone')}
+        value={timezone}
+        onChangeText={setTimezone}
+        autoCapitalize="none"
+        error={zonaValida ? undefined : t('settings.timezoneInvalid')}
+        testID="location-timezone"
+      />
+      <AppText variant="help" tone="muted">
+        {t('settings.locationTimezoneHint', { ejemplos: ZONAS_DE_EJEMPLO.join(' · ') })}
+      </AppText>
 
       <ToggleField
         label={t('settings.kioskPhoto')}
@@ -491,6 +543,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
               locationId: location.id,
               name,
               address,
+              timezone,
               settings: buildSettings(),
             },
             {
@@ -501,7 +554,9 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
             },
           );
         }}
-        disabled={!canEdit || name.trim().length < 2}
+        // Una zona que no existe no se guarda: rompería Horas y Reportes de esta sede.
+        disabled={!canEdit || name.trim().length < 2 || !zonaValida}
+        hint={zonaValida ? undefined : t('settings.timezoneInvalid')}
         loading={mutations.saveLocation.isPending}
         testID="location-save"
       />
@@ -570,9 +625,28 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
             onChangeText={setNuevaDireccion}
             testID="location-new-address"
           />
+          {/*
+            SE PREGUNTA LA ZONA, no se copia la de al lado.
+            Antes esto mandaba `timezone: scope.timezone` —la zona de la sede que
+            estuvieras mirando— así que abrir una tienda de Toronto mientras mirabas Lima
+            la creaba en hora de Lima, y hasta hoy no había dónde corregirlo. Se rellena
+            con la de la empresa como punto de partida, que acierta cuando todas las
+            tiendas están en el mismo país y se cambia en un segundo cuando no.
+          */}
+          <FormField
+            label={t('settings.locationTimezone')}
+            value={nuevaZona}
+            onChangeText={setNuevaZona}
+            autoCapitalize="none"
+            error={nuevaZonaValida ? undefined : t('settings.timezoneInvalid')}
+            testID="location-new-timezone"
+          />
+          <AppText variant="help" tone="subtle">
+            {t('settings.locationTimezoneHint', { ejemplos: ZONAS_DE_EJEMPLO.join(' · ') })}
+          </AppText>
           <PrimaryButton
             label={t('settings.addLocationSubmit')}
-            disabled={nuevaSede.trim() === ''}
+            disabled={nuevaSede.trim() === '' || !nuevaZonaValida}
             loading={mutations.addLocation.isPending}
             onPress={() => {
               const nombre = nuevaSede.trim();
@@ -580,7 +654,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
                 {
                   name: nombre,
                   address: nuevaDireccion.trim(),
-                  timezone: scope.timezone,
+                  timezone: nuevaZona,
                   settings: DEFAULT_LOCATION_SETTINGS,
                 },
                 {
@@ -588,6 +662,7 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
                     setAbierta(nombre);
                     setNuevaSede('');
                     setNuevaDireccion('');
+                    setNuevaZona(zonaDeLaEmpresa);
                   },
                 },
               );

@@ -716,7 +716,10 @@
     "addJobRolePlaceholder": "Cashier, Barista, Stockroom…",
     "addJobRoleSubmit": "Open role",
     "addJobRoleDone": "Job role \"{{name}}\" is open. You can assign it when adding someone.",
-    "earlyDepartureReasonMinutes": "Ask for a reason when leaving this many minutes early"
+    "earlyDepartureReasonMinutes": "Ask for a reason when leaving this many minutes early",
+    "locationTimezone": "Time zone for this location",
+    "locationTimezoneHint": "Decides which day each shift belongs to in reports. e.g. {{ejemplos}}",
+    "timezoneInvalid": "That time zone does not exist. Write it as \"Region/City\", not \"GMT-5\"."
   },
   "notifications": {
     "activeBody": "This device will get the alerts you pick below.",

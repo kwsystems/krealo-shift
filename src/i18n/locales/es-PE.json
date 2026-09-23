@@ -716,7 +716,10 @@
     "addJobRolePlaceholder": "Cajero, Barista, Almacén…",
     "addJobRoleSubmit": "Abrir puesto",
     "addJobRoleDone": "Puesto «{{name}}» abierto. Ya se puede asignar al dar de alta a alguien.",
-    "earlyDepartureReasonMinutes": "Preguntar motivo al salir antes de (minutos)"
+    "earlyDepartureReasonMinutes": "Preguntar motivo al salir antes de (minutos)",
+    "locationTimezone": "Zona horaria de esta sede",
+    "locationTimezoneHint": "Decide a qué día pertenece cada jornada en los reportes. Ej.: {{ejemplos}}",
+    "timezoneInvalid": "Esa zona horaria no existe. Escríbela como «Región/Ciudad», no como «GMT-5»."
   },
   "notifications": {
     "activeBody": "Este dispositivo recibirá los avisos que elijas abajo.",

@@ -99,6 +99,7 @@ export function useSettingsMutations(organizationId: string | null) {
       locationId: string;
       name: string;
       address: string;
+      timezone: string;
       settings: LocationSettings;
     }) => updateLocation(variables),
     onSuccess: invalidateScope,

@@ -15,6 +15,7 @@ import { membershipOf, requireManagesLocation, requireUid } from './shared/calle
 import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/attendance';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
+import { zonaSegura } from './shared/zonas';
 import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
@@ -841,7 +842,7 @@ function fechaLocal(iso: string | null, zona: string): string | null {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return null;
   // `en-CA` da exactamente `AAAA-MM-DD`, que es el formato que usa `target_date`.
-  return new Intl.DateTimeFormat('en-CA', { timeZone: zona }).format(d);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: zonaSegura(zona, 'fechaLocal') }).format(d);
 }
 
 export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request) => {

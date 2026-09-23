@@ -1,5 +1,6 @@
 import { z } from 'zod';
 
+import { zonaCanonica } from '@/domain/zona-horaria';
 import { docId } from '@/lib/firebase/ids';
 
 import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
@@ -34,14 +35,32 @@ export async function updateLocation(params: {
   locationId: string;
   name: string;
   address: string;
+  /**
+   * La zona horaria de ESTA sede.
+   *
+   * NO SE PODÍA CAMBIAR, y era el agujero: Ajustes solo dejaba editar la de la empresa,
+   * así que una sede creada desde la app se quedaba para siempre con la zona de la sede
+   * que estuviera seleccionada al crearla. Con tiendas en dos países eso significa que
+   * las de uno de los dos agrupan sus jornadas por el día del otro.
+   */
+  timezone: string;
   settings: LocationSettings;
 }): Promise<void> {
+  /*
+   * SE GUARDA LA CANÓNICA, no lo que se tecleó. `Intl` acepta minúsculas y alias viejos,
+   * así que sin esto la misma zona acabaría escrita de tres formas en la base y dos
+   * sedes del mismo huso parecerían estar en husos distintos.
+   */
+  const timezone = zonaCanonica(params.timezone);
+  if (timezone === null) throw toAdminError({ code: '23514', message: 'INVALID_TIMEZONE' });
+
   await execute((db) =>
     db
       .from(TABLES.locations)
       .update({
         name: params.name.trim(),
         address: params.address.trim(),
+        timezone,
         settings: params.settings,
       })
       .eq('id', params.locationId),
@@ -72,6 +91,10 @@ export async function createLocation(params: {
   timezone: string;
   settings: LocationSettings;
 }): Promise<string> {
+  // Misma comprobación que al editar: una sede no puede nacer con una zona que lanza.
+  const timezone = zonaCanonica(params.timezone);
+  if (timezone === null) throw toAdminError({ code: '23514', message: 'INVALID_TIMEZONE' });
+
   const creada = await selectRows(z.object({ id: docId() }), (db) =>
     db
       .from(TABLES.locations)
@@ -79,7 +102,7 @@ export async function createLocation(params: {
         organization_id: params.organizationId,
         name: params.name.trim(),
         address: params.address.trim(),
-        timezone: params.timezone,
+        timezone,
         is_active: true,
         settings: params.settings,
       })

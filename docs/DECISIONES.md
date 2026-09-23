@@ -776,6 +776,41 @@ fábrica, configurable por sede).
   «a partir de aquí esto es tiempo libre entre dos jornadas», y ya lo configura cada sede.
 - **Dónde:** `functions/src/manager.ts`, con sus dos pruebas de emulador.
 
+### La zona horaria es de la sede, y se guarda canónica
+
+Cada sede tiene su propia zona horaria, editable en Ajustes, y al crear una sede se pide
+en vez de copiar la de la sede que estuvieras mirando. Lo que se guarda es lo que `Intl`
+resuelve, no lo que se tecleó.
+
+- **Motivo:** la zona decide a qué día pertenece cada jornada en los resúmenes, que es lo
+  que se usa para pagar. Hasta el 2026-09-23 solo se podía poner la de la empresa, así
+  que con tiendas en Perú y Canadá (pedido de Andree) las de un país habrían agrupado sus
+  jornadas por el día del otro. Y como Perú no cambia la hora y Canadá sí, la diferencia
+  aparece medio año y desaparece el otro — el peor tipo de fallo de diagnosticar.
+- **Por qué canónica:** `Intl` no distingue mayúsculas y acepta alias antiguos
+  (`America/Montreal` resuelve a `America/Toronto`). Sin normalizar, la misma zona
+  quedaría escrita de tres formas y dos sedes del mismo huso parecerían estar en husos
+  distintos.
+- **Costo:** un campo más en el formulario de cada sede y en el de alta.
+- **Dónde:** `src/domain/zona-horaria.ts`.
+
+### Una zona horaria inválida en la base se cae a UTC, no revienta
+
+`zonaSegura` registra el error y devuelve UTC en vez de dejar que `Intl` lance.
+
+- **Motivo:** un solo documento de sede con la zona mal escrita no estropeaba una fila:
+  **mataba la consulta entera** de Horas y Reportes de esa semana, con un error que no
+  menciona la zona por ningún lado. El panel ahora la valida al escribirla, pero las
+  sedes creadas antes no pasaron por ninguna comprobación, y el panel escribe en
+  Firestore **directamente** —no a través de una función— así que el servidor no controla
+  lo que llega.
+- **Costo aceptado:** un día agrupado en UTC en vez de en la zona de la tienda puede
+  estar mal; una pantalla que no carga está mal seguro. El registro es lo que permite
+  enterarse: sin él, alguien vería números raros sin saber por dónde empezar.
+- **De paso:** la zona de la **empresa** tampoco se validaba, y ese campo existe desde el
+  principio. Mismo fallo, misma comprobación.
+- **Dónde:** `functions/src/shared/zonas.ts`.
+
 ---
 
 ## Cómo agregar una entrada
