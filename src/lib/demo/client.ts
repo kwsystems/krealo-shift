@@ -2,6 +2,7 @@ import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
 import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
+import { registrarFichajeDemo } from './reconstruir';
 import type { DataClient } from '@/lib/firebase/query';
 
 /**
@@ -46,6 +47,16 @@ function sesionDemo() {
     user: usuarioDemo(),
   };
 }
+
+/**
+ * A quién le pertenece lo que se ficha en el reloj de la demostración.
+ *
+ * `verify-pin` devuelve siempre a Ana Quispe Lara —cualquier PIN entra, no hay a quién
+ * verificar— así que el fichaje tiene que ir a la MISMA persona, o el panel enseñaría una
+ * sesión de alguien que no es quien acabas de ver en el reloj. Es `empleadoId(1)` de la
+ * semilla.
+ */
+const DEMO_EMPLEADO_KIOSCO = '33333333-3333-4333-8333-000000000001';
 
 function sinError<T>(data: T) {
   return { data, error: null };
@@ -449,7 +460,12 @@ function estadoTrasEventoDemo(tipo: string): 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK
   return 'OFF_SHIFT';
 }
 
-function registrarEventoDemo(almacen: Almacen, tipo: string, motivo: unknown): void {
+function registrarEventoDemo(
+  almacen: Almacen,
+  tipo: string,
+  motivo: unknown,
+  nota?: unknown,
+): void {
   almacen.set('demo_estado_kiosco', [{ estado: estadoTrasEventoDemo(tipo) }]);
   // El motivo se guarda para que la demostración pueda enseñarlo en los reportes.
   if (tipo === 'break_start' && typeof motivo === 'string') {
@@ -458,6 +474,27 @@ function registrarEventoDemo(almacen: Almacen, tipo: string, motivo: unknown): v
       { break_reason: motivo, iniciada: new Date().toISOString() },
     ]);
   }
+
+  /*
+   * Y AHORA SÍ LLEGA AL PANEL.
+   *
+   * Hasta el 2026-09-23 esto acababa aquí: se guardaba el estado y nada más. Así que el
+   * reloj decía «entrada registrada» y Horas, Inicio y Reportes seguían enseñando solo
+   * lo sembrado. Andree lo encontró probando —fichó y preguntó dónde verlo— y la
+   * respuesta era «en ningún sitio».
+   *
+   * Es el primer recorrido que intenta cualquiera el primer día, y estaba roto de la
+   * peor manera: sin error, simplemente no aparecía.
+   */
+  const sede = (almacen.get('locations') ?? [])[0];
+  registrarFichajeDemo(almacen, {
+    employeeId: DEMO_EMPLEADO_KIOSCO,
+    locationId: String(sede?.id ?? DEMO_LOCATION_1),
+    eventType: tipo,
+    breakReason: typeof motivo === 'string' ? motivo : null,
+    breakNote: typeof nota === 'string' ? nota : null,
+    zona: String(sede?.timezone ?? 'America/Lima'),
+  });
 }
 
 function crearFunctions(almacen: Almacen) {
@@ -556,7 +593,7 @@ function crearFunctions(almacen: Almacen) {
         case 'submit-time-event': {
           const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
           const tipo = String(cuerpo.eventType ?? '');
-          registrarEventoDemo(almacen, tipo, cuerpo.breakReason);
+          registrarEventoDemo(almacen, tipo, cuerpo.breakReason, cuerpo.breakNote);
           return sinError({
             status: 'accepted',
             eventId: '99999999-9999-4999-8999-999999999999',
