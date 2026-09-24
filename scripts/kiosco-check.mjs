@@ -40,6 +40,7 @@ import {
   servirExport,
   cargarPlaywright,
   sembrarKiosco,
+  bindingConMarca,
   medirContraste,
   esperarPantalla,
   esperarAlgoDeTexto,
@@ -443,7 +444,23 @@ for (const tema of TEMAS) {
 /** Qué deuda conocida se ha topado de verdad, para poder decirla al final. */
 const deudaVista = new Set();
 
+/*
+ * SE RECORRE CADA TEMA DOS VECES: con el acento de fabrica y con el COLOR DE UNA EMPRESA.
+ *
+ * El reloj es la pantalla que de verdad se brandea —la ve el equipo entero todos los dias,
+ * colgada en la pared de la tienda— asi que medirla solo con el violeta de fabrica es medir
+ * el unico caso que seguro funciona. Y el color elegido para la vuelta con marca es un
+ * AMARILLO PURO a proposito: usado tal cual da 1,07:1 sobre blanco, o sea es exactamente el
+ * caso que la rampa derivada tiene que salvar. Con un azul oscuro no se probaria nada.
+ */
+const MARCA_DIFICIL = '#FFE500';
+const VUELTAS = [];
 for (const tema of TEMAS) {
+  VUELTAS.push({ tema, marca: null });
+  VUELTAS.push({ tema, marca: MARCA_DIFICIL });
+}
+
+for (const { tema, marca } of VUELTAS) {
   // iPad vertical: el aparato real. El kiosco de una tienda es esto, no un teléfono.
   const ctx = await navegador.newContext({
     viewport: { width: 834, height: 1112 },
@@ -451,7 +468,7 @@ for (const tema of TEMAS) {
     ...CON_CAMARA,
   });
   const pag = await ctx.newPage();
-  await sembrarKiosco(pag);
+  await sembrarKiosco(pag, marca === null ? undefined : bindingConMarca(marca));
 
   /** Recorre el fichaje entero midiendo en cada parada. */
   const parar = async (nombre) => {
@@ -469,13 +486,14 @@ for (const tema of TEMAS) {
         continue;
       }
       problemas.push(
-        `contraste en ${tema}, ${nombre}: «${f.texto}» a ${f.razon}:1 (hace falta ` +
+        `contraste en ${tema}${marca === null ? '' : ` con marca ${marca}`}, ${nombre}: ` +
+          `«${f.texto}» a ${f.razon}:1 (hace falta ` +
           `${f.exigido}:1 con ${f.px}px) — ${f.tinta} sobre ${f.fondo}`,
       );
     }
     const nuevos = fallos.length - conocidos;
     console.log(
-      `  ${tema.padEnd(5)} ${nombre.padEnd(22)} ${String(medidos).padStart(3)} textos, ` +
+      `  ${tema.padEnd(5)} ${(marca === null ? nombre : `${nombre} · marca`).padEnd(28)} ${String(medidos).padStart(3)} textos, ` +
         `${nuevos === 0 ? 'todos legibles' : `${nuevos} ILEGIBLES`}` +
         `${conocidos > 0 ? ` (${conocidos} de deuda conocida)` : ''}` +
         `${saltados > 0 ? ` (${saltados} apagados, exentos)` : ''}`,

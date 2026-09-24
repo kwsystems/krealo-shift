@@ -42,7 +42,20 @@
  * ellos, conservando el tono, y su única obligación es no romper la escalera.
  */
 export type RampaDeMarca = {
-  /** Fondo tenue. Se garantiza que `p600` encima se lee. */
+  /**
+   * `p50` ES UNA SUPERFICIE, no un tinte cualquiera, y eso lo enseñó el reloj de la tienda.
+   *
+   * La primera versión lo derivaba de una RELACIÓN —«el tinte sobre el que `p600` se lee»—
+   * y en el tema oscuro eso daba un oliva claro. Parecía razonable hasta que
+   * `kiosco:check` midió la pantalla del reloj: `primary50` es EL FONDO DE TODA la pantalla
+   * del kiosco, así que encima van la hora, el nombre de la sede, «Ingresa tu PIN» y la
+   * insignia verde. Diez textos ilegibles de golpe.
+   *
+   * Definido por su PAPEL —una superficie del color de la empresa— sale solo: la misma
+   * luminosidad que la superficie de la que hace de variante, con un susurro de tono. Así
+   * la tinta de siempre sigue leyéndose encima, que es lo que una superficie tiene que
+   * cumplir.
+   */
   p50: string;
   p100: string;
   p200: string;
@@ -51,6 +64,20 @@ export type RampaDeMarca = {
   /** Texto del acento y botones principales. Se garantiza ≥ 4,5:1 contra la superficie. */
   p600: string;
   p700: string;
+  /**
+   * LA TINTA QUE VA ENCIMA DEL ACENTO, y es un cuarto papel que descubrió el reloj.
+   *
+   * El acento no solo se lee SOBRE la superficie: también hace de RELLENO de los botones
+   * principales, con texto encima. Son dos exigencias distintas y para algunos tonos van en
+   * contra: un amarillo lo bastante oscuro para leerse sobre blanco sigue siendo demasiado
+   * claro para llevar texto blanco encima. `kiosco:check` lo encontró con «Marcar entrada»
+   * a 3,03:1, blanco sobre oliva.
+   *
+   * Así que la tinta se ELIGE MIDIENDO entre blanco y la tinta oscura del tema, en vez de
+   * quedarse fija. Es lo que hace cualquier sistema de diseño serio —los botones amarillos
+   * llevan texto negro— solo que aquí se decide con un número y no a ojo.
+   */
+  tintaSobreAcento: string;
 };
 
 export type AvisoDeMarca = {
@@ -88,6 +115,13 @@ export function rampaDeMarca(
   base: string,
   superficie: string,
   estados: { trabajando: string; pausa: string; tarde: string },
+  /**
+   * La tinta que va ENCIMA del acento: blanca en el tema claro, casi negra en el oscuro. Se
+   * pasa porque es del tema y esta función no sabe en cuál está. NO se elige entre varias:
+   * la del tema se respeta y lo que se mueve es el relleno, porque cambiarle la tinta a los
+   * botones de una empresa y no a los del resto de la app dejaría dos clases de botón.
+   */
+  tintasSobreAcento: readonly string[] = ['#FFFFFF'],
 ): VeredictoDeMarca | null {
   const lch = aOklch(base);
   if (lch === null) return null;
@@ -95,19 +129,55 @@ export function rampaDeMarca(
   const claraLaSuperficie = luminancia(superficie) > 0.4;
 
   /*
+   * LA SUPERFICIE TEÑIDA VA PRIMERO, porque es la referencia de todo lo demás. Se queda a
+   * la MISMA luminosidad que la superficie original y con el croma muy bajo: eso es lo que
+   * la hace seguir siendo una superficie —la tinta normal se lee encima igual— y a la vez
+   * del color de la empresa.
+   */
+  const lSuperficie = aOklch(superficie)?.l ?? (claraLaSuperficie ? 1 : 0.2);
+  const suave = deOklch({ l: lSuperficie, c: Math.min(lch.c, 0.035), h: lch.h });
+
+  /*
    * EL TEXTO SE BUSCA HACIA DONDE HAY SITIO: más oscuro sobre una superficie clara, más
    * claro sobre una oscura. Buscar siempre hacia abajo dejaría el tema oscuro con un
    * acento casi negro sobre fondo casi negro, que es justo el error que se arregló esta
    * mañana con la elevación.
+   *
+   * Y SE BUSCA CONTRA `suave`, NO contra la superficie original, porque `suave` es donde el
+   * acento acaba pintándose de verdad: es el fondo del reloj entero. Al ser las dos de la
+   * misma luminosidad la diferencia es mínima, pero medir contra el fondo real es lo que
+   * hace que la garantía sea una garantía y no una aproximación.
    */
-  const fuerte = buscarLuminosidad(lch, superficie, CONTRASTE_TEXTO, claraLaSuperficie);
-  const medio = buscarLuminosidad(lch, superficie, CONTRASTE_FORMA, claraLaSuperficie);
   /*
-   * EL FONDO SUAVE SE BUSCA AL REVÉS: tiene que estar tan cerca de la superficie que no
-   * moleste, y a la vez dejar leer el texto fuerte encima. Se busca contra `fuerte`, no
-   * contra la superficie, porque lo que hay que poder leer es eso.
+   * EL ACENTO TIENE DOS TRABAJOS Y CADA UNO PIDE LO SUYO:
+   *
+   *   · leerse COMO TEXTO sobre la superficie teñida
+   *   · hacer de RELLENO de un botón, con la tinta del tema encima
+   *
+   * El segundo lo descubrió `kiosco:check` con «Marcar entrada» en blanco sobre un oliva a
+   * 3,03:1. Y no se arregla eligiendo otra tinta: hay que mover el relleno.
+   *
+   * LO QUE HACE QUE ESTO SE PUEDA CUMPLIR es que en cada tema las dos exigencias empujan
+   * hacia el MISMO lado. En claro la tinta de encima es blanca, así que oscurecer mejora
+   * las dos cosas a la vez; en oscuro la tinta es casi negra y aclarar mejora las dos. Por
+   * eso basta con quedarse con la más exigente de las dos búsquedas, sin negociar nada.
    */
-  const suave = buscarLuminosidad(lch, fuerte, CONTRASTE_TEXTO, !claraLaSuperficie);
+  const tinta = tintasSobreAcento[0] ?? '#FFFFFF';
+  const lSuave = luminosidadDe(suave);
+  const masExigente = (unos: string, otros: string) =>
+    Math.abs(luminosidadDe(unos) - lSuave) >= Math.abs(luminosidadDe(otros) - lSuave)
+      ? unos
+      : otros;
+
+  const porTinta = buscarLuminosidad(lch, tinta, CONTRASTE_TEXTO, claraLaSuperficie);
+  const fuerte = masExigente(
+    buscarLuminosidad(lch, suave, CONTRASTE_TEXTO, claraLaSuperficie),
+    porTinta,
+  );
+  const medio = masExigente(
+    buscarLuminosidad(lch, suave, CONTRASTE_FORMA, claraLaSuperficie),
+    porTinta,
+  );
 
   /*
    * LOS TRES ESCALONES INTERMEDIOS SE INTERPOLAN EN LUMINOSIDAD, con el mismo tono.
@@ -115,7 +185,6 @@ export function rampaDeMarca(
    * para el detalle que tiene que destacar sobre el acento, así que quedarse corto lo
    * haría desaparecer justo encima de él.
    */
-  const lSuave = luminosidadDe(suave);
   const lMedio = luminosidadDe(medio);
   const lFuerte = luminosidadDe(fuerte);
   const entre = (a: number, b: number, t: number) => deOklch({ ...lch, l: a + (b - a) * t });
@@ -144,6 +213,7 @@ export function rampaDeMarca(
       p500: medio,
       p600: fuerte,
       p700: masAlla,
+      tintaSobreAcento: tinta,
     },
     avisos,
     sinColor: lch.c < CROMA_MINIMO,

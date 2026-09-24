@@ -110,6 +110,8 @@ export const BINDING_KIOSCO = {
   organizationId: '11111111-1111-4111-8111-111111111111',
   organizationName: 'Krealo Media Demo',
   organizationLogoPath: null,
+  /* Sin marca por defecto: la vuelta con color se pide a proposito. Ver `conMarca`. */
+  organizationBrandColor: null,
   locationId: '22222222-2222-4222-8222-222222222221',
   locationName: 'Sede Principal',
   timezone: 'America/Lima',
@@ -124,6 +126,15 @@ export const BINDING_KIOSCO = {
   },
   activatedAt: new Date().toISOString(),
 };
+
+/**
+ * El mismo iPad, pero de una empresa con SU color.
+ *
+ * Existe porque el reloj es la pantalla que de verdad se brandea —la ve el equipo entero
+ * todos los dias, colgada en la pared— y medirla solo con el violeta de fabrica seria
+ * medir el unico caso que seguro funciona.
+ */
+export const bindingConMarca = (color) => ({ ...BINDING_KIOSCO, organizationBrandColor: color });
 
 /** Deja el navegador como un iPad ya activado, antes de que cargue la app. */
 export async function sembrarKiosco(page, binding = BINDING_KIOSCO) {

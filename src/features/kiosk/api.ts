@@ -83,6 +83,16 @@ const activateResponseSchema = z.object({
     // pintar. `nullable` porque la mayoría de las organizaciones no tendrán logotipo
     // el primer día, y eso no es un error.
     logoPath: z.string().nullable().default(null),
+    /**
+     * El color de marca, o `null`. Viaja en el vínculo y no se consulta aparte porque el
+     * reloj tiene que poder pintarse SIN RED: es lo primero que se rompe en una tienda, y
+     * una pantalla que se queda sin su color al caerse el wifi parece rota.
+     */
+    brandColor: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .nullable()
+      .default(null),
   }),
   location: z.object({
     id: docId(),
@@ -311,6 +321,7 @@ export async function activateKiosk(params: {
       organizationId: d.organization.id,
       organizationName: d.organization.name,
       organizationLogoPath: d.organization.logoPath,
+      organizationBrandColor: d.organization.brandColor,
       locationId: d.location.id,
       locationName: d.location.name,
       timezone: d.location.timezone,

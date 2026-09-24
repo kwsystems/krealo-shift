@@ -172,6 +172,7 @@ export const activateKiosk = onCall(async (request) => {
       defaultLocale: organization.default_locale ?? 'es-PE',
       weekStartsOn: organization.week_starts_on ?? 1,
       logoPath: organization.logo_path ?? null,
+      brandColor: (organization.brand_color as string | null) ?? null,
     },
     location: {
       id: locationId,
@@ -296,6 +297,7 @@ export const refreshKioskRoster = onCall(async (request) => {
     organization: {
       name: (organizacion?.name as string | null) ?? null,
       logoPath: (organizacion?.logo_path as string | null) ?? null,
+      brandColor: (organizacion?.brand_color as string | null) ?? null,
     },
     policies: politicasDe(location),
     roster,

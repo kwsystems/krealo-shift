@@ -52,11 +52,17 @@ export function useColorDeMarca(): string | null {
 export function useColoresConMarca(base: ColorSet, color: string | null): ColorSet {
   return useMemo(() => {
     if (color === null) return base;
-    const veredicto = rampaDeMarca(color, base.surface, {
-      trabajando: base.success600,
-      pausa: base.warning600,
-      tarde: base.danger600,
-    });
+    const veredicto = rampaDeMarca(
+      color,
+      base.surface,
+      { trabajando: base.success600, pausa: base.warning600, tarde: base.danger600 },
+      /*
+       * LA TINTA DE ENCIMA ES LA DEL TEMA y no se negocia: lo que se mueve es el relleno.
+       * Cambiarle la tinta a los botones de una empresa y no a los del resto de la app
+       * dejaría dos clases de botón en la misma pantalla.
+       */
+      [base.onPrimary],
+    );
     // Un color inválido guardado en la base no puede dejar la app sin tema: se ignora.
     if (veredicto === null) return base;
     return {
@@ -67,6 +73,7 @@ export function useColoresConMarca(base: ColorSet, color: string | null): ColorS
       primary500: veredicto.rampa.p500,
       primary600: veredicto.rampa.p600,
       primary700: veredicto.rampa.p700,
+      onPrimary: veredicto.rampa.tintaSobreAcento,
     };
   }, [base, color]);
 }

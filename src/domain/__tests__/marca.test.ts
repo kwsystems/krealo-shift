@@ -88,6 +88,80 @@ describe('rampaDeMarca', () => {
     expect(desvios).toEqual([]);
   });
 
+  it('`p50` sigue siendo una SUPERFICIE: la tinta de siempre se lee encima', () => {
+    /*
+     * ESTA ES LA PRUEBA QUE FALTABA, y la escribí después de que el reloj me desmintiera.
+     *
+     * `primary50` no es un tinte decorativo: es EL FONDO DE TODA la pantalla del kiosco
+     * (`AppScreen tone="kiosk"`), así que encima van la hora, el nombre de la sede,
+     * «Ingresa tu PIN» y la insignia verde de confirmación. Yo lo había derivado de una
+     * relación —«el tinte sobre el que el acento se lee»— en vez de de su papel, y en el
+     * tema oscuro salía un oliva claro: `kiosco:check` encontró diez textos ilegibles de
+     * golpe en la pantalla que mira todo el equipo todos los días.
+     *
+     * Se comprueba con la tinta principal, la secundaria y el verde de «Trabajando»,
+     * porque los tres se pintan sobre ese fondo.
+     */
+    const fallos: string[] = [];
+    for (const [nombre, superficie, paleta, estados] of [
+      ['claro', lightColors.surface, lightColors, ESTADOS_CLARO],
+      ['oscuro', darkColors.raised, darkColors, ESTADOS_OSCURO],
+    ] as const) {
+      for (const base of coloresDePrueba()) {
+        const v = rampaDeMarca(base, superficie, estados);
+        if (v === null) continue;
+        for (const [quien, tinta, minimo] of [
+          ['tinta principal', paleta.ink900, 4.5],
+          ['tinta secundaria', paleta.ink700, 4.5],
+          ['verde de trabajando', paleta.success600, 3],
+        ] as const) {
+          const r = contraste(tinta, v.rampa.p50);
+          if (r < minimo - 0.1) {
+            fallos.push(`${nombre} ${base}: ${quien} a ${r.toFixed(2)} sobre ${v.rampa.p50}`);
+          }
+        }
+      }
+    }
+    expect(fallos).toEqual([]);
+  });
+
+  it('el texto de un botón del color de la empresa SE LEE, en reposo y pulsado', () => {
+    /*
+     * El cuarto papel del acento, y el que encontró `kiosco:check`: además de leerse SOBRE
+     * la superficie, hace de relleno de los botones con texto encima. Con un amarillo,
+     * «Marcar entrada» salía blanco sobre oliva a 3,03:1. La tinta se elige midiendo entre
+     * blanco y casi negro, que es lo que hace que un botón amarillo lleve texto negro.
+     *
+     * Se exige en los DOS rellenos —reposo y pulsado— porque un botón cuyo texto desaparece
+     * al pulsarlo es peor que uno que se lee siempre un poco menos.
+     */
+    /*
+     * SE LE PASA LA TINTA DEL TEMA, y la primera versión de esta prueba no lo hacía: dejaba
+     * la de por defecto —blanca— también en oscuro, y allí las dos exigencias se contradicen
+     * (para que el blanco se lea el relleno tiene que oscurecerse, y para separarse de una
+     * superficie oscura tiene que aclararse). O sea que la prueba pedía lo imposible y el
+     * fallo era suyo, no del código. En oscuro la tinta de encima es casi negra.
+     */
+    const fallos: string[] = [];
+    for (const [nombre, superficie, paleta, estados] of [
+      ['claro', lightColors.surface, lightColors, ESTADOS_CLARO],
+      ['oscuro', darkColors.raised, darkColors, ESTADOS_OSCURO],
+    ] as const) {
+      for (const base of coloresDePrueba()) {
+        const v = rampaDeMarca(base, superficie, estados, [paleta.onPrimary]);
+        if (v === null) continue;
+        for (const [donde, relleno] of [
+          ['en reposo', v.rampa.p500],
+          ['pulsado', v.rampa.p600],
+        ] as const) {
+          const r = contraste(v.rampa.tintaSobreAcento, relleno);
+          if (r < 4.4) fallos.push(`${nombre} ${base} ${donde}: ${r.toFixed(2)}`);
+        }
+      }
+    }
+    expect(fallos).toEqual([]);
+  });
+
   it('la escalera no se invierte: del más tenue al más fuerte, en orden', () => {
     /*
      * ESTE FALLO YA PASÓ EN ESTA APP, con los colores fijos: `primary50` acabó siendo más

@@ -8,6 +8,7 @@ import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { keepScreenAwake, releaseScreenAwake } from '@/lib/kiosk/screen-awake';
 import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskStore } from '@/stores/kiosk-store';
+import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
 import { useNetworkStore } from '@/stores/network-store';
 
 /**
@@ -45,6 +46,12 @@ const RUTAS_SIN_CREDENCIAL = new Set(['setup', 'help', 'exit']);
 export default function KioskLayout() {
   const online = useNetworkStore((s) => s.online);
   const setScreenAwake = useKioskStore((s) => s.setScreenAwake);
+  /*
+   * EL COLOR DE LA EMPRESA SALE DEL VÍNCULO, no de una consulta. El reloj tiene que poder
+   * pintarse sin red —es lo primero que se cae en una tienda— y una pantalla que pierde su
+   * color al caerse el wifi parece rota.
+   */
+  const colorDeMarca = useKioskStore((s) => s.binding?.organizationBrandColor ?? null);
   const notSetUp = useKioskNotSetUp();
   const segments = useSegments();
 
@@ -113,14 +120,21 @@ export default function KioskLayout() {
     return <KioskNotSetUpState />;
   }
 
+  /*
+   * EL PROVEEDOR ENVUELVE AL `Stack` Y NO AL REVÉS: las pantallas del reloj se pintan como
+   * hijas suyas, así que quedan dentro. Los dos estados de error de arriba se devuelven
+   * antes a propósito: sin vínculo no hay empresa, y por tanto no hay marca que poner.
+   */
   return (
-    <Stack
-      screenOptions={{
-        headerShown: false,
-        // Sin gesto de retroceso: el empleado no debe poder salirse del flujo.
-        gestureEnabled: false,
-        animation: 'fade',
-      }}
-    />
+    <ProveedorDeMarca color={colorDeMarca}>
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          // Sin gesto de retroceso: el empleado no debe poder salirse del flujo.
+          gestureEnabled: false,
+          animation: 'fade',
+        }}
+      />
+    </ProveedorDeMarca>
   );
 }

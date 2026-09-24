@@ -92,6 +92,8 @@ export type KioskBinding = {
    * peticiones al día por iPad para un dato que cambia una vez al año.
    */
   organizationLogoPath: string | null;
+  /** Color de marca de la empresa, o `null`. Se guarda para pintar el reloj sin red. */
+  organizationBrandColor: string | null;
   locationId: string;
   locationName: string;
   timezone: string;
