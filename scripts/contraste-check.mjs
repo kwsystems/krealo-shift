@@ -37,6 +37,7 @@ import {
   MARCADOR_ACCESO,
   MARCADORES,
   irA,
+  sembrarKiosco,
 } from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
@@ -131,8 +132,14 @@ for (const tema of TEMAS) {
     });
     const pagina = await contexto.newPage();
 
-    const revisar = async (nombre) => {
-      const { fallos, medidos, saltados } = await medirContraste(pagina, {
+    /*
+     * `enPagina` como parametro y no leyendo la de fuera: el reloj se mide en SU PROPIO
+     * contexto —necesita credencial de kiosco y entrar ahi deja la sesion del panel fuera
+     * de juego— asi que `revisar` tiene que poder apuntar a otra pestaña sin que nadie
+     * reasigne una variable a escondidas.
+     */
+    const revisar = async (nombre, enPagina = pagina) => {
+      const { fallos, medidos, saltados } = await medirContraste(enPagina, {
         minimo: MINIMO,
         minimoGrande: MINIMO_GRANDE,
         tamanoGrande: TAMANO_GRANDE,
@@ -196,6 +203,39 @@ for (const tema of TEMAS) {
       await pagina.waitForTimeout(2800);
       await revisar(nombre);
     }
+
+    /*
+     * EL RELOJ DE FICHAJE, que nunca se habia medido.
+     *
+     * Este arnes recorria las siete pantallas del panel y se paraba ahi. O sea que la
+     * pantalla que usa LA MAYORIA DE LA GENTE —la de la pared de la tienda, leida de pie,
+     * a un metro y con la luz que haya— era la unica sin una sola medida de contraste.
+     * El panel lo miran uno o dos encargados; el reloj lo miran todos, cuatro veces al
+     * dia.
+     *
+     * Va al final y en su propio contexto porque necesita credencial de kiosco sembrada, y
+     * porque entrar al reloj deja la sesion del panel fuera de juego: si fuera antes, las
+     * pantallas de arriba se medirian sin sesion.
+     */
+    const contextoKiosco = await navegador.newContext({
+      viewport: { width: ancho, height: alto },
+      colorScheme: tema,
+    });
+    const paginaKiosco = await contextoKiosco.newPage();
+    await sembrarKiosco(paginaKiosco);
+    await paginaKiosco.goto(base + '/kiosk', { waitUntil: 'networkidle' });
+
+    const teclado = paginaKiosco.locator('[data-testid="keypad-1"]:visible');
+    try {
+      await teclado.waitFor({ timeout: 30000 });
+    } catch {
+      problemas.push(
+        `${tema}/${nombreAncho}: el reloj no llego a pintar su teclado, asi que se quedo ` +
+          'sin medir. Es la pantalla que usa mas gente: no se da por buena sin medirla.',
+      );
+    }
+    if ((await teclado.count()) > 0) await revisar('reloj', paginaKiosco);
+    await contextoKiosco.close();
 
     await contexto.close();
   }

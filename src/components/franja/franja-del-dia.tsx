@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { franjaDelDia, type FranjaDelDia } from '@/domain/franja-del-dia';
+import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, sizes, spacing } from '@/theme/tokens';
 
@@ -189,6 +190,37 @@ export function FilaDeFranja({
   testID?: string;
 }) {
   const estilos = useEstilosDeFila();
+  /*
+   * EN TELÉFONO LA FILA SE APILA, y esto es un fallo que yo mismo metí el día que nació la
+   * franja: con la columna del nombre en 160 px fijos y 358 px de ancho útil a 390, a la
+   * franja le quedaban 90 px. O sea un muñón de dos centímetros donde tenía que estar la
+   * forma del día: la única cosa que esta fila existe para enseñar. Se vio en la captura
+   * de teléfono, no leyendo el código.
+   *
+   * Apilada, el nombre va arriba y la franja debajo a todo lo ancho. Se pierde la
+   * comparación entre filas —que era la razón de la columna fija— y se gana poder ver
+   * cada día. En un teléfono no cabían las dos cosas.
+   */
+  const { isCompact } = useResponsive();
+
+  if (isCompact) {
+    return (
+      <View style={estilos.filaApilada} testID={testID}>
+        <View style={estilos.quienApilado}>
+          <AppText variant="bodyStrong" numberOfLines={1}>
+            {nombre}
+          </AppText>
+          {detalle === undefined ? null : (
+            <AppText variant="help" tone="subtle" tabular numberOfLines={1}>
+              {detalle}
+            </AppText>
+          )}
+        </View>
+        {children}
+      </View>
+    );
+  }
+
   return (
     <View style={estilos.fila} testID={testID}>
       <View style={estilos.quien}>
@@ -208,6 +240,9 @@ export function FilaDeFranja({
 
 const useEstilosDeFila = estilosDelTema(() => ({
   fila: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
+  filaApilada: { gap: spacing.xs },
+  /* Apilado, el nombre y su hora van en una línea: el nombre crece y la hora se pega. */
+  quienApilado: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
   /*
    * EL NOMBRE NO CRECE Y LA FRANJA SÍ. Al revés, cada fila tendría su franja empezando en
    * una columna distinta según lo largo que fuera el nombre, y comparar dos días —que es

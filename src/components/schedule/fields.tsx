@@ -1,5 +1,13 @@
 import { useState, type ReactNode } from 'react';
-import { Modal, Pressable, ScrollView, Switch, View, type ViewStyle } from 'react-native';
+import {
+  Modal,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  View,
+  type ViewStyle,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -105,6 +113,11 @@ export function KeyValueRow({
  *
  * Si una fila entera necesita tonos, la fila está mal pensada, no mal pintada.
  */
+const estilosDeFicha = StyleSheet.create({
+  /* `minWidth: 0` con `flexShrink`: en la web, sin los dos, un texto no baja de su ancho. */
+  etiquetaQueEncoge: { flexShrink: 1, minWidth: 0 },
+});
+
 export function StatTile({
   label,
   value,
@@ -126,11 +139,23 @@ export function StatTile({
   const palette = tone === undefined ? null : paletaDeEstado(colors)[tone];
   const content = (
     <View style={styles.tile}>
-      <Row gap={spacing.xs}>
+      {/*
+        LA ETIQUETA TIENE QUE PODER ENVOLVER, y esto es la consecuencia de estrechar la
+        ficha a 104 px: le quedan 72 de contenido, y «Regulares» con su icono y su hueco
+        pide 81. Sin envolver, la fila desbordaba su ficha 5 px y la fila de seis fichas
+        desbordaba su contenedor 6 px a 360 px de ancho, recortados en silencio por un
+        `overflow: hidden`. Lo midió `responsive:check`; a ojo no se veía porque lo que
+        sobraba quedaba justo fuera del borde.
+      */}
+      <Row gap={spacing.xs} wrap align="center">
         {icon !== undefined ? (
           <Ionicons name={icon} size={16} color={palette === null ? colors.ink500 : palette.fg} />
         ) : null}
-        <AppText variant="label" tone={palette === null ? 'subtle' : undefined}>
+        <AppText
+          variant="label"
+          tone={palette === null ? 'subtle' : undefined}
+          style={estilosDeFicha.etiquetaQueEncoge}
+        >
           {label}
         </AppText>
       </Row>
@@ -670,8 +695,18 @@ const useEstilos = estilosDelTema((colors) => ({
    * antes) y `flexGrow` reparte lo que sobra entre las que hayan caído en esa línea. El
    * borde derecho queda recto, que es lo que hace que se lean como una sola fila de
    * cifras y no como tarjetas sueltas.
+   *
+   * Y EL CORTE BAJA DE 132 A 104 por el teléfono: con 358 px de ancho útil a 390, a 132
+   * solo entraban DOS fichas y la tercera caía sola a todo lo ancho, con la fila de
+   * arriba a medias. A 104 entran las tres (114 px cada una tras repartir) y la etiqueta
+   * envuelve en dos líneas, que se lee bien y deja el borde recto.
+   *
+   * ESTE es el número que manda: probé a cambiarlo en el estilo de la tarjeta de dentro y
+   * no pasó nada, porque quien decide dónde se parte la fila es el envoltorio. Lo delató
+   * medir el `minWidth` calculado en el navegador —seguía en 132— en vez de dar por hecho
+   * que el cambio había surtido efecto.
    */
-  tileWrap: { flexGrow: 1, flexBasis: 132, minWidth: 132 },
+  tileWrap: { flexGrow: 1, flexBasis: 104, minWidth: 104 },
   /*
    * PLANO, NO PERFIL. Era un recuadro con borde de 1 px del color de su estado, y tres
    * de estas seguidas convertían Inicio en una fila de marcos de colores que competían
@@ -685,7 +720,7 @@ const useEstilos = estilosDelTema((colors) => ({
    */
   tile: {
     flex: 1,
-    minWidth: 132,
+    /* Sin mínimo propio: el ancho y el corte de fila los decide `tileWrap`, el envoltorio. */
     /*
      * LA ALTURA MÍNIMA NO ES ADORNO: sin ella la ficha se colapsa y la tarjeta de abajo
      * se le monta encima. Lo comprobé rompiéndolo sin querer —quité el estilo entero
