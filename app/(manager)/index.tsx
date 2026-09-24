@@ -1,12 +1,21 @@
 import { useMemo } from 'react';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 
 import { AsyncSection } from '@/components/schedule/data-states';
 import { InlineNotice, LimitBar, StatTile } from '@/components/schedule/fields';
+import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import {
+  AppScreen,
+  Card,
+  ResponsiveContainer,
+  Row,
+  SeparadorDeRegistro,
+  Stack,
+} from '@/components/ui/layout';
 import { OfflineBanner, StatusBadge, SyncIndicator } from '@/components/ui/states';
 import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
@@ -22,7 +31,8 @@ import {
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { useNetworkStore } from '@/stores/network-store';
-import { spacing } from '@/theme/tokens';
+import { estilosDelTema } from '@/theme/estilos';
+import { radii, spacing } from '@/theme/tokens';
 import { currentLanguage } from '@/i18n';
 import {
   formatClockTime,
@@ -40,6 +50,7 @@ import {
  */
 export default function ManagerHomeScreen() {
   const { t } = useTranslation();
+  const estilos = useEstilos();
   const router = useRouter();
   const scope = useManagerScope();
   const language = currentLanguage();
@@ -239,6 +250,7 @@ export default function ManagerHomeScreen() {
                       {franjasDeHoy.map((franja) => (
                         <FilaDeFranja
                           key={franja.employeeId}
+                          semilla={franja.employeeId}
                           nombre={names.get(franja.employeeId) ?? t('common.unknown')}
                           detalle={detalleDeFranja(franja, scope.timezone, scope.timeFormat)}
                           testID={`band-row-${franja.employeeId}`}
@@ -285,81 +297,113 @@ export default function ManagerHomeScreen() {
                       body={t('admin.nobodyRightNowHint')}
                     />
                   ) : (
-                    <Stack gap={spacing.sm}>
-                      {dashboard.rightNow.map((entry) => (
-                        <Card key={`${entry.state}-${entry.employeeId}-${entry.since}`}>
-                          <Row justify="space-between" gap={spacing.md} align="center">
-                            <Stack gap={spacing.xs}>
-                              <AppText variant="bodyStrong">
-                                {entry.name !== ''
-                                  ? entry.name
-                                  : (names.get(entry.employeeId) ?? t('team.unknownEmployee'))}
-                              </AppText>
-                              {/*
-                                La hora suelta —"14:23"— no dice de qué. Con la
-                                etiqueta se lee sin tener que deducirla del estado.
-                              */}
-                              <AppText variant="help" tone="subtle" tabular>
-                                {t(timeLabelKey(entry.state), {
-                                  time: formatClockTime(
-                                    entry.since,
-                                    scope.timezone,
-                                    scope.timeFormat,
-                                    language,
-                                  ),
-                                })}
-                              </AppText>
-                            </Stack>
+                    /*
+                      UNA HOJA CON FILAS, NO QUINCE TARJETAS.
 
-                            {/*
-                              El tiempo transcurrido solo en pantalla ancha.
-                              En un monitor la fila tenía el nombre a la izquierda y la
-                              etiqueta de estado a 1.100 px de distancia, con el medio
-                              vacío: eso es lo que hace que una app se lea como un
-                              móvil estirado. Y no es relleno: cuánto lleva dentro
-                              alguien es el dato que decide si mandarlo a descansar.
-                              En teléfono no se pinta, porque ahí el ancho es el
-                              recurso escaso y la fila ya va justa. Y solo para quien
-                              está DENTRO: ver `cuentaTiempo`.
-                            */}
-                            {isWide && cuentaTiempo(entry.state) ? (
-                              <AppText variant="help" tone="subtle" tabular>
-                                {t('admin.elapsedLabel', {
-                                  duration: minutesToHHmm(
-                                    Math.max(
-                                      0,
-                                      Math.round((now.getTime() - Date.parse(entry.since)) / 60000),
-                                    ),
-                                  ),
-                                })}
-                              </AppText>
-                            ) : null}
-                            <StatusBadge
-                              label={stateLabel(entry)}
-                              tone={
-                                entry.state === 'working'
-                                  ? 'working'
-                                  : entry.state === 'onBreak'
-                                    ? 'onBreak'
-                                    : entry.state === 'upcoming'
-                                      ? 'info'
-                                      : 'late'
-                              }
-                              icon={
-                                entry.state === 'working'
-                                  ? 'checkmark-circle'
-                                  : entry.state === 'onBreak'
-                                    ? 'cafe-outline'
-                                    : entry.state === 'upcoming'
-                                      ? 'log-in-outline'
-                                      : 'alert-circle'
-                              }
-                              compact
-                            />
-                          </Row>
-                        </Card>
-                      ))}
-                    </Stack>
+                      Cada persona traía su propia `Card`: quince personas dentro eran
+                      quince planos flotando, cada uno con su sombra, su relleno y su
+                      hueco, en la pantalla donde más falta hace el alto. Ahora comparten
+                      superficie y las separa una regla fina, que es lo que hace que se
+                      lean como una lista de gente y no como quince objetos sueltos.
+                    */
+                    <View style={estilos.hojaDeAhora} testID="right-now-list">
+                      {dashboard.rightNow.map((entry, indice) => {
+                        const nombre =
+                          entry.name !== ''
+                            ? entry.name
+                            : (names.get(entry.employeeId) ?? t('team.unknownEmployee'));
+                        return (
+                          <View key={`${entry.state}-${entry.employeeId}-${entry.since}`}>
+                            {indice === 0 ? null : <SeparadorDeRegistro />}
+                            <View style={estilos.filaDeAhora}>
+                              <Row gap={spacing.md} align="center">
+                                <AnclaDePersona
+                                  semilla={entry.employeeId}
+                                  nombre={nombre}
+                                  tamano="sm"
+                                />
+                                <Stack gap={spacing.xs} style={estilos.creceYEncoge}>
+                                  <AppText variant="bodyStrong">{nombre}</AppText>
+                                  {/*
+                                    La hora suelta —"14:23"— no dice de qué. Con la
+                                    etiqueta se lee sin tener que deducirla del estado.
+                                  */}
+                                  <AppText variant="help" tone="subtle" tabular>
+                                    {t(timeLabelKey(entry.state), {
+                                      time: formatClockTime(
+                                        entry.since,
+                                        scope.timezone,
+                                        scope.timeFormat,
+                                        language,
+                                      ),
+                                    })}
+                                  </AppText>
+                                </Stack>
+
+                                {/*
+                                  El tiempo transcurrido solo en pantalla ancha, y en
+                                  COLUMNA DE ANCHO FIJO que se reserva aunque esta fila no
+                                  cuente tiempo. Si la columna se encogiera en las filas de
+                                  «Próximo», la insignia de esas filas subiría a la
+                                  izquierda y la columna de estado dejaría de ser una
+                                  columna: comparar de un vistazo exige que caigan en la
+                                  misma vertical, incluida la fila que no tiene dato.
+
+                                  Y no es relleno: cuánto lleva dentro alguien es el dato
+                                  que decide si mandarlo a descansar. En teléfono no se
+                                  pinta, porque ahí el ancho es el recurso escaso.
+                                */}
+                                {isWide ? (
+                                  <AppText
+                                    variant="help"
+                                    tone="subtle"
+                                    tabular
+                                    style={estilosDeColumna.transcurrido}
+                                  >
+                                    {cuentaTiempo(entry.state)
+                                      ? t('admin.elapsedLabel', {
+                                          duration: minutesToHHmm(
+                                            Math.max(
+                                              0,
+                                              Math.round(
+                                                (now.getTime() - Date.parse(entry.since)) / 60000,
+                                              ),
+                                            ),
+                                          ),
+                                        })
+                                      : ''}
+                                  </AppText>
+                                ) : null}
+                                <View style={estilosDeColumna.estado}>
+                                  <StatusBadge
+                                    label={stateLabel(entry)}
+                                    tone={
+                                      entry.state === 'working'
+                                        ? 'working'
+                                        : entry.state === 'onBreak'
+                                          ? 'onBreak'
+                                          : entry.state === 'upcoming'
+                                            ? 'info'
+                                            : 'late'
+                                    }
+                                    icon={
+                                      entry.state === 'working'
+                                        ? 'checkmark-circle'
+                                        : entry.state === 'onBreak'
+                                          ? 'cafe-outline'
+                                          : entry.state === 'upcoming'
+                                            ? 'log-in-outline'
+                                            : 'alert-circle'
+                                    }
+                                    compact
+                                  />
+                                </View>
+                              </Row>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
                   )}
                 </Stack>
               </Stack>
@@ -394,3 +438,33 @@ function detalleDeFranja(
   if (franja.turno !== null) return hora(franja.turno.desde);
   return undefined;
 }
+
+const useEstilos = estilosDelTema((colors) => ({
+  /*
+   * LA HOJA DE «AHORA MISMO»: una superficie, con las filas dentro.
+   *
+   * `overflow: hidden` no es decoración: sin él la primera y la última fila pintan sus
+   * esquinas cuadradas por encima del redondeo de la hoja, y se ve el pico.
+   */
+  hojaDeAhora: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.card,
+    overflow: 'hidden',
+  },
+  filaDeAhora: { paddingVertical: spacing.md, paddingHorizontal: spacing.lg },
+  /* `minWidth: 0` además de `flexShrink`: en la web, sin él no baja de su contenido. */
+  creceYEncoge: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+}));
+
+/**
+ * Las dos columnas de la derecha de «Ahora mismo».
+ *
+ * Anchos FIJOS a propósito, y reservados incluso en la fila que no tiene tiempo que
+ * contar: lo que hace útil una columna es que el dato caiga en la misma vertical en todas
+ * las filas. Si se encogiera donde no hay dato, la insignia de esa fila se desplazaría y
+ * la columna de estado dejaría de poder leerse de arriba abajo.
+ */
+const estilosDeColumna = StyleSheet.create({
+  transcurrido: { width: 96, textAlign: 'right', flexShrink: 0 },
+  estado: { width: 112, alignItems: 'flex-end', flexShrink: 0 },
+});

@@ -22,7 +22,7 @@ describe('indiceDeAncla', () => {
   it('personas distintas no caen todas en el mismo tono', () => {
     const ids = Array.from({ length: 40 }, (_, i) => `empleado-${i}-${i * 7}`);
     const tonos = new Set(ids.map((id) => indiceDeAncla(id)));
-    // Con 40 personas y 5 tonos, que salgan al menos 4 distintos. No se pide reparto
+    // Con 40 personas y seis tonos, que salgan al menos cuatro distintos. No se pide reparto
     // perfecto —es un hash, no un repartidor— sino que no colapse en uno solo.
     expect(tonos.size).toBeGreaterThanOrEqual(4);
   });

@@ -1,6 +1,7 @@
 import { View, type DimensionValue } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { franjaDelDia, type FranjaDelDia } from '@/domain/franja-del-dia';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -179,11 +180,14 @@ const useEstilos = estilosDelTema((colors) => ({
 
 /** Una fila de la franja: quién, su forma del día, y la hora que hace falta leer. */
 export function FilaDeFranja({
+  semilla,
   nombre,
   detalle,
   children,
   testID,
 }: {
+  /** El IDENTIFICADOR de la persona: el ancla es suya, no de su nombre. */
+  semilla: string;
   nombre: string;
   detalle?: string;
   children: React.ReactNode;
@@ -207,9 +211,12 @@ export function FilaDeFranja({
     return (
       <View style={estilos.filaApilada} testID={testID}>
         <View style={estilos.quienApilado}>
-          <AppText variant="bodyStrong" numberOfLines={1}>
-            {nombre}
-          </AppText>
+          <View style={estilos.nombreApilado}>
+            <AnclaDePersona semilla={semilla} nombre={nombre} tamano="sm" />
+            <AppText variant="bodyStrong" numberOfLines={1} style={estilos.creceYEncoge}>
+              {nombre}
+            </AppText>
+          </View>
           {detalle === undefined ? null : (
             <AppText variant="help" tone="subtle" tabular numberOfLines={1}>
               {detalle}
@@ -223,6 +230,13 @@ export function FilaDeFranja({
 
   return (
     <View style={estilos.fila} testID={testID}>
+      {/*
+        EL ANCLA VA FUERA DE LA COLUMNA DEL NOMBRE, no dentro. Todas miden lo mismo, así
+        que el nombre sigue empezando en la misma vertical en todas las filas y la franja
+        también: meterla dentro de los 160 px se los comería al nombre y cada fila
+        recortaría por un sitio distinto.
+      */}
+      <AnclaDePersona semilla={semilla} nombre={nombre} tamano="sm" />
       <View style={estilos.quien}>
         <AppText variant="bodyStrong" numberOfLines={1}>
           {nombre}
@@ -242,7 +256,18 @@ const useEstilosDeFila = estilosDelTema(() => ({
   fila: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
   filaApilada: { gap: spacing.xs },
   /* Apilado, el nombre y su hora van en una línea: el nombre crece y la hora se pega. */
-  quienApilado: { flexDirection: 'row', justifyContent: 'space-between', gap: spacing.sm },
+  quienApilado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+  },
+  /*
+   * APILADO EL ANCLA NO LE QUITA NADA A LA FRANJA: va en la línea del nombre, y la franja
+   * ocupa la línea de abajo entera. Por eso aquí sí cabe en un teléfono.
+   */
+  nombreApilado: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
+  creceYEncoge: { flexShrink: 1, minWidth: 0 },
   /*
    * EL NOMBRE NO CRECE Y LA FRANJA SÍ. Al revés, cada fila tendría su franja empezando en
    * una columna distinta según lo largo que fuera el nombre, y comparar dos días —que es

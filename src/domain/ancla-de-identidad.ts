@@ -23,7 +23,7 @@
  */
 
 /** Cuántos tonos hay. Vive aquí para que el cálculo no dependa de la paleta. */
-export const TONOS_DE_ANCLA = 5;
+export const TONOS_DE_ANCLA = 6;
 
 export function indiceDeAncla(semilla: string, total: number = TONOS_DE_ANCLA): number {
   if (total <= 0) return 0;

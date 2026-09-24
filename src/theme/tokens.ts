@@ -325,27 +325,63 @@ export const lineHeight = {
  * El texto va SIEMPRE oscuro sobre tinte claro (y al revés en oscuro), y no se elige a
  * ojo: `contraste:check` mide los 2838 textos de la app y estos van dentro.
  */
+/*
+ * LOS TONOS DE ANCLA, Y POR QUÉ SON DISCOS DE COLOR Y NO TINTES PÁLIDOS.
+ *
+ * La primera versión de esta lista eran cinco lavados clarísimos —#ECE6FF, #D6EFF5,
+ * #DCEBFB, #F7E2F0, #E3E6EC— elegidos a ojo, y PARECÍAN cinco colores. Se midió la
+ * separación perceptual entre ellos en OKLab y salió entre 1,7 y 3,1 sobre 100. El umbral
+ * para que dos categorías se distingan es 8. O sea que no eran cinco colores: era el mismo
+ * lavado cinco veces, con un susurro de tono.
+ *
+ * Y eso es EXACTAMENTE la pega que puso Andree —«no se diferencia entre persona»— sobre la
+ * versión anterior, que pintaba a todo el mundo del mismo tinte. Yo la di por arreglada
+ * pasando de un tinte a cinco. Medidos, los cinco eran uno. Arreglar algo y comprobarlo
+ * mirando no es comprobarlo.
+ *
+ * La causa se ve en cuanto se calcula: en OKLab la distancia la manda sobre todo la
+ * LUMINOSIDAD, y cinco lavados al mismo nivel de claridad no se pueden separar por mucho
+ * que cambie el tono. Para que el color distinga, el color tiene que existir.
+ *
+ * Ahora el disco lleva color de verdad y la letra va en blanco (en claro) o en tinta
+ * oscura del mismo tono (en oscuro). Y no son colores elegidos a ojo tampoco: la prueba
+ * `anclas-separan.test.ts` recalcula en cada ejecución que
+ *   · cada par de anclas se separa ≥ 8
+ *   · ningún ancla se acerca a menos de 8 de un color de ESTADO —verde, ámbar, rojo—,
+ *     porque un ancla que parezca un estado es peor que no tener ancla
+ *   · la letra sobre su disco llega a 4,5:1 y el disco contra su superficie a 3:1
+ *
+ * Son SEIS y no más: por debajo de seis sobran colisiones en un equipo normal, y por
+ * encima el séptimo ya no se separa 8 de los otros sin meterse en el verde o el rojo.
+ * Cuando dos personas comparten tono, lo que las distingue son las iniciales.
+ */
 export const anclasDeIdentidadClaro = [
-  { bg: '#ECE6FF', fg: '#452BB7' },
-  /*
-   * CIAN Y NO VERDE MENTA. El primer intento puso #D7F0EC, y en la captura las anclas de
-   * dos personas quedaban a un paso del verde de la insignia «Activo» (#EAF9F1): un tinte
-   * pálido de la misma familia justo al lado de un estado del mismo color. Se corrió hacia
-   * el azul hasta que se lee como otra cosa.
-   */
-  { bg: '#D6EFF5', fg: '#10566B' },
-  { bg: '#DCEBFB', fg: '#14558F' },
-  { bg: '#F7E2F0', fg: '#8A2E6C' },
-  { bg: '#E3E6EC', fg: '#3A4558' },
+  { bg: '#5B3CC4', fg: '#FFFFFF' },
+  { bg: '#0E6E8E', fg: '#FFFFFF' },
+  { bg: '#1D4ED8', fg: '#FFFFFF' },
+  { bg: '#A21C79', fg: '#FFFFFF' },
+  { bg: '#475569', fg: '#FFFFFF' },
+  { bg: '#7C4A2A', fg: '#FFFFFF' },
 ] as const;
 
-/** En oscuro se invierte la relación: fondo hundido y tinta clara del mismo tono. */
+/**
+ * En oscuro NO vale el mismo disco: medido contra la superficie oscura (#1C1A24), los seis
+ * de arriba se quedaban entre 2,4 y 3,1 de contraste, o sea un disco que se hunde en la
+ * página. Aquí se sube la claridad del MISMO tono y la letra pasa a ser la tinta oscura,
+ * así la persona conserva su color entre los dos temas y el disco se sigue viendo.
+ *
+ * La arcilla es el caso que hubo que corregir: #C89066, que era la primera opción, se
+ * quedaba a 6,3 del ámbar de «En descanso» (#C4831F). Un ancla a un paso de un estado es
+ * justo lo que esta lista no puede tener, así que se corrió hacia el rojo —#CE8A72— hasta
+ * que la distancia pasó de 8.
+ */
 export const anclasDeIdentidadOscuro = [
-  { bg: '#2A2342', fg: '#C9B9FF' },
-  { bg: '#13303A', fg: '#93CFE2' },
-  { bg: '#16293E', fg: '#9CC8F2' },
-  { bg: '#33203B', fg: '#E9AFD5' },
-  { bg: '#262B34', fg: '#C2C9D6' },
+  { bg: '#A78BFA', fg: '#221A3D' },
+  { bg: '#5BC0DE', fg: '#0B2B36' },
+  { bg: '#7FA9F5', fg: '#10213F' },
+  { bg: '#E879C0', fg: '#3B0F2C' },
+  { bg: '#9AA8BC', fg: '#1B2330' },
+  { bg: '#CE8A72', fg: '#331D0D' },
 ] as const;
 
 export const shadows = {
