@@ -15,7 +15,32 @@
     "skipLibCheck": true,
     "sourceMap": true
   },
-  "include": ["src/**/*.ts", "../src/domain/**/*.ts"],
+  /*
+   * SE NOMBRAN LOS FICHEROS COMPARTIDOS, UNO A UNO, y antes decia `../src/domain/**`.
+   *
+   * Compilar la carpeta entera hacia el servidor era compilar tambien lo que es SOLO de
+   * la app, y el dia que uno de esos ficheros importo algo del alias `@/` —la zona horaria
+   * para los rotulos de la franja del dia— la compilacion de las funciones se rompio. No
+   * se noto porque `tsc --noEmit` de la raiz usa el tsconfig de la raiz, que si resuelve
+   * `@/`: el fallo solo aparecia al DESPLEGAR, y aguanto medio dia porque en ese rato no
+   * hubo que desplegar funciones.
+   *
+   * Arreglarlo añadiendo `paths` aqui habria sido peor: entonces el servidor compilaria
+   * `src/utils/time.ts` y con el `date-fns`, que no esta en las dependencias de las
+   * funciones. Habriamos cambiado un fallo de compilacion por uno de arranque en
+   * produccion.
+   *
+   * Lo que el servidor comparte de verdad son tres ficheros: la maquina de estados, los
+   * motivos de pausa y el PIN. Nombrandolos, un fichero nuevo de la app no puede volver a
+   * arrastrar al servidor, y si alguien necesita compartir un cuarto tiene que decirlo
+   * aqui, que es exactamente el momento de preguntarse si debe.
+   */
+  "include": [
+    "src/**/*.ts",
+    "../src/domain/attendance-state-machine.ts",
+    "../src/domain/break-reason.ts",
+    "../src/domain/pin.ts"
+  ],
   // Las pruebas NO se compilan aqui, y por dos motivos: las corre el jest de la raiz
   // —con sus tipos, que este tsconfig no declara— y ademas lo que sale de `lib/` es lo
   // que se despliega a Cloud Functions, donde una prueba no pinta nada.

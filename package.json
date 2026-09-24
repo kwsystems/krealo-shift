@@ -34,7 +34,8 @@
     "contratos:check": "node scripts/contratos-check.mjs",
     "campos:check": "node scripts/campos-muertos-check.mjs",
     "emulador:check": "node scripts/emulador-check.mjs",
-    "relieve:check": "node scripts/relieve-check.mjs dist-demo"
+    "relieve:check": "node scripts/relieve-check.mjs dist-demo",
+    "funciones:check": "tsc -p functions --noEmit"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
