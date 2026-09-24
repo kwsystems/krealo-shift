@@ -31,6 +31,27 @@ export async function updateOrganization(params: {
   );
 }
 
+/**
+ * Guardar SOLO el color de marca.
+ *
+ * Es una función aparte y no un campo más de `OrganizationPatch` a propósito: ese patch
+ * exige los cuatro campos de la tarjeta de organización —nombre, idioma, zona e inicio de
+ * semana— y la marca se edita en otra tarjeta. Hacerlos opcionales para esto dejaría que
+ * cualquier llamada mandase un patch vacío y no fallara.
+ */
+export async function updateOrganizationBrand(params: {
+  organizationId: string;
+  /** `null` quita el color y devuelve la empresa al acento de fábrica. */
+  brandColor: string | null;
+}): Promise<void> {
+  await execute((db) =>
+    db
+      .from(TABLES.organizations)
+      .update({ brand_color: params.brandColor })
+      .eq('id', params.organizationId),
+  );
+}
+
 export async function updateLocation(params: {
   locationId: string;
   name: string;

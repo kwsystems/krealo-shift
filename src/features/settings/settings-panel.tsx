@@ -27,7 +27,7 @@ import {
 import { JobRolesCard } from './job-roles-card';
 import { MembersCard } from './members-card';
 import { PinsCard } from './pins-card';
-import { OrganizationLogoField } from './logo-field';
+import { MarcaCard } from './marca-card';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
 import { AppText } from '@/components/ui/app-text';
@@ -96,6 +96,16 @@ export function SettingsPanel() {
               organization={scope.organization}
               canEdit={scope.isAdmin}
               abiertaDeEntrada={abrir === 'empresa'}
+            />
+            {/*
+              LA MARCA VA JUSTO DESPUÉS DE «ORGANIZACIÓN» y antes de las sedes, siguiendo el
+              orden con el que se monta una tienda que ya ordenaba esta lista: qué es la
+              empresa, CÓMO SE LLAMA A LA VISTA, dónde está, quién entra y con qué aparato.
+            */}
+            <MarcaCard
+              organization={scope.organization}
+              canEdit={scope.isAdmin}
+              abiertaDeEntrada={abrir === 'marca'}
             />
             {scope.location !== null ? (
               <LocationCard
@@ -261,13 +271,6 @@ function OrganizationCard({
         una imagen ya subida a Storage no puede quedar "pendiente de guardar" sin que
         el archivo y la columna se separen.
       */}
-      <OrganizationLogoField
-        organizationId={organization.id}
-        logoPath={organization.logo_path}
-        canEdit={canEdit}
-        onChanged={() => scope.refetch()}
-      />
-
       <SegmentedControl
         label={t('settings.defaultLocale')}
         value={locale}

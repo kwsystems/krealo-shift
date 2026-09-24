@@ -11,6 +11,7 @@ import {
   setLocationActive,
   updateLocation,
   updateOrganization,
+  updateOrganizationBrand,
   type NotificationPreferences,
   type OrganizationPatch,
 } from './api';
@@ -75,6 +76,12 @@ export function useSettingsMutations(organizationId: string | null) {
   const saveOrganization = useMutation({
     mutationFn: (patch: OrganizationPatch) =>
       updateOrganization({ organizationId: organizationId ?? '', patch }),
+    onSuccess: invalidateScope,
+  });
+
+  const saveBrandColor = useMutation({
+    mutationFn: (brandColor: string | null) =>
+      updateOrganizationBrand({ organizationId: organizationId ?? '', brandColor }),
     onSuccess: invalidateScope,
   });
 
@@ -152,6 +159,7 @@ export function useSettingsMutations(organizationId: string | null) {
   return {
     saveOrganization,
     saveLocation,
+    saveBrandColor,
     addLocation,
     addOrganization,
     toggleLocation,

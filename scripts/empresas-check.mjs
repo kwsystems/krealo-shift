@@ -204,6 +204,46 @@ try {
   await foto(pagina, '4-cambiada');
 
   /* ------------------------------------------------------------------ */
+  const casoMarca = 'el color de la empresa AVISA cuando se parece a un estado, con el numero';
+  /*
+   * POR QUE SE PRUEBA CON UN COLOR MALO Y NO CON UNO BONITO. Un arnes que elige un azul
+   * oscuro comprueba que la pantalla no explota, y nada mas: ese color pasaria sin que la
+   * app hiciera nada. Lo que hay que poder afirmar es que el aviso SALE cuando toca, y para
+   * eso hace falta un color que lo provoque: un verde, que en esta app choca con
+   * «Trabajando».
+   *
+   * Y SE EXIGE EL NUMERO DENTRO DEL TEXTO. Un aviso que dice «ese color no va bien» deja a
+   * alguien atascado sin saber cuanto le falta; con la distancia escrita se puede decidir.
+   * Ademas es lo que distingue un aviso de verdad de un cartel puesto para que el arnes
+   * pase.
+   */
+  await irA(pagina, base, '/settings');
+  const tituloMarca = pagina.getByText('Marca', { exact: true }).first();
+  if (!(await tituloMarca.isVisible().catch(() => false))) {
+    fallar(casoMarca, 'no hay tarjeta «Marca» en Ajustes');
+  } else {
+    await tituloMarca.click();
+    const campo = pagina.locator('[data-testid="brand-color"]');
+    await campo.waitFor({ timeout: 20000 });
+    await campo.fill('#1FA971');
+    await pagina.waitForTimeout(500);
+    const aviso = pagina.locator('[data-testid="brand-aviso-trabajando"]');
+    if ((await aviso.count()) === 0) {
+      fallar(casoMarca, 'eleg\u00ed un verde y no salio el aviso de que choca con «Trabajando»');
+    } else {
+      const texto = (await aviso.innerText()).replace(/\s+/g, ' ');
+      if (!/\d/.test(texto)) {
+        fallar(casoMarca, `el aviso sale pero sin numero: «${texto.slice(0, 120)}»`);
+      } else if ((await pagina.locator('[data-testid="brand-preview"]').count()) === 0) {
+        fallar(casoMarca, 'el aviso sale pero no hay vista previa del reloj que mirar');
+      } else {
+        pasa(casoMarca, texto.slice(0, 90));
+      }
+    }
+  }
+  await foto(pagina, '8-marca');
+
+  /* ------------------------------------------------------------------ */
   const casoBarra = 'se cambia de sede DESDE LA BARRA DE ARRIBA, sin pasar por Ajustes';
   /*
    * LA MITAD QUE FALTABA. Todo lo de arriba se hace dentro de Ajustes, y ese era el
