@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
+import { SeparadorDeCabecera, SeparadorDeRegistro } from '@/components/ui/layout';
 import { MemberRow } from './member-row';
 import type { TeamMember } from '@/features/team/hooks';
 import { estilosDelTema } from '@/theme/estilos';
@@ -76,6 +77,18 @@ export function MemberList({
        * señalaría a la columna de al lado.
        */
       ListHeaderComponent={<CabeceraDeColumnas />}
+      /*
+       * ESTO FALTABA, y es exactamente lo que Andree señaló mirando la app publicada: «el
+       * que separa a Ana y Joseph no se ve, es como que no están separados». No es que no
+       * se viera: NO ESTABA. Volcado el DOM, entre fila y fila no había ningún elemento;
+       * eran bloques blancos de 73 px pegados sobre fondo blanco.
+       *
+       * Y lo que lo hizo invisible para mí: el comentario de `member-row` afirmaba que las
+       * filas «las separa una regla fina (SeparadorDeRegistro, en la lista)». Lo escribí yo
+       * al quitarles la tarjeta y nunca comprobé que la lista la tuviera. Horas sí la
+       * llevaba, así que al mirar el código de al lado todo parecía consistente.
+       */
+      ItemSeparatorComponent={SeparadorDeRegistro}
       style={styles.lista}
       contentContainerStyle={styles.contenido}
       testID={testID}
@@ -101,21 +114,24 @@ function CabeceraDeColumnas() {
   const { t } = useTranslation();
   const estilos = useEstilosDeCabecera();
   return (
-    <View style={estilos.cabecera}>
-      <View style={estilos.hueco} />
-      {/*
+    <>
+      <View style={estilos.cabecera}>
+        <View style={estilos.hueco} />
+        {/*
         SIN `numberOfLines`: si algún día no cabe, que envuelva en dos líneas en vez de
         cortarse. Un rótulo cortado —«Horas reci…»— obliga a adivinar qué columna es, que
         es exactamente lo que una cabecera existe para evitar. Pasó en el primer intento,
         con la columna a 72 px.
       */}
-      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.horas}>
-        {t('team.recentHours')}
-      </AppText>
-      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>
-        {t('team.statusColumn')}
-      </AppText>
-    </View>
+        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.horas}>
+          {t('team.recentHours')}
+        </AppText>
+        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>
+          {t('team.statusColumn')}
+        </AppText>
+      </View>
+      <SeparadorDeCabecera />
+    </>
   );
 }
 

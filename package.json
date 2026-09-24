@@ -33,7 +33,8 @@
     "empresas:check": "node scripts/empresas-check.mjs dist-demo",
     "contratos:check": "node scripts/contratos-check.mjs",
     "campos:check": "node scripts/campos-muertos-check.mjs",
-    "emulador:check": "node scripts/emulador-check.mjs"
+    "emulador:check": "node scripts/emulador-check.mjs",
+    "relieve:check": "node scripts/relieve-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

@@ -49,6 +49,34 @@ export const lightColors = {
   raised: '#FFFFFF',
   hundido: '#F4F3F8',
   border: '#E5E3EB',
+  /*
+   * LA REGLA QUE SEPARA DOS FILAS, y es un token APARTE de `border` aunque las dos sean
+   * líneas finas del mismo gris lavanda. La diferencia es el trabajo que hacen.
+   *
+   * `border` es RECESIVO A PROPÓSITO: es la rejilla de los gráficos y el carril del turno
+   * en la franja del día, o sea referencia que no debe competir con el dato. Subirle el
+   * contraste para arreglar las listas habría oscurecido la rejilla de Reportes y el
+   * carril de Inicio, que son justo lo que tiene que quedarse atrás.
+   *
+   * La regla de una lista hace lo contrario: TIENE que verse, porque es lo único que dice
+   * dónde acaba una persona y empieza la siguiente. Medida, la anterior estaba a 1,27:1
+   * contra la fila —a distancia de lectura, no está— y por eso Andree dijo que Ana y
+   * Joseph «no se ven separados». Esta está a 2,01:1.
+   *
+   * Y NO se sube a 3:1, que es el umbral de los bordes de control, aunque fuera lo obvio:
+   * comparadas las dos en una captura, a 3:1 veinte filas se leen como una rejilla de hoja
+   * de cálculo. La dirección de esta app es «libro de registro», y un renglón de registro
+   * se ve sin gritar. La que sí llega a 3:1 es la de debajo.
+   */
+  regla: '#B8B6BC',
+  /*
+   * LA REGLA DE LA CABECERA, más marcada (3,01:1), y eso ES la información: en un libro de
+   * registro la raya bajo los rótulos de columna pesa más que las que separan asientos,
+   * porque separa dos cosas distintas —qué significa cada columna, y los datos— mientras
+   * que las de abajo separan dos cosas iguales. Con todas las rayas del mismo grosor, la
+   * cabecera parecía un asiento más.
+   */
+  reglaFuerte: '#959499',
   success50: '#EAF9F1',
   success600: '#157D56',
   warning50: '#FFF6E5',
@@ -149,6 +177,9 @@ export const darkColors = {
 
   canvas: '#131118',
   border: '#332F3D',
+  /* Mismos trabajos que en claro, medidos contra la superficie oscura: 2,07:1 y 3,01:1. */
+  regla: '#514B61',
+  reglaFuerte: '#6B6280',
   success50: '#12261D',
   success600: '#4ADE9B',
   warning50: '#2B2011',

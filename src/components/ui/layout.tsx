@@ -203,7 +203,8 @@ const useEstilos = estilosDelTema((colors) => ({
     ...shadows.card,
   },
   row: { flexDirection: 'row' },
-  separadorDeRegistro: { height: borderWidth.hairline, backgroundColor: colors.border },
+  separadorDeRegistro: { height: borderWidth.hairline, backgroundColor: colors.regla },
+  separadorDeCabecera: { height: borderWidth.hairline, backgroundColor: colors.reglaFuerte },
   barra: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -285,5 +286,16 @@ export function BarraDeControl({
  */
 export function SeparadorDeRegistro() {
   const styles = useEstilos();
-  return <View style={styles.separadorDeRegistro} />;
+  return <View style={styles.separadorDeRegistro} testID="separador-de-registro" />;
+}
+
+/**
+ * La regla de debajo de los rótulos de columna. MÁS MARCADA que las de entre filas, y eso
+ * es información y no adorno: separa dos cosas distintas —qué significa cada columna, y
+ * los datos— mientras que las de abajo separan dos cosas iguales entre sí. Con todas las
+ * rayas al mismo peso, la cabecera se leía como un asiento más de la lista.
+ */
+export function SeparadorDeCabecera() {
+  const styles = useEstilos();
+  return <View style={styles.separadorDeCabecera} testID="separador-de-cabecera" />;
 }

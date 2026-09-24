@@ -7,7 +7,7 @@ import { AppText } from '@/components/ui/app-text';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { SupportedLanguage } from '@/i18n';
-import { SeparadorDeRegistro } from '@/components/ui/layout';
+import { SeparadorDeCabecera, SeparadorDeRegistro } from '@/components/ui/layout';
 import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
 import type { TimeFormatPreference } from '@/utils/time';
@@ -127,15 +127,20 @@ function CabeceraDeColumnas() {
   const { t } = useTranslation();
   const estilos = useEstilosDeCabecera();
   return (
-    <View style={estilos.cabecera}>
-      <View style={estilos.hueco} />
-      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.netas}>
-        {t('timesheet.netHours')}
-      </AppText>
-      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.pausas}>
-        {t('timesheet.breaks')}
-      </AppText>
-    </View>
+    <>
+      <View style={estilos.cabecera}>
+        <View style={estilos.hueco} />
+        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.netas}>
+          {t('timesheet.netHours')}
+        </AppText>
+        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.pausas}>
+          {t('timesheet.breaks')}
+        </AppText>
+      </View>
+      {/* La raya de la cabecera pesa más que las de entre filas: separa dos cosas
+          distintas, no dos iguales. Ver `SeparadorDeCabecera`. */}
+      <SeparadorDeCabecera />
+    </>
   );
 }
 
