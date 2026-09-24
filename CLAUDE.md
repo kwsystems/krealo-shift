@@ -11,7 +11,28 @@ Toda tarea creada o actualizada por un agente debe llevar:
 | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | `companyName` | **"Universo Tutu"** — TEMPORAL, ver la nota de abajo. El destino definitivo es "Krealo Shift".                              |
 | `assignees`   | `["andree@krealomedia.com"]`                                                                                                |
-| `tags`        | `["Claude"]` — etiqueta nativa ya existente. Usar el nombre exacto: un nombre nuevo CREA una etiqueta y no se puede borrar. |
+| `tags`        | `["Claude", "Krealo Shift"]` — las DOS. Ver la nota de abajo.                                                             |
+
+### Las dos etiquetas (2026-09-24)
+
+Toda tarea del proyecto lleva **`["Claude", "Krealo Shift"]`**. `Claude` dice quién la
+escribió; `Krealo Shift` dice de qué proyecto es, y hace falta porque las tareas viven en
+el tablero de «Universo Tutu», que es un cliente real: sin la etiqueta, el trabajo del
+proyecto y el del cliente se mezclan y solo los distingue el prefijo del título.
+
+**`tags` REEMPLAZA la lista entera**, no añade: mandar `["Krealo Shift"]` borra `Claude`.
+
+**Un nombre de etiqueta nuevo CREA la etiqueta y no se puede borrar.** Por eso se escribe
+exacto y una sola vez. `Krealo Shift` ya existe desde el 2026-09-24; no hace falta crear
+nada más.
+
+Las 142 tareas que había quedaron retiquetadas ese día. Medido en la respuesta del API,
+`update` con `tags` devuelve `updated: ["tagIds","updatedBy"]`: **no toca `completedAt`
+ni `status`**, así que retiquetar en masa no reescribe el historial de completadas. Eso se
+comprobó en una tarea antes de tocar las 142.
+
+Lo que **no** se puede comprobar desde el API: `/tasks/list` no devuelve `tags`, así que
+después de etiquetar hay que mirar la UI. No se puede afirmar que se ve sin haberlo visto.
 
 ### Excepción temporal de empresa (2026-08-27)
 
