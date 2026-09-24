@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Linking } from 'react-native';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
+import { useLocalSearchParams } from 'expo-router';
 import { esZonaValida, zonaCanonica, ZONAS_DE_EJEMPLO } from '@/domain/zona-horaria';
 
 import { useKioskDevices, useNotificationPreferences, useSettingsMutations } from './hooks';
@@ -60,6 +61,11 @@ const CODE_VALID_MINUTES = 30;
 export function SettingsPanel() {
   const { t } = useTranslation();
   const scope = useManagerScope();
+  /*
+   * `abrir` LO MANDA EL CONMUTADOR DE LA BARRA DE ARRIBA. Se lee aquí y no en la ruta
+   * porque es esta pantalla la que sabe qué tarjeta corresponde a cada valor.
+   */
+  const { abrir } = useLocalSearchParams<{ abrir?: string }>();
 
   return (
     <Stack gap={spacing.lg}>
@@ -79,16 +85,24 @@ export function SettingsPanel() {
           <Stack gap={spacing.lg}>
             <AppLanguageCard />
             <AppThemeCard />
+            {/*
+              `abrir` VIENE DE LA BARRA DE ARRIBA. Quien pulsa «Dar de alta otra empresa»
+              en el conmutador llega aquí, y llegar a una pantalla de ocho tarjetas
+              cerradas, teniendo que adivinar cuál era, deja el problema igual que estaba:
+              el formulario existía y no se encontraba. Con esto llega abierta.
+            */}
             <OrganizationCard
               key={scope.organization.id}
               organization={scope.organization}
               canEdit={scope.isAdmin}
+              abiertaDeEntrada={abrir === 'empresa'}
             />
             {scope.location !== null ? (
               <LocationCard
                 key={scope.location.id}
                 location={scope.location}
                 canEdit={scope.isAdmin}
+                abiertaDeEntrada={abrir === 'sede'}
               />
             ) : null}
             {/*
@@ -167,9 +181,12 @@ function AppThemeCard() {
 function OrganizationCard({
   organization,
   canEdit,
+  abiertaDeEntrada = false,
 }: {
   organization: ManagerOrganization;
   canEdit: boolean;
+  /** La abre el conmutador de la barra de arriba al venir a dar de alta una empresa. */
+  abiertaDeEntrada?: boolean;
 }) {
   const { t } = useTranslation();
   const scope = useManagerScope();
@@ -206,7 +223,7 @@ function OrganizationCard({
   const nameValid = patch.name.length > 1;
 
   return (
-    <FormCard collapsible title={t('settings.organization')}>
+    <FormCard collapsible defaultOpen={abiertaDeEntrada} title={t('settings.organization')}>
       {/*
         EL SELECTOR DE EMPRESA, y solo si hay MÁS DE UNA.
         Con una sola es un desplegable de un elemento: ruido que sugiere que hay algo que
@@ -537,7 +554,16 @@ const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = (
   Object.keys(ETIQUETAS_NUMERICAS) as NumericSettingKey[]
 ).map((key) => ({ key, labelKey: ETIQUETAS_NUMERICAS[key] }));
 
-function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdit: boolean }) {
+function LocationCard({
+  location,
+  canEdit,
+  abiertaDeEntrada = false,
+}: {
+  location: ManagerLocation;
+  canEdit: boolean;
+  /** La abre el conmutador de la barra de arriba al venir a abrir una sede. */
+  abiertaDeEntrada?: boolean;
+}) {
   const { t } = useTranslation();
   const scope = useManagerScope();
   const mutations = useSettingsMutations(scope.organization?.id ?? null);
@@ -601,7 +627,12 @@ function LocationCard({ location, canEdit }: { location: ManagerLocation; canEdi
   });
 
   return (
-    <FormCard collapsible title={t('settings.locations')} description={location.name}>
+    <FormCard
+      collapsible
+      defaultOpen={abiertaDeEntrada}
+      title={t('settings.locations')}
+      description={location.name}
+    >
       {/*
         QUE SEDE SE ESTA EDITANDO, y antes no se podia elegir: esta tarjeta recibia la
         del alcance y no habia forma de cambiarla desde aqui. Con dos tiendas, la

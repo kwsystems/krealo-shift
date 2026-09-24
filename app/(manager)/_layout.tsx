@@ -2,7 +2,7 @@ import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { DesktopHeader } from '@/components/layout/desktop-header';
+import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
@@ -93,9 +93,9 @@ export default function ManagerLayout() {
         La cabecera va DENTRO del provider porque lee la organización y la sede, y
         FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una
         cabecera que empieza donde acaba la navegación no es una cabecera de app. En
-        pantallas estrechas no pinta nada (ver DesktopHeader).
+        pantallas estrechas se queda sin la marca pero SI con el alcance (ver BarraDeAlcance).
       */}
-      <DesktopHeader />
+      <BarraDeAlcance />
       <Tabs
         screenOptions={{
           headerShown: false,

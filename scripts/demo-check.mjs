@@ -207,13 +207,20 @@ if (DIR_PROD !== undefined) {
 /*
  * La cabecera de escritorio aparece en ancho y NO en teléfono.
  *
- * Las dos mitades importan. Que aparezca es lo que da identidad al panel en un
- * monitor; que NO aparezca en teléfono es lo que impide que robe alto de pantalla
- * donde el alto es el recurso escaso. Un `useSidebar` mal puesto rompe una de las dos
- * sin romper ninguna pantalla, así que nada más lo notaría.
+ * CAMBIADO EL 2026-09-24: ANTES SE EXIGÍA QUE EN TELÉFONO NO APARECIERA, y ahora se
+ * exige lo contrario. El argumento viejo era que en un teléfono el alto es el recurso
+ * escaso y cada pantalla ya trae su título. Sigue siendo cierto para la MARCA —el icono
+ * de la app ya dice qué aplicación es, y por eso la marca se sigue ocultando— y era falso
+ * para el ALCANCE: el título de la pantalla dice «Equipo», no de qué negocio ni de qué
+ * tienda es ese equipo. En un teléfono que además va a llevar dos empresas, no saberlo es
+ * peor que perder 44 px. Y desde que la barra es el conmutador, ocultarla en teléfono
+ * dejaría el cambio de empresa y de sede sin ningún camino allí.
+ *
+ * Lo que se comprueba, entonces, es que la barra esté en LOS DOS y que en teléfono NO
+ * lleve la marca: eso es lo que distingue «se adaptó» de «se olvidó el punto de corte».
  */
 for (const [etiqueta, ancho, esperada] of [
-  ['teléfono', 390, false],
+  ['teléfono', 390, true],
   ['escritorio', 1440, true],
 ]) {
   const ctx = await navegador.newContext({ viewport: { width: ancho, height: 900 } });
@@ -226,8 +233,25 @@ for (const [etiqueta, ancho, esperada] of [
       `cabecera en ${etiqueta} (${ancho}px): ${hay ? 'aparece y no debería' : 'no aparece y debería'}`,
     );
   }
+  // La marca solo en ancho: es la mitad que sí depende del punto de corte.
+  const conMarca = (await pag.locator('[data-testid="desktop-header"]').innerText().catch(() => ''))
+    .toLowerCase()
+    .includes('krealo shift');
+  const marcaEsperada = ancho >= 768;
+  if (conMarca !== marcaEsperada) {
+    problemas.push(
+      `marca en la cabecera, ${etiqueta} (${ancho}px): ${conMarca ? 'aparece y no debería' : 'no aparece y debería'}`,
+    );
+  }
+  // Y que se pueda pulsar para cambiar de empresa o de sede, que es a lo que existe.
+  const conmutador = (await pag.locator('[data-testid="scope-open"]').count()) > 0;
+  if (!conmutador) {
+    problemas.push(
+      `cabecera en ${etiqueta} (${ancho}px): no se puede pulsar para cambiar de empresa ni de sede`,
+    );
+  }
   console.log(
-    `  cabecera  ${etiqueta.padEnd(11)} ${hay ? 'sí' : 'no'}  (se espera ${esperada ? 'sí' : 'no'})`,
+    `  cabecera  ${etiqueta.padEnd(11)} ${hay ? 'sí' : 'no'}  marca ${conMarca ? 'sí' : 'no'}  conmutador ${conmutador ? 'sí' : 'no'}`,
   );
   await ctx.close();
 }

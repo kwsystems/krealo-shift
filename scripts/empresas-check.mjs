@@ -43,6 +43,13 @@ const NUEVA = 'Univers Toutou';
 const SEDE_NUEVA = 'Montreal Centre';
 const ZONA_NUEVA = 'America/Toronto';
 
+/** Deja solo letras, números y espacios simples: los textos pintados traen basura invisible. */
+const normalizar = (texto) =>
+  texto
+    .replace(/[^\p{L}\p{N} ]+/gu, ' ')
+    .replace(/ +/g, ' ')
+    .trim();
+
 const problemas = [];
 const fallar = (caso, detalle) => {
   problemas.push(`${caso}: ${detalle}`);
@@ -195,6 +202,112 @@ try {
     fallar(caso4, 'no llegué a tener selector que cambiar');
   }
   await foto(pagina, '4-cambiada');
+
+  /* ------------------------------------------------------------------ */
+  const casoBarra = 'se cambia de sede DESDE LA BARRA DE ARRIBA, sin pasar por Ajustes';
+  /*
+   * LA MITAD QUE FALTABA. Todo lo de arriba se hace dentro de Ajustes, y ese era el
+   * problema que señaló Andree: «es bien difícil buscarlo para una persona que no conoce
+   * la app». Desde el 2026-09-24 la barra de arriba es el conmutador, así que hay que
+   * comprobar el camino que de verdad va a usar la gente, no solo el que existía.
+   *
+   * Se comprueba con la SEDE y no con la empresa porque en la demostración la empresa
+   * nueva desaparece al recargar —los datos se siembran en memoria— y este caso va después
+   * de la recarga del caso 5. Las sedes sembradas están siempre, y el mecanismo que se
+   * ejercita es el mismo: abrir la hoja, elegir, y que la pantalla cambie.
+   */
+  await irA(pagina, base, '/');
+  const abridor = pagina.locator('[data-testid="scope-open"]');
+  if ((await abridor.count()) === 0) {
+    fallar(casoBarra, 'la barra de arriba no se puede pulsar: no hay conmutador');
+  } else {
+    const cabeceraAntes = await cabecera();
+    await abridor.click();
+    await pagina.locator('[data-testid="scope-sheet"]').waitFor({ timeout: 20000 });
+    const opciones = pagina.locator('[data-testid^="scope-loc-"]');
+    const cuantas = await opciones.count();
+    if (cuantas < 2) {
+      fallar(casoBarra, `la hoja ofrece ${cuantas} sede(s): no hay a dónde cambiar`);
+    } else {
+      /*
+       * SE ELIGE LA QUE NO ESTÁ PUESTA. Pulsar la que ya está seleccionada cerraría la hoja
+       * sin cambiar nada y el arnés lo daría por bueno: pasaría comprobando que un botón
+       * cierra una hoja, que no es lo que aquí importa.
+       */
+      /*
+       * SE LEE LA ETIQUETA ACCESIBLE Y NO EL TEXTO PINTADO. El texto de la opción llega con
+       * un salto de línea delante que ni `replace(/\s+/g,' ')` ni `trim()` quitaban —el
+       * mensaje de error del primer intento salía con el espacio dentro—, así que la
+       * comparación daba siempre falsa y el arnés elegía la sede que YA estaba puesta.
+       * La etiqueta accesible la escribe el componente, es una cadena limpia, y de paso
+       * comprobar por ella es comprobar lo que oye un lector de pantalla.
+       */
+      const nombreActual = normalizar(cabeceraAntes);
+      let elegida = null;
+      for (let i = 0; i < cuantas; i += 1) {
+        const bruta = (await opciones.nth(i).getAttribute('aria-label')) ?? '';
+        const texto = bruta.split('.')[0]?.trim() ?? '';
+        if (texto !== '' && !nombreActual.includes(normalizar(texto))) {
+          elegida = { i, texto };
+          break;
+        }
+      }
+      if (elegida === null) {
+        fallar(casoBarra, 'todas las sedes de la hoja son la que ya está puesta');
+      } else {
+        await opciones.nth(elegida.i).click();
+        await pagina
+          .waitForFunction(
+            (n) =>
+              (document.querySelector('[data-testid="desktop-header"]')?.innerText ?? '').includes(
+                n,
+              ),
+            elegida.texto,
+            { timeout: 25000 },
+          )
+          .catch(() => undefined);
+        const cabeceraDespues = await cabecera();
+        if (!cabeceraDespues.includes(elegida.texto)) {
+          fallar(
+            casoBarra,
+            `elegí «${elegida.texto}» en la hoja de la barra y la cabecera sigue diciendo ` +
+              `«${cabeceraDespues}»: la hoja se cierra y la pantalla no cambia`,
+          );
+        } else {
+          pasa(casoBarra, `«${cabeceraAntes}» → «${cabeceraDespues}»`);
+        }
+      }
+    }
+  }
+  await foto(pagina, '6-desde-la-barra');
+
+  /* ------------------------------------------------------------------ */
+  const casoAlta = 'desde la barra se LLEGA al alta, con el formulario ya abierto';
+  /*
+   * El conmutador no duplica el formulario de alta: lleva a Ajustes con la tarjeta ya
+   * abierta. Eso hay que comprobarlo entero, porque media solución —llevar a Ajustes y
+   * dejar ocho tarjetas cerradas— deja el problema igual que estaba: el formulario existía
+   * y no se encontraba.
+   */
+  await irA(pagina, base, '/');
+  await pagina.locator('[data-testid="scope-open"]').click();
+  await pagina.locator('[data-testid="scope-sheet"]').waitFor({ timeout: 20000 });
+  await pagina.locator('[data-testid="scope-nueva-empresa"]').click();
+  const llego = await pagina
+    .locator('[data-testid="org-new-name"]')
+    .waitFor({ timeout: 20000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!llego) {
+    const texto = (await pagina.innerText('body')).replace(/\s+/g, ' ');
+    fallar(
+      casoAlta,
+      `no llegué al formulario de alta de empresa. Pantalla: ${texto.slice(0, 220)}`,
+    );
+  } else {
+    pasa(casoAlta, 'la tarjeta de organización llega abierta');
+  }
+  await foto(pagina, '7-alta-desde-la-barra');
 
   /* ------------------------------------------------------------------ */
   const caso5 = 'la empresa elegida SOBREVIVE a una recarga';
