@@ -1,4 +1,4 @@
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AnclaDePersona } from '@/components/ui/ancla';
@@ -84,13 +84,14 @@ export function SessionRow({
     <Pressable
       onPress={() => onPress(session)}
       accessibilityRole="button"
-      accessibilityLabel={`${employeeName}. ${start} – ${end}. ${net}`}
+      /* El nombre accesible SÍ dice qué es cada número: quien no ve la cabecera lo necesita. */
+      accessibilityLabel={`${employeeName}. ${start} – ${end}. ${t('timesheet.netHours')}: ${net}`}
       accessibilityHint={t('timesheet.openDetailHint')}
       testID={testID}
       style={({ pressed }) => [pressed ? styles.pressed : null]}
     >
       <View style={styles.fila}>
-        <Row justify="space-between" gap={spacing.md} align="flex-start">
+        <Row gap={spacing.md} align="center">
           {/*
             EL MISMO ANCLA QUE EN EQUIPO, y del mismo color para la misma persona.
 
@@ -109,16 +110,21 @@ export function SessionRow({
               {`${start} – ${end}`}
             </AppText>
           </Stack>
-          <Stack gap={spacing.xs}>
-            <AppText variant="bodyStrong" tabular>
-              {net}
-            </AppText>
-            {session.unpaid_break_minutes > 0 ? (
-              <AppText variant="label" tone="subtle" tabular>
-                {`${t('timesheet.breaks')}: ${minutesToHHmm(session.unpaid_break_minutes)}`}
-              </AppText>
-            ) : null}
-          </Stack>
+          {/*
+            DOS COLUMNAS DE ANCHO FIJO, que es lo que hace que las horas se puedan comparar
+            sin leerlas: caen en la misma vertical en todas las filas, así que el total de
+            una sesión se mide contra el de la de arriba de un vistazo. Con un bloque que
+            crece según su contenido, cada fila pone su número en otro sitio.
+
+            La pausa pierde su rótulo repetido: la cabecera lo dice una vez y aquí queda el
+            número, que es lo que cambia de fila en fila.
+          */}
+          <AppText variant="bodyStrong" tabular style={estilosDeColumna.netas}>
+            {net}
+          </AppText>
+          <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.pausas}>
+            {session.unpaid_break_minutes > 0 ? minutesToHHmm(session.unpaid_break_minutes) : '–'}
+          </AppText>
         </Row>
 
         {alerts.length > 0 ? (
@@ -155,3 +161,15 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.sm,
   },
 }));
+
+/**
+ * Las dos columnas de la derecha de una sesión: horas netas y pausas.
+ *
+ * Anchos FIJOS a propósito, y los mismos que su cabecera: lo que las hace servir es que
+ * caigan en la misma vertical en todas las filas. Si creciesen con su contenido, la hoja
+ * volvería a ser una lista de fichas donde comparar exige leer.
+ */
+const estilosDeColumna = StyleSheet.create({
+  netas: { width: 80, textAlign: 'right', flexShrink: 0 },
+  pausas: { width: 72, textAlign: 'right', flexShrink: 0 },
+});

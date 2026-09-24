@@ -1,11 +1,14 @@
 import { useCallback, type ReactElement } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { SessionRow } from './session-row';
+import { AppText } from '@/components/ui/app-text';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { SupportedLanguage } from '@/i18n';
 import { SeparadorDeRegistro } from '@/components/ui/layout';
+import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
 import type { TimeFormatPreference } from '@/utils/time';
 
@@ -86,7 +89,18 @@ export function SessionList({
       data={sessions}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
-      ListHeaderComponent={header}
+      /*
+        LA CABECERA DE LA PANTALLA Y ENCIMA LOS ROTULOS DE LAS COLUMNAS. Van juntos porque
+        los dos tienen que desplazarse con la lista: una cabecera de columna que se queda
+        fija mientras las filas suben señalaría a la nada en cuanto se pasara de la
+        primera pantalla.
+      */
+      ListHeaderComponent={
+        <>
+          {header}
+          <CabeceraDeColumnas />
+        </>
+      }
       ListEmptyComponent={empty}
       ItemSeparatorComponent={SeparadorDeRegistro}
       style={styles.lista}
@@ -107,3 +121,35 @@ const styles = StyleSheet.create({
    */
   contenido: { paddingBottom: spacing.xl },
 });
+
+/** Los rotulos de las columnas de la derecha, con los MISMOS anchos que las filas. */
+function CabeceraDeColumnas() {
+  const { t } = useTranslation();
+  const estilos = useEstilosDeCabecera();
+  return (
+    <View style={estilos.cabecera}>
+      <View style={estilos.hueco} />
+      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.netas}>
+        {t('timesheet.netHours')}
+      </AppText>
+      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.pausas}>
+        {t('timesheet.breaks')}
+      </AppText>
+    </View>
+  );
+}
+
+const useEstilosDeCabecera = estilosDelTema((colors) => ({
+  cabecera: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  hueco: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  netas: { width: 80, textAlign: 'right', flexShrink: 0 },
+  pausas: { width: 72, textAlign: 'right', flexShrink: 0 },
+}));

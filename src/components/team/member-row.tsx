@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AnclaDePersona } from '@/components/ui/ancla';
@@ -8,7 +8,7 @@ import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { TeamMember } from '@/features/team/hooks';
 import { estilosDelTema } from '@/theme/estilos';
-import { radii, sizes, spacing } from '@/theme/tokens';
+import { spacing } from '@/theme/tokens';
 import { minutesToHHmm } from '@/utils/time';
 
 /**
@@ -55,13 +55,18 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
     <Pressable
       onPress={() => onPress(member.id)}
       accessibilityRole="button"
-      accessibilityLabel={`${member.displayName}. ${estado}`}
+      /*
+       * EL NOMBRE ACCESIBLE SÍ DICE «horas recientes», aunque la columna ya no lo escriba.
+       * Quien mira tiene la cabecera de la columna para saber qué es ese número; quien
+       * navega con un lector de pantalla no la tiene a mano, así que aquí va con palabras.
+       */
+      accessibilityLabel={`${member.displayName}. ${estado}. ${t('team.recentHours')}: ${minutesToHHmm(recentMinutes)}`}
       accessibilityHint={t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
       style={({ pressed }) => [pressed ? styles.pressed : null]}
     >
       <View style={styles.fila}>
-        <Row justify="space-between" gap={spacing.md} align="flex-start">
+        <Row gap={spacing.md} align="center">
           {/*
             EL ANCLA DE LA FILA: las iniciales.
 
@@ -93,17 +98,34 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
               </AppText>
             ) : null}
           </Stack>
-          <Stack gap={spacing.xs}>
+          {/*
+            COLUMNAS, NO DOS EXTREMOS.
+
+            Antes esto era un `space-between` con el nombre pegado a la izquierda y un
+            bloque con la insignia y las horas pegado a la derecha: en un monitor de 1440
+            quedaban SETECIENTOS píxeles de nada en medio, y el ojo tenía que saltar de una
+            punta a la otra en cada fila. Lo dijo Andree mirando la app publicada: «se ve
+            raro».
+
+            Ahora las horas y el estado son columnas de ancho fijo, así que caen en la
+            MISMA vertical en todas las filas. Eso es lo que convierte una lista en una
+            tabla que se recorre de un vistazo: el total de cada persona se compara con el
+            de la de arriba sin leer, porque está justo debajo.
+
+            Las horas van con cifras tabulares y alineadas a la derecha, que es la única
+            forma de que dos números se puedan comparar en columna.
+          */}
+          <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.horas}>
+            {minutesToHHmm(recentMinutes)}
+          </AppText>
+          <View style={estilosDeColumna.estado}>
             <StatusBadge
               label={estado}
               tone={member.status === 'active' ? 'working' : 'offShift'}
               icon={member.status === 'active' ? 'checkmark-circle' : 'pause-circle-outline'}
               compact
             />
-            <AppText variant="label" tone="subtle" tabular>
-              {`${t('team.recentHours')}: ${minutesToHHmm(recentMinutes)}`}
-            </AppText>
-          </Stack>
+          </View>
         </Row>
       </View>
     </Pressable>
@@ -128,3 +150,19 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.sm,
   },
 }));
+
+/**
+ * Las dos columnas de la derecha.
+ *
+ * Anchos FIJOS a propósito: lo que las hace servir es que caigan en la misma vertical en
+ * todas las filas. Si creciesen con su contenido, cada fila tendría sus columnas en un
+ * sitio distinto y volveríamos a una lista de fichas.
+ *
+ * Y la etiqueta «Horas recientes:» se cae del texto: repetida en veinte filas es ruido, y
+ * lo que significa la columna se dice UNA vez en su cabecera. El nombre accesible de la
+ * fila sí la conserva, porque ahí no hay cabecera que mirar.
+ */
+const estilosDeColumna = StyleSheet.create({
+  horas: { width: 104, textAlign: 'right', flexShrink: 0 },
+  estado: { width: 104, alignItems: 'flex-end', flexShrink: 0 },
+});

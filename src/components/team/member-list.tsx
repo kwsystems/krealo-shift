@@ -1,8 +1,11 @@
 import { useCallback } from 'react';
-import { FlatList, StyleSheet } from 'react-native';
+import { FlatList, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
+import { AppText } from '@/components/ui/app-text';
 import { MemberRow } from './member-row';
 import type { TeamMember } from '@/features/team/hooks';
+import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
 
 /**
@@ -60,6 +63,19 @@ export function MemberList({
       data={members}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
+      /*
+       * LA CABECERA DICE UNA VEZ LO QUE SIGNIFICA CADA COLUMNA.
+       *
+       * Antes cada fila repetía «Horas recientes: 43:05», veinte veces la misma palabra
+       * para un dato que cambia. Una cabecera lo dice una vez y las veinte filas se
+       * quedan con el número, que es lo que se compara. Es la diferencia entre una tabla y
+       * una lista de frases.
+       *
+       * `accessibilityRole` de cabecera para que un lector de pantalla pueda saltar aquí,
+       * y los mismos anchos que las columnas de la fila: si no coincidieran, el rótulo
+       * señalaría a la columna de al lado.
+       */
+      ListHeaderComponent={<CabeceraDeColumnas />}
       style={styles.lista}
       contentContainerStyle={styles.contenido}
       testID={testID}
@@ -79,3 +95,42 @@ const styles = StyleSheet.create({
    */
   contenido: { paddingBottom: spacing.xl },
 });
+
+/** Los rótulos de las columnas de la derecha, con los mismos anchos que las filas. */
+function CabeceraDeColumnas() {
+  const { t } = useTranslation();
+  const estilos = useEstilosDeCabecera();
+  return (
+    <View style={estilos.cabecera}>
+      <View style={estilos.hueco} />
+      {/*
+        SIN `numberOfLines`: si algún día no cabe, que envuelva en dos líneas en vez de
+        cortarse. Un rótulo cortado —«Horas reci…»— obliga a adivinar qué columna es, que
+        es exactamente lo que una cabecera existe para evitar. Pasó en el primer intento,
+        con la columna a 72 px.
+      */}
+      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.horas}>
+        {t('team.recentHours')}
+      </AppText>
+      <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>
+        {t('team.statusColumn')}
+      </AppText>
+    </View>
+  );
+}
+
+const useEstilosDeCabecera = estilosDelTema((colors) => ({
+  cabecera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    backgroundColor: colors.surface,
+    paddingTop: spacing.md,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.sm,
+  },
+  hueco: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  /* Los MISMOS anchos que en la fila: si no coinciden, el rótulo señala otra columna. */
+  horas: { width: 104, textAlign: 'right', flexShrink: 0 },
+  estado: { width: 104, textAlign: 'right', flexShrink: 0 },
+}));

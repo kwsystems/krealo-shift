@@ -261,6 +261,7 @@
     "resetPin": "Reset PIN",
     "pinShownOnce": "This PIN is shown only once. Write it down and hand it over in person.",
     "temporaryPin": "Temporary PIN: {{pin}}",
+    "statusColumn": "Status",
     "recentHours": "Recent hours",
     "upcomingShifts": "Upcoming shifts",
     "noEmployees": "No employees yet",

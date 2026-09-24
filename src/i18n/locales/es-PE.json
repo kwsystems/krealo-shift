@@ -261,6 +261,7 @@
     "resetPin": "Reiniciar PIN",
     "pinShownOnce": "Este PIN se muestra una sola vez. Anótalo y entrégalo en persona.",
     "temporaryPin": "PIN temporal: {{pin}}",
+    "statusColumn": "Estado",
     "recentHours": "Horas recientes",
     "upcomingShifts": "Próximos turnos",
     "noEmployees": "Todavía no hay empleados",
