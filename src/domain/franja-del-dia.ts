@@ -22,6 +22,7 @@
  * pantalla que parece precisa y no lo es. Cuando haga falta, se cargan los eventos y se
  * dibujan donde estuvieron.
  */
+import { inZone } from '@/utils/time';
 
 /** Un tramo de la franja, en fracciones de la ventana: 0 es el principio y 1 el final. */
 export type TramoDeFranja = { desde: number; hasta: number };
@@ -122,4 +123,77 @@ export function ventanaDelDia(
     desde: new Date(Math.min(...inicios) - margen),
     hasta: new Date(Math.max(...finales) + margen),
   };
+}
+
+/**
+ * LAS MARCAS DE HORA DE LA FRANJA: dónde cae cada hora redonda, en fracciones.
+ *
+ * ESTO FALTABA, Y ERA EL AGUJERO GRANDE DE LA FRANJA. La franja codifica la hora del día
+ * como posición horizontal —es lo único que hace— y no había nada en pantalla que dijera
+ * qué hora es cada posición. Se veía que Ana empezó más tarde que Julio, pero no a qué
+ * hora empezó ninguno de los dos, ni si el hueco de la derecha era media hora o cuatro.
+ * Un gráfico cuyo eje no está rotulado enseña la forma y esconde el dato.
+ *
+ * Y no se veía mirando, porque la pantalla se lee como si tuviera sentido: las barras
+ * están donde tienen que estar. Salió midiendo la posición de cada barra contra la hora
+ * que la fila escribe debajo del nombre. Cuadran —00:38 cae en 0,032, 09:00 en 0,577— y
+ * de ahí se deduce que la ventana iba de las 00:08 a las 15:30. Que sea deducible a base
+ * de despejar es exactamente la razón por la que tiene que estar escrito.
+ *
+ * LAS HORAS SON REDONDAS EN LA ZONA DE LA TIENDA, no en UTC. Un rótulo a las «09:37» no
+ * es una referencia: lo que sirve de regla es la hora en punto, y «en punto» solo
+ * significa algo en el reloj que mira quien atiende la tienda.
+ *
+ * EL PASO SE ELIGE SOLO. Con una ventana de cuatro horas, marcas cada hora; con una de
+ * dieciséis, cada tres. Fijar el paso llenaría de rótulos encabalgados las jornadas
+ * largas —que son justo las que más falta hace leer— o dejaría dos marcas en las cortas.
+ *
+ * Y SE REENCAJA EN CADA PASO en vez de sumar el intervalo a ciegas: sumar 3 h sobre un
+ * cambio de horario deja las marcas a y media el resto del día. Perú no cambia la hora,
+ * pero la app ya se está montando para una segunda empresa en Canadá, que sí.
+ */
+export function marcasDeHora(
+  ventana: { desde: Date; hasta: Date },
+  zona: string,
+  maximo = 6,
+): { fraccion: number; instante: Date }[] {
+  const total = ventana.hasta.getTime() - ventana.desde.getTime();
+  // Una ventana de duración cero dividiría por cero y devolvería marcas en el infinito.
+  if (!(total > 0) || maximo < 1) return [];
+
+  const minutos = total / 60_000;
+  const paso =
+    PASOS_DE_MARCA.find((candidato) => minutos / candidato <= maximo) ??
+    PASOS_DE_MARCA[PASOS_DE_MARCA.length - 1] ??
+    60;
+
+  const marcas: { fraccion: number; instante: Date }[] = [];
+  let instante = encajarEnPaso(ventana.desde, zona, paso);
+  if (instante < ventana.desde.getTime()) instante += paso * 60_000;
+  instante = encajarEnPaso(new Date(instante), zona, paso);
+  if (instante < ventana.desde.getTime()) instante += paso * 60_000;
+
+  // El tope es una red, no la regla: con `maximo` ≤ 6 nunca se llega. Está para que un
+  // paso mal encajado no pueda colgar la pantalla en un bucle infinito.
+  while (instante <= ventana.hasta.getTime() && marcas.length < 32) {
+    marcas.push({ fraccion: (instante - ventana.desde.getTime()) / total, instante: new Date(instante) });
+    const siguiente = encajarEnPaso(new Date(instante + paso * 60_000), zona, paso);
+    instante = siguiente > instante ? siguiente : instante + paso * 60_000;
+  }
+  return marcas;
+}
+
+/**
+ * Los pasos posibles, en minutos. Todos son múltiplos de 60 a propósito: una marca a las
+ * «09:30» no funciona como regla, porque lo que el ojo busca es la hora en punto.
+ */
+const PASOS_DE_MARCA = [60, 120, 180, 240, 360, 720] as const;
+
+/** El múltiplo de `paso` anterior o igual, contado desde la medianoche de la tienda. */
+function encajarEnPaso(instante: Date, zona: string, paso: number): number {
+  const local = inZone(instante, zona);
+  const desdeMedianoche = local.getHours() * 60 + local.getMinutes();
+  const sobra =
+    (desdeMedianoche % paso) * 60_000 + local.getSeconds() * 1_000 + local.getMilliseconds();
+  return instante.getTime() - sobra;
 }

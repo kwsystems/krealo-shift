@@ -21,8 +21,8 @@ import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { LoImportanteDeHoy } from '@/components/dashboard/lo-importante';
 import { prioridadDelDia } from '@/features/dashboard/prioridad';
-import { FilaDeFranja, FranjaDeUnDia } from '@/components/franja/franja-del-dia';
-import { ventanaDelDia } from '@/domain/franja-del-dia';
+import { FilaDeFranja, FranjaDeUnDia, ListaDeFranjas } from '@/components/franja/franja-del-dia';
+import { marcasDeHora, ventanaDelDia } from '@/domain/franja-del-dia';
 import {
   useManagerDashboard,
   type FranjaDeHoy,
@@ -91,6 +91,24 @@ export default function ManagerHomeScreen() {
     );
     return ventanaDelDia(intervalos, ahora) ?? { desde: ahora, hasta: ahora };
   }, [franjasDeHoy, ahora]);
+
+  /*
+   * LA REGLA DE HORAS DE LA FRANJA. Las marcas son horas en punto EN LA ZONA DE LA TIENDA
+   * —la cuenta vive en el dominio— y aquí solo se les pone el texto, respetando el 12h/24h
+   * de la sede: quien lee esto mira el mismo reloj que sus empleados.
+   *
+   * CUATRO EN TELÉFONO Y SEIS EN PANTALLA ANCHA. Con seis a 390 px los rótulos se tocaban
+   * —«03:00 06:00 09:00» pegados— y una regla ilegible es peor que ninguna, porque ocupa
+   * sitio y encima hay que descifrarla. Se vio en la captura de teléfono.
+   */
+  const marcasDeLaFranja = useMemo(
+    () =>
+      marcasDeHora(ventana, scope.timezone, isWide ? 6 : 4).map((marca) => ({
+        fraccion: marca.fraccion,
+        texto: formatClockTime(marca.instante.toISOString(), scope.timezone, scope.timeFormat, language),
+      })),
+    [ventana, scope.timezone, scope.timeFormat, language, isWide],
+  );
 
   /*
    * Los cinco conteos que piden una acción, ordenados por lo que cuesta ignorarlos.
@@ -246,7 +264,11 @@ export default function ManagerHomeScreen() {
                       {t('band.empty')}
                     </AppText>
                   ) : (
-                    <Stack gap={spacing.sm} testID="band-list">
+                    <ListaDeFranjas
+                      marcas={marcasDeLaFranja}
+                      ahora={fraccionDeAhora(ventana, ahora)}
+                      testID="band-list"
+                    >
                       {franjasDeHoy.map((franja) => (
                         <FilaDeFranja
                           key={franja.employeeId}
@@ -265,7 +287,7 @@ export default function ManagerHomeScreen() {
                           />
                         </FilaDeFranja>
                       ))}
-                    </Stack>
+                    </ListaDeFranjas>
                   )}
 
                   <LimitBar
@@ -468,3 +490,17 @@ const estilosDeColumna = StyleSheet.create({
   transcurrido: { width: 96, textAlign: 'right', flexShrink: 0 },
   estado: { width: 112, alignItems: 'flex-end', flexShrink: 0 },
 });
+
+/**
+ * Dónde cae AHORA dentro de la ventana del día, de 0 a 1, o `null` si queda fuera.
+ *
+ * Es la misma cuenta que hace `franjaDelDia` para cada fila, y sale aquí porque la línea
+ * pasó a ser del bloque: la ventana y la hora son del día, no de cada persona.
+ */
+function fraccionDeAhora(ventana: { desde: Date; hasta: Date }, momento: Date): number | null {
+  const total = ventana.hasta.getTime() - ventana.desde.getTime();
+  // Sin esto, una ventana de duración cero daría Infinity y la línea se pintaría fuera.
+  if (!(total > 0)) return null;
+  const fraccion = (momento.getTime() - ventana.desde.getTime()) / total;
+  return fraccion < 0 || fraccion > 1 ? null : fraccion;
+}

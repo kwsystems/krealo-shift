@@ -1,4 +1,4 @@
-import { franjaDelDia, ventanaDelDia } from '@/domain/franja-del-dia';
+import { franjaDelDia, marcasDeHora, ventanaDelDia } from '@/domain/franja-del-dia';
 
 /**
  * La geometría de la franja del día.
@@ -173,5 +173,115 @@ describe('ventanaDelDia', () => {
 
   it('sin nada que enseñar no hay ventana', () => {
     expect(ventanaDelDia([], h(12))).toBeNull();
+  });
+});
+
+/**
+ * LAS MARCAS DE HORA. Lo que puede fallar aquí no es «qué números salen» sino que la regla
+ * mienta: una marca fuera de la ventana, una hora que no es en punto en la tienda, o un
+ * paso tan fino que los rótulos se encabalguen justo en las jornadas largas.
+ */
+describe('marcasDeHora', () => {
+  const LIMA = 'America/Lima';
+  const ventana = (desdeISO: string, hastaISO: string) => ({
+    desde: new Date(desdeISO),
+    hasta: new Date(hastaISO),
+  });
+  /** La hora de reloj en Lima, que es la que el rótulo va a enseñar. */
+  const enLima = (fecha: Date) =>
+    new Intl.DateTimeFormat('es-PE', {
+      timeZone: LIMA,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    }).format(fecha);
+
+  it('todas las marcas son horas EN PUNTO en la zona de la tienda', () => {
+    // Lo que sirve de regla es la hora en punto. Una marca a las 09:37 no es referencia
+    // de nada, y «en punto» solo significa algo en el reloj de quien atiende la tienda:
+    // en UTC estas mismas marcas caen a las 14:00, que es otra cosa.
+    const marcas = marcasDeHora(ventana('2026-09-24T13:08:00Z', '2026-09-24T23:30:00Z'), LIMA);
+    expect(marcas.length).toBeGreaterThan(1);
+    for (const marca of marcas) expect(enLima(marca.instante)).toMatch(/:00$/);
+  });
+
+  it('ninguna marca se sale de la ventana', () => {
+    // Una marca en 1,2 se pintaría fuera de la pista, o peor, recortada en el borde
+    // diciendo una hora que no corresponde a donde está.
+    const v = ventana('2026-09-24T13:08:00Z', '2026-09-24T20:30:00Z');
+    for (const marca of marcasDeHora(v, LIMA)) {
+      expect(marca.fraccion).toBeGreaterThanOrEqual(0);
+      expect(marca.fraccion).toBeLessThanOrEqual(1);
+      expect(marca.instante.getTime()).toBeGreaterThanOrEqual(v.desde.getTime());
+      expect(marca.instante.getTime()).toBeLessThanOrEqual(v.hasta.getTime());
+    }
+  });
+
+  it('la fracción dice DÓNDE cae esa hora, no solo que cae dentro', () => {
+    /*
+     * La prueba de arriba pasaría igual devolviendo siempre 0,5. Esta ata la fracción al
+     * reloj: en una ventana que empieza en punto, la marca de las dos horas siguientes
+     * tiene que caer justo a un cuarto de una ventana de ocho horas.
+     */
+    const v = ventana('2026-09-24T13:00:00Z', '2026-09-24T21:00:00Z'); // 08:00–16:00 en Lima
+    const marcas = marcasDeHora(v, LIMA, 6);
+    const dosHorasDespues = marcas.find((m) => enLima(m.instante) === '10:00');
+    expect(dosHorasDespues).toBeDefined();
+    expect(dosHorasDespues?.fraccion).toBeCloseTo(0.25, 5);
+  });
+
+  it('una jornada larga no se llena de rótulos: el paso se agranda solo', () => {
+    // Dieciséis horas con marca cada hora serían dieciséis rótulos encabalgados justo en
+    // el día que más falta hace leer.
+    const marcas = marcasDeHora(ventana('2026-09-24T10:00:00Z', '2026-09-25T02:00:00Z'), LIMA);
+    expect(marcas.length).toBeLessThanOrEqual(6);
+    expect(marcas.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('una jornada corta no se queda con una sola marca', () => {
+    const marcas = marcasDeHora(ventana('2026-09-24T13:10:00Z', '2026-09-24T17:50:00Z'), LIMA);
+    expect(marcas.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it('una ventana de duración cero no devuelve marcas en el infinito', () => {
+    // Sin la guarda, dividir por cero da Infinity y cada rótulo se pinta fuera de la
+    // pantalla. Es el mismo borde que ya tenía `franjaDelDia`.
+    expect(marcasDeHora(ventana('2026-09-24T13:00:00Z', '2026-09-24T13:00:00Z'), LIMA)).toEqual([]);
+    expect(marcasDeHora(ventana('2026-09-24T14:00:00Z', '2026-09-24T13:00:00Z'), LIMA)).toEqual([]);
+  });
+
+  it('un cambio de horario no desiguala la regla: los huecos siguen siendo iguales', () => {
+    /*
+     * Toronto adelanta el reloj el 8 de marzo de 2026 a las 02:00. Perú no cambia la hora,
+     * pero la app se está montando para una segunda empresa en Canadá, que sí.
+     *
+     * LO QUE SE AFIRMA AQUÍ ES QUE LOS HUECOS SEAN IGUALES, y no que las marcas caigan en
+     * punto, porque lo segundo NO PUEDE FALLAR: el salto es de una hora exacta y el paso
+     * es múltiplo de sesenta minutos, así que cruzar el cambio deja las marcas en punto
+     * igual — solo se salta una. La primera versión de esta prueba afirmaba «:00» y pasaba
+     * también con la suma a ciegas, o sea que no probaba nada. Se vio rompiendo el código
+     * a propósito para ver si la prueba caía, y no cayó.
+     *
+     * Sumando el paso a ciegas, en el reloj de la tienda las marcas salen 00, 04, 07, 10…:
+     * una regla cuya primera división mide cuatro horas y el resto tres. Eso es lo que
+     * hace que una escala mienta, y es lo que esto sí caza.
+     */
+    const marcas = marcasDeHora(
+      ventana('2026-03-08T05:00:00Z', '2026-03-08T20:00:00Z'),
+      'America/Toronto',
+    );
+    const horaLocal = (fecha: Date) =>
+      Number(
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'America/Toronto',
+          hour: '2-digit',
+          hour12: false,
+        }).format(fecha),
+      );
+    expect(marcas.length).toBeGreaterThan(2);
+    const huecos = marcas
+      .slice(1)
+      .map((marca, i) => horaLocal(marca.instante) - horaLocal(marcas[i]?.instante ?? marca.instante));
+    expect(new Set(huecos).size).toBe(1);
   });
 });

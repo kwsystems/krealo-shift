@@ -90,6 +90,29 @@ for (const escenario of ESCENARIOS) {
       planSinReal: conPlan.filter((f) => f.querySelector('[data-testid$="-real"]') === null).length,
       conReal: conReal.length,
       vacio: document.querySelector('[data-testid="band-empty"]') !== null,
+      /*
+       * LA REGLA DE HORAS. La franja codifica la hora del dia como POSICION, asi que sin
+       * rotulos enseña la forma y esconde el dato: se ve que una persona empezo mas tarde
+       * que otra, no a que hora empezo ninguna. Se mide que haya al menos dos marcas,
+       * porque con una sola no hay escala: una referencia suelta no dice cuanto mide nada.
+       */
+      marcasDeHora: [...document.querySelectorAll('[data-testid="band-list-eje"] *')]
+        .map((e) => (e.children.length === 0 ? (e.textContent ?? '').trim() : ''))
+        .filter((t) => /^\d{1,2}:\d{2}( ?[ap]\.? ?m\.?)?$/i.test(t)).length,
+      /*
+       * Y «ahora», que es la linea contra la que se juzga todo lo demas. Puede no existir
+       * —si la jornada sembrada termino antes de la hora actual, el momento cae fuera de
+       * la ventana— asi que no se exige: se exige que si existe, este DENTRO de la pista.
+       * Una linea de «ahora» en el borde o fuera senalaria a una hora que no es.
+       */
+      ahora: (() => {
+        const linea = document.querySelector('[data-testid="band-list-ahora"]');
+        if (linea === null) return null;
+        const pista = linea.parentElement.getBoundingClientRect();
+        const caja = linea.getBoundingClientRect();
+        if (pista.width <= 0) return { fraccion: null };
+        return { fraccion: (caja.left + caja.width / 2 - pista.left) / pista.width };
+      })(),
     };
   });
 
@@ -113,6 +136,31 @@ for (const escenario of ESCENARIOS) {
       `escenario «${escenario.nombre}»: hay ${franjaDelDia.filas} fila(s) y ningún tramo ` +
         'pintado. Una franja que existe y no dice nada es el fallo de campo muerto.',
     );
+  }
+
+  /*
+   * LA ESCALA NO ES OPCIONAL. Una franja sin rotulos de hora es un grafico con el eje sin
+   * rotular: la unica cosa que hace —colocar el tiempo en el espacio— queda sin decir.
+   * Estuvo asi hasta el 2026-09-24 y no se veia mirando, porque la pantalla se lee como si
+   * tuviera sentido; salio midiendo la posicion de cada barra contra la hora escrita bajo
+   * el nombre y despejando la ventana a mano.
+   */
+  if (franjaDelDia.filas > 0 && franjaDelDia.marcasDeHora < 2) {
+    problemas.push(
+      `escenario «${escenario.nombre}»: la franja tiene ${franjaDelDia.filas} fila(s) y ` +
+        `${franjaDelDia.marcasDeHora} rotulo(s) de hora. Sin escala, la posicion de cada ` +
+        'barra no dice a que hora fue nada.',
+    );
+  }
+
+  if (franjaDelDia.ahora !== null) {
+    const f = franjaDelDia.ahora.fraccion;
+    if (f === null || !(f >= 0 && f <= 1)) {
+      problemas.push(
+        `escenario «${escenario.nombre}»: la linea de «ahora» esta en ${f} de la pista, o ` +
+          'sea fuera. Estaria señalando una hora que no es la que marca.',
+      );
+    }
   }
 
   /*

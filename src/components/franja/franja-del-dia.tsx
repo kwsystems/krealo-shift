@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import { View, type DimensionValue } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -39,6 +40,20 @@ import { radii, sizes, spacing } from '@/theme/tokens';
  * dice con palabras: quien no distingue el verde del ámbar, y quien navega con un lector
  * de pantalla, leen lo mismo que quien mira.
  */
+/**
+ * «¿Pinta el bloque la línea de AHORA, o la pinta cada fila?»
+ *
+ * ES UN CONTEXTO Y NO UN PROP porque las dos respuestas tienen que salir de la MISMA
+ * decisión. En pantalla ancha la línea cruza el bloque entero; apilado en un teléfono no
+ * puede, porque ahí cada fila pone el nombre encima de su franja y una vertical a toda
+ * altura pasaría por encima de los nombres. Si eso se decidiera en dos sitios —la pantalla
+ * por un lado y la lista por otro— el día que uno cambiara de punto de corte habría dos
+ * marcas de «ahora» o ninguna, y ninguna de las dos se notaría hasta mirar.
+ *
+ * Por defecto `false`: una franja suelta, fuera de una lista, sigue pintando la suya.
+ */
+const ElBloquePintaAhora = createContext(false);
+
 export function FranjaDeUnDia({
   ventana,
   turno,
@@ -57,6 +72,7 @@ export function FranjaDeUnDia({
 }) {
   const estilos = useEstilos();
   const { t } = useTranslation();
+  const loPintaElBloque = useContext(ElBloquePintaAhora);
   const franja: FranjaDelDia = franjaDelDia({ ventana, turno, trabajado, ahora });
 
   /*
@@ -107,7 +123,7 @@ export function FranjaDeUnDia({
         />
       )}
 
-      {franja.ahora === null ? null : (
+      {franja.ahora === null || loPintaElBloque ? null : (
         <View
           testID={testID === undefined ? undefined : `${testID}-ahora`}
           style={[estilos.ahora, { left: porcentaje(franja.ahora) }]}
@@ -252,8 +268,161 @@ export function FilaDeFranja({
   );
 }
 
-const useEstilosDeFila = estilosDelTema(() => ({
+/**
+ * LA LISTA DE FRANJAS CON SU REGLA DE HORAS.
+ *
+ * ESTO ES LO QUE LE FALTABA A LA FRANJA, Y ERA LO GORDO. La franja codifica la hora del
+ * día como posición horizontal —es lo único que hace— y no había nada que dijera qué hora
+ * es cada posición. Se veía que Ana empezó más tarde que Julio; no a qué hora empezó
+ * ninguno de los dos, ni si el hueco de la derecha era media hora o cuatro. Un gráfico con
+ * el eje sin rotular enseña la forma y esconde el dato.
+ *
+ * Y no se veía mirando, porque la pantalla se lee como si tuviera sentido: las barras
+ * están donde deben. Salió midiendo cada barra contra la hora que la fila escribe bajo el
+ * nombre, y deduciendo de ahí que la ventana iba de las 00:08 a las 15:30. Que la escala
+ * haya que DESPEJARLA es justo la razón de escribirla.
+ *
+ * LAS GUÍAS VAN DETRÁS DE TODAS LAS FILAS, no dentro de cada barra. La pista mide diez
+ * píxeles de alto: una guía ahí dentro sería un palito invisible metido entre el carril y
+ * el relleno. Cruzando el bloque entero, en cambio, se puede seguir con el ojo desde
+ * cualquier fila hasta el rótulo de abajo, que es para lo que existe una regla.
+ *
+ * EN TELÉFONO NO HAY GUÍAS, solo los rótulos. Apilada, cada fila pone el nombre encima de
+ * su franja, así que una línea vertical que cruzara el bloque pasaría por encima de los
+ * nombres: sería una reja sobre el texto, no una referencia.
+ */
+export function ListaDeFranjas({
+  marcas,
+  ahora,
+  children,
+  testID,
+}: {
+  /** Las horas en punto: dónde caen (0..1) y qué se escribe en cada una. */
+  marcas: readonly { fraccion: number; texto: string }[];
+  /**
+   * «Ahora», en fracción de la ventana, o `null` si el momento cae fuera.
+   *
+   * VA AQUÍ Y NO EN CADA FILA, y es un arreglo de esta misma tanda. Antes cada franja
+   * pintaba su propio palito de diez píxeles: siete marcas sueltas diciendo todas lo
+   * mismo, porque la ventana y la hora son las del bloque, no las de la persona. Al
+   * meter las guías —que sí cruzan el bloque entero— quedó a la vista la jerarquía al
+   * revés: la rejilla, que es la referencia, se leía más continua que «ahora», que es
+   * la línea contra la que se juzga todo lo demás («¿esta persona llega tarde AHORA?»).
+   */
+  ahora?: number | null;
+  children: React.ReactNode;
+  testID?: string;
+}) {
+  const estilos = useEstilosDeFila();
+  const { isCompact } = useResponsive();
+  const hayRegla = marcas.length > 0;
+  const hayAhora = ahora !== null && ahora !== undefined;
+
+  return (
+    <View style={estilos.bloque} testID={testID}>
+      {(hayRegla || hayAhora) && !isCompact ? (
+        /*
+         * `pointerEvents="none"`: la capa cubre las filas enteras, así que sin esto se
+         * comería cualquier pulsación sobre ellas. Hoy no hay ninguna; el día que la
+         * haya, el fallo sería «la fila no responde» y nadie miraría una capa decorativa.
+         */
+        <View style={estilos.capaDeGuias} pointerEvents="none">
+          <View style={estilos.anclaHueca} />
+          <View style={estilos.quien} />
+          <View style={estilos.franja}>
+            {marcas.map((marca) => (
+              <View
+                key={marca.fraccion}
+                style={[estilos.guia, { left: fraccionAPorcentaje(marca.fraccion) }]}
+              />
+            ))}
+            {hayAhora ? (
+              <View
+                testID={testID === undefined ? undefined : `${testID}-ahora`}
+                style={[estilos.ahoraDelBloque, { left: fraccionAPorcentaje(ahora) }]}
+              />
+            ) : null}
+          </View>
+        </View>
+      ) : null}
+
+      <ElBloquePintaAhora.Provider value={hayAhora && !isCompact}>
+        <View style={estilos.filas}>{children}</View>
+      </ElBloquePintaAhora.Provider>
+
+      {hayRegla ? (
+        <View style={estilos.eje} testID={testID === undefined ? undefined : `${testID}-eje`}>
+          {isCompact ? null : (
+            <>
+              <View style={estilos.anclaHueca} />
+              <View style={estilos.quien} />
+            </>
+          )}
+          <View style={estilos.franja}>
+            {marcas.map((marca) => (
+              /*
+               * EL RÓTULO SE CENTRA EN SU MARCA con ancho fijo y margen negativo, que es
+               * como se centra sobre un porcentaje sin `calc`: `translateX` en React
+               * Native no acepta porcentajes, así que un `-50%` aquí no haría nada.
+               */
+              <AppText
+                key={marca.fraccion}
+                variant="help"
+                tone="subtle"
+                tabular
+                numberOfLines={1}
+                style={[estilos.rotulo, { left: fraccionAPorcentaje(marca.fraccion) }]}
+              >
+                {marca.texto}
+              </AppText>
+            ))}
+          </View>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const fraccionAPorcentaje = (valor: number): DimensionValue =>
+  `${Number((valor * 100).toFixed(2))}%` as DimensionValue;
+
+const useEstilosDeFila = estilosDelTema((colors) => ({
   fila: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
+  bloque: { position: 'relative' },
+  filas: { gap: spacing.sm },
+  /* La capa de guías ocupa el bloque entero: las líneas cruzan todas las filas. */
+  capaDeGuias: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: spacing.base,
+  },
+  /* El mismo hueco que ocupa el ancla en la fila, para que la pista empiece igual. */
+  anclaHueca: { width: sizes.avatarSm, flexShrink: 0 },
+  guia: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: colors.border },
+  /*
+   * «AHORA» CRUZA EL BLOQUE, y pesa más que las guías a propósito: las guías son la regla
+   * y esta es la línea contra la que se juzga todo —«¿llega tarde AHORA?»—. Con el mismo
+   * gris que la rejilla se perdería entre ella.
+   */
+  ahoraDelBloque: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 2,
+    marginLeft: -1,
+    backgroundColor: colors.ink700,
+  },
+  eje: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.base, marginTop: spacing.xs },
+  /*
+   * El rótulo se sale de la pista por los dos lados cuando la marca cae cerca de un borde,
+   * y está bien: recortarlo es lo que haría que la primera hora del día no se pudiera leer.
+   */
+  rotulo: { position: 'absolute', width: 56, marginLeft: -28, textAlign: 'center' },
   filaApilada: { gap: spacing.xs },
   /* Apilado, el nombre y su hora van en una línea: el nombre crece y la hora se pega. */
   quienApilado: {
