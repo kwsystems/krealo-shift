@@ -100,6 +100,22 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
 - `/tasks/list` corta en 500 ítems y puede devolver registros `act_*` / `rec_*`
   además de tareas normales.
 - Usar el token equivocado en `create`/`update` da `PUBLISHER_AUTH_FAILED`.
+- **Una tarea creada directamente con `status: "done"` NO cuenta como completada.**
+  `/tasks/create` guarda el estado pero **no escribe `completedAt`**, y el tablero cuenta
+  las completadas por esa fecha, no por el estado. El resultado es una tarea que se ve
+  cerrada en la lista y no aparece en «completadas hoy»: hecha para quien la abre,
+  invisible para quien mira el resumen del día. Lo vio Andree el 2026-09-24 —«¿por qué hoy
+  no tengo ninguna tarea completada?»— con dos tareas en `done` desde hacía cinco horas.
+
+  **Por eso una tarea se crea SIEMPRE en `not_started` y se cierra con `/tasks/update`.**
+  No es ceremonia: el ciclo de vida de arriba ya lo pedía, y saltárselo —aunque el trabajo
+  ya estuviera hecho al escribir la tarea— es lo que produjo el agujero.
+
+  Medido: `update` con `status: "done"` responde `updated: ["status","completedAt",...]`.
+  **Lo hace incluso yendo de `done` a `done`**, o sea que reescribe la fecha con la de hoy.
+  Así que **no se re-cierran tareas viejas para «arreglarles» la fecha**: en vez de
+  recuperar el historial, lo machaca y mueve al día de hoy trabajo de la semana pasada.
+
 - **`/tasks/create` recorta `description` a 2000 caracteres exactos y responde
   `success: true` sin avisar.** `/tasks/update` NO recorta: acepta y devuelve
   intactos al menos 9000 caracteres (medido). Por eso, para una descripción larga:
