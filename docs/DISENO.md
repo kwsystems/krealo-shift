@@ -88,6 +88,40 @@ disciplina de uso:
   así que nunca se usa como decoración, y siempre va con icono y etiqueta: nunca color a
   secas, porque quien no distingue el verde del rojo también tiene que poder usar esto.
 
+## Lo que las siete tareas entregaron (2026-09-23 y 24)
+
+| #   | Qué cambió                                                  | La medida                                                      |
+| --- | ----------------------------------------------------------- | -------------------------------------------------------------- |
+| 1   | Archivo para títulos y reloj; cuatro planos de superficie   | título 28 px en `Archivo_700Bold`, medido en el navegador      |
+| 2   | Un plano se ve porque es un plano: fuera los marcos de 1 px | seis recuadros del mismo peso en Inicio → uno                  |
+| 3   | Los mandos en una fila, no en una pila                      | Horario 89 % → 59 % de pantalla en mando; Equipo 66 % → 41 %   |
+| 4   | **La franja del día**, el elemento firma                    | 13 pruebas de geometría; `inicio:check` vigila que se pinte    |
+| 5   | La rejilla del horario deja de gritar                       | 2 → 4 empleados visibles; fuera la insignia que salía en todos |
+| 6   | Horas y Equipo vuelven a ser tablas                         | 1 → 8 personas visibles en Equipo                              |
+| 7   | El reloj entra en la comprobación de contraste              | 23 textos del reloj, × 2 temas × 2 anchos                      |
+
+### Lo que NO se cambió, y por qué
+
+- **Las siete pestañas del teléfono.** La premisa era que no caben. Medido a 390, 414 y
+  360: las etiquetas son de 10 px —el mismo tamaño que usa iOS— y **ninguna está
+  cortada**. Y el cajón «Más» ya se había quitado con un motivo escrito: no decía qué
+  había dentro. Cambiarlo por una suposición habría desandado una mejora real.
+- **La voz de los estados.** Se buscó copy que se disculpa —«lo sentimos», «ups», «algo
+  salió mal»— y no hay ninguno: los nueve mensajes de error dicen qué falló y qué hacer.
+- **La escala de cifras tabulares.** El prop `tabular` ya estaba puesto donde hacía falta.
+  Lo que faltaba era la **etiqueta** del número, no su alineación.
+
+### Siete veces me corrigió una medición
+
+Queda escrito porque es el método, no una anécdota: la fuente que parecía no aplicarse y
+era el rastro de la cabecera; el icono que mi selector confundió con un título; el
+`minHeight` que me llevé por delante al reescribir un estilo; el hueco de 32 px que
+razoné como táctil y no lo era; el `formatClockTime` con la zona y el formato cambiados
+de sitio; la prueba que pasaba igual poniendo infinito; y el `minWidth` que cambié en la
+tarjeta cuando quien manda es el envoltorio.
+
+**Editar no es lo mismo que cambiar, y ver no es lo mismo que medir.**
+
 ## Lo que se verifica, y no se opina
 
 - `tema:check` — los dos temas enteros, y que **Archivo esté cargada y en uso**. Este
