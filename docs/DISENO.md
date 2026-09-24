@@ -111,24 +111,89 @@ disciplina de uso:
 - **La escala de cifras tabulares.** El prop `tabular` ya estaba puesto donde hacía falta.
   Lo que faltaba era la **etiqueta** del número, no su alineación.
 
-### Siete veces me corrigió una medición
+## Lo que salió de mirar la app publicada (2026-09-24)
+
+Tres cosas que ninguna comprobación estaba viendo y que salieron de dos sitios: Andree
+mirando la app con sus datos, y una medición que hice por otro motivo.
+
+### «No se diferencia entre persona»: el ancla que no anclaba
+
+Las filas pintaban a todo el mundo del mismo tinte clarísimo. Lo arreglé pasando de un
+tinte a cinco, y **calculada la separación perceptual en OKLab, los cinco quedaban entre
+1,7 y 3,1 sobre un umbral de 8**. O sea que no eran cinco colores: era el mismo lavado
+cinco veces, con un susurro de tono. Le puse el defecto que me había señalado, con más
+código.
+
+La causa se ve en cuanto se calcula y no se ve mirando: **en OKLab la distancia la manda
+sobre todo la luminosidad**, y cinco lavados a la misma claridad no se separan por mucho
+que cambie el tono. Para que el color distinga, el color tiene que existir.
+
+Ahora el disco lleva color de verdad, son seis, y hay una prueba que recalcula en cada
+ejecución que cada par se separa ≥ 8, que ninguno se acerca a menos de 8 de un color de
+**estado** —un ancla que parece un estado inventa un estado— y que la letra y el disco
+llegan a su contraste. La arcilla de oscuro hubo que correrla: quedaba a 6,3 del ámbar de
+«En descanso».
+
+### El medio vacío de las filas
+
+`space-between` con el nombre a la izquierda y la insignia a la derecha deja **setecientos
+píxeles de nada** en un monitor de 1440, y el ojo salta de punta a punta en cada fila.
+Columnas de ancho fijo con su cabecera: el valor cae en la misma vertical en todas las
+filas, que es lo que convierte una lista en algo que se compara sin leer. La columna se
+reserva **incluso en la fila que no tiene ese dato**, porque si se encogiera ahí, la
+siguiente columna se desplazaría y dejaría de ser columna.
+
+### La franja del día tenía el eje sin rotular
+
+El elemento firma codifica la hora como **posición horizontal** —es lo único que hace— y
+no decía qué hora es cada posición. Se veía que alguien empezó más tarde que otro, no a
+qué hora empezó ninguno.
+
+Y no se veía mirando, **porque la pantalla se lee como si tuviera sentido**: las barras
+están donde deben. Salió midiendo la posición de cada barra contra la hora escrita bajo el
+nombre y despejando de ahí que la ventana iba de las 00:08 a las 15:30. Que la escala haya
+que despejarla es la razón de escribirla.
+
+Al poner las guías quedó a la vista una jerarquía al revés que yo mismo acababa de crear:
+la rejilla cruzaba el bloque entero mientras «ahora» —la línea contra la que se juzga todo
+lo demás— eran siete palitos sueltos de diez píxeles. Ahora «ahora» es una línea del
+bloque, y en teléfono vuelve a la fila; las dos decisiones salen del mismo contexto para
+que no puedan discrepar.
+
+### Ocho veces me corrigió una medición
 
 Queda escrito porque es el método, no una anécdota: la fuente que parecía no aplicarse y
 era el rastro de la cabecera; el icono que mi selector confundió con un título; el
 `minHeight` que me llevé por delante al reescribir un estilo; el hueco de 32 px que
 razoné como táctil y no lo era; el `formatClockTime` con la zona y el formato cambiados
-de sitio; la prueba que pasaba igual poniendo infinito; y el `minWidth` que cambié en la
-tarjeta cuando quien manda es el envoltorio.
+de sitio; la prueba que pasaba igual poniendo infinito; el `minWidth` que cambié en la
+tarjeta cuando quien manda es el envoltorio; y los cinco tonos de ancla que parecían
+cinco y medidos eran uno.
 
 **Editar no es lo mismo que cambiar, y ver no es lo mismo que medir.**
+
+### Y una prueba que escribí y no probaba nada
+
+La del cambio de horario afirmaba que las marcas de hora siguen «en punto» tras un cambio
+de hora. **Eso no puede fallar**: el salto es de una hora exacta y el paso es múltiplo de
+sesenta minutos, así que cruzarlo deja las marcas en punto igual, solo se salta una. Lo
+descubrió el control —romper el código a propósito para ver si la prueba cae— y no cayó.
+Reescrita a lo que de verdad se rompe: que los huecos midan lo mismo.
+
+**Una prueba que no se ha visto caer no prueba nada.**
 
 ## Lo que se verifica, y no se opina
 
 - `tema:check` — los dos temas enteros, y que **Archivo esté cargada y en uso**. Este
   último control se escribió tras comprobar que una fuente que no llega no rompe nada:
   el navegador cae a la del sistema y el título se ve «parecido».
-- `contraste:check` — 2966 textos medidos en 8 pantallas × 2 anchos × 2 temas.
+- `contraste:check` — 3053 textos medidos en 8 pantallas × 2 anchos × 2 temas.
 - `responsive:check` — que nada se salga ni se recorte.
+- `inicio:check` — además de que los tres días se vean distintos, que la franja **tenga
+  escala**: al menos dos rótulos de hora, y la línea de «ahora» dentro de la pista.
+- `anclas-separan.test.ts` — que los tonos de identidad se distingan de verdad, que no se
+  confundan con un estado y que lleguen a su contraste. Aritmética, no un comentario que
+  diga que se miró una vez.
 
 Las capturas de antes están en la tarea 1/7 del Publisher; el diagnóstico de arriba sale
 de ellas.
