@@ -312,6 +312,42 @@ export const lineHeight = {
  * Sombras muy suaves y solo en tarjetas flotantes o modales (§5).
  * Nada de sombras dramáticas ni efectos de vidrio.
  */
+/**
+ * LOS TONOS DEL ANCLA DE IDENTIDAD: el círculo con las iniciales de cada persona.
+ *
+ * SON CINCO Y NINGUNO ES VERDE, ÁMBAR NI ROJO, y eso no es estética: esos tres significan
+ * ESTADO en esta app —trabajando, en pausa, tarde— y un color no puede significar dos
+ * cosas. Un ancla verde junto a una insignia ámbar sería una contradicción sin querer.
+ *
+ * El violeta sí entra aunque sea el acento, porque en un círculo con iniciales nadie lo
+ * confunde con un botón: la forma ya dice qué es.
+ *
+ * El texto va SIEMPRE oscuro sobre tinte claro (y al revés en oscuro), y no se elige a
+ * ojo: `contraste:check` mide los 2838 textos de la app y estos van dentro.
+ */
+export const anclasDeIdentidadClaro = [
+  { bg: '#ECE6FF', fg: '#452BB7' },
+  /*
+   * CIAN Y NO VERDE MENTA. El primer intento puso #D7F0EC, y en la captura las anclas de
+   * dos personas quedaban a un paso del verde de la insignia «Activo» (#EAF9F1): un tinte
+   * pálido de la misma familia justo al lado de un estado del mismo color. Se corrió hacia
+   * el azul hasta que se lee como otra cosa.
+   */
+  { bg: '#D6EFF5', fg: '#10566B' },
+  { bg: '#DCEBFB', fg: '#14558F' },
+  { bg: '#F7E2F0', fg: '#8A2E6C' },
+  { bg: '#E3E6EC', fg: '#3A4558' },
+] as const;
+
+/** En oscuro se invierte la relación: fondo hundido y tinta clara del mismo tono. */
+export const anclasDeIdentidadOscuro = [
+  { bg: '#2A2342', fg: '#C9B9FF' },
+  { bg: '#13303A', fg: '#93CFE2' },
+  { bg: '#16293E', fg: '#9CC8F2' },
+  { bg: '#33203B', fg: '#E9AFD5' },
+  { bg: '#262B34', fg: '#C2C9D6' },
+] as const;
+
 export const shadows = {
   none: {
     shadowColor: 'transparent',

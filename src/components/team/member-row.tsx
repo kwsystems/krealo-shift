@@ -2,6 +2,7 @@ import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
@@ -75,11 +76,7 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
             `aria-hidden` no hace falta: el `accessibilityLabel` del Pressable ya dice el
             nombre completo, y las iniciales no añaden nada que oír.
           */}
-          <View style={styles.iniciales} accessibilityElementsHidden importantForAccessibility="no">
-            <AppText variant="label" tone="primary">
-              {inicialesDe(member.displayName)}
-            </AppText>
-          </View>
+          <AnclaDePersona semilla={member.id} nombre={member.displayName} />
           <Stack gap={spacing.xs} style={styles.creceYEncoge}>
             <AppText variant="bodyStrong">{member.displayName}</AppText>
             <AppText variant="help" tone="subtle">
@@ -123,20 +120,6 @@ const useEstilos = estilosDelTema((colors) => ({
    * su propia `Card`: quince sesiones eran quince planos flotando, cada uno pagando
    * relleno, sombra y hueco justo en la pantalla donde más falta hace el alto.
    */
-  /*
-   * El ancla mide lo mismo que dos líneas de texto para que la fila no crezca por ella, y
-   * se apoya en el tinte del acento: es identidad, no estado, así que no toca la paleta
-   * de estados.
-   */
-  iniciales: {
-    width: sizes.avatarMd,
-    height: sizes.avatarMd,
-    borderRadius: radii.pill,
-    backgroundColor: colors.primary50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
   creceYEncoge: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   fila: {
     backgroundColor: colors.surface,
@@ -145,26 +128,3 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.sm,
   },
 }));
-
-/**
- * Las iniciales de un nombre: la primera letra del nombre y la del primer apellido.
- *
- * Con un solo nombre («Ana») devuelve una letra, no dos: inventar la segunda a partir de
- * la segunda letra del nombre —«AN»— es el truco que convierte a Ana y a Andrés en el
- * mismo ancla, que es justo lo contrario de lo que el ancla sirve.
- */
-function inicialesDe(nombre: string): string {
-  const partes = nombre
-    .trim()
-    .split(/\s+/)
-    .filter((parte) => parte !== '');
-  if (partes.length === 0) return '?';
-  /*
-   * Se separa por PUNTOS DE CÓDIGO y no con `charAt`, porque una inicial puede ser un
-   * carácter fuera del plano básico y `charAt` devolvería media pareja sustituta: un
-   * rombo con una interrogación en lugar de una letra.
-   */
-  const primera = [...(partes[0] ?? '')][0] ?? '';
-  const segunda = partes.length > 1 ? ([...(partes[1] ?? '')][0] ?? '') : '';
-  return (primera + segunda).toUpperCase();
-}

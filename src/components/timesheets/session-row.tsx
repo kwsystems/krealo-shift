@@ -1,6 +1,7 @@
 import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
@@ -90,7 +91,19 @@ export function SessionRow({
     >
       <View style={styles.fila}>
         <Row justify="space-between" gap={spacing.md} align="flex-start">
-          <Stack gap={spacing.xs}>
+          {/*
+            EL MISMO ANCLA QUE EN EQUIPO, y del mismo color para la misma persona.
+
+            Una hoja de horas es una lista larga del MISMO puñado de gente repetida: sin
+            ancla hay que leer el nombre en cada fila para seguir a alguien por la semana,
+            que es justo lo que se viene a hacer aquí. Con el ancla, seguir a una persona
+            es seguir un color por la columna.
+
+            La semilla es el identificador del empleado, así que su tono es el mismo aquí
+            y en Equipo. Un color que cambia de pantalla sería peor que no tenerlo.
+          */}
+          <AnclaDePersona semilla={session.employee_id} nombre={employeeName} tamano="sm" />
+          <Stack gap={spacing.xs} style={styles.creceYEncoge}>
             <AppText variant="bodyStrong">{employeeName}</AppText>
             <AppText variant="help" tone="muted" tabular>
               {`${start} – ${end}`}
@@ -134,6 +147,7 @@ const useEstilos = estilosDelTema((colors) => ({
    * su propia `Card`: quince sesiones eran quince planos flotando, cada uno pagando
    * relleno, sombra y hueco justo en la pantalla donde más falta hace el alto.
    */
+  creceYEncoge: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   fila: {
     backgroundColor: colors.surface,
     paddingVertical: spacing.md,
