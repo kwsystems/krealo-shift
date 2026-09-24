@@ -37,6 +37,30 @@ export function escenarioDeLaUrl(): Escenario {
 }
 
 /**
+ * EL COLOR DE MARCA DE LA DEMOSTRACIÓN, con `?marca=%23C2185B` en la URL.
+ *
+ * POR QUÉ EXISTE. La app va a poder llevar el color de cada empresa, y esa promesa solo se
+ * puede comprobar viendo la pantalla CON un color puesto. Sin esta llave, los arneses solo
+ * podrían medir el violeta de fábrica, o sea el único caso que seguro que funciona.
+ *
+ * Y sirve además para lo que más importa: probar con un color DIFÍCIL —uno que, usado tal
+ * cual, dejaría el texto ilegible— y comprobar que la derivación lo salva. Una prueba que
+ * solo usa colores fáciles no prueba nada.
+ *
+ * Se valida el formato aquí: un valor raro en la URL no puede dejar la demostración sin
+ * empresa.
+ */
+export function marcaDeLaUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const pedido = new URLSearchParams(window.location.search).get('marca');
+    return pedido !== null && /^#[0-9A-Fa-f]{6}$/.test(pedido) ? pedido.toUpperCase() : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * ¿Ese instante cae hoy EN LA ZONA DE LA SEDE?
  *
  * Con la misma función que usa el tablero (`dateKeyOf`) y el mismo huso, y esto no es

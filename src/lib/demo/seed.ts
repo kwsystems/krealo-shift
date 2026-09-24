@@ -786,6 +786,8 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       default_timezone: TZ,
       week_starts_on: 1,
       logo_path: null,
+      /* Se puede poner con `?marca=%23C2185B`. Ver `marcaDeLaUrl`. */
+      brand_color: null,
     },
   ]);
   almacen.set('organization_memberships', [

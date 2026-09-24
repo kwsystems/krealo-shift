@@ -3,11 +3,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
+import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
-import { ManagerScopeProvider } from '@/hooks/use-manager-scope';
+import { ManagerScopeProvider, useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { borderWidth, fontFamily, fontSize, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
@@ -52,9 +53,7 @@ import { useTheme } from '@/theme/use-theme';
  * imposible que las dos rutas se redirijan la una a la otra en bucle.
  */
 export default function ManagerLayout() {
-  const { colors } = useTheme();
   const { t } = useTranslation();
-  const { useSidebar } = useResponsive();
   const { destination, retry } = useBootResolution();
 
   switch (destination.kind) {
@@ -89,6 +88,35 @@ export default function ManagerLayout() {
 
   return (
     <ManagerScopeProvider>
+      <MarcaDeLaEmpresa>
+        <PanelConMarca />
+      </MarcaDeLaEmpresa>
+    </ManagerScopeProvider>
+  );
+}
+
+/**
+ * El panel entero, pintado YA con el color de la empresa.
+ *
+ * ESTÁ APARTE POR UNA RAZÓN MEDIDA, no por orden. La barra de pestañas recibe su color de
+ * acento con `tabBarActiveTintColor: colors.primary600`, y `colors` sale de `useTheme()`.
+ * Mientras esa llamada vivía en el MISMO componente que monta `ProveedorDeMarca`, leía el
+ * contexto de más arriba —o sea vacío— y devolvía el violeta de fábrica: la cabecera salía
+ * del color de la empresa y la barra lateral seguía violeta. Media pantalla de un color y
+ * media de otro.
+ *
+ * Y no se vio en la captura, se vio MIDIENDO: en la imagen la pestaña activa parecía haber
+ * cambiado, y el color calculado decía `rgb(91, 63, 214)`, el violeta exacto de siempre.
+ * Es el mismo error que yo acababa de escribir en el comentario de `MarcaDeLaEmpresa` y
+ * cometí dos funciones más abajo.
+ */
+function PanelConMarca() {
+  const { colors } = useTheme();
+  const { t } = useTranslation();
+  const { useSidebar } = useResponsive();
+
+  return (
+    <>
       {/*
         La cabecera va DENTRO del provider porque lee la organización y la sede, y
         FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una
@@ -266,6 +294,20 @@ export default function ManagerLayout() {
           }}
         />
       </Tabs>
-    </ManagerScopeProvider>
+    </>
   );
+}
+
+/**
+ * Pone el color de la empresa a disposición de todo el panel.
+ *
+ * ES UN COMPONENTE APARTE y no dos líneas en el layout porque el color vive DENTRO del
+ * alcance: `useManagerScope` solo devuelve algo por debajo de su proveedor, y el layout
+ * es quien lo monta. Intentar leerlo en el mismo componente que lo provee devuelve el
+ * contexto vacío, que es un fallo silencioso —color de fábrica, ningún error— y por tanto
+ * de los peores.
+ */
+function MarcaDeLaEmpresa({ children }: { children: React.ReactNode }) {
+  const { organization } = useManagerScope();
+  return <ProveedorDeMarca color={organization?.brand_color ?? null}>{children}</ProveedorDeMarca>;
 }

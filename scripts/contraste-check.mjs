@@ -205,6 +205,36 @@ for (const tema of TEMAS) {
     }
 
     /*
+     * Y AHORA CON EL COLOR DE OTRA EMPRESA, que es lo que la marca blanca pone en juego.
+     *
+     * POR QUE HACE FALTA. Todos los numeros de arriba suponen el acento de fabrica. Desde
+     * que una empresa puede elegir el suyo, ese supuesto deja de valer: el dia que una
+     * pasteleria elija su amarillo, ninguna de las 3.124 medidas de arriba habla de la
+     * pantalla que esa gente va a ver.
+     *
+     * SE PRUEBA CON UN AMARILLO PURO A PROPOSITO. Usado tal cual sobre blanco da 1,07:1
+     * —ilegible— asi que es justo el caso que la derivacion tiene que salvar. Probar con
+     * un azul oscuro no probaria nada: ese ya pasaria sin derivar.
+     *
+     * Solo en el tema y ancho que toque de la vuelta, y en dos pantallas: medir las ocho
+     * otra vez por cada tema y ancho multiplicaria por dos un arnes que ya tarda, y lo que
+     * se vigila —que la rampa derivada cumple— no depende de la pantalla.
+     */
+    const MARCA_DIFICIL = '#FFE500';
+    /*
+     * SE ENTRA DIRECTO AL PANEL, sin pasar por la pantalla de acceso: a estas alturas del
+     * recorrido la sesión ya existe, así que esperar el rótulo de acceso se queda colgado
+     * treinta segundos. Pasó a la primera ejecución.
+     */
+    await pagina.goto(`${base}/?marca=${encodeURIComponent(MARCA_DIFICIL)}`, {
+      waitUntil: 'networkidle',
+    });
+    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 600 });
+    await revisar(`inicio con marca ${MARCA_DIFICIL}`);
+    await irA(pagina, base, '/team', { asentar: 500 });
+    await revisar(`equipo con marca ${MARCA_DIFICIL}`);
+
+    /*
      * EL RELOJ DE FICHAJE, que nunca se habia medido.
      *
      * Este arnes recorria las siete pantallas del panel y se paraba ahi. O sea que la

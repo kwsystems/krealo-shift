@@ -1,6 +1,6 @@
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
-import { aplicarEscenario, escenarioDeLaUrl } from './escenarios';
+import { aplicarEscenario, escenarioDeLaUrl, marcaDeLaUrl } from './escenarios';
 import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
 import { registrarFichajeDemo } from './reconstruir';
 import type { DataClient } from '@/lib/firebase/query';
@@ -879,7 +879,16 @@ export function getDemoClient(): DataClient {
    * barra de direcciones.
    */
   const escenario = escenarioDeLaUrl();
-  const sembrar = () => aplicarEscenario(crearAlmacen(), escenario);
+  const marca = marcaDeLaUrl();
+  const sembrar = () => {
+    const almacen = aplicarEscenario(crearAlmacen(), escenario);
+    if (marca !== null) {
+      // Se pinta sobre TODAS las empresas sembradas: la demostración crea una segunda al
+      // probar el alta, y una marca que solo alcanza a la primera no probaría el cambio.
+      for (const fila of almacen.get('organizations') ?? []) fila.brand_color = marca;
+    }
+    return almacen;
+  };
 
   let almacen = sembrar();
   const reiniciar = () => {

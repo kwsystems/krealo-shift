@@ -202,6 +202,20 @@ const organizationSchema = z.object({
    * exactamente lo que pasa al mover de un proyecto de pruebas a uno de verdad.
    */
   logo_path: z.string().nullable().default(null),
+  /**
+   * El color de marca de la empresa, en `#RRGGBB`, o `null` si no ha elegido ninguno.
+   *
+   * SE GUARDA EL COLOR QUE ELIGIÓ LA PERSONA, no la rampa derivada. Guardar la rampa
+   * ataría el dato a la versión del algoritmo que la calculó: el día que se afine la
+   * derivación —o que cambie el fondo sobre el que se mide— las empresas se quedarían con
+   * una rampa vieja calculada contra otra pantalla. Guardando el original se vuelve a
+   * derivar siempre, y lo que la empresa dijo que era su color sigue siendo su color.
+   */
+  brand_color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/)
+    .nullable()
+    .default(null),
 });
 
 export type ManagerOrganization = z.infer<typeof organizationSchema>;
@@ -314,7 +328,7 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
   const organization = await selectRows(organizationSchema, (client) =>
     client
       .from(TABLES.organizations)
-      .select('id, name, default_locale, default_timezone, week_starts_on, logo_path')
+      .select('id, name, default_locale, default_timezone, week_starts_on, logo_path, brand_color')
       .eq('id', membership.organization_id)
       .single(),
   );

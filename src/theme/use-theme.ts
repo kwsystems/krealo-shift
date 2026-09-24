@@ -1,6 +1,7 @@
 import { useColorScheme } from 'react-native';
 
 import { darkColors, lightColors, type ColorSet } from './tokens';
+import { useColorDeMarca, useColoresConMarca } from './marca-de-empresa';
 import { usePreferencesStore } from '@/stores/preferences-store';
 
 /**
@@ -61,5 +62,12 @@ export function useTheme(): Theme {
   const systemScheme = useColorScheme();
   const preference = usePreferencesStore((state) => state.theme);
   const scheme = resolveScheme(preference, systemScheme);
-  return { colors: colorsFor(scheme), scheme, preference, isDark: scheme === 'dark' };
+  /*
+   * EL ACENTO PUEDE SER EL DE LA EMPRESA. Sin empresa que lo ponga, `useColorDeMarca`
+   * devuelve `null` y esto devuelve el MISMO objeto de siempre, sin derivar nada: quien no
+   * use marca no paga nada y no cambia nada. Ver `marca-de-empresa.tsx`.
+   */
+  const colorDeMarca = useColorDeMarca();
+  const colors = useColoresConMarca(colorsFor(scheme), colorDeMarca);
+  return { colors, scheme, preference, isDark: scheme === 'dark' };
 }
