@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { Row } from '@/components/ui/layout';
+import { Row, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
@@ -46,6 +46,7 @@ export function ShiftCard({
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
   const { t } = useTranslation();
 
   const range = formatShiftRange(shift.starts_at, shift.ends_at, timezone, timeFormat);
@@ -174,7 +175,14 @@ export function ShiftCard({
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={t('schedule.editShiftHint')}
       testID={testID}
-      style={({ pressed }) => [pressed ? styles.pressed : null]}
+      {...respuesta.props}
+      /*
+       * EL REALCE VA EN EL `Pressable` Y NO EN UN HIJO, al revés que en las filas de lista:
+       * aquí el cuerpo ya es una tarjeta con su propio fondo y su borde, así que el color
+       * de respuesta tiene que ir por encima. En una fila de lista es al revés, porque el
+       * fondo lo lleva el hijo.
+       */
+      style={({ pressed }) => respuesta.estilo(pressed)}
     >
       {body}
     </Pressable>
@@ -193,13 +201,15 @@ export function EmptyShiftSlot({
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       testID={testID}
-      style={({ pressed }) => [styles.slot, pressed ? styles.pressed : null]}
+      {...respuesta.props}
+      style={({ pressed }) => [styles.slot, ...respuesta.estilo(pressed)]}
     >
       <Ionicons name="add" size={sizes.iconMobile} color={colors.ink500} />
     </Pressable>

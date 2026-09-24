@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
-import { Row, Stack } from '@/components/ui/layout';
+import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { TeamMember } from '@/features/team/hooks';
 import { estilosDelTema } from '@/theme/estilos';
@@ -35,6 +35,7 @@ export type MemberRowProps = {
 function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberRowProps) {
   const { t } = useTranslation();
   const styles = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
 
   const estado =
     member.status === 'active'
@@ -63,11 +64,12 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
       accessibilityLabel={`${member.displayName}. ${estado}. ${t('team.recentHours')}: ${minutesToHHmm(recentMinutes)}`}
       accessibilityHint={t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
-      style={({ pressed }) => [pressed ? styles.pressed : null]}
+      {...respuesta.props}
     >
-      <View style={styles.fila}>
-        <Row gap={spacing.md} align="center">
-          {/*
+      {({ pressed }) => (
+        <View style={[styles.fila, ...respuesta.estilo(pressed)]}>
+          <Row gap={spacing.md} align="center">
+            {/*
             EL ANCLA DE LA FILA: las iniciales.
 
             Una lista de veinte nombres sin nada a la izquierda obliga a leer para
@@ -81,24 +83,24 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
             `aria-hidden` no hace falta: el `accessibilityLabel` del Pressable ya dice el
             nombre completo, y las iniciales no añaden nada que oír.
           */}
-          <AnclaDePersona semilla={member.id} nombre={member.displayName} />
-          <Stack gap={spacing.xs} style={styles.creceYEncoge}>
-            <AppText variant="bodyStrong">{member.displayName}</AppText>
-            <AppText variant="help" tone="subtle">
-              {puestos}
-            </AppText>
-            {/*
+            <AnclaDePersona semilla={member.id} nombre={member.displayName} />
+            <Stack gap={spacing.xs} style={styles.creceYEncoge}>
+              <AppText variant="bodyStrong">{member.displayName}</AppText>
+              <AppText variant="help" tone="subtle">
+                {puestos}
+              </AppText>
+              {/*
               Sin sede no puede fichar: el reloj esta atado a una tienda y solo ofrece a
               quien trabaja alli. Asi que esto no es un dato que falte, es alguien que no
               puede trabajar, y por eso se dice en la fila y no escondido en su ficha.
             */}
-            {member.locationIds.length === 0 ? (
-              <AppText variant="help" tone="danger">
-                {t('team.noLocationWarning')}
-              </AppText>
-            ) : null}
-          </Stack>
-          {/*
+              {member.locationIds.length === 0 ? (
+                <AppText variant="help" tone="danger">
+                  {t('team.noLocationWarning')}
+                </AppText>
+              ) : null}
+            </Stack>
+            {/*
             COLUMNAS, NO DOS EXTREMOS.
 
             Antes esto era un `space-between` con el nombre pegado a la izquierda y un
@@ -115,19 +117,20 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
             Las horas van con cifras tabulares y alineadas a la derecha, que es la única
             forma de que dos números se puedan comparar en columna.
           */}
-          <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.horas}>
-            {minutesToHHmm(recentMinutes)}
-          </AppText>
-          <View style={estilosDeColumna.estado}>
-            <StatusBadge
-              label={estado}
-              tone={member.status === 'active' ? 'working' : 'offShift'}
-              icon={member.status === 'active' ? 'checkmark-circle' : 'pause-circle-outline'}
-              compact
-            />
-          </View>
-        </Row>
-      </View>
+            <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.horas}>
+              {minutesToHHmm(recentMinutes)}
+            </AppText>
+            <View style={estilosDeColumna.estado}>
+              <StatusBadge
+                label={estado}
+                tone={member.status === 'active' ? 'working' : 'offShift'}
+                icon={member.status === 'active' ? 'checkmark-circle' : 'pause-circle-outline'}
+                compact
+              />
+            </View>
+          </Row>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -135,7 +138,6 @@ function MemberRowBase({ member, recentMinutes, jobRoleNames, onPress }: MemberR
 export const MemberRow = memo(MemberRowBase);
 
 const useEstilos = estilosDelTema((colors) => ({
-  pressed: { opacity: 0.9 },
   /*
    * LA FILA ES UNA FILA DE TABLA, no una tarjeta. Comparte superficie con sus vecinas y
    * las separa una regla fina (`SeparadorDeRegistro`, en la lista). Antes cada una traía

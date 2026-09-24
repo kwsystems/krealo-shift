@@ -1,4 +1,4 @@
-import { Children, type ReactNode } from 'react';
+import { Children, useState, type ReactNode } from 'react';
 import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -196,7 +196,17 @@ const useEstilos = estilosDelTema((colors) => ({
    * peligro. Ahí el marco de color es información, no decoración.
    */
   card: {
-    backgroundColor: colors.surface,
+    /*
+     * `raised` Y NO `surface`, y el token existía sin usarse desde que se escribió el
+     * sistema de planos. En CLARO los dos son blanco, así que no cambia nada. En OSCURO
+     * `raised` es #252230 contra una superficie #1C1A24: ahí está la elevación, porque en
+     * oscuro una sombra negra sobre fondo casi negro no existe. Estaba escrito en el
+     * propio proyecto —«en claro la elevación es sombra; en oscuro tiene que ser color»—
+     * y no estaba hecho.
+     */
+    backgroundColor: colors.raised,
+    borderTopWidth: borderWidth.hairline,
+    borderTopColor: colors.filoElevado,
     borderRadius: radii.card,
     padding: spacing.lg,
     gap: spacing.md,
@@ -205,6 +215,19 @@ const useEstilos = estilosDelTema((colors) => ({
   row: { flexDirection: 'row' },
   separadorDeRegistro: { height: borderWidth.hairline, backgroundColor: colors.regla },
   separadorDeCabecera: { height: borderWidth.hairline, backgroundColor: colors.reglaFuerte },
+  encima: { backgroundColor: colors.encima },
+  pulsado: { backgroundColor: colors.pulsado },
+  /*
+   * EL FOCO ES UN ANILLO POR DENTRO (`borderWidth` hacia adentro no existe en React Native,
+   * así que se hace con un borde del ancho de foco y color de acento). Va por dentro y no
+   * por fuera para no mover el contenido: un borde que aparece empujaría la fila entera
+   * 2 px, y una lista que salta al tabular es peor que una sin foco visible.
+   */
+  conFoco: {
+    borderWidth: borderWidth.focus,
+    borderColor: colors.primary500,
+    borderRadius: radii.input,
+  },
   barra: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -298,4 +321,52 @@ export function SeparadorDeRegistro() {
 export function SeparadorDeCabecera() {
   const styles = useEstilos();
   return <View style={styles.separadorDeCabecera} testID="separador-de-cabecera" />;
+}
+
+/**
+ * LA RESPUESTA AL PUNTERO, AL DEDO Y AL TECLADO de cualquier cosa que se pulse.
+ *
+ * POR QUÉ HACÍA FALTA. Contados los elementos pulsables de cinco pantallas —4 en Inicio,
+ * 16 en Equipo, 33 en Horas, 88 en Horario, 11 en Reportes— NINGUNO parecía pulsable.
+ * Lo único que había era una opacidad del 0,9 al pulsar, o sea una señal que llega cuando
+ * ya has decidido pulsar. Al pasar el puntero por encima no pasaba nada en absoluto, y en
+ * un panel que se usa con ratón una fila que no responde al puntero se lee como texto.
+ *
+ * ES UN HOOK Y NO UN COMPONENTE porque los pulsables de esta app ya traen su propio
+ * `Pressable` con su `accessibilityRole`, su etiqueta y su pista. Envolverlos en otro
+ * componente obligaría a reenviar todo eso, y reenviar props de accesibilidad es
+ * exactamente donde se pierden en silencio. Así cada sitio conserva los suyos y solo añade
+ * tres cosas.
+ *
+ * EL FOCO SE PINTA APARTE del ratón, y no es lo mismo: quien navega con teclado necesita
+ * ver DÓNDE está, no si algo está caliente. Por eso es un anillo y no un fondo.
+ *
+ * Uso:
+ *   const respuesta = useRespuestaAlPuntero();
+ *   <Pressable {...respuesta.props} ...>
+ *     {({ pressed }) => <View style={[estilos.fila, ...respuesta.estilo(pressed)]}>…</View>}
+ *   </Pressable>
+ *
+ * El estilo va en el hijo y no en el `Pressable` a propósito: el hijo es quien lleva el
+ * color de superficie, así que un fondo puesto en el padre quedaría tapado por él.
+ */
+export function useRespuestaAlPuntero() {
+  const [encima, setEncima] = useState(false);
+  const [conFoco, setConFoco] = useState(false);
+  const estilos = useEstilos();
+
+  return {
+    props: {
+      onHoverIn: () => setEncima(true),
+      onHoverOut: () => setEncima(false),
+      onFocus: () => setConFoco(true),
+      onBlur: () => setConFoco(false),
+    },
+    /** `pressed` manda sobre el puntero: si estás pulsando, da igual que además estés encima. */
+    estilo: (pressed: boolean) => [
+      encima && !pressed ? estilos.encima : null,
+      pressed ? estilos.pulsado : null,
+      conFoco ? estilos.conFoco : null,
+    ],
+  };
 }

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
-import { Row, Stack } from '@/components/ui/layout';
+import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
@@ -72,6 +72,7 @@ export function SessionRow({
 }) {
   const { t } = useTranslation();
   const styles = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
 
   const start = formatClockTime(session.starts_at, timezone, timeFormat, language);
   const end =
@@ -88,11 +89,12 @@ export function SessionRow({
       accessibilityLabel={`${employeeName}. ${start} – ${end}. ${t('timesheet.netHours')}: ${net}`}
       accessibilityHint={t('timesheet.openDetailHint')}
       testID={testID}
-      style={({ pressed }) => [pressed ? styles.pressed : null]}
+      {...respuesta.props}
     >
-      <View style={styles.fila}>
-        <Row gap={spacing.md} align="center">
-          {/*
+      {({ pressed }) => (
+        <View style={[styles.fila, ...respuesta.estilo(pressed)]}>
+          <Row gap={spacing.md} align="center">
+            {/*
             EL MISMO ANCLA QUE EN EQUIPO, y del mismo color para la misma persona.
 
             Una hoja de horas es una lista larga del MISMO puñado de gente repetida: sin
@@ -103,14 +105,14 @@ export function SessionRow({
             La semilla es el identificador del empleado, así que su tono es el mismo aquí
             y en Equipo. Un color que cambia de pantalla sería peor que no tenerlo.
           */}
-          <AnclaDePersona semilla={session.employee_id} nombre={employeeName} tamano="sm" />
-          <Stack gap={spacing.xs} style={styles.creceYEncoge}>
-            <AppText variant="bodyStrong">{employeeName}</AppText>
-            <AppText variant="help" tone="muted" tabular>
-              {`${start} – ${end}`}
-            </AppText>
-          </Stack>
-          {/*
+            <AnclaDePersona semilla={session.employee_id} nombre={employeeName} tamano="sm" />
+            <Stack gap={spacing.xs} style={styles.creceYEncoge}>
+              <AppText variant="bodyStrong">{employeeName}</AppText>
+              <AppText variant="help" tone="muted" tabular>
+                {`${start} – ${end}`}
+              </AppText>
+            </Stack>
+            {/*
             DOS COLUMNAS DE ANCHO FIJO, que es lo que hace que las horas se puedan comparar
             sin leerlas: caen en la misma vertical en todas las filas, así que el total de
             una sesión se mide contra el de la de arriba de un vistazo. Con un bloque que
@@ -119,28 +121,29 @@ export function SessionRow({
             La pausa pierde su rótulo repetido: la cabecera lo dice una vez y aquí queda el
             número, que es lo que cambia de fila en fila.
           */}
-          <AppText variant="bodyStrong" tabular style={estilosDeColumna.netas}>
-            {net}
-          </AppText>
-          <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.pausas}>
-            {session.unpaid_break_minutes > 0 ? minutesToHHmm(session.unpaid_break_minutes) : '–'}
-          </AppText>
-        </Row>
-
-        {alerts.length > 0 ? (
-          <Row gap={spacing.xs} wrap align="flex-start">
-            {alerts.map((alert) => (
-              <StatusBadge
-                key={alert}
-                label={t(alertLabelKey(alert))}
-                tone={alert === 'lateArrival' || alert === 'earlyDeparture' ? 'onBreak' : 'late'}
-                icon={ALERT_ICONS[alert]}
-                compact
-              />
-            ))}
+            <AppText variant="bodyStrong" tabular style={estilosDeColumna.netas}>
+              {net}
+            </AppText>
+            <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.pausas}>
+              {session.unpaid_break_minutes > 0 ? minutesToHHmm(session.unpaid_break_minutes) : '–'}
+            </AppText>
           </Row>
-        ) : null}
-      </View>
+
+          {alerts.length > 0 ? (
+            <Row gap={spacing.xs} wrap align="flex-start">
+              {alerts.map((alert) => (
+                <StatusBadge
+                  key={alert}
+                  label={t(alertLabelKey(alert))}
+                  tone={alert === 'lateArrival' || alert === 'earlyDeparture' ? 'onBreak' : 'late'}
+                  icon={ALERT_ICONS[alert]}
+                  compact
+                />
+              ))}
+            </Row>
+          ) : null}
+        </View>
+      )}
     </Pressable>
   );
 }

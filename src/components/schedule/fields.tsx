@@ -731,7 +731,10 @@ const useEstilos = estilosDelTema((colors) => ({
     justifyContent: 'center',
     gap: spacing.xs,
     borderRadius: radii.card,
-    backgroundColor: colors.surface,
+    backgroundColor: colors.raised,
+    /* El filo de arriba: en oscuro es lo que dice «esto está levantado». Ver `Card`. */
+    borderTopWidth: borderWidth.hairline,
+    borderTopColor: colors.filoElevado,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.base,
     ...shadows.card,

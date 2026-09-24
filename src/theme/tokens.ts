@@ -47,6 +47,16 @@ export const lightColors = {
    * espacio, nunca con un segundo perfil.
    */
   raised: '#FFFFFF',
+  /*
+   * EL FILO DE ARRIBA DE UN PLANO ELEVADO. Transparente en claro porque allí la elevación
+   * ya la lleva la sombra; en OSCURO es lo que hace el trabajo, porque una sombra negra
+   * sobre un fondo casi negro no existe. Un filo claro arriba es cómo se lee «esto está
+   * levantado» cuando la luz viene de arriba, y es lo único que funciona sin luz.
+   *
+   * El ancho es 1 px en los DOS temas aunque en claro no se vea: así el alto de una
+   * tarjeta no cambia al cambiar de tema, que si no sería un salto de 1 px por tarjeta.
+   */
+  filoElevado: 'transparent',
   hundido: '#F4F3F8',
   border: '#E5E3EB',
   /*
@@ -69,6 +79,16 @@ export const lightColors = {
    * se ve sin gritar. La que sí llega a 3:1 es la de debajo.
    */
   regla: '#B8B6BC',
+  /*
+   * LO QUE PASA AL PONER EL PUNTERO ENCIMA Y AL PULSAR.
+   *
+   * Antes no pasaba NADA al pasar por encima, y al pulsar solo bajaba la opacidad al 0,9.
+   * Contados los elementos pulsables de cinco pantallas —152— ninguno parecía pulsable
+   * ANTES de tocarlo, que es cuando hace falta saberlo. En un panel que se usa con ratón,
+   * una fila que no responde al puntero se lee como texto, no como un control.
+   */
+  encima: '#F4F3F8',
+  pulsado: '#EDEBF4',
   /*
    * LA REGLA DE LA CABECERA, más marcada (3,01:1), y eso ES la información: en un libro de
    * registro la raya bajo los rótulos de columna pesa más que las que separan asientos,
@@ -173,12 +193,20 @@ export const darkColors = {
    * seguir separándose de `canvas` (#131118) sin acercarse al borde.
    */
   raised: '#252230',
+  filoElevado: 'rgba(255,255,255,0.07)',
   hundido: '#17151E',
 
   canvas: '#131118',
   border: '#332F3D',
   /* Mismos trabajos que en claro, medidos contra la superficie oscura: 2,07:1 y 3,01:1. */
   regla: '#514B61',
+  /*
+   * EN OSCURO EL REALCE VA HACIA LA LUZ, no hacia la sombra. `hundido` no sirve aquí: en
+   * oscuro es más OSCURO que la superficie, y una fila que se apaga al pasar por encima
+   * dice lo contrario de lo que tiene que decir.
+   */
+  encima: '#2A2734',
+  pulsado: '#322E3E',
   reglaFuerte: '#6B6280',
   success50: '#12261D',
   success600: '#4ADE9B',
@@ -186,7 +214,20 @@ export const darkColors = {
   warning600: '#C4831F',
   danger50: '#2C1519',
   danger100: '#3A1B21',
-  danger600: '#DC5A70',
+  /*
+   * #E95F77 Y NO #DC5A70, y el cambio lo pidió una medición, no el gusto.
+   *
+   * Al subir las tarjetas de oscuro al plano elevado (#252230 en vez de #1C1A24) el rojo se
+   * quedó en 4,25:1 sobre ese fondo, por debajo del 4,5:1 que pide un texto de 16 px. Lo
+   * cazó `contraste:check` en Horas, en los dos anchos, y es exactamente para lo que existe:
+   * subir un plano cambia el fondo de TODO lo que lleva dentro, y el texto que iba justo
+   * deja de ir.
+   *
+   * Se aclara el rojo en vez de bajar el plano porque el plano es lo que hace que en oscuro
+   * se vea una tarjeta, y porque aclararlo mejora el contraste también sobre la superficie
+   * de siempre: 5,21:1 contra los 4,69:1 de antes. Ahora sobre el plano elevado da 4,72:1.
+   */
+  danger600: '#E95F77',
   info50: '#10202E',
   info600: '#6FB3E8',
   // Tinta oscura sobre el acento claro: 4,87:1. Blanco daría 3,65:1 y no llega.
@@ -431,15 +472,26 @@ export const shadows = {
      * cuánto se nota.
      */
     shadowColor: '#000000',
-    shadowOpacity: 0.04,
+    /*
+     * 0,10 Y NO 0,04. Con 0,04 sobre un lienzo que ya está a 1,07:1 de la tarjeta, el plano
+     * no se levantaba: la tarjeta era un trozo de blanco ligeramente distinto dibujado
+     * sobre otro blanco. Comparadas las dos en captura, 0,10 levanta sin hacer ruido y
+     * 0,14 ya empieza a parecer una pegatina.
+     *
+     * Sigue siendo UNA capa y con las propiedades de siempre, a propósito: dos capas se
+     * escribirían con `boxShadow`, que en la web funciona pero en iOS y Android de esta
+     * versión no lo puedo comprobar desde aquí. Una mejora que solo puedo verificar en la
+     * mitad de los sitios donde corre no es una mejora, es una apuesta.
+     */
+    shadowOpacity: 0.1,
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
   floating: {
     shadowColor: '#000000',
-    shadowOpacity: 0.08,
-    shadowRadius: 20,
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
     shadowOffset: { width: 0, height: 8 },
     elevation: 8,
   },
