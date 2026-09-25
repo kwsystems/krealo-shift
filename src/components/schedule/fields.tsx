@@ -321,7 +321,7 @@ export function Chip({
     >
       {/* El check no es decorativo: sin él, la selección sería solo color (§21). */}
       {selected ? <Ionicons name="checkmark" size={14} color={colors.primary700} /> : null}
-      <AppText variant="label" tone={selected ? 'primary' : 'muted'}>
+      <AppText variant="label" tone={selected ? 'primary' : 'muted'} style={styles.chipEtiqueta}>
         {label}
       </AppText>
     </Pressable>
@@ -745,11 +745,23 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.sm,
     paddingVertical: spacing.xs,
   },
+  /*
+    EL CHIP CEDE Y SU ETIQUETA ENVUELVE, porque el texto de un chip de sede lo escribe el
+    cliente. Con «Sucursal Miraflores Centro Comercial Larcomar» el chip se salía 47 px de
+    un iPad vertical y arrastraba la pantalla de Equipo: en web una View no se encoge de
+    fábrica, así que un hijo más ancho que su celda simplemente desborda —envolver la fila
+    no ayuda, porque una fila `wrap` parte ENTRE chips, nunca dentro de uno—.
+    Envolver y no recortar es lo que ya decidió esta misma pantalla unas líneas más arriba
+    para el carrusel de filtros: esconder media opción es peor que ocupar dos renglones.
+    El mínimo táctil de 44 px sigue siendo el suelo, así que ceder no lo deja impulsable.
+  */
+  chipEtiqueta: { flexShrink: 1, minWidth: 0 },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: spacing.xs,
+    flexShrink: 1,
     minHeight: sizes.touchTargetMin,
     /*
      * ANCHO MÍNIMO TAMBIÉN, y no solo alto. El alto estaba desde el principio; el ancho

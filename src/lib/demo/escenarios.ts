@@ -314,3 +314,45 @@ export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almace
   if (clonadas.length > 0) almacen.set('time_edit_requests', clonadas);
   return almacen;
 }
+
+/**
+ * NOMBRES LARGOS DE EMPRESA Y DE SEDE, con `?nombres=largos` en la URL.
+ *
+ * POR QUÉ EXISTE, que es toda la lección de esta tarea.
+ * El nombre de la empresa lo escribe el cliente, no nosotros, y la demostración se llama
+ * «Café Demostración»: diecisiete caracteres cómodos. Con ese nombre `responsive:check`
+ * llevaba una semana en verde sobre una barra superior que, con un nombre de verdad,
+ * ensanchaba la página 160 px por encima de la pantalla —también en un monitor de 1920—.
+ * El fallo no estaba escondido: estaba fuera de los datos con los que se medía.
+ *
+ * Así que el caso difícil deja de depender de que a alguien se le ocurra probarlo a mano.
+ * El nombre no es un absurdo de laboratorio: «Universo Tutu Perú y Canadá Sociedad Anónima
+ * Cerrada» es la forma larga de un cliente real de la agencia, y la sede es una dirección
+ * de centro comercial, que es como se llaman las sedes de verdad.
+ *
+ * SOLO EN MODO DEMOSTRACIÓN. En la app de verdad los nombres los trae la base de datos.
+ */
+export const EMPRESA_LARGA = 'Universo Tutu Perú y Canadá Sociedad Anónima Cerrada';
+export const SEDE_LARGA = 'Sucursal Miraflores Centro Comercial Larcomar';
+
+export function nombresLargosDeLaUrl(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    return new URLSearchParams(window.location.search).get('nombres') === 'largos';
+  } catch {
+    return false;
+  }
+}
+
+/** Alarga el nombre de TODAS las empresas y el de la primera sede. */
+export function aplicarNombresLargos(almacen: Almacen): Almacen {
+  for (const fila of almacen.get('organizations') ?? []) fila.name = EMPRESA_LARGA;
+  const sedes = almacen.get('locations') ?? [];
+  /*
+   * Solo la PRIMERA sede, y a propósito: si se alargaran todas, una lista de sedes con
+   * todos los nombres igual de largos se rompería de forma uniforme y no se vería cuál
+   * empuja a cuál. Con una larga entre cortas, el desborde tiene dueño.
+   */
+  if (sedes[0] !== undefined) sedes[0].name = SEDE_LARGA;
+  return almacen;
+}

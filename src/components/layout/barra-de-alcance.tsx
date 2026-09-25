@@ -66,6 +66,15 @@ export function BarraDeAlcance() {
           accessibilityLabel={`${resumen}. ${t('scope.open')}`}
           accessibilityHint={t('scope.openHint')}
           testID="scope-open"
+          /*
+            EL ENCOGIMIENTO VA AQUÍ, EN EL PRESSABLE, y no en la View de dentro. El hijo
+            directo de la barra es ESTE, y en react-native-web una View trae
+            `flex-shrink: 0` de fábrica: mientras el que no cedía era el padre, daba igual
+            lo que dijera el hijo. Con «Universo Tutu Perú y Canadá Sociedad Anónima
+            Cerrada» la barra se iba a 520 px dentro de una pantalla de 360 y arrastraba
+            la página entera —también a 1920—, hasta que `responsive:check` lo midió.
+          */
+          style={estilos.pulsable}
           {...respuesta.props}
         >
           {({ pressed }) => (
@@ -258,6 +267,13 @@ const useEstilos = estilosDelTema((colors) => ({
    * con el dedo: `responsive:check` exige 44 px en las DOS dimensiones, y el ancho no
    * compensa el alto.
    */
+  /*
+    `minWidth: 0` NO ES REDUNDANTE con `flexShrink`, y esa es la mitad del fallo. En web un
+    elemento flex trae `min-width: auto`, que le prohíbe bajar del ancho de su contenido:
+    encoger «1» de algo que no puede encogerse es cero. En nativo Yoga ya usa 0, así que
+    esto no cambia nada allí y lo arregla todo aquí, que es donde corre el panel.
+  */
+  pulsable: { flexShrink: 1, minWidth: 0 },
   contexto: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -266,15 +282,18 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.sm,
     borderRadius: radii.input,
     flexShrink: 1,
+    minWidth: 0,
   },
   organizacion: {
     fontFamily: fontFamily.medium,
     fontSize: fontSize.label,
     color: colors.ink700,
     flexShrink: 1,
+    minWidth: 0,
   },
-  separador: { color: colors.ink500, fontSize: fontSize.label },
-  sede: { fontSize: fontSize.label, color: colors.ink500, flexShrink: 1 },
+  /* La punta y el punto medio no se encogen: son de ancho fijo y lo que cede es el texto. */
+  separador: { color: colors.ink500, fontSize: fontSize.label, flexShrink: 0 },
+  sede: { fontSize: fontSize.label, color: colors.ink500, flexShrink: 1, minWidth: 0 },
   opcion: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,

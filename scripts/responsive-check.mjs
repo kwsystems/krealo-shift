@@ -126,6 +126,18 @@ const HOJAS = [
   ['horario', '/schedule', '[data-testid="schedule-copy-week"]', 'copy-week-sheet'],
   ['equipo', '/team', '[data-testid="team-add-employee"]', 'employee-form-sheet'],
   ['reportes', '/reports', '[data-testid="report-share-open"]', 'report-share-sheet'],
+  /*
+   * El selector de alcance entró aquí tarde y por un motivo que vale la pena dejar escrito:
+   * es la hoja MÁS nueva y la que más aprieta —lista de empresas, lista de sedes y dos
+   * acciones de alta, todo en una pantalla de 360— y aun así se pasó cuatro días sin medir,
+   * porque al añadirla al encabezado nadie la añadió a esta lista. El arnés seguía diciendo
+   * «4 hojas, todo cabe» con la verdad de antes: una lista de hojas no se actualiza sola, y
+   * mientras no se actualiza, sigue dando un verde que ya no cubre lo que se acaba de tocar.
+   *
+   * Se abre desde `inicio` porque la barra vive en todas las pantallas del panel; da igual
+   * cuál, y esa es justamente la razón por la que importa que quepa.
+   */
+  ['inicio', '/', '[data-testid="scope-open"]', 'scope-sheet'],
 ];
 
 /** Textos que, si aparecen tras entrar, significan que se está midiendo otra pantalla. */
@@ -617,6 +629,123 @@ for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a <= 768)) {
   await ctx.close();
 }
 
+/*
+ * TERCERA PASADA: CON UN NOMBRE DE EMPRESA DE VERDAD.
+ *
+ * POR QUÉ HACE FALTA UNA PASADA ENTERA PARA ESTO.
+ * Las dos de arriba miden la demostración, y la demostración se llama «Café Demostración»:
+ * diecisiete caracteres que caben en cualquier sitio. El nombre de la empresa NO lo
+ * escribimos nosotros —lo escribe quien contrata la app— y con uno largo la barra superior
+ * ensanchaba la página 160 px por encima de la pantalla, también en un monitor de 1920.
+ * El arnés estuvo verde toda la semana sobre ese fallo, y no por flojo: el caso difícil
+ * estaba fuera de los datos con los que medía. Un arnés solo cubre los datos que le das.
+ *
+ * LA REGLA AQUÍ ES DISTINTA, y la diferencia es el fondo del asunto:
+ *
+ *   - Que algo SE SALGA de la ventana sigue siendo un fallo. Un nombre largo puede ocupar
+ *     menos sitio, nunca más del que hay.
+ *   - Que un nombre se RECORTE con puntos suspensivos NO lo es, y por eso esta pasada no
+ *     mira los recortes. Es la decisión correcta para un dato que el cliente controla y
+ *     que está entero en otro sitio —en el nombre accesible del botón y en la hoja, que
+ *     envuelve—. Aplicar aquí la regla general de la primera pasada obligaría a que la
+ *     barra creciera con el nombre, que es exactamente el fallo que se acaba de arreglar.
+ *
+ * Tres anchos y no siete: el estrecho, el del aparato de la tienda y el ancho. Lo que
+ * importa es que el fallo no dependía del ancho, así que basta con cubrir los tres tramos.
+ */
+const PANTALLAS_LARGAS = [
+  ['inicio', '/', 'Para que lo sepas'],
+  ['equipo', '/team', 'Agregar empleado'],
+  ['horario', '/schedule', 'Copiar semana anterior'],
+];
+
+for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a === 360 || a === 768 || a === 1920)) {
+  const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+  const pagina = await ctx.newPage();
+  /*
+   * LA LLAVE VIAJA EN CADA NAVEGACIÓN, y no solo en la primera: el cliente de la
+   * demostración lee la URL una vez por CARGA de pestaña, y cada `goto` es una carga
+   * nueva. Sin repetirla, se entraría con nombres largos y se mediría con los cortos, o
+   * sea otra vez el verde que no cubre nada.
+   */
+  await pagina.goto(base + '/?nombres=largos', { waitUntil: 'networkidle' });
+  await pagina.locator('[data-testid="sign-in-demo"]').click();
+  await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
+
+  for (const [pantalla, ruta, marcador] of PANTALLAS_LARGAS) {
+    await pagina.goto(base + ruta + '?nombres=largos', { waitUntil: 'networkidle' });
+    await esperarPantalla(pagina, marcador, { asentar: 400, obligatorio: false });
+
+    const texto = ((await pagina.evaluate(() => document.body.innerText)) || '').replace(
+      /\s+/g,
+      ' ',
+    );
+    /*
+     * LA GUARDA, y aquí es doble: que se cargó la pantalla que toca Y que de verdad trae
+     * el nombre largo. Sin lo segundo, un fallo de la llave dejaría esta pasada midiendo
+     * la demostración normal —que ya está verde— y diciendo que el caso difícil pasa.
+     */
+    if (!texto.includes(marcador)) {
+      problemas.push(`${nombreAncho}, ${pantalla} con nombres largos: no se cargó esa pantalla`);
+      continue;
+    }
+    if (!texto.includes('Universo Tutu Perú y Canadá')) {
+      problemas.push(
+        `${nombreAncho}, ${pantalla}: «?nombres=largos» no llegó a la pantalla, así que el ` +
+          'caso del nombre largo NO se midió',
+      );
+      continue;
+    }
+
+    const m = await pagina.evaluate(MEDIR, MINIMO_TACTIL);
+    let vistos = 0;
+    let perdonados = 0;
+    /*
+     * PASA POR LA MISMA LISTA DE DEUDA Y DE EXENCIONES que las otras pasadas, y no por una
+     * suya. Con una lista aparte, la rejilla de la semana —que ya está anotada como deuda
+     * con su tarea— saldría aquí como hallazgo nuevo, y una deuda que reaparece con otro
+     * nombre en cada pasada deja de ser deuda: se convierte en ruido que se aprende a
+     * ignorar, y con él se ignora lo que sí es nuevo.
+     */
+    const anotarLargo = (clase, detalle, mensaje, testid) => {
+      const excusada = excusa(pantalla, clase, detalle, testid);
+      if (excusada !== undefined) {
+        perdonados += 1;
+        if (excusada.exento) exencionesVistas.add(excusada.motivo);
+        else deudaVista.add(excusada.motivo);
+        return;
+      }
+      vistos += 1;
+      problemas.push(`${nombreAncho} (${ancho}px), ${pantalla} con nombre largo: ${mensaje}`);
+    };
+
+    for (const f of m.fuera) {
+      anotarLargo('fuera', f.texto, `«${f.texto}» se sale ${f.derecha - m.vw}px por la derecha`);
+    }
+    for (const sc of m.scrollers) {
+      anotarLargo(
+        'scroller',
+        sc.texto,
+        `hay ${sc.contenido}px de contenido en ${sc.visible}px visibles («${sc.texto}»)`,
+      );
+    }
+    for (const t of m.tactiles) {
+      anotarLargo(
+        'tactil',
+        t.texto,
+        `«${t.texto || t.testid}» mide ${t.ancho}×${t.alto}, por debajo del mínimo táctil`,
+        t.testid,
+      );
+    }
+    console.log(
+      `  ${String(ancho).padStart(4)} ${(pantalla + ' (nombre largo)').padEnd(22)} ` +
+        `${vistos === 0 ? 'nada se sale' : `${vistos} PROBLEMAS`}` +
+        `${perdonados > 0 ? ` (${perdonados} ya anotados)` : ''}`,
+    );
+  }
+  await ctx.close();
+}
+
 await navegador.close();
 await cerrar();
 
@@ -634,6 +763,7 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  `\nOK: ${PANTALLAS.length} pantallas × ${ANCHOS.length} anchos y ${HOJAS.length} hojas. ` +
+  `\nOK: ${PANTALLAS.length} pantallas × ${ANCHOS.length} anchos, ${HOJAS.length} hojas y ` +
+    `${PANTALLAS_LARGAS.length} pantallas con un nombre de empresa largo. ` +
     'Nada se sale, nada se recorta sin querer, y todo lo que se pulsa llega al mínimo táctil.',
 );

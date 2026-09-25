@@ -1,6 +1,12 @@
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
-import { aplicarEscenario, escenarioDeLaUrl, marcaDeLaUrl } from './escenarios';
+import {
+  aplicarEscenario,
+  aplicarNombresLargos,
+  escenarioDeLaUrl,
+  marcaDeLaUrl,
+  nombresLargosDeLaUrl,
+} from './escenarios';
 import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
 import { registrarFichajeDemo } from './reconstruir';
 import type { DataClient } from '@/lib/firebase/query';
@@ -880,8 +886,10 @@ export function getDemoClient(): DataClient {
    */
   const escenario = escenarioDeLaUrl();
   const marca = marcaDeLaUrl();
+  const nombresLargos = nombresLargosDeLaUrl();
   const sembrar = () => {
-    const almacen = aplicarEscenario(crearAlmacen(), escenario);
+    let almacen = aplicarEscenario(crearAlmacen(), escenario);
+    if (nombresLargos) almacen = aplicarNombresLargos(almacen);
     if (marca !== null) {
       // Se pinta sobre TODAS las empresas sembradas: la demostración crea una segunda al
       // probar el alta, y una marca que solo alcanza a la primera no probaría el cambio.
