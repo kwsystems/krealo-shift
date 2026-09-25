@@ -533,6 +533,83 @@ for (const { tema, marca } of VUELTAS) {
   await ctx.close();
 }
 
+/*
+ * ¿SE PUEDE FICHAR SIN DARLE LA CÁMARA AL NAVEGADOR?
+ *
+ * POR QUÉ EXISTE. Desde el 2026-09-25 la foto dejó de ser obligatoria: por decisión de la
+ * dueña del local, el aparato se queda en la tienda y las cámaras de seguridad son la
+ * prueba de presencia. Pero «ya no se pide la cámara» no se puede afirmar leyendo el
+ * código: basta con que un componente se monte por error para que el navegador enseñe el
+ * cartel del permiso, y entonces el empleado se planta delante de una petición que nadie
+ * le explicó y que no sabe si puede rechazar.
+ *
+ * LAS OTRAS TRES VUELTAS DE ESTE ARNÉS ABREN EL NAVEGADOR CON EL PERMISO YA CONCEDIDO
+ * (`CON_CAMARA`), así que NINGUNA habría notado esto: con el permiso dado, pedirlo o no
+ * pedirlo se ve exactamente igual. Por eso esta vuelta lo niega a propósito.
+ *
+ * Y se comprueba el fichaje ENTERO, no que la pantalla no reviente: lo que hay que poder
+ * afirmar es que alguien entra a trabajar sin tocar la cámara.
+ */
+{
+  const caso = 'se ficha SIN darle la cámara al navegador';
+  // Sin `CON_CAMARA` a propósito: el permiso se queda sin conceder.
+  const ctx = await navegador.newContext({ viewport: { width: 834, height: 1112 } });
+  const pag = await ctx.newPage();
+  await sembrarKiosco(pag);
+  await irA(pag, base, '/kiosk', { asentar: 700 });
+
+  await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
+  for (const digito of ['1', '2', '3', '4', '5', '6']) {
+    await pag.locator(`[data-testid="keypad-${digito}"]:visible`).first().click();
+    await pag.waitForTimeout(160);
+  }
+  await pag.waitForTimeout(2600);
+
+  const entrada = pag.locator('[data-testid="kiosk-action-clock_in"]');
+  if ((await entrada.count()) === 0) {
+    problemas.push(`${caso}: no llegué a la pantalla de acciones, así que no pude fichar`);
+  } else {
+    await entrada.first().click();
+    await pag.waitForTimeout(1200);
+
+    /*
+     * LOS RESTOS DE LA FOTO SE BUSCAN EN LA PANTALLA DE CONFIRMACIÓN, no en la lista de
+     * acciones, y esa fue la primera versión de esta comprobación: miraba el texto justo
+     * después del PIN, donde la foto NUNCA sale porque solo aparece al confirmar. Así que
+     * daba «no sale» siempre, también con la foto obligatoria puesta.
+     */
+    const texto = (await pag.innerText('body')).replace(/\s+/g, ' ');
+    const restos = [
+      ['el aviso de que se tomará una foto', texto.includes('Se tomará una foto')],
+      ['el bloqueo por falta de foto', texto.includes('Sin foto no se puede')],
+      ['la espera de la foto', texto.includes('Esperando la foto')],
+      [
+        'el botón de reintentar la foto',
+        (await pag.locator('[data-testid="kiosk-photo-retry"]').count()) > 0,
+      ],
+    ].filter(([, sale]) => sale);
+
+    if (restos.length > 0) {
+      problemas.push(
+        `${caso}: al confirmar sigue saliendo ${restos.map(([q]) => q).join(', ')}. ` +
+          'La foto dejó de ser obligatoria, así que nada debería pedirla.',
+      );
+    }
+
+    /*
+     * Y EL FICHAJE SE AFIRMA CON SU PROPIO MARCADOR, no buscando la palabra «Trabajando»
+     * en la página. Ese fue el segundo fallo de esta comprobación: «Trabajando» aparece
+     * también en la pantalla de confirmación, así que la comprobación pasaba aunque el
+     * fichaje se hubiera quedado bloqueado sin foto. Lo cazó el control: con la foto
+     * obligatoria de vuelta, esto seguía en verde.
+     */
+    if (await esperarResultado(pag, caso)) {
+      console.log(`  ok    ${caso} — entra a trabajar sin tocar la cámara`);
+    }
+  }
+  await ctx.close();
+}
+
 console.log(
   '  nota: el estado «ese PIN no es correcto» NO se visita aquí — en demostración\n' +
     '        cualquier PIN entra. Ese contraste lo cubre src/theme/__tests__/tema.test.ts.',

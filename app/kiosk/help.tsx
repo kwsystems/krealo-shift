@@ -52,6 +52,20 @@ export default function KioskHelpScreen() {
               <AppText variant="help" tone="subtle">
                 {t('kiosk.privacyRecorded')}
               </AppText>
+              {/*
+                ESTA FRASE —«la foto solo se toma si tu tienda la tiene activada»— ERA
+                FALSA EN LA WEB HASTA EL 2026-09-25, y es la peor clase de falsedad: está
+                en la única pantalla que el empleado puede abrir sin sesión, hecha
+                precisamente para que la persona de quien se guardan los datos pueda leer
+                qué se guarda. Mientras la web forzó la foto por encima del ajuste de la
+                sede, aquí se le prometía a la gente algo que el código contradecía.
+
+                Hoy es cierta, porque la foto volvió a depender solo del ajuste.
+
+                QUIEN VUELVA A HACER LA FOTO OBLIGATORIA TIENE QUE TOCAR ESTE TEXTO, y por
+                eso queda dicho aquí y no en el fichero de la regla: el que cambie la regla
+                mirará la regla, no esta pantalla.
+              */}
               <AppText variant="help" tone="subtle">
                 {t('kiosk.privacyPhoto')}
               </AppText>
