@@ -166,16 +166,18 @@ const MINIMO_TACTIL = 44;
  * linea de deuda que cita un id ya cerrado invita a borrarla —«si la tarea esta hecha,
  * fuera»— y borrarla sin arreglar nada pone el arnes en rojo.
  */
-const DEUDA = new Map([
-  [
-    'horario/scroller',
-    'la rejilla de la semana pide 1120 px y por debajo se arrastra (tXdQjB2WZqydk1EyZmRt)',
-  ],
-  [
-    'horario/fuera',
-    'la rejilla de la semana pide 1120 px y por debajo se arrastra (tXdQjB2WZqydk1EyZmRt)',
-  ],
-]);
+/*
+ * VACÍA A PROPÓSITO, y la forma se queda. Las dos líneas que había —la rejilla de la
+ * semana arrastrándose por debajo de 1120 px— ya no son deuda: se decidió (opción «a» de
+ * la tarea de decisión) que la rejilla se arrastre con la columna de nombres FIJA, y eso
+ * está hecho y medido, así que bajan a `EXENCIONES` con su guarda. Ver ahí.
+ *
+ * Se deja el mapa vacío y no se borra el mecanismo: la diferencia entre deuda y exención
+ * es lo que mantiene honesta esta salida, y el día que haya una deuda de verdad hace
+ * falta saber cómo se escribe. Una lista de excusas VIVA, en cambio, es una trampa: el
+ * camino cómodo pasa a ser añadirse a ella en vez de arreglar nada.
+ */
+const DEUDA = new Map([]);
 
 /**
  * EXENCIONES RAZONADAS, que no son deuda.
@@ -196,10 +198,41 @@ const DEUDA = new Map([
  * única forma de que un lector de pantalla lea el valor de cada día. Lo que sí era un
  * fallo es que pulsarlas con Enter no hiciera nada, y eso se arregló en el componente.
  */
+/*
+ * LA SEGUNDA EXENCIÓN, la de la rejilla del horario, es la que más cuesta ganarse, así
+ * que va escrita entera.
+ *
+ * La regla general dice que un contenedor que scrollea en horizontal esconde contenido sin
+ * avisar. En la rejilla de la semana el arrastre es la respuesta CORRECTA, y está medido
+ * por qué: para meter siete días en un portátil de 1280 hacen falta columnas de 116 px, y
+ * descontando relleno quedan 84 px de texto, donde ya no cabe ni «Publicado». Por debajo
+ * de 136 px los turnos dejan de leerse, y un horario con turnos ilegibles es peor que uno
+ * que se arrastra. No es un ancho que ajustar: es cuántos días caben.
+ *
+ * Lo que SÍ era un fallo —y lo que hacía que esto fuera deuda y no exención— es que al
+ * arrastrar se iba también la columna de empleados: dejabas de ver de quién era la fila.
+ * Arreglado fijándola (`position: sticky`), así que arrastrar ya no pierde información,
+ * solo pide un gesto.
+ *
+ * Y POR ESO ESTA EXENCIÓN TIENE GUARDA, que es lo que la separa de una excusa: la cuarta
+ * pasada de este mismo arnés arrastra la rejilla de verdad en 768, 1024 y 1280 y mide que
+ * los ocho nombres siguen en su sitio. El día que dejen de estarlo, el arnés se pone rojo
+ * y esta exención cae con él.
+ */
 const EXENCIONES = new Map([
   [
     'reportes/tactil/testid:day-column-',
     'marcas del gráfico: les aplica el mínimo de 24×24 de WCAG 2.5.8, y miden 25×24',
+  ],
+  [
+    'horario/scroller',
+    'la rejilla de la semana se arrastra a propósito (comprimir más deja los turnos ' +
+      'ilegibles) y la columna de nombres se queda fija: lo mide la cuarta pasada',
+  ],
+  [
+    'horario/fuera',
+    'la rejilla de la semana se arrastra a propósito (comprimir más deja los turnos ' +
+      'ilegibles) y la columna de nombres se queda fija: lo mide la cuarta pasada',
   ],
 ]);
 
@@ -741,6 +774,114 @@ for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a === 360 || a
       `  ${String(ancho).padStart(4)} ${(pantalla + ' (nombre largo)').padEnd(22)} ` +
         `${vistos === 0 ? 'nada se sale' : `${vistos} PROBLEMAS`}` +
         `${perdonados > 0 ? ` (${perdonados} ya anotados)` : ''}`,
+    );
+  }
+  await ctx.close();
+}
+
+/*
+ * CUARTA PASADA: LA REJILLA DE LA SEMANA SE ARRASTRA, Y POR ESO HAY QUE MIRARLA MÁS.
+ *
+ * Esta pasada existe para que la exención de más arriba no sea una excusa. La regla
+ * general dice que un contenedor que scrollea en horizontal esconde contenido sin avisar,
+ * y en la rejilla del horario se acepta que scrollee: comprimir siete días por debajo de
+ * 136 px deja los turnos ilegibles, y un horario ilegible es peor que uno que se arrastra.
+ *
+ * Pero eso solo vale MIENTRAS la columna de nombres se quede fija. Si se va con el resto,
+ * arrastrar deja de ser «pedir un gesto» y pasa a ser «perder de quién es la fila», que es
+ * el fallo de verdad. O sea: la exención depende de un hecho, así que el hecho se mide, y
+ * si deja de ser cierto esto se pone rojo y la exención cae con él.
+ *
+ * Una exención sin guarda es el permiso para no mirar.
+ */
+const ANCHOS_QUE_ARRASTRAN = [768, 1024, 1280];
+
+for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) =>
+  ANCHOS_QUE_ARRASTRAN.includes(a),
+)) {
+  const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
+  const pagina = await ctx.newPage();
+  await pagina.goto(base + '/', { waitUntil: 'networkidle' });
+  await pagina.locator('[data-testid="sign-in-demo"]').click();
+  await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
+  await pagina.goto(base + '/schedule', { waitUntil: 'networkidle' });
+  const cargada = await esperarPantalla(pagina, MARCADORES['/schedule'], {
+    asentar: 500,
+    obligatorio: false,
+  });
+  if (!cargada) {
+    problemas.push(`${nombreAncho}, horario: no se cargó, así que la columna fija NO se midió`);
+    await ctx.close();
+    continue;
+  }
+
+  const r = await pagina.evaluate(() => {
+    const cabecera = document.querySelector('[data-testid="grid-name-header"]');
+    if (cabecera === null) return { error: 'no existe la cabecera de la columna de nombres' };
+
+    /*
+     * EL SCROLLER SE BUSCA SUBIENDO DESDE LA CABECERA, y no por un selector: así se mide
+     * el contenedor que de verdad arrastra a ESTA columna. Buscarlo por clase o por ser
+     * «el primero que scrollea» mediría cualquier otro y el arnés diría que sí sin haber
+     * mirado la rejilla.
+     */
+    let scroller = cabecera.parentElement;
+    while (scroller !== null && scroller.scrollWidth <= scroller.clientWidth + 1) {
+      scroller = scroller.parentElement;
+    }
+    if (scroller === null) {
+      return { arrastra: false };
+    }
+
+    const izquierdaAntes = cabecera.getBoundingClientRect().left;
+    scroller.scrollLeft = scroller.scrollWidth;
+    // Forzar el reflow antes de volver a medir.
+    void scroller.offsetWidth;
+    const caja = cabecera.getBoundingClientRect();
+    const cajaScroller = scroller.getBoundingClientRect();
+
+    const nombres = Array.from(document.querySelectorAll('[data-testid^="grid-name-"]')).filter(
+      (n) => n.getAttribute('data-testid') !== 'grid-name-header',
+    );
+    const filasVisibles = nombres.filter((n) => {
+      const c = n.getBoundingClientRect();
+      return c.width > 0 && c.left >= cajaScroller.left - 2 && c.left < cajaScroller.right;
+    }).length;
+
+    return {
+      arrastra: true,
+      movida: Math.round(caja.left - izquierdaAntes),
+      desplazado: Math.round(scroller.scrollLeft),
+      filas: nombres.length,
+      filasVisibles,
+      texto: (cabecera.textContent ?? '').trim(),
+    };
+  });
+
+  if (r.error !== undefined) {
+    problemas.push(`${nombreAncho}, horario: ${r.error}`);
+  } else if (r.arrastra === false) {
+    // Cabe entera: no hay nada que fijar, y decirlo es más honesto que un OK mudo.
+    console.log(`  ${String(ancho).padStart(4)} horario: cabe entera, no se arrastra`);
+  } else if (r.desplazado === 0) {
+    problemas.push(
+      `${nombreAncho}, horario: la rejilla no se dejó arrastrar, así que NO se comprobó ` +
+        'que la columna de nombres se queda fija',
+    );
+  } else if (r.movida !== 0) {
+    problemas.push(
+      `${nombreAncho} (${ancho}px), horario: al arrastrar ${r.desplazado}px la columna de ` +
+        `nombres se movió ${r.movida}px: se pierde de vista de quién es cada fila`,
+    );
+  } else if (r.filasVisibles < r.filas) {
+    problemas.push(
+      `${nombreAncho} (${ancho}px), horario: tras arrastrar solo ${r.filasVisibles} de ` +
+        `${r.filas} nombres siguen en su sitio`,
+    );
+  } else {
+    console.log(
+      `  ${String(ancho).padStart(4)} horario: arrastrada ${r.desplazado}px, los ` +
+        `${r.filas} nombres siguen delante`,
     );
   }
   await ctx.close();

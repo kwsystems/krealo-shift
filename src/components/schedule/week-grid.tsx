@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ScrollView, View, type LayoutChangeEvent } from 'react-native';
+import { Platform, ScrollView, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { EmptyShiftSlot, ShiftCard } from './shift-card';
@@ -56,6 +56,31 @@ const NAME_COLUMN_WIDTH = spacing.huge * 3.5;
 const DAY_COLUMN_MIN_WIDTH = spacing.huge * 3 - spacing.sm;
 
 /**
+ * LA COLUMNA DE NOMBRES NO SE VA AL ARRASTRAR.
+ *
+ * EL FALLO QUE ARREGLA, que no es el que parecía. Por debajo de 1120 px la rejilla se
+ * arrastra en horizontal, y la respuesta obvia —apretar las columnas— está medida y
+ * descartada: meter siete días en 1280 pide columnas de 116 px, y ahí el turno deja de
+ * leerse. Un horario con turnos ilegibles es peor que uno que se arrastra.
+ *
+ * Pero al arrastrar hacia el domingo se iba TAMBIÉN la columna de empleados, así que
+ * dejabas de ver de quién era la fila que estabas mirando. Eso sí es un fallo, y es el
+ * que molesta de verdad: sin el nombre delante, una rejilla de turnos es una cuadrícula
+ * de horas sin dueño, y poner un turno en la fila equivocada es un error que llega hasta
+ * la tienda. Con la columna fija, arrastrar pasa de perder información a solo pedir un
+ * gesto: es como funciona cualquier hoja de cálculo, y por la misma razón.
+ *
+ * `position: 'sticky'` EXISTE EN react-native-web Y NO ESTÁ EN LOS TIPOS DE RN, de ahí el
+ * casteo. En nativo no se aplica —ahí `ScrollView` no es un contenedor CSS con scroll— y
+ * la rejilla se queda como estaba, que es lo correcto: el panel se usa en web.
+ *
+ * EL LÍMITE, dicho en voz alta: el horario semanal se ARMA en pantalla grande. De 1440 px
+ * para arriba cabe la semana entera sin arrastrar; por debajo se arrastra con los nombres
+ * delante, y en un teléfono la vista Semana ya cae sola en la lista por días.
+ */
+const COLUMNA_PEGAJOSA = { position: 'sticky', left: 0, zIndex: 1 } as unknown as ViewStyle;
+
+/**
  * Turno con su fecha local ya calculada, para no repetir la conversión de zona
  * horaria en cada celda de la cuadrícula.
  */
@@ -97,6 +122,8 @@ export function WeekGrid({
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
+  /* Solo en web: ver `COLUMNA_PEGAJOSA`. En nativo no hay `sticky` que valga. */
+  const fija = Platform.OS === 'web' ? styles.columnaFija : null;
   /** Ancho que el `ScrollView` tiene de verdad en pantalla. 0 hasta el primer layout. */
   const [anchoVisible, setAnchoVisible] = useState(0);
 
@@ -130,7 +157,7 @@ export function WeekGrid({
     >
       <View>
         <Row gap={0} align="stretch">
-          <View style={[styles.headerCell, styles.nameColumn]}>
+          <View style={[styles.headerCell, styles.nameColumn, fija]} testID="grid-name-header">
             <AppText variant="label" tone="subtle">
               {t('schedule.employee')}
             </AppText>
@@ -153,7 +180,10 @@ export function WeekGrid({
 
         {rows.map((row) => (
           <Row key={row.employeeId} gap={0} align="stretch">
-            <View style={[styles.cell, styles.nameColumn]}>
+            <View
+              style={[styles.cell, styles.nameColumn, fija]}
+              testID={`grid-name-${row.employeeId}`}
+            >
               <AppText variant="bodyStrong" numberOfLines={2}>
                 {row.name}
               </AppText>
@@ -316,6 +346,18 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.xs,
   },
   nameColumn: { width: NAME_COLUMN_WIDTH, flexGrow: 0, flexShrink: 0 },
+  /*
+    EL FONDO Y EL FILO NO SON ADORNO. Una columna pegajosa sin fondo deja que los días
+    pasen POR DEBAJO del nombre y se lean los dos a la vez, que es peor que no fijarla.
+    Y el filo derecho es lo que dice que la rejilla sigue: sin él, la columna fija y la
+    primera de días se leen como una sola tabla que casualmente no se mueve.
+  */
+  columnaFija: {
+    ...COLUMNA_PEGAJOSA,
+    backgroundColor: colors.canvas,
+    borderRightWidth: borderWidth.hairline,
+    borderRightColor: colors.border,
+  },
   /*
    * `flex: 1` con mínimo, y el mínimo manda: cuando siete mínimos más la columna de
    * nombres no caben, `minWidth` gana al encogido y la rejilla se arrastra en vez de
