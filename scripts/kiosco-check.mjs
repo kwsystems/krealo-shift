@@ -84,27 +84,32 @@ const MINIMO_TEXTO_GRANDE = 3;
 const TAMANO_GRANDE = 24;
 
 /**
- * DEUDA DEL TEMA CLARO, NOMBRADA PARA QUE EL ARNÉS SIGA SIRVIENDO.
+ * LA DEUDA DEL TEMA CLARO SE PAGÓ EL 2026-09-22, y esta lista se queda VACÍA a propósito.
  *
- * Al medir el contraste de verdad aparecieron dos tintas que no llegan, y NO son del
- * tema oscuro: son del claro, el que la app lleva usando desde siempre.
+ * Llevaba excusando dos tintas que no llegaban al contraste mínimo:
  *
- *   #16845B — `success600` en claro. «Trabajando», «entrada registrada». 4,24 y 4,31:1.
- *   #B56B00 — `warning600` en claro. El aviso de modo demostración. 3,86:1.
+ *   #16845B — `success600` en claro, a 4,24:1
+ *   #B56B00 — `warning600` en claro, a 3,75:1
  *
- * Arreglarlas cambia las insignias de estado de TODA la app, que es un cambio visible
- * que tiene que ver Andree: queda en la tarea nJTTpJRad37anvPtsAZc. Aquí se nombran por
- * su valor exacto y SOLO en claro. Lo que NO se hace es bajar el mínimo: eso dejaría un
- * arnés que dice OK sin comprobar nada.
+ * NINGUNO DE LOS DOS EXISTE YA. Hoy son #157D56 y #A26000, y medidos contra el fondo del
+ * reloj dan 4,64:1 y 4,52:1: los dos pasan el 4,5 que se les pide. La tarea que lo
+ * arregló —nJTTpJRad37anvPtsAZc— está cerrada, y `contraste:check`, que llevaba la misma
+ * lista, la vació ese día. Este arnés se quedó excusando lo que ya nadie debe, así que su
+ * salida decía «se topó y se dejó pasar» sobre una deuda pagada.
  *
- * Se excusa por el color, no por el texto: si la misma tinta floja aparece en un sitio
- * nuevo es la misma deuda, pero si el flojo es OTRO color, esto falla. Y en oscuro no se
- * excusa nada, porque el oscuro se diseñó midiendo y no hereda nada que disculpar.
+ * SE QUEDA LA FORMA Y SE VA EL CONTENIDO, por dos razones:
+ *
+ *   · Una lista de excusas VIVA es una trampa: el día que alguien meta un color que no
+ *     llega, el camino cómodo será añadirlo aquí —la lista parece el sitio previsto— en
+ *     vez de arreglar el color. Vacía, añadir una entrada es un acto deliberado.
+ *   · Y borrarla del todo dejaría sin documentar CÓMO se excusa una deuda cuando de
+ *     verdad haya una: se excusa por el color exacto y solo en claro, nunca bajando el
+ *     mínimo, que dejaría un arnés diciendo OK sin comprobar nada.
+ *
+ * En oscuro no se excusa nada y no se excusará: ese tema se diseñó midiendo y no hereda
+ * nada que disculpar.
  */
-const DEUDA_DE_CLARO = new Map([
-  ['rgb(22, 132, 91)', 'success600 en claro (nJTTpJRad37anvPtsAZc)'],
-  ['rgb(181, 107, 0)', 'warning600 en claro (nJTTpJRad37anvPtsAZc)'],
-]);
+const DEUDA_DE_CLARO = new Map([]);
 
 /**
  * Holgura mínima por debajo del teclado, en píxeles.
