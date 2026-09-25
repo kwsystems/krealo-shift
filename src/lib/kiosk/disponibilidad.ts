@@ -33,12 +33,10 @@ import { Platform } from 'react-native';
  *
  * Lo que cambia para que el hueco no quede abierto a secas:
  *
- *   1. EN WEB LA FOTO ES OBLIGATORIA Y BLOQUEA. En un iPad atornillado a la pared el
- *      aparato ES la prueba de presencia, asi que ahi la foto es opcional y nunca
- *      impide fichar. En un navegador la direccion se abre desde cualquier sitio —desde
- *      casa, desde el bus, o pasandosela por mensaje—, asi que la foto pasa a ser la
- *      UNICA prueba de que quien ficha estaba delante. Si es la unica prueba, no puede
- *      ser opcional: sin foto no hay fichaje.
+ *   1. EN WEB LA FOTO ERA OBLIGATORIA Y BLOQUEABA, y DEJO DE SERLO el 2026-09-25. El
+ *      parrafo de abajo explica por que era obligatoria y se conserva entero, porque el
+ *      argumento sigue siendo correcto: lo que cambio no es el razonamiento, es quien
+ *      pone la prueba de presencia. Ver «LA FOTO YA NO BLOQUEA» al final del fichero.
  *
  *   2. EN WEB NO SE FICHA SIN RED. La cola en web vive en memoria y no sobrevive a un
  *      recargado (punto 2 de arriba), asi que encolar seria prometer un fichaje que se
@@ -54,8 +52,34 @@ const esWeb = Platform.OS === 'web';
 
 export const kioskModeAvailable = true;
 
-/** Sin foto no hay fichaje. Solo en web, y el porque esta justo arriba. */
-export const fotoDeVerificacionObligatoria = esWeb;
+/**
+ * LA FOTO YA NO BLOQUEA (Andree, por decision de la dueña del local, 2026-09-25).
+ *
+ * «Ninguna foto. Al final esto solo estara puesto en la tienda, y vere las camaras para
+ * saber que si estan marcando.»
+ *
+ * LA MITIGACION NO DESAPARECE: CAMBIA DE MANOS. El argumento de arriba —que en un
+ * navegador la foto era la unica prueba de que quien ficha estaba delante— sigue siendo
+ * cierto, y por eso se conserva escrito. Lo que cambia es que ahora la prueba de presencia
+ * es FISICA y del local: el aparato se queda en la tienda y las camaras de seguridad
+ * cubren lo que cubria la foto. Es una prueba mejor, de hecho: la foto demuestra que
+ * alguien estaba delante de la camara del aparato, no que estuviera en la tienda.
+ *
+ * ESTO SE ESCRIBE AQUI Y NO SE BORRA EL PARRAFO DE ARRIBA a proposito. Quien lea ese
+ * razonamiento sin esta nota concluira que la regla se cayo por descuido y la restaurara
+ * —es lo que yo habria hecho—, y eso devolveria un bloqueo que la dueña quito a sabiendas.
+ *
+ * Y EL RIESGO REAL ES MAS ESTRECHO DE LO QUE DA A ENTENDER EL PARRAFO DE ARRIBA, que dice
+ * «la direccion se abre desde cualquier sitio». Medido: el reloj exige ACTIVACION con
+ * codigo antes de ofrecer el teclado, y sin credencial pinta su estado vacio. Asi que no
+ * es «cualquiera con el enlace ficha desde su casa»: es que ESE navegador, ya activado,
+ * salga de la tienda, o que alguien copie su credencial del almacenamiento. Que el aparato
+ * no se mueva del local es exactamente la respuesta a eso.
+ *
+ * QUIEN QUIERA LA FOTO LA SIGUE TENIENDO: el ajuste «Foto al fichar» de cada sede sigue
+ * existiendo y funcionando. Lo que se quita es que la web la imponga por encima del ajuste.
+ */
+export const fotoDeVerificacionObligatoria = false;
 
 /** Fichar sin red solo donde la cola sobrevive a un recargado. */
 export const permiteFicharSinRed = !esWeb;
