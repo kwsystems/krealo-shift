@@ -15,6 +15,7 @@ import { AppText } from '@/components/ui/app-text';
 import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { spacing, radii } from '@/theme/tokens';
+import { adminErrorCode, adminErrorKind } from '@/hooks/use-admin-query';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -35,6 +36,46 @@ type Estado =
   | { fase: 'listo' };
 
 const PREVIEW = 96;
+
+/**
+ * QUÉ SE LE DICE A QUIEN ACABA DE FALLARLE LA SUBIDA.
+ *
+ * POR QUÉ EXISTE ESTA FUNCIÓN. Antes había un `catch` vacío y un solo mensaje: «No
+ * pudimos subir el logotipo. Revisa tu conexión y vuelve a intentarlo». El 2026-09-28
+ * ese mensaje salió con la conexión perfecta, y localizar la causa costó descartar a
+ * ciegas el bucket, las reglas de Storage, el rol del usuario y el id de la membresía
+ * —todo estaba bien—. El error real nunca se había mirado porque nadie lo guardaba.
+ *
+ * Un mensaje que nombra la causa equivocada es peor que uno que dice «no sé»: manda a
+ * mirar donde no está el problema. Así que ahora:
+ *
+ *   - se REGISTRA el error crudo, para que exista en la consola del navegador;
+ *   - el mensaje se elige por el TIPO de fallo, y no hay uno para todos;
+ *   - y cuando no hay nada mejor que decir, se enseña el CÓDIGO. `storage/unauthorized`
+ *     no es un detalle interno del bucket: son dos palabras que se pueden buscar y que
+ *     dicen exactamente qué pasó. Esconderlo era lo que dejaba a ciegas.
+ */
+function registrar(donde: string, error: unknown): void {
+  console.error(`[logo] ${donde} falló:`, error);
+}
+
+/**
+ * Devuelve la CLAVE del texto, no el texto: así esta función no necesita conocer `t`
+ * —que tiene un tipo genérico incómodo de reproducir— y se puede probar sola, sin
+ * montar i18n.
+ */
+export function claveDelFallo(error: unknown): { clave: string; codigo: string } {
+  const tipo = adminErrorKind(error);
+  const codigo = adminErrorCode(error);
+
+  if (tipo === 'forbidden') return { clave: 'settings.logoForbidden', codigo };
+  if (tipo === 'offline') return { clave: 'settings.logoUploadFailed', codigo };
+  if (tipo === 'invalid') return { clave: 'settings.logoUnsupportedType', codigo };
+  if (tipo === 'notConfigured') return { clave: 'settings.logoNotConfigured', codigo };
+  return codigo === ''
+    ? { clave: 'settings.logoUploadFailed', codigo }
+    : { clave: 'settings.logoUploadFailedCode', codigo };
+}
 
 export function OrganizationLogoField({
   organizationId,
@@ -98,10 +139,10 @@ export function OrganizationLogoField({
       });
       setEstado({ fase: 'listo' });
       onChanged();
-    } catch {
-      // El mensaje del error de Storage no se muestra tal cual: puede traer detalles
-      // internos del bucket y no le dice nada a quien está mirando la pantalla.
-      setEstado({ fase: 'error', mensaje: t('settings.logoUploadFailed') });
+    } catch (error) {
+      registrar('subir', error);
+      const { clave, codigo } = claveDelFallo(error);
+      setEstado({ fase: 'error', mensaje: t(clave, { codigo }) });
     }
   };
 
@@ -112,8 +153,16 @@ export function OrganizationLogoField({
       await removeOrganizationLogo({ organizationId, logoPath });
       setEstado({ fase: 'reposo' });
       onChanged();
-    } catch {
-      setEstado({ fase: 'error', mensaje: t('settings.logoRemoveFailed') });
+    } catch (error) {
+      registrar('quitar', error);
+      const tipo = adminErrorKind(error);
+      setEstado({
+        fase: 'error',
+        mensaje:
+          tipo === 'forbidden'
+            ? t('settings.logoForbidden')
+            : t('settings.logoRemoveFailed'),
+      });
     }
   };
 

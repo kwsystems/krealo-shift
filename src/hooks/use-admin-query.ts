@@ -35,12 +35,32 @@ export type AdminErrorKind =
 
 export class AdminError extends Error {
   readonly kind: AdminErrorKind;
+  /**
+   * EL CÓDIGO CRUDO, y se guarda por lo que costó no tenerlo.
+   *
+   * `kind` sirve para decidir qué microcopy enseñar, pero borra de qué se quejó el
+   * backend. Cuando el logo de una empresa no se pudo subir, la pantalla decía
+   * «revisa tu conexión» y no había forma —ni mirando la base, ni las reglas, ni el
+   * bucket— de saber si era permiso, formato, tamaño o red. Diagnosticarlo se llevó
+   * una hora de descartar hipótesis a ciegas.
+   *
+   * Un código como `storage/unauthorized` NO es un detalle interno del bucket: es
+   * una palabra corta que se puede buscar y que dice exactamente qué pasó. Se guarda
+   * para poder enseñarlo cuando no haya nada mejor que decir.
+   */
+  readonly code: string;
 
-  constructor(kind: AdminErrorKind, message?: string) {
+  constructor(kind: AdminErrorKind, message?: string, code = '') {
     super(message ?? kind);
     this.name = 'AdminError';
     this.kind = kind;
+    this.code = code;
   }
+}
+
+/** El código crudo, si lo hay. Vacío cuando el error no traía ninguno. */
+export function adminErrorCode(error: unknown): string {
+  return error instanceof AdminError ? error.code : '';
 }
 
 export function adminErrorKind(error: unknown): AdminErrorKind {
@@ -53,7 +73,15 @@ function readString(source: Record<string, unknown>, key: string): string {
 }
 
 /**
- * Códigos de Firestore y de Cloud Functions que la interfaz sí sabe explicar.
+ * Códigos de Firestore, de Cloud Functions y de Storage que la interfaz sí sabe
+ * explicar.
+ *
+ * LOS DE STORAGE SE AÑADIERON EL 2026-09-28, Y FALTABAN TODOS. Esta tabla cubría
+ * Firestore y Functions; Firebase Storage usa un prefijo propio —`storage/…`— así que
+ * NINGÚN fallo de subida encajaba en ningún caso y todos caían en `server`. El
+ * resultado: subir el logo fallaba y la pantalla decía «revisa tu conexión» aunque la
+ * conexión estuviera perfecta. Un error mal clasificado no es un detalle de
+ * presentación: manda a mirar donde no está el problema.
  *
  * `failed-precondition` MERECE SU PROPIA LÍNEA y no es un error de servidor
  * cualquiera: en Firestore es, casi siempre, «falta el índice compuesto de esta
@@ -86,6 +114,24 @@ function kindFromCode(code: string, message: string): AdminErrorKind {
       return 'offline';
     case 'not-configured':
       return 'notConfigured';
+
+    /*
+     * STORAGE. `unauthorized` es el que dan las reglas al rechazar, y es el que más
+     * importa distinguir: es lo único que significa «tu usuario no puede hacer esto»
+     * y lo que mandaba a revisar el cable de red.
+     */
+    case 'storage/unauthorized':
+    case 'storage/unauthenticated':
+      return 'forbidden';
+    case 'storage/retry-limit-exceeded':
+    case 'storage/canceled':
+      return 'offline';
+    case 'storage/object-not-found':
+    case 'storage/bucket-not-found':
+      return 'notFound';
+    case 'storage/invalid-argument':
+    case 'storage/invalid-checksum':
+      return 'invalid';
     default:
       break;
   }
@@ -101,7 +147,7 @@ export function toAdminError(error: unknown): AdminError {
     const source = error as Record<string, unknown>;
     const message = readString(source, 'message');
     const code = readString(source, 'code');
-    return new AdminError(kindFromCode(code, message), message);
+    return new AdminError(kindFromCode(code, message), message, code);
   }
 
   if (error instanceof Error) {
