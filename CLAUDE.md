@@ -162,11 +162,42 @@ navegadores reciben la versión nueva llamando a funciones que aún no existen e
 servidor. Al revés no rompe nada, porque la web vieja no sabe que las nuevas existen.
 
 ```
-npx firebase deploy --only functions --project krealo-shift --non-interactive
+npx --yes firebase-tools@15 deploy --only functions --project krealo-shift --non-interactive
 npm run web:build
-npx firebase deploy --only hosting --project krealo-shift --non-interactive
+npx --yes firebase-tools@15 deploy --only hosting --project krealo-shift --non-interactive
 npm run despliegue:check
 ```
+
+**`npx firebase` a secas NO funciona en un contenedor nuevo.** Funcionaba por la caché del
+anterior; recién creado, el comando muere con «could not determine executable to run» y
+parece un problema de credenciales cuando es que falta la herramienta. De ahí el
+`--yes firebase-tools@15`, que además fija la versión mayor. No se añade a
+`devDependencies`: probado, mete 15 800 líneas de `package-lock.json` y re-resuelve
+dependencias que no vienen a cuento.
+
+### El build se niega a construir sin `.env` (2026-09-28)
+
+`npm run web:build` ahora pasa por `scripts/paquete-check.mjs` antes y después de exportar,
+y **falla** si el paquete no lleva su configuración de Firebase dentro. Si falla el de
+después, **borra `dist/`**: un paquete roto en disco es un despliegue esperando a que
+alguien ejecute el comando de subir sin mirar la salida.
+
+Existe porque esto tumbó producción DOS veces con la misma forma. El 21-sep se desplegó un
+paquete construido sin `.env` y el sitio pasó a enseñar «Falta configuración del entorno»;
+el arreglo de entonces fue añadir la comprobación a `despliegue:check`. El 28-sep volvió a
+pasar igual —el contenedor se recicló, se llevó el `.env`, `web:build` dijo «Exported:
+dist» y se publicó una web muerta— y `despliegue:check` lo cazó **después de publicarla**.
+El guardián estaba un paso tarde las dos veces: una comprobación posterior al despliegue no
+evita la caída, solo la nombra.
+
+La pregunta «¿lleva este paquete su configuración?» vive en **un solo sitio**
+(`scripts/lib/configuracion-horneada.mjs`) y la usan los dos arneses. Con una copia en cada
+uno acabarían discrepando sobre el mismo paquete, que es lo que ya pasó con las listas de
+deuda de contraste.
+
+**`.env` no está versionado y así se queda** —puede apuntar a otro proyecto en local— pero
+`.env.example` sí trae los valores reales, y es correcto: la configuración web de Firebase
+es pública por diseño. Recuperarlo es `cp .env.example .env`.
 
 Las reglas de Firestore y Storage se suben **solo si cambiaron** (`--only
 firestore:rules,firestore:indexes,storage`): mirar el diff antes, no desplegarlas por

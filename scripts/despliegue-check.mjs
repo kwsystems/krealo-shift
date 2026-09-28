@@ -27,6 +27,8 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
+import { faltaEnElPaquete } from './lib/configuracion-horneada.mjs';
+
 const BASE = (process.argv[2] ?? 'https://krealo-shift.web.app').replace(/\/$/, '');
 const DIST = 'dist';
 
@@ -127,9 +129,12 @@ if (fallos.length === 0) {
   // de «sin configuración» a un despliegue correcto.
   const urlEntrada = `${BASE}/${relative(DIST, entrada).split(sep).join('/')}`;
   const paquete = await (await fetch(urlEntrada)).text();
-  const faltan = [];
-  if (!/AIza[0-9A-Za-z_-]{30,}/.test(paquete)) faltan.push('la clave de API de Firebase');
-  if (!paquete.includes('krealo-shift')) faltan.push('el identificador del proyecto');
+  /*
+   * LA MISMA FUNCIÓN QUE USA `paquete-check.mjs`, y compartida a propósito: la pregunta
+   * «¿lleva este paquete su configuración?» se hace antes de desplegar y después, y si
+   * cada arnés tuviera su copia acabarían discrepando sobre el mismo paquete.
+   */
+  const faltan = faltaEnElPaquete(paquete);
 
   if (faltan.length > 0) {
     console.error(`\nFALLA: el paquete publicado no lleva ${faltan.join(' ni ')}.`);

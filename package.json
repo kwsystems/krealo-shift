@@ -20,7 +20,7 @@
     "demo:check": "node scripts/demo-check.mjs dist-demo",
     "demo:export:prod": "cross-env EXPO_PUBLIC_DEMO=1 EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist-demo-prod --clear",
     "demo:check:prod": "node scripts/demo-check.mjs dist-demo dist-demo-prod",
-    "web:build": "cross-env EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist --clear",
+    "web:build": "node scripts/paquete-check.mjs --antes && cross-env EXPO_PUBLIC_APP_ENV=production expo export --platform web --output-dir dist --clear && node scripts/paquete-check.mjs --despues",
     "web:deploy": "npm run web:build && firebase deploy --only hosting && npm run despliegue:check",
     "despliegue:check": "node scripts/despliegue-check.mjs",
     "kiosco:check": "node scripts/kiosco-check.mjs dist-demo",
@@ -35,7 +35,8 @@
     "campos:check": "node scripts/campos-muertos-check.mjs",
     "emulador:check": "node scripts/emulador-check.mjs",
     "relieve:check": "node scripts/relieve-check.mjs dist-demo",
-    "funciones:check": "tsc -p functions --noEmit"
+    "funciones:check": "tsc -p functions --noEmit",
+    "paquete:check": "node scripts/paquete-check.mjs --despues"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",
