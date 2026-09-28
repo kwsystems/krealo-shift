@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   copyPreviousWeek,
   createShift,
+  createShifts,
   duplicateShift,
   fetchPublications,
   fetchWeekShifts,
@@ -144,6 +145,17 @@ export function useScheduleMutations(params: {
     onSuccess: invalidate,
   });
 
+  const createMany = useMutation({
+    mutationFn: (inputs: ShiftInput[]) =>
+      createShifts({
+        organizationId: organizationId ?? '',
+        locationId: locationId ?? '',
+        timezone,
+        inputs,
+      }),
+    onSuccess: invalidate,
+  });
+
   const update = useMutation({
     mutationFn: (variables: { shiftId: string; input: ShiftInput }) =>
       updateShift({
@@ -212,7 +224,7 @@ export function useScheduleMutations(params: {
     },
   });
 
-  return { create, update, duplicate, remove, copyWeek, publish };
+  return { create, createMany, update, duplicate, remove, copyWeek, publish };
 }
 
 /**

@@ -170,6 +170,9 @@ export function WeekGrid({
                 { width: anchoDeDia },
                 day === todayKey ? styles.cabeceraDeHoy : null,
               ]}
+              /* El día en el identificador, no solo en el rótulo: un arnés necesita saber
+                 QUE semana está mirando, y el rótulo («lun 28») depende del idioma. */
+              testID={`grid-day-${day}`}
             >
               <AppText variant="label" tone={day === todayKey ? 'primary' : 'subtle'}>
                 {formatDayColumn(day, language)}

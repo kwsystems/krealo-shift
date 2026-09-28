@@ -1,4 +1,5 @@
 import { detectOverlaps, scheduledMinutesByEmployee, type ScheduledShift } from '../conflicts';
+import { refrigerioDeUnTurno } from '../pegar-horario';
 
 /**
  * UNA SEMANA DE VERDAD DE LA TIENDA, PASADA POR LAS FUNCIONES DE LA APP.
@@ -32,8 +33,13 @@ const SEMANA: Fila[] = [
   ['E', [null, ['2026-09-29','17:00','21:00'], ['2026-09-30','17:00','21:00'], null, null, null, null]],
 ];
 
-/** La regla que sale de los totales de la tabla: 1 h de refrigerio en turnos de 8 h o mas. */
-const REFRIGERIO = (minutos: number) => (minutos >= 8 * 60 ? 60 : 0);
+/*
+ * La regla que sale de los totales de la tabla —1 h de refrigerio en turnos de 8 h o
+ * mas— estaba escrita a mano aqui. Ahora es codigo de la app, porque el importador de
+ * horarios la aplica al pegar una semana, y se importa desde alli: si alguien cambia el
+ * umbral, esta prueba tiene que dejar de cuadrar con los totales de la tienda.
+ */
+const REFRIGERIO = refrigerioDeUnTurno;
 
 const turnos: ScheduledShift[] = [];
 for (const [quien, dias] of SEMANA) {

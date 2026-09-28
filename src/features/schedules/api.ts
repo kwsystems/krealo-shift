@@ -192,6 +192,46 @@ export async function createShift(params: {
 }
 
 /**
+ * Crear varios turnos de golpe, para pegar una semana entera.
+ *
+ * UNA SOLA ESCRITURA y no 25, porque el adaptador agrupa la lista en un `writeBatch`:
+ * o entran todos o no entra ninguno. Con un `createShift` por turno, un fallo a mitad
+ * —red, permiso, cuota— dejaría media semana cargada, y media semana es peor que
+ * ninguna: nadie sabe qué falta sin compararla con la tabla turno a turno.
+ *
+ * Comparte `buildRow` con el alta de uno, a propósito: los campos que un turno necesita
+ * al nacer se han equivocado ya dos veces en este archivo (`publication_version` y
+ * `updated_at`, las dos tirando la consulta de la semana entera). Un segundo constructor
+ * de filas sería el tercer sitio donde equivocarse.
+ */
+export async function createShifts(params: {
+  organizationId: string;
+  locationId: string;
+  timezone: string;
+  inputs: ShiftInput[];
+}): Promise<number> {
+  if (params.inputs.length === 0) return 0;
+
+  const createdBy = actorId();
+  const rows = params.inputs.map((input) => ({
+    ...buildRow({
+      organizationId: params.organizationId,
+      locationId: params.locationId,
+      timezone: params.timezone,
+      input,
+    }),
+    status: 'draft' as const,
+    publication_version: 0,
+    published_at: null,
+    created_by: createdBy,
+    updated_by: createdBy,
+  }));
+
+  await execute((db) => db.from(TABLES.shifts).insert(rows));
+  return rows.length;
+}
+
+/**
  * Editar deja el turno en borrador, incluso si estaba publicado (§11.3 paso 8).
  * Se conserva `publication_version` para saber que ya existió publicado antes.
  */

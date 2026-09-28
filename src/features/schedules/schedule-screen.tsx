@@ -10,6 +10,8 @@ import {
   useWeekShifts,
 } from './hooks';
 import { warningsForShift } from './conflicts';
+import { PegarHorarioSheet } from './pegar-horario-sheet';
+import type { EmpleadoConocido, TurnoPegado } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
 import {
   addWeeks,
@@ -83,6 +85,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const [chosenDay, setChosenDay] = useState<DateKey | null>(null);
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
+  const [pasteOpen, setPasteOpen] = useState(false);
   const [copyEmployeeId, setCopyEmployeeId] = useState<string | null>(null);
   const [publishAllOpen, setPublishAllOpen] = useState(false);
   const [publishPickerOpen, setPublishPickerOpen] = useState(false);
@@ -158,6 +161,21 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
 
   const employeeOptions = useMemo<Option<string>[]>(
     () => locationMembers.map((member) => ({ value: member.id, label: member.displayName })),
+    [locationMembers],
+  );
+
+  /*
+   * El puesto se lo pone el importador desde la PERSONA, porque una tabla de horario no
+   * trae puestos: trae nombres y horas. Es el mismo valor que elegiría quien abre el
+   * formulario de turno, sin tener que elegirlo 25 veces.
+   */
+  const empleadosParaPegar = useMemo<EmpleadoConocido[]>(
+    () =>
+      locationMembers.map((member) => ({
+        id: member.id,
+        nombre: member.displayName,
+        jobRoleId: member.jobRoleIds[0] ?? null,
+      })),
     [locationMembers],
   );
 
@@ -337,6 +355,25 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                       onPress={() => setCopyOpen(true)}
                       fullWidth={false}
                       testID="schedule-copy-week"
+                    />
+                    {/*
+                      «PEGAR HORARIO» CUESTA UNA LINEA DE MANDOS A 1280 px, medido: la fila
+                      pasa a envolverse y la rejilla empieza 56 px mas abajo (y=486 de 800
+                      con la barra de publicar visible). A 1440 no envuelve.
+
+                      Se queda aun asi, y no por comodidad: la alternativa era esconderlo
+                      —junto con «Copiar semana anterior»— detras de un «Llenar la semana»,
+                      y eso le cuesta un clic MAS A LA SEMANA a la accion que de verdad se
+                      repite, que es copiar la anterior. Cambiar el habito semanal por 56 px
+                      en un ancho que ademas no es el del panel de la tienda es un mal
+                      cambio. Si algun dia hay un cuarto boton aqui, este es el momento de
+                      agrupar los dos que llenan la semana, no antes.
+                    */}
+                    <GhostButton
+                      label={t('schedule.pasteWeek')}
+                      onPress={() => setPasteOpen(true)}
+                      fullWidth={false}
+                      testID="schedule-paste-week"
                     />
                     <SecondaryButton
                       label={t('schedule.addShift')}
@@ -647,6 +684,38 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               ))}
           </Stack>
         </AdminSheet>
+      ) : null}
+
+      {pasteOpen ? (
+        <PegarHorarioSheet
+          dias={days}
+          empleados={empleadosParaPegar}
+          timezone={scope.timezone}
+          language={language}
+          saving={mutations.createMany.isPending}
+          turnosExistentes={rows.filter((row) => row.status !== 'cancelled').length}
+          onClose={() => setPasteOpen(false)}
+          onSubmit={(turnos: TurnoPegado[]) => {
+            mutations.createMany.mutate(
+              turnos.map((turno) => ({
+                employeeId: turno.employeeId,
+                jobRoleId: turno.jobRoleId,
+                dateKey: turno.dateKey,
+                startTime: turno.startTime,
+                endTime: turno.endTime,
+                plannedUnpaidBreakMinutes: turno.plannedUnpaidBreakMinutes,
+                employeeNote: null,
+                managerNote: null,
+              })),
+              {
+                onSuccess: (count) => {
+                  setPasteOpen(false);
+                  setFeedback(t('schedule.pasted', { count }));
+                },
+              },
+            );
+          }}
+        />
       ) : null}
 
       <AdminSheet

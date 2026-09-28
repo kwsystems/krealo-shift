@@ -51,10 +51,18 @@ export function FormField({
           setFocused(false);
           inputProps.onBlur?.(event);
         }}
+        /*
+         * EL `style` QUE LLEGA SE RESPETA, Y ANTES SE PERDIA. `inputProps` se esparce
+         * arriba y este `style` lo pisaba entero, así que un campo que pedía ser más alto
+         * —un cuadro para pegar una tabla— recibía el alto de una línea sin una queja:
+         * el tipo aceptaba la propiedad, el componente la tiraba. Va al final para que
+         * siga ganando sobre lo de aquí, que es lo que quiere quien la pasa.
+         */
         style={[
           styles.input,
           focused ? styles.inputFocused : null,
           error !== undefined ? styles.inputError : null,
+          inputProps.style,
         ]}
       />
       {error !== undefined ? (

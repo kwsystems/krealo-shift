@@ -68,6 +68,14 @@ const FIJOS_A_PROPOSITO = new Map([
     'un fichaje AÑADIDO no tenía valor anterior; por eso se distingue de una corrección',
   ],
   ['purgarUbicacion.photo_path', 'purgar ES poner la ruta a null: el valor fijo es el trabajo'],
+  [
+    'clearOrganizationLogo.logo_path',
+    'quitar el logo ES poner la ruta a null: igual que purgar, el valor fijo es el trabajo',
+  ],
+  [
+    'clearOrganizationLogo.path',
+    'la respuesta dice cual es el logo ahora, y despues de quitarlo no hay ninguno',
+  ],
   // El marcador de éxito de las funciones que no devuelven datos.
   ['attachPhoto.ok', 'marcador de éxito'],
   ['revokeAllSessions.ok', 'marcador de éxito'],
