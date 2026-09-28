@@ -129,6 +129,49 @@ describe('los totales de la tabla como oráculo', () => {
   });
 });
 
+describe('la misma semana escrita con barras y una cabecera de solo numeros', () => {
+  /*
+   * ESTA ES LA FORMA QUE SE LE DA A ANDREE PARA PEGAR desde un mensaje, donde los
+   * tabuladores no sobreviven al copiar. Si esta prueba se cae, el bloque que se le mandó
+   * deja de funcionar, y el fallo aparecería en su pantalla y no aquí.
+   */
+  const CON_BARRAS = [
+    'Personal | 28 | 29 | 30 | 1 | 2 | 3 | 4 | Horas',
+    'Ana Rivas | DESCANSO | 10:00-19:00 | 11:00-20:00 | 10:00-19:00 | 10:00-19:00 | 12:00-21:00 | 13:00-22:00 | 48h',
+    'Bruno Salas | 10:00-19:00 | 12:00-21:00 | 10:00-19:00 | 17:30-22:00 | DESCANSO | 11:00-22:00 | 10:00-20:30 | 48h',
+    'Carla Mendez | DESCANSO | DESCANSO | 16:00-21:00 | 10:00-22:00 | 10:00-22:00 | 10:00-22:00 | 10:00-21:00 | 48h',
+    'Diana Rojas | 17:00-21:00 | 17:00-20:30 | DESCANSO | 18:30-22:00 | 17:30-21:30 | 18:00-22:00 | 17:30-22:00 | 23.5h',
+    'Elena Vidal | DESCANSO | 17:00-21:00 | 17:00-21:00 | - | - | - | - | 8h',
+  ].join('\n');
+
+  const horario = pegar(CON_BARRAS);
+
+  it('lee los mismos 25 turnos, sin un solo problema', () => {
+    expect(horario.turnos).toHaveLength(25);
+    expect(horario.problemas).toEqual([]);
+  });
+
+  it('saca los mismos totales', () => {
+    expect(horario.resumen.map((fila) => fila.minutos)).toEqual([
+      48 * 60,
+      48 * 60,
+      48 * 60,
+      23.5 * 60,
+      8 * 60,
+    ]);
+  });
+
+  it('la cabecera de numeros sueltos sigue valiendo para comprobar la semana', () => {
+    const otraSemana = parsearHorarioPegado({
+      texto: CON_BARRAS,
+      dias: weekDays('2026-10-05'),
+      empleados: EQUIPO,
+      timezone: TZ,
+    });
+    expect(otraSemana.problemas.some((uno) => uno.clave === 'semanaDistinta')).toBe(true);
+  });
+});
+
 describe('la semana equivocada', () => {
   it('bloquea si la cabecera anuncia otros días del mes', () => {
     const horario = parsearHorarioPegado({
