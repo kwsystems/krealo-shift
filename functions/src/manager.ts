@@ -283,8 +283,24 @@ export const setOrganizationLogo = onCall(async (request) => {
     throw new HttpsError('invalid-argument', 'La imagen pesa mas de 1 MB.');
   }
 
-  const ruta = `organization-logos/${organizationId}/logo.${extension}`;
-  await getStorage().bucket().file(ruta).save(cuerpo, { contentType });
+  /*
+   * DOS RUTAS, Y CONFUNDIRLAS DEJA LA VISTA PREVIA EN BLANCO. Lo hice el 2026-09-28:
+   *
+   *   rutaEnBucket  la de verdad dentro del bucket, CON el prefijo.
+   *   rutaGuardada  lo que va en `logo_path`, SIN el prefijo.
+   *
+   * El cliente compone la URL publica con `storage.from('organization-logos')
+   * .getPublicUrl(logo_path)`, o sea que AÑADE el prefijo el solo. Guardar la ruta
+   * completa hacia que pidiera `organization-logos/organization-logos/...`, que no
+   * existe: la subida funcionaba, el archivo estaba bien, y el recuadro salia vacio.
+   *
+   * (Las fotos de fichaje guardan la ruta COMPLETA en `photo_path`, al contrario que
+   * esto. La incoherencia es del proyecto y no se arregla aqui, pero por eso los dos
+   * nombres van separados: «ruta» a secas no dice cual de las dos es.)
+   */
+  const rutaEnBucket = `organization-logos/${organizationId}/logo.${extension}`;
+  const rutaGuardada = `${organizationId}/logo.${extension}`;
+  await getStorage().bucket().file(rutaEnBucket).save(cuerpo, { contentType });
 
   /*
    * Y SE BORRA LA VERSION ANTERIOR SI CAMBIO LA EXTENSION. Antes lo hacia el cliente
@@ -298,7 +314,7 @@ export const setOrganizationLogo = onCall(async (request) => {
   }
 
   await db.collection(COLLECTIONS.organizations).doc(organizationId).set(
-    { logo_path: ruta, updated_at: nowISO() },
+    { logo_path: rutaGuardada, updated_at: nowISO() },
     { merge: true },
   );
 
@@ -308,10 +324,10 @@ export const setOrganizationLogo = onCall(async (request) => {
     action: 'organization.logo_set',
     entityType: 'organization',
     entityId: organizationId,
-    after: { logo_path: ruta },
+    after: { logo_path: rutaGuardada },
   });
 
-  return { path: ruta };
+  return { path: rutaGuardada };
 });
 
 /** Las tres extensiones que acepta el logo, por tipo de contenido. */

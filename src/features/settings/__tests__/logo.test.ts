@@ -1,4 +1,4 @@
-import { LOGO_MAX_BYTES, logoStoragePath, validateLogo, type LogoMimeType } from '../logo';
+import { LOGO_BUCKET, LOGO_MAX_BYTES, logoStoragePath, validateLogo, type LogoMimeType } from '../logo';
 import { formatMegabytes } from '../logo-field';
 
 /**
@@ -50,6 +50,38 @@ describe('validateLogo', () => {
       reason: 'unsupportedType',
       contentType: 'application/pdf',
     });
+  });
+});
+
+/**
+ * LA RUTA GUARDADA NO LLEVA EL PREFIJO DEL «BUCKET», Y ESTO LO FIJA.
+ *
+ * DE DÓNDE SALE. El 2026-09-28 la subida del logo paso a hacerla una Cloud Function, y
+ * la función guardó en `logo_path` la ruta COMPLETA —con `organization-logos/` delante—.
+ * Quien pinta la vista previa compone la URL con
+ * `storage.from('organization-logos').getPublicUrl(logo_path)`, o sea que añade el
+ * prefijo por su cuenta: la URL pedida fue `organization-logos/organization-logos/...`.
+ *
+ * Y EL FALLO NO SE PARECIA A UN FALLO: la subida decía «Logotipo actualizado», el
+ * archivo estaba en el bucket, con su tamaño y su tipo correctos, y el recuadro de la
+ * vista previa salía en blanco. Nada que mirar del lado del error, porque no hubo error.
+ *
+ * `logo_path` significa «ruta DENTRO del prefijo del logo». Las fotos de fichaje hacen
+ * lo contrario —`photo_path` guarda la ruta completa— así que la ambigüedad es real y
+ * la única defensa es que esté escrito y probado de qué tipo es cada una.
+ */
+describe('la convención de logo_path', () => {
+  it('no lleva el prefijo del bucket: lo añade quien compone la URL', () => {
+    const ruta = logoStoragePath('krealo-demo', 'image/png');
+    expect(ruta).toBe('krealo-demo/logo.png');
+    expect(ruta.startsWith(LOGO_BUCKET)).toBe(false);
+    expect(ruta).not.toContain(LOGO_BUCKET);
+  });
+
+  it('la ruta completa se forma con el prefijo UNA vez', () => {
+    const completa = `${LOGO_BUCKET}/${logoStoragePath('krealo-demo', 'image/png')}`;
+    expect(completa).toBe('organization-logos/krealo-demo/logo.png');
+    expect(completa.split(LOGO_BUCKET)).toHaveLength(2);
   });
 });
 
