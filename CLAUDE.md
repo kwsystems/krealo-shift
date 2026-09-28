@@ -118,8 +118,30 @@ En PowerShell: `[Environment]::GetEnvironmentVariable("NOMBRE","User")`.
 - **No hay endpoint de comentarios.** "Comentar" = reescribir `description` con el
   texto anexado; leer primero el `description` actual para no pisar contenido.
 - **`/tasks/list` no devuelve `tags`, `priority` ni `completedAt`.** Verificar en la UI.
-- `/tasks/list` corta en 500 ítems y puede devolver registros `act_*` / `rec_*`
-  además de tareas normales.
+- **`/tasks/list` PAGINA, y la nota anterior que decía «corta en 500» era falsa.** Devuelve
+  500 por página, sí, pero también `total`, `truncated` y `nextCursor`; pasando ese cursor
+  se lee el resto. Medido el 2026-09-28 sobre «Universo Tutu»: `total: 987`, primera página
+  500, segunda 487, `truncated: false`.
+
+  Esa nota falsa costó dos afirmaciones equivocadas a Andree —«no pude leer el estado de
+  esa tarea porque la lista corta en 500»— cuando bastaba con pedir la página siguiente.
+  Una limitación apuntada de más es igual de dañina que una de menos: cierra caminos que
+  están abiertos.
+
+  Puede devolver registros `act_*` / `rec_*` además de tareas normales (en la medición del
+  28-sep no salió ninguno: las 500 eran tareas).
+
+- **`success: true` de `/tasks/create` NO prueba que la tarea exista. Hay que releerla.**
+  El 2026-09-28 una tarea se creó con `success: true` y su `taskId`, el `update` de la
+  descripción también respondió bien, y horas después ese id daba **404** y no aparecía en
+  ninguna de las dos páginas del tablero. Lo notó Andree —«no veo que estés creando
+  cosas»— y tenía razón: se había dado por creada porque el API dijo que sí.
+
+  Es la misma forma que las otras dos trampas de esta API: `create` con `status: "done"`
+  no escribe `completedAt`, y `create` recorta la descripción a 2000 caracteres
+  respondiendo `success`. El patrón es siempre el mismo —**responde bien a cosas que no
+  hizo del todo**— así que después de crear o de escribir algo que importe, se LEE de
+  vuelta y se comprueba; no se confía en la respuesta.
 - Usar el token equivocado en `create`/`update` da `PUBLISHER_AUTH_FAILED`.
 - **Una tarea creada directamente con `status: "done"` NO cuenta como completada.**
   `/tasks/create` guarda el estado pero **no escribe `completedAt`**, y el tablero cuenta
