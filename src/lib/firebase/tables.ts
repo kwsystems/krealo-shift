@@ -124,6 +124,8 @@ export const RPC = {
    * `setOrganizationLogo` en functions/src/manager.ts.
    */
   setOrganizationLogo: 'set_organization_logo',
+  /** Quitarlo tambien pasa por la funcion: la regla de Storage no deja borrar al cliente. */
+  clearOrganizationLogo: 'clear_organization_logo',
   managerAdjustTime: 'manager_adjust_time',
   /**
    * Fichaje manual del gerente (§11.4 "agregar fichaje manual con motivo").

@@ -1,6 +1,6 @@
-import { execute, requireClient, toAdminError } from '@/hooks/use-admin-query';
+import { requireClient, toAdminError } from '@/hooks/use-admin-query';
 import { getDataClient } from '@/lib/firebase/query';
-import { RPC, TABLES } from '@/lib/firebase/tables';
+import { RPC } from '@/lib/firebase/tables';
 
 /**
  * Logotipo de la organización (§11.6).
@@ -160,15 +160,24 @@ export async function removeOrganizationLogo(params: {
   organizationId: string;
   logoPath: string;
 }): Promise<void> {
+  /*
+   * TAMBIEN POR LA FUNCION, y esto lo aprendi rompiendolo. Al mover la SUBIDA a
+   * `setOrganizationLogo` y cerrar `organization-logos` a escritura en `storage.rules`, el
+   * borrado se quedo yendo directo a Storage: la regla nueva deniega a todo cliente, asi
+   * que «Quitar logotipo» empezo a fallar para todo el mundo, incluido el dueño, con un
+   * mensaje que culpaba a sus permisos.
+   *
+   * Al cerrar una puerta hay que mirar TODO lo que pasaba por ella. Por ahi entraban dos
+   * operaciones y yo solo estaba mirando una.
+   *
+   * Y el orden «columna primero, archivo despues» que habia aqui desaparece con esto, para
+   * bien: las dos cosas ocurren dentro de la misma llamada, asi que ya no hay un estado
+   * intermedio en el que la columna diga que no hay logo y el archivo siga en un prefijo
+   * de lectura publica.
+   */
   const db = requireClient();
-
-  // Primero la columna y después el archivo, por el mismo motivo del comentario de
-  // arriba en el otro orden: si se borra el archivo y falla el update, la pantalla
-  // queda con un logotipo roto. Así, como mucho, sobra un archivo.
-  await execute((client) =>
-    client.from(TABLES.organizations).update({ logo_path: null }).eq('id', params.organizationId),
-  );
-
-  const { error } = await db.storage.from(LOGO_BUCKET).remove([params.logoPath]);
+  const { error } = await db.rpc(RPC.clearOrganizationLogo, {
+    p_organization_id: params.organizationId,
+  });
   if (error !== null) throw toAdminError(error);
 }

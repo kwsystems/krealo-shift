@@ -337,6 +337,60 @@ const EXTENSION_DE_LOGO: Record<string, string> = {
   'image/webp': 'webp',
 };
 
+/**
+ * QUITAR EL LOGO, y existe por un descuido que merece quedar escrito.
+ *
+ * Al arreglar la SUBIDA —moviendola a `setOrganizationLogo` y cerrando
+ * `organization-logos` a escritura en `storage.rules`— se me paso que el BORRADO seguia
+ * yendo directo a Storage desde el navegador. La regla nueva deniega a todo cliente, asi
+ * que «Quitar logotipo» empezo a fallar para todo el mundo, incluido el dueño.
+ *
+ * Y EL MENSAJE MENTIA EN LA CAUSA: Storage devolvia `storage/unauthorized`, que la app
+ * traduce —correctamente, en general— a «no tienes permiso; hace falta ser dueño o
+ * administrador». Andree ES el dueño. El sintoma era cierto y la explicacion falsa, que es
+ * la peor combinacion: manda a revisar los permisos de una persona cuando lo que pasa es
+ * que la puerta esta cerrada para todos.
+ *
+ * La leccion: al cerrar una puerta hay que mirar TODO lo que pasaba por ella, no solo lo
+ * que estabas arreglando. Cerrar la escritura son cuatro palabras en un archivo de reglas;
+ * lo que entraba por ahi eran dos operaciones, no una.
+ */
+export const clearOrganizationLogo = onCall(async (request) => {
+  const uid = requireUid(request);
+  const organizationId = textoRequerido(request.data?.p_organization_id, 'p_organization_id');
+
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin']);
+
+  /*
+   * SE BORRAN LAS TRES EXTENSIONES, no la que dice `logo_path`. Si alguna vez la columna y
+   * el archivo se desincronizan —y ya paso una vez, con la ruta guardada con el prefijo
+   * duplicado— borrar «la que dice la columna» deja el archivo de verdad en un prefijo de
+   * LECTURA PUBLICA. Quitar el logo tiene que quitarlo de verdad.
+   */
+  for (const extension of Object.values(EXTENSION_DE_LOGO)) {
+    await getStorage()
+      .bucket()
+      .file(`organization-logos/${organizationId}/logo.${extension}`)
+      .delete({ ignoreNotFound: true });
+  }
+
+  await db
+    .collection(COLLECTIONS.organizations)
+    .doc(organizationId)
+    .set({ logo_path: null, updated_at: nowISO() }, { merge: true });
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'organization.logo_cleared',
+    entityType: 'organization',
+    entityId: organizationId,
+  });
+
+  return { path: null };
+});
+
 export const createKioskActivationCode = onCall(async (request) => {
   const uid = requireUid(request);
   const locationId = textoRequerido(request.data?.p_location_id, 'p_location_id');

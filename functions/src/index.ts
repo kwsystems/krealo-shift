@@ -27,6 +27,7 @@ export {
 export {
   setEmployeePin,
   setOrganizationLogo,
+  clearOrganizationLogo,
   createKioskActivationCode,
   revokeKioskDevice,
   managerAdjustTime,
