@@ -2,13 +2,14 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AsyncSection } from '@/components/schedule/data-states';
-import { FormCard, InlineNotice, KeyValueRow } from '@/components/schedule/fields';
+import { FormCard, InlineNotice, SegmentedControl } from '@/components/schedule/fields';
 import { FormField } from '@/components/ui/form-field';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
 import { TemporaryPinSheet } from '@/features/team/employee-detail';
 import { useEmployees, useTeamMutations } from '@/features/team/hooks';
+import { useSettingsMutations } from './hooks';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { spacing } from '@/theme/tokens';
 
@@ -35,6 +36,7 @@ export function PinsCard() {
 
   const employees = useEmployees(organizationId);
   const { resetPin } = useTeamMutations(organizationId);
+  const mutations = useSettingsMutations(organizationId);
 
   const [busqueda, setBusqueda] = useState('');
   const [pin, setPin] = useState<{ valor: string; nombre: string } | null>(null);
@@ -93,24 +95,66 @@ export function PinsCard() {
     >
       <Stack gap={spacing.lg}>
         {/*
-          LA LONGITUD SE ENSEÑA Y NO SE EDITA, y el aviso de al lado explica por qué. No
-          es una carencia del panel: bajarla de 6 a 4 dejaría fuera a la tienda entera de
-          golpe, porque los PIN guardados son hashes de seis dígitos y el teclado
-          validaría al cuarto. Nadie podría volver a fichar hasta que un administrador le
-          pusiera un PIN nuevo a cada persona, una por una.
+          LA LONGITUD SE EDITA AQUÍ, Y AQUÍ ES LA CLAVE.
 
-          Enseñarla igualmente importa: es el dato que hace falta para decirle a alguien
-          por teléfono cuántos dígitos tiene que teclear.
+          Antes solo se enseñaba, con un aviso que decía «no se cambia desde aquí: bajarlo
+          dejaría sin fichar a toda la tienda hasta reasignar el PIN de cada persona, una
+          por una». El motivo era bueno y la conclusión no: los PIN guardados son hashes de
+          seis dígitos y el teclado del reloj envía EXACTAMENTE al llegar a su longitud, así
+          que con la sede en 4 un PIN de 6 no se puede teclear —la persona marca cuatro
+          dígitos y no pasa nada, sin error ni aviso—. Cierto. Pero de ahí no se sigue que
+          el ajuste no deba existir: se sigue que tiene que vivir DONDE se reasignan los
+          PIN. El propio comentario que lo excluía decía que «necesita un flujo propio que
+          reasigne los PIN»; ese flujo es esta tarjeta, que lista a la gente y los reinicia.
+
+          Así que el control va aquí, pegado a los botones que arreglan su consecuencia, y
+          con el aviso EN EL MOMENTO DE ELEGIR y no después. Andree lo pidió el 2026-09-28,
+          con su tienda recién creada: cinco personas, ningún fichaje y nadie que se haya
+          aprendido su PIN. Ese es el momento en que esto cuesta cinco clics; una semana
+          después cuesta una tienda parada.
         */}
         <Stack gap={spacing.xs}>
-          <KeyValueRow
+          <SegmentedControl
             label={t('settings.pinLengthLabel', { location: scope.location?.name ?? '' })}
             value={String(longitud)}
+            options={[
+              { value: '4', label: t('settings.pinLengthDigits', { n: 4 }) },
+              { value: '5', label: t('settings.pinLengthDigits', { n: 5 }) },
+              { value: '6', label: t('settings.pinLengthDigits', { n: 6 }) },
+            ]}
+            onChange={(valor) => {
+              const sede = scope.location;
+              if (sede === null) return;
+              const digitos = Number(valor);
+              if (digitos === longitud) return;
+              mutations.saveLocation.mutate({
+                locationId: sede.id,
+                name: sede.name,
+                address: sede.address,
+                timezone: sede.timezone,
+                settings: { ...scope.settings, pinLength: digitos },
+              });
+            }}
             testID="pin-length"
           />
           <AppText variant="help" tone="subtle">
-            {t('settings.pinLengthFixed')}
+            {t('settings.pinLengthWarning')}
           </AppText>
+          {mutations.saveLocation.isSuccess ? (
+            <InlineNotice
+              tone="warning"
+              icon="alert-circle"
+              title={t('settings.pinLengthChangedTitle')}
+              body={t('settings.pinLengthChangedBody', { n: longitud })}
+            />
+          ) : null}
+          {mutations.saveLocation.error !== null ? (
+            <InlineNotice
+              tone="late"
+              icon="alert-circle"
+              title={t('settings.pinLengthSaveFailed')}
+            />
+          ) : null}
         </Stack>
 
         <AsyncSection

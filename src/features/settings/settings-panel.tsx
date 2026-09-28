@@ -534,16 +534,21 @@ type ClaveNumerica = {
 }[keyof LocationSettings];
 
 /**
- * `pinLength` es numérico y NO se edita aquí, a propósito.
+ * `pinLength` es numérico y NO se edita en ESTA tarjeta, a propósito.
  *
- * Bajarlo de 6 a 4 deja fuera a TODA la tienda de golpe: los PIN guardados son hashes de
- * seis dígitos y el teclado validaría al cuarto, así que nadie podría volver a fichar
- * hasta que un administrador le pusiera un PIN nuevo a cada persona. Eso no es un campo
- * que se cambia de paso mirando ajustes; necesita un flujo propio que reasigne los PIN, y
- * §11.6 no lo pide entre los ajustes de ubicación.
+ * Bajarlo de 6 a 4 invalida los PIN que ya existen: son hashes de seis dígitos y el
+ * teclado del reloj envía al llegar a su longitud, así que un PIN de seis en una sede de
+ * cuatro no se puede teclear —la persona marca cuatro y no pasa nada, sin error—. O sea
+ * que no es un campo que se cambie de paso entre otros diez números.
  *
- * La exclusión es explícita y no un olvido: la lista de abajo es un `Record` exhaustivo,
- * así que sin esta línea el panel no compilaría.
+ * Pero SÍ se edita, desde el 2026-09-28: vive en la tarjeta de PINs, que es donde se
+ * reasignan. La versión anterior de este comentario decía que «necesita un flujo propio
+ * que reasigne los PIN» y concluía que el ajuste no debía existir; el flujo ya existía
+ * —esa tarjeta lista a la gente y reinicia sus PIN— así que el control se puso junto a
+ * los botones que arreglan su consecuencia, con el aviso en el momento de elegir.
+ *
+ * La exclusión de aquí sigue siendo explícita y no un olvido: la lista de abajo es un
+ * `Record` exhaustivo, así que sin esta línea el panel no compilaría.
  */
 type ClaveNumericaNoEditable = 'pinLength';
 
