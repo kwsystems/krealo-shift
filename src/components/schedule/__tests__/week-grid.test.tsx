@@ -32,12 +32,13 @@ function shiftRow(overrides: Partial<ShiftRow> = {}): ShiftRow {
   };
 }
 
-function rows(shift: ShiftRow): EmployeeRow[] {
+function rows(shift: ShiftRow, restDays: EmployeeRow['restDays'] = []): EmployeeRow[] {
   return [
     {
       employeeId: 'e1',
       name: 'Ana Torres',
       shifts: [{ ...shift, dateKey: '2026-08-24' }],
+      restDays,
       scheduledMinutes: 420,
     },
   ];
@@ -51,9 +52,64 @@ const baseProps = {
   language: 'es-PE' as const,
   jobRoleNames: new Map<string, string>(),
   warningsFor: () => [],
+  onSelectRestDay: () => undefined,
 };
 
 describe('cuadrícula semanal', () => {
+  it('un día libre marcado se ve como tal, y tocarlo ofrece quitarlo', async () => {
+    const onSelectRestDay = jest.fn();
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        onSelectRestDay={onSelectRestDay}
+        rows={rows(shiftRow(), [
+          { id: 'd1', employeeId: 'e1', dateKey: '2026-08-25' },
+        ])}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+
+    // Lo que antes era un hueco idéntico a un hueco sin decidir.
+    expect(view.getByText('Descanso')).toBeTruthy();
+    fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
+    expect(onSelectRestDay).toHaveBeenCalledWith({
+      id: 'd1',
+      employeeId: 'e1',
+      dateKey: '2026-08-25',
+    });
+  });
+
+  it('en una semana pasada el descanso se ve pero no se toca', async () => {
+    const onSelectRestDay = jest.fn();
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        readOnly
+        onSelectRestDay={onSelectRestDay}
+        rows={rows(shiftRow(), [{ id: 'd1', employeeId: 'e1', dateKey: '2026-08-25' }])}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+
+    expect(view.getByText('Descanso')).toBeTruthy();
+    fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
+    expect(onSelectRestDay).not.toHaveBeenCalled();
+  });
+
+  it('sin descanso marcado no aparece ninguno', async () => {
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        rows={rows(shiftRow())}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+    expect(view.queryByText('Descanso')).toBeNull();
+  });
+
   it('muestra el horario local del turno y el total del empleado', async () => {
     const view = await renderWithProviders(
       <WeekGrid

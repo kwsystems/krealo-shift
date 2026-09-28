@@ -7,9 +7,12 @@ import {
   createShifts,
   duplicateShift,
   fetchPublications,
+  fetchWeekRestDays,
   fetchWeekShifts,
   publishShifts,
+  removeRestDay,
   removeShift,
+  setRestDays,
   updateShift,
   type ShiftInput,
   type ShiftRow,
@@ -20,7 +23,7 @@ import {
   type ScheduledShift,
   type ScheduleWarning,
 } from './conflicts';
-import { weekRangeInstants } from './week';
+import { addDaysToKey, weekRangeInstants } from './week';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { track } from '@/lib/analytics';
 
@@ -37,6 +40,8 @@ export const scheduleKeys = {
     ['schedule', 'week', locationId, weekStart] as const,
   publications: (locationId: string, weekStart: string) =>
     ['schedule', 'publications', locationId, weekStart] as const,
+  restDays: (locationId: string, weekStart: string) =>
+    ['schedule', 'restDays', locationId, weekStart] as const,
 };
 
 export function useWeekShifts(params: {
@@ -58,6 +63,25 @@ export function useWeekShifts(params: {
         toISO: range.toISO,
       }),
     enabled: locationId !== null && organizationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+  });
+}
+
+export function useWeekRestDays(params: {
+  organizationId: string | null;
+  locationId: string | null;
+  weekStart: string;
+}) {
+  return useQuery({
+    queryKey: scheduleKeys.restDays(params.locationId ?? 'none', params.weekStart),
+    queryFn: () =>
+      fetchWeekRestDays({
+        organizationId: params.organizationId ?? '',
+        locationId: params.locationId ?? '',
+        fromKey: params.weekStart,
+        toKey: addDaysToKey(params.weekStart, 6),
+      }),
+    enabled: params.locationId !== null && params.organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
 }
@@ -184,6 +208,21 @@ export function useScheduleMutations(params: {
     onSuccess: invalidate,
   });
 
+  const markRestDays = useMutation({
+    mutationFn: (days: { employeeId: string; dateKey: string }[]) =>
+      setRestDays({
+        organizationId: organizationId ?? '',
+        locationId: locationId ?? '',
+        days,
+      }),
+    onSuccess: invalidate,
+  });
+
+  const unmarkRestDay = useMutation({
+    mutationFn: (variables: { restDayId: string }) => removeRestDay(variables),
+    onSuccess: invalidate,
+  });
+
   const copyWeek = useMutation({
     mutationFn: (variables: { employeeId?: string | null }) =>
       copyPreviousWeek({
@@ -224,7 +263,17 @@ export function useScheduleMutations(params: {
     },
   });
 
-  return { create, createMany, update, duplicate, remove, copyWeek, publish };
+  return {
+    create,
+    createMany,
+    update,
+    duplicate,
+    remove,
+    markRestDays,
+    unmarkRestDay,
+    copyWeek,
+    publish,
+  };
 }
 
 /**

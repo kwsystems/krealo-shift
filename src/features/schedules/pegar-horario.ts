@@ -73,6 +73,22 @@ export type TurnoPegado = {
   cruzaMedianoche: boolean;
 };
 
+/**
+ * Un día libre marcado A PROPOSITO, que no es lo mismo que una celda vacía.
+ *
+ * LA TABLA DISTINGUE LAS DOS COSAS Y LA APP TENIA QUE DEJAR DE PERDERLO. «DESCANSO»
+ * dice «esta persona trabaja esta semana y este día lo tiene libre»; una raya o una
+ * celda en blanco dicen «aquí no hay nada», que es el caso de quien ya no sigue en la
+ * tienda o de un hueco que todavía no se ha decidido. En la rejilla las tres se veían
+ * igual —un hueco con un «+»— y con eso no se puede ni repartir el horario («¿cuándo
+ * descanso?») ni revisarlo («¿esto es un día libre o me falta cubrirlo?»).
+ */
+export type DescansoPegado = {
+  employeeId: string;
+  nombre: string;
+  dateKey: DateKey;
+};
+
 export type ProblemaPegado =
   | { clave: 'nadaQueLeer' }
   | { clave: 'nombreDesconocido'; texto: string }
@@ -86,6 +102,7 @@ export type ResumenPegado = {
   employeeId: string;
   nombre: string;
   turnos: number;
+  descansos: number;
   minutos: number;
   /** Total que declara la tabla, si traía columna de horas. */
   minutosDeclarados: number | null;
@@ -93,6 +110,7 @@ export type ResumenPegado = {
 
 export type HorarioPegado = {
   turnos: TurnoPegado[];
+  descansos: DescansoPegado[];
   problemas: ProblemaPegado[];
   resumen: ResumenPegado[];
 };
@@ -110,18 +128,24 @@ export function problemaBloquea(problema: ProblemaPegado): boolean {
   return problema.clave !== 'totalDiscrepa';
 }
 
+/** Dice «este día lo tiene libre», y eso se guarda. */
 const PALABRAS_DE_DESCANSO = new Set([
-  '',
-  '-',
-  '.',
-  ':',
   'descanso',
+  'descansa',
   'dialibre',
+  'diadelibre',
   'franco',
   'libre',
   'off',
   'x',
 ]);
+
+/**
+ * Dice «aquí no hay nada», y eso NO se guarda: es el jueves de quien dejó la tienda el
+ * miércoles. Marcarlo como descanso la dejaría apareciendo en la plantilla de la semana
+ * siguiente con un hueco que nadie tiene que cubrir, o peor, que alguien cubriría.
+ */
+const CELDAS_VACIAS = new Set(['', '-', '.', ':', '·', '*']);
 
 const PALABRAS_DE_CABECERA = new Set([
   'personal',
@@ -135,17 +159,25 @@ const PALABRAS_DE_CABECERA = new Set([
   'vendedora',
 ]);
 
-const DIAS_DE_LA_SEMANA =
-  /^(lun|mar|mie|jue|vie|sab|dom|mon|tue|wed|thu|fri|sat|sun|l|m|x|j|v|s|d)/;
+/**
+ * ¿Suena a nombre de día? Para reconocer la fila de cabecera («Lun 28 Sep»).
+ *
+ * LAS INICIALES SUELTAS SOLO VALEN SI LA CELDA ES ESA LETRA Y NADA MAS, y esto costó un
+ * fallo de verdad: la versión anterior aceptaba la letra como PREFIJO, así que «LIBRE»
+ * parecía lunes, «X» miércoles y «día libre» domingo. Con tres de esas en una fila, la
+ * fila entera pasaba por cabecera y se descartaba en silencio: quien tuviera la semana
+ * libre desaparecía de lo pegado sin un aviso. Lo cazó la prueba de las otras formas de
+ * escribir «descanso»; leyendo el código parecía correcto.
+ */
+function suenaADia(celda: string): boolean {
+  const texto = normalizar(celda);
+  if (/^[lmxjvsd]$/.test(texto)) return true;
+  return /^(lun|mar|mie|jue|vie|sab|dom|mon|tue|wed|thu|fri|sat|sun)/.test(texto);
+}
 
 /** Sin acentos, sin mayúsculas y sin espacios de más: para comparar, nunca para mostrar. */
 function normalizar(texto: string): string {
-  return texto
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .trim();
+  return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
 /** Todos los guiones del mundo son el mismo guion. */
@@ -160,7 +192,7 @@ function unGuion(texto: string): string {
  * documento o de un mensaje llega así. Dos espacios o más también separan, porque una
  * tabla escrita a mano se alinea con espacios.
  *
- * Y HAY UN CAMINO DE RESERVA para la línea escrita con UN espacio —«Edith DESCANSO
+ * Y HAY UN CAMINO DE RESERVA para la línea escrita con UN espacio —«Ana DESCANSO
  * 10:00-19:00 …»—, que con las reglas de arriba sería una sola celda. Ahí se parte por
  * fichas: lo que va antes de la primera celda reconocible es el nombre, y cada ficha
  * siguiente es un día. Sin esto, escribir el horario a mano en el propio cuadro de texto
@@ -204,27 +236,34 @@ function celdasDeLinea(linea: string): string[] {
 
 const RANGO = /^(\d{1,2})[:.h](\d{2})-(\d{1,2})[:.h](\d{2})$/;
 
-/** Una celda es de día si se entiende como rango de horas o como descanso. */
+/** Una celda es de día si se entiende: horas, descanso o vacía. */
 function esCeldaDeDia(celda: string): boolean {
-  const limpia = unGuion(celda).replace(/\s+/g, '').replace(/a(?=\d)/gi, '-');
-  if (PALABRAS_DE_DESCANSO.has(normalizar(limpia))) return true;
-  return limpia.split('/').every((parte) => RANGO.test(parte));
+  return leerCelda(celda) !== null;
 }
 
 type Rango = { startTime: string; endTime: string };
 
 /**
- * Los rangos de una celda: ninguno si es descanso, uno normalmente, varios si el día
- * tiene turno partido («10:00-13:00 / 17:00-21:00»). `null` si no se entiende, que es
- * distinto de vacío y por eso no se puede devolver una lista vacía para los dos casos.
+ * TRES RESULTADOS Y UN FALLO, y hacen falta los cuatro. Antes eran dos —«rangos» o
+ * «lista vacía»— y la lista vacía significaba a la vez «descanso» y «aquí no hay nada»:
+ * el importador no podía distinguir un día libre del jueves de quien ya no
+ * trabaja. `null` sigue siendo «no lo entendí», que no es ninguno de los tres.
  */
-function rangosDeCelda(celda: string): Rango[] | null {
-  const limpia = unGuion(celda).replace(/\s+/g, '').replace(/a(?=\d)/gi, '-');
-  if (PALABRAS_DE_DESCANSO.has(normalizar(limpia))) return [];
+type Celda = { tipo: 'turnos'; rangos: Rango[] } | { tipo: 'descanso' } | { tipo: 'vacia' };
+
+function leerCelda(celda: string): Celda | null {
+  const limpia = unGuion(celda)
+    .replace(/\s+/g, '')
+    .replace(/a(?=\d)/gi, '-');
+  const palabra = normalizar(limpia);
+  if (PALABRAS_DE_DESCANSO.has(palabra)) return { tipo: 'descanso' };
+  if (CELDAS_VACIAS.has(palabra)) return { tipo: 'vacia' };
 
   const rangos: Rango[] = [];
   for (const parte of limpia.split('/')) {
-    if (PALABRAS_DE_DESCANSO.has(normalizar(parte))) continue;
+    const suelta = normalizar(parte);
+    // «10:00-13:00 / descanso» es un turno con ruido, no medio descanso.
+    if (PALABRAS_DE_DESCANSO.has(suelta) || CELDAS_VACIAS.has(suelta)) continue;
     const trozos = RANGO.exec(parte);
     if (trozos === null) return null;
     const inicio = localTimeToMinutes(`${trozos[1]}:${trozos[2]}`);
@@ -232,7 +271,7 @@ function rangosDeCelda(celda: string): Rango[] | null {
     if (inicio === null || fin === null) return null;
     rangos.push({ startTime: minutesToLocalTime(inicio), endTime: minutesToLocalTime(fin) });
   }
-  return rangos;
+  return rangos.length === 0 ? { tipo: 'vacia' } : { tipo: 'turnos', rangos };
 }
 
 /** «48h» → 2880. «23.5 h» → 1410. Sin la «h» no es un total: es un día. */
@@ -244,7 +283,7 @@ function totalDeclarado(celda: string): number | null {
   return Math.round((horas + fraccion) * 60);
 }
 
-/** El nombre sin el apéndice de contrato ni de puesto: «Edith – FT» → «Edith». */
+/** El nombre sin el apéndice de contrato ni de puesto: «Ana – FT» → «Ana». */
 function nombreDeCelda(celda: string): string {
   const sinParentesis = celda.replace(/\([^)]*\)/g, ' ');
   const cortado = unGuion(sinParentesis).split(/\s+-\s*|\s*-\s+/)[0] ?? '';
@@ -262,18 +301,24 @@ function diaDelMes(dia: DateKey): number {
 function numerosDeCabecera(celdas: string[]): number[] | null {
   const candidatas = celdas.slice(1).filter((celda) => totalDeclarado(celda) === null);
   if (candidatas.length < 3) return null;
-  if (candidatas.some((celda) => esCeldaDeDia(celda) && normalizar(celda) !== '')) {
-    const hayRangos = candidatas.some((celda) => {
-      const rangos = rangosDeCelda(celda);
-      return rangos !== null && rangos.length > 0;
-    });
-    if (hayRangos) return null;
+  /*
+   * HORAS O DESCANSO ⇒ ES UNA FILA DE HORARIO, NO UNA CABECERA. Lo segundo importa tanto
+   * como lo primero: una cabecera nunca dice «DESCANSO», y mirarlo aquí desambigua la
+   * «X» —que en una cabecera es miércoles y en una celda es día libre— sin tener que
+   * adivinar por el contexto.
+   */
+  if (
+    candidatas.some((celda) => {
+      const tipo = leerCelda(celda)?.tipo;
+      return tipo === 'turnos' || tipo === 'descanso';
+    })
+  ) {
+    return null;
   }
 
   const primera = normalizar(nombreDeCelda(celdas[0] ?? ''));
   const suenaACabecera =
-    PALABRAS_DE_CABECERA.has(primera) ||
-    candidatas.filter((celda) => DIAS_DE_LA_SEMANA.test(normalizar(celda))).length >= 3;
+    PALABRAS_DE_CABECERA.has(primera) || candidatas.filter((celda) => suenaADia(celda)).length >= 3;
   if (!suenaACabecera) return null;
 
   const numeros: number[] = [];
@@ -322,6 +367,7 @@ export function parsearHorarioPegado(params: {
   const { texto, dias, empleados, timezone } = params;
 
   const turnos: TurnoPegado[] = [];
+  const descansos: DescansoPegado[] = [];
   const problemas: ProblemaPegado[] = [];
   const declarados = new Map<string, number>();
   const nombresLeidos: string[] = [];
@@ -362,8 +408,8 @@ export function parsearHorarioPegado(params: {
     const celdasDeDia = (total === null ? resto : resto.slice(0, -1)).slice(0, dias.length);
 
     const hayAlgoDeHorario = celdasDeDia.some((celda) => {
-      const rangos = rangosDeCelda(celda);
-      return rangos !== null && rangos.length > 0;
+      const leida = leerCelda(celda);
+      return leida !== null && leida.tipo !== 'vacia';
     });
 
     if (encontrado === null) {
@@ -388,8 +434,8 @@ export function parsearHorarioPegado(params: {
       const dia = dias[indice];
       if (dia === undefined) return;
 
-      const rangos = rangosDeCelda(celda);
-      if (rangos === null) {
+      const leida = leerCelda(celda);
+      if (leida === null) {
         problemas.push({
           clave: 'celdaIlegible',
           nombre: encontrado.nombre,
@@ -399,7 +445,13 @@ export function parsearHorarioPegado(params: {
         return;
       }
 
-      for (const rango of rangos) {
+      if (leida.tipo === 'descanso') {
+        descansos.push({ employeeId: encontrado.id, nombre: encontrado.nombre, dateKey: dia });
+        return;
+      }
+      if (leida.tipo === 'vacia') return;
+
+      for (const rango of leida.rangos) {
         const instantes = shiftInstants({
           dateKey: dia,
           startTime: rango.startTime,
@@ -435,7 +487,7 @@ export function parsearHorarioPegado(params: {
     });
   }
 
-  if (turnos.length === 0 && problemas.length === 0) {
+  if (turnos.length === 0 && descansos.length === 0 && problemas.length === 0) {
     problemas.push({ clave: 'nadaQueLeer' });
   }
 
@@ -472,14 +524,19 @@ export function parsearHorarioPegado(params: {
   const resumen: ResumenPegado[] = [];
   for (const employeeId of [...new Set(nombresLeidos)]) {
     const suyos = turnos.filter((turno) => turno.employeeId === employeeId);
+    const susDescansos = descansos.filter((descanso) => descanso.employeeId === employeeId);
     const minutos = suyos.reduce((suma, turno) => suma + turno.minutosNetos, 0);
     const declarado = declarados.get(employeeId) ?? null;
     const nombre =
-      suyos[0]?.nombre ?? empleados.find((empleado) => empleado.id === employeeId)?.nombre ?? '';
+      suyos[0]?.nombre ??
+      susDescansos[0]?.nombre ??
+      empleados.find((empleado) => empleado.id === employeeId)?.nombre ??
+      '';
     resumen.push({
       employeeId,
       nombre,
       turnos: suyos.length,
+      descansos: susDescansos.length,
       minutos,
       minutosDeclarados: declarado,
     });
@@ -488,5 +545,5 @@ export function parsearHorarioPegado(params: {
     }
   }
 
-  return { turnos, problemas, resumen };
+  return { turnos, descansos, problemas, resumen };
 }

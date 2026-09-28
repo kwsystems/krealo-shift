@@ -45,6 +45,7 @@ export const TABLES = {
   employeeJobRoles: 'employee_job_roles',
   shifts: 'shifts',
   shiftPublications: 'shift_publications',
+  restDays: 'rest_days',
   timeEvents: 'time_events',
   workSessions: 'work_sessions',
   breakIntervals: 'break_intervals',

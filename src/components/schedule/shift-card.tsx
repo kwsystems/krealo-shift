@@ -216,6 +216,60 @@ export function EmptyShiftSlot({
   );
 }
 
+/**
+ * Día libre marcado: lo que antes era un hueco idéntico a un hueco sin decidir.
+ *
+ * SE PARECE A LA CELDA VACIA A PROPOSITO —el mismo plano hundido, porque las dos son
+ * «aquí no se trabaja»— y se distingue por lo único que importa: lo dice. Un día libre y
+ * un día sin cubrir se veían igual, así que ni el equipo podía leer su descanso en la
+ * rejilla ni quien arma el horario podía repasarlo buscando huecos.
+ */
+export function RestDayChip({
+  label,
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  label: string;
+  onPress?: () => void;
+  accessibilityLabel: string;
+  testID?: string;
+}) {
+  const { colors } = useTheme();
+  const styles = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
+
+  const cuerpo = (
+    <>
+      <Ionicons name="moon-outline" size={16} color={colors.ink500} />
+      <AppText variant="label" tone="subtle" numberOfLines={1}>
+        {label}
+      </AppText>
+    </>
+  );
+
+  if (onPress === undefined) {
+    return (
+      <View style={styles.descanso} accessibilityLabel={accessibilityLabel} testID={testID}>
+        {cuerpo}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      {...respuesta.props}
+      style={({ pressed }) => [styles.descanso, ...respuesta.estilo(pressed)]}
+    >
+      {cuerpo}
+    </Pressable>
+  );
+}
+
 const useEstilos = estilosDelTema((colors) => ({
   card: {
     gap: spacing.xs,
@@ -263,5 +317,17 @@ const useEstilos = estilosDelTema((colors) => ({
     backgroundColor: colors.hundido,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  descanso: {
+    minHeight: sizes.touchTargetMin,
+    borderRadius: radii.input,
+    backgroundColor: colors.hundido,
+    borderWidth: borderWidth.hairline,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.sm,
   },
 }));

@@ -7,11 +7,12 @@ import {
   toScheduledShifts,
   useScheduleMutations,
   usePublications,
+  useWeekRestDays,
   useWeekShifts,
 } from './hooks';
 import { warningsForShift } from './conflicts';
 import { PegarHorarioSheet } from './pegar-horario-sheet';
-import type { EmpleadoConocido, TurnoPegado } from './pegar-horario';
+import type { EmpleadoConocido } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
 import {
   addWeeks,
@@ -34,6 +35,7 @@ import {
 import {
   DayList,
   WeekGrid,
+  type DatedRestDay,
   type DatedShift,
   type EmployeeRow,
 } from '@/components/schedule/week-grid';
@@ -91,6 +93,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const [publishPickerOpen, setPublishPickerOpen] = useState(false);
   const [pickedIds, setPickedIds] = useState<string[] | null>(null);
   const [removingShift, setRemovingShift] = useState<ShiftRow | null>(null);
+  const [removingRestDay, setRemovingRestDay] = useState<DatedRestDay | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
@@ -111,6 +114,11 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
     locationId: scope.locationId,
     weekStart,
     timezone: scope.timezone,
+  });
+  const restDaysQuery = useWeekRestDays({
+    organizationId: scope.organization?.id ?? null,
+    locationId: scope.locationId,
+    weekStart,
   });
   const publications = usePublications({
     organizationId: scope.organization?.id ?? null,
@@ -193,6 +201,16 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
     return map;
   }, [jobRolesQuery.data]);
 
+  const descansos = useMemo<DatedRestDay[]>(
+    () =>
+      (restDaysQuery.data ?? []).map((fila) => ({
+        id: fila.id,
+        employeeId: fila.employee_id,
+        dateKey: fila.date_key,
+      })),
+    [restDaysQuery.data],
+  );
+
   const gridRows = useMemo<EmployeeRow[]>(() => {
     const byEmployee = new Map<string, DatedShift[]>();
     for (const shift of datedShifts) {
@@ -201,9 +219,15 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
       byEmployee.set(shift.employee_id, current);
     }
 
+    /*
+     * QUIEN SOLO TIENE DESCANSOS TAMBIEN ES UNA FILA. Si los ids salieran solo del equipo
+     * y de los turnos, la semana de alguien que la tiene entera libre no se vería: la
+     * rejilla enseñaría un hueco donde hay una decisión tomada.
+     */
     const ids = new Set<string>([
       ...locationMembers.map((member) => member.id),
       ...byEmployee.keys(),
+      ...descansos.map((descanso) => descanso.employeeId),
     ]);
 
     return [...ids]
@@ -211,10 +235,11 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
         employeeId,
         name: names.get(employeeId) ?? t('team.unknownEmployee'),
         shifts: byEmployee.get(employeeId) ?? [],
+        restDays: descansos.filter((descanso) => descanso.employeeId === employeeId),
         scheduledMinutes: analysis.minutesByEmployee.get(employeeId) ?? 0,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [datedShifts, locationMembers, names, analysis.minutesByEmployee, t]);
+  }, [datedShifts, locationMembers, names, analysis.minutesByEmployee, descansos, t]);
 
   // Se agrupa por la fecha de cada turno; los días sin turnos no necesitan entrada
   // porque la lista consulta con `?? []` y muestra su estado vacío.
@@ -227,6 +252,16 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
     }
     return map;
   }, [datedShifts]);
+
+  const restDaysByDay = useMemo(() => {
+    const map = new Map<DateKey, DatedRestDay[]>();
+    for (const descanso of descansos) {
+      const current = map.get(descanso.dateKey);
+      if (current === undefined) map.set(descanso.dateKey, [descanso]);
+      else current.push(descanso);
+    }
+    return map;
+  }, [descansos]);
 
   const selectedDay =
     chosenDay !== null && days.includes(chosenDay)
@@ -471,12 +506,14 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
                     onSelectShift={openEdit}
                     onAddShift={openCreate}
+                    onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
                   />
                 ) : view === 'week' ? (
                   <DayList
                     days={days}
                     shiftsByDay={shiftsByDay}
+                    restDaysByDay={restDaysByDay}
                     employeeNames={names}
                     jobRoleNames={jobRoleNames}
                     todayKey={todayKey}
@@ -486,6 +523,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
                     onSelectShift={openEdit}
                     onAddShift={({ dateKey }) => openCreate({ dateKey })}
+                    onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
                   />
                 ) : (
@@ -504,6 +542,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     <DayList
                       days={[selectedDay]}
                       shiftsByDay={shiftsByDay}
+                      restDaysByDay={restDaysByDay}
                       employeeNames={names}
                       jobRoleNames={jobRoleNames}
                       todayKey={todayKey}
@@ -513,6 +552,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                       warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
                       onSelectShift={openEdit}
                       onAddShift={({ dateKey }) => openCreate({ dateKey })}
+                      onSelectRestDay={setRemovingRestDay}
                       readOnly={readOnly}
                     />
                   </Stack>
@@ -545,8 +585,24 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
           jobRoles={jobRoleOptions}
           days={days}
           language={language}
-          saving={mutations.create.isPending || mutations.update.isPending}
+          saving={
+            mutations.create.isPending ||
+            mutations.update.isPending ||
+            mutations.markRestDays.isPending
+          }
           existingStatus={editing.mode === 'edit' ? editing.shift.status : undefined}
+          onSubmitRestDay={
+            editing.mode === 'create'
+              ? ({ employeeId, dateKey }) => {
+                  mutations.markRestDays.mutate([{ employeeId, dateKey }], {
+                    onSuccess: () => {
+                      setEditing(null);
+                      setFeedback(t('schedule.restDayMarked'));
+                    },
+                  });
+                }
+              : undefined
+          }
           onSubmit={submitShift}
           onDuplicate={
             editing.mode === 'edit'
@@ -686,6 +742,28 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
         </AdminSheet>
       ) : null}
 
+      <ConfirmSheet
+        visible={removingRestDay !== null}
+        title={t('schedule.removeRestDay')}
+        body={t('schedule.removeRestDayHint')}
+        confirmLabel={t('schedule.removeRestDay')}
+        destructive
+        onConfirm={() => {
+          const descanso = removingRestDay;
+          if (descanso === null) return;
+          mutations.unmarkRestDay.mutate(
+            { restDayId: descanso.id },
+            {
+              onSuccess: () => {
+                setRemovingRestDay(null);
+                setFeedback(t('schedule.restDayRemoved'));
+              },
+            },
+          );
+        }}
+        onCancel={() => setRemovingRestDay(null)}
+      />
+
       {pasteOpen ? (
         <PegarHorarioSheet
           dias={days}
@@ -695,25 +773,55 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
           saving={mutations.createMany.isPending}
           turnosExistentes={rows.filter((row) => row.status !== 'cancelled').length}
           onClose={() => setPasteOpen(false)}
-          onSubmit={(turnos: TurnoPegado[]) => {
-            mutations.createMany.mutate(
-              turnos.map((turno) => ({
-                employeeId: turno.employeeId,
-                jobRoleId: turno.jobRoleId,
-                dateKey: turno.dateKey,
-                startTime: turno.startTime,
-                endTime: turno.endTime,
-                plannedUnpaidBreakMinutes: turno.plannedUnpaidBreakMinutes,
-                employeeNote: null,
-                managerNote: null,
-              })),
-              {
-                onSuccess: (count) => {
-                  setPasteOpen(false);
-                  setFeedback(t('schedule.pasted', { count }));
+          onSubmit={({ turnos, descansos }) => {
+            /*
+             * LOS DESCANSOS SE MARCAN ANTES DE CREAR LOS TURNOS, y el orden importa si
+             * algo falla: quedarse con los días libres marcados y sin turnos se ve al
+             * instante en la rejilla —seis celdas que dicen «Descanso» y ni un turno— y
+             * se arregla volviendo a pegar. Al revés, el fallo sería invisible: la semana
+             * parecería completa y solo faltaría lo que no se ve.
+             */
+            const marcar =
+              descansos.length === 0
+                ? Promise.resolve(0)
+                : mutations.markRestDays.mutateAsync(
+                    descansos.map((descanso) => ({
+                      employeeId: descanso.employeeId,
+                      dateKey: descanso.dateKey,
+                    })),
+                  );
+
+            void marcar.then(() => {
+              if (turnos.length === 0) {
+                setPasteOpen(false);
+                setFeedback(t('schedule.restDaysMarked', { count: descansos.length }));
+                return;
+              }
+              mutations.createMany.mutate(
+                turnos.map((turno) => ({
+                  employeeId: turno.employeeId,
+                  jobRoleId: turno.jobRoleId,
+                  dateKey: turno.dateKey,
+                  startTime: turno.startTime,
+                  endTime: turno.endTime,
+                  plannedUnpaidBreakMinutes: turno.plannedUnpaidBreakMinutes,
+                  employeeNote: null,
+                  managerNote: null,
+                })),
+                {
+                  onSuccess: (count) => {
+                    setPasteOpen(false);
+                    setFeedback(
+                      descansos.length === 0
+                        ? t('schedule.pasted', { count })
+                        : `${t('schedule.pasted', { count })} ${t('schedule.restDaysMarked', {
+                            count: descansos.length,
+                          })}`,
+                    );
+                  },
                 },
-              },
-            );
+              );
+            });
           }}
         />
       ) : null}
@@ -731,9 +839,24 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               mutations.copyWeek.mutate(
                 { employeeId: copyEmployeeId },
                 {
-                  onSuccess: (count) => {
+                  /*
+                   * `copyPreviousWeek` DEVUELVE DOS CUENTAS, y el compilador no avisó: el
+                   * antiguo `t('schedule.copied', { count })` seguía compilando con
+                   * `count` convertido en objeto, y entonces el plural de i18next deja de
+                   * resolver y el mensaje sale con el marcador sin sustituir. Un tipo
+                   * `unknown` en la interpolación es el precio de que traducir acepte
+                   * cualquier valor; aquí se paga mirándolo.
+                   */
+                  onSuccess: ({ turnos, descansos }) => {
                     setCopyOpen(false);
-                    setFeedback(t('schedule.copied', { count }));
+                    setFeedback(
+                      descansos === 0
+                        ? t('schedule.copied', { count: turnos })
+                        : `${t('schedule.copied', { count: turnos })} ${t(
+                            'schedule.copiedRestDays',
+                            { count: descansos },
+                          )}`,
+                    );
                   },
                 },
               );

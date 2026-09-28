@@ -109,6 +109,66 @@ describe('parsearHorarioPegado, la semana real', () => {
   });
 });
 
+describe('un descanso marcado y una celda vacía no son lo mismo', () => {
+  /*
+   * ES LA DISTINCION QUE PIDIO ANDREE Y LA QUE LA TABLA YA TRAIA. «DESCANSO» dice que la
+   * persona trabaja esta semana y ese día lo tiene libre; la raya de quien dejó la tienda
+   * el miércoles dice que ahí no hay nada. Antes las dos llegaban a la app como la misma
+   * cosa —un hueco— y eso es exactamente lo que se perdía.
+   */
+  const horario = pegar(TABLA_REAL);
+
+  it('marca los seis descansos de la tabla y ninguno más', () => {
+    expect(horario.descansos).toHaveLength(6);
+  });
+
+  it('cada descanso cae en el día que dice la tabla', () => {
+    const de = (id: string) =>
+      horario.descansos.filter((d) => d.employeeId === id).map((d) => d.dateKey);
+    expect(de('e-ana')).toEqual(['2026-09-28']);
+    expect(de('e-bruno')).toEqual(['2026-10-02']);
+    expect(de('e-carla')).toEqual(['2026-09-28', '2026-09-29']);
+    expect(de('e-diana')).toEqual(['2026-09-30']);
+  });
+
+  it('la raya de quien ya no sigue NO es un descanso', () => {
+    // Elena descansa el lunes y deja la tienda el miércoles: un descanso, no cinco.
+    const deElena = horario.descansos.filter((d) => d.employeeId === 'e-elena');
+    expect(deElena.map((d) => d.dateKey)).toEqual(['2026-09-28']);
+  });
+
+  it('el resumen cuenta turnos y descansos por separado', () => {
+    const fila = horario.resumen.find((r) => r.employeeId === 'e-carla');
+    expect(fila).toMatchObject({ turnos: 5, descansos: 2, minutos: 48 * 60 });
+  });
+
+  it('acepta las otras formas de decirlo', () => {
+    const otras = pegar('Ana Rivas\tLIBRE\tOFF\tX\tFranco\tdía libre');
+    expect(otras.descansos.map((d) => d.dateKey)).toEqual([
+      '2026-09-28',
+      '2026-09-29',
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+    ]);
+    expect(otras.problemas).toEqual([]);
+  });
+
+  it('una celda vacía o un punto no marcan nada', () => {
+    const vacias = pegar('Ana Rivas | - | . | 10:00-19:00 | · | *');
+    expect(vacias.descansos).toEqual([]);
+    expect(vacias.turnos).toHaveLength(1);
+    expect(vacias.problemas).toEqual([]);
+  });
+
+  it('una persona que solo descansa esa semana sigue saliendo en el resumen', () => {
+    const solo = pegar('Ana Rivas\tDESCANSO\tDESCANSO');
+    expect(solo.turnos).toEqual([]);
+    expect(solo.descansos).toHaveLength(2);
+    expect(solo.resumen[0]).toMatchObject({ turnos: 0, descansos: 2, minutos: 0 });
+  });
+});
+
 describe('los totales de la tabla como oráculo', () => {
   it('avisa cuando lo leído no cuadra con lo declarado, sin bloquear', () => {
     // 17:30 leído como 7:30 da un horario perfectamente plausible y equivocado.

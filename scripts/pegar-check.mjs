@@ -23,7 +23,15 @@
  *   npm run demo:export
  *   node scripts/pegar-check.mjs dist-demo
  */
-import { servirExport, cargarPlaywright, esperarPantalla, sinGlifos, irA } from './lib/arnes-web.mjs';
+import { mkdirSync } from 'node:fs';
+
+import {
+  servirExport,
+  cargarPlaywright,
+  esperarPantalla,
+  sinGlifos,
+  irA,
+} from './lib/arnes-web.mjs';
 
 const DIR = process.argv[2];
 if (DIR === undefined) {
@@ -73,7 +81,9 @@ try {
 
   const dias = await pagina
     .locator('[data-testid^="grid-day-"]')
-    .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('data-testid').slice('grid-day-'.length)));
+    .evaluateAll((nodos) =>
+      nodos.map((n) => n.getAttribute('data-testid').slice('grid-day-'.length)),
+    );
   if (dias.length !== 7) {
     throw new Error(`esperaba 7 columnas de día en la rejilla y encontré ${dias.length}`);
   }
@@ -105,8 +115,15 @@ try {
   const [uno, dos] = equipo;
   const numeros = dias.map((dia) => Number(dia.slice(8, 10)));
   const cabecera = ['Personal', ...numeros, 'Horas'].join('\t');
+  /*
+   * LA TABLA LLEVA LAS DOS FORMAS DE «NO HAY TURNO» A PROPOSITO: el martes de la segunda
+   * persona es una RAYA y el miércoles es DESCANSO. Es la distinción que se mide abajo:
+   * el descanso tiene que salir marcado en la rejilla y la raya no, porque una raya es
+   * «aquí no hay nada» —el jueves de quien ya dejó la tienda— y marcarla la dejaría
+   * apareciendo como plantilla de la semana siguiente.
+   */
   const completa = `${uno.nombre} – FT\tDESCANSO\t10:00–19:00\t11:00–20:00\t10:00–19:00\t10:00–19:00\t12:00–21:00\t13:00–22:00\t48h`;
-  const parcial = `${dos.nombre} – PT\t17:00–21:00\t17:00–20:30\tDESCANSO\t18:30–22:00\t17:30–21:30\t18:00–22:00\t17:30–22:00\t23.5h`;
+  const parcial = `${dos.nombre} – PT\t17:00–21:00\t-\tDESCANSO\t18:30–22:00\t17:30–21:30\t18:00–22:00\t17:30–22:00\t20h`;
   const tabla = [cabecera, completa, parcial].join('\n');
 
   // --- 4. Control negativo, ANTES de lo demás: si esto pasa, el resto no mide nada.
@@ -138,7 +155,9 @@ try {
   const bloqueantesBuenos = await pagina.locator('[data-testid="paste-week-blocker"]').count();
   if (bloqueantesBuenos > 0) {
     const textos = await pagina.locator('[data-testid="paste-week-blocker"]').allTextContents();
-    problemas.push(`la tabla buena dio ${bloqueantesBuenos} aviso(s) bloqueante(s): ${textos.map(sinGlifos).join(' | ')}`);
+    problemas.push(
+      `la tabla buena dio ${bloqueantesBuenos} aviso(s) bloqueante(s): ${textos.map(sinGlifos).join(' | ')}`,
+    );
   }
 
   const cuerpoHoja = sinGlifos(
@@ -154,8 +173,19 @@ try {
   const rotulo = sinGlifos(
     await pagina.locator('[data-testid="paste-week-confirm"]').first().textContent(),
   );
-  if (!rotulo.includes('12')) {
-    problemas.push(`el botón de crear no anuncia 12 turnos: «${rotulo}»`);
+  if (!rotulo.includes('11')) {
+    problemas.push(`el botón de crear no anuncia 11 turnos: «${rotulo}»`);
+  }
+
+  const avisoDeDescansos = sinGlifos(
+    await pagina
+      .locator('[data-testid="paste-week-rest-total"]')
+      .first()
+      .textContent()
+      .catch(() => ''),
+  );
+  if (!/\b2\b/.test(avisoDeDescansos)) {
+    problemas.push(`la vista previa no anuncia los 2 descansos: «${avisoDeDescansos}»`);
   }
 
   // --- 2 y 3. Crear, y comprobar la rejilla y la barra de publicar.
@@ -176,15 +206,43 @@ try {
   const totalDe = (testid) => totalDeLaCelda(despues.find((f) => f.testid === testid)?.texto);
 
   if (totalDe(uno.testid) !== '48:00') {
+    problemas.push(`${uno.nombre}: la rejilla dice ${totalDe(uno.testid)} y la tabla decía 48:00`);
+  }
+  if (totalDe(dos.testid) !== '20:00') {
+    problemas.push(`${dos.nombre}: la rejilla dice ${totalDe(dos.testid)} y la tabla decía 20:00`);
+  }
+
+  /*
+   * LOS DESCANSOS, Y LA RAYA QUE NO LO ES. Las dos mitades: sin la primera el descanso
+   * podría no haberse guardado y sin la segunda podríamos estar marcando también los
+   * huecos, que es el fallo que este cambio viene a evitar.
+   */
+  const idDe = (testid) => testid.slice('grid-name-'.length);
+  const chip = (testid, dia) => pagina.locator(`[data-testid="rest-day-${idDe(testid)}-${dia}"]`);
+
+  if ((await chip(uno.testid, dias[0]).count()) !== 1) {
+    problemas.push(`${uno.nombre}: el DESCANSO del ${dias[0]} no se ve marcado en la rejilla`);
+  }
+  if ((await chip(dos.testid, dias[2]).count()) !== 1) {
+    problemas.push(`${dos.nombre}: el DESCANSO del ${dias[2]} no se ve marcado en la rejilla`);
+  }
+  if ((await chip(dos.testid, dias[1]).count()) !== 0) {
     problemas.push(
-      `${uno.nombre}: la rejilla dice ${totalDe(uno.testid)} y la tabla decía 48:00`,
+      `${dos.nombre}: la RAYA del ${dias[1]} quedó marcada como descanso, y una raya no es un descanso`,
     );
   }
-  if (totalDe(dos.testid) !== '23:30') {
-    problemas.push(
-      `${dos.nombre}: la rejilla dice ${totalDe(dos.testid)} y la tabla decía 23:30 (23.5 h)`,
-    );
+
+  const textoDescanso = sinGlifos(
+    await pagina.locator(`[data-testid="rest-day-${idDe(uno.testid)}-${dias[0]}"]`).textContent(),
+  );
+  if (!/descanso/i.test(textoDescanso)) {
+    problemas.push(`el día libre no dice que lo es: «${textoDescanso}»`);
   }
+
+  /* La captura la sube el CI como artefacto, igual que `inicio:check`: cuando esto falla,
+     ver la rejilla ahorra la mitad de la investigacion. */
+  mkdirSync('capturas', { recursive: true });
+  await pagina.screenshot({ path: 'capturas/pegar.png', fullPage: false });
 
   const publicar = await pagina.locator('[data-testid="schedule-publish-all"]').count();
   if (publicar === 0) {
@@ -192,8 +250,11 @@ try {
   }
 
   const texto = sinGlifos(await pagina.evaluate(() => document.body?.innerText ?? ''));
-  if (!/12 turnos/.test(texto)) {
+  if (!/11 turnos/.test(texto)) {
     problemas.push('la pantalla no confirma cuántos turnos se crearon');
+  }
+  if (!/2 días de descanso/.test(texto)) {
+    problemas.push('la pantalla no confirma cuántos descansos se marcaron');
   }
 } catch (error) {
   problemas.push(`el arnés no pudo completar la medida: ${error.message}`);
@@ -208,4 +269,7 @@ if (problemas.length > 0) {
   for (const problema of problemas) console.error(`  · ${problema}`);
   process.exit(1);
 }
-console.log('PEGAR HORARIO — OK: 12 turnos pegados, totales 48:00 y 23:30, y en borrador.');
+console.log(
+  'PEGAR HORARIO — OK: 11 turnos pegados, totales 48:00 y 20:00, en borrador, ' +
+    'los 2 descansos marcados en la rejilla y la raya sin marcar.',
+);

@@ -100,6 +100,13 @@ const COMPOSITE_IDS: Record<string, readonly string[]> = {
   notification_preferences: ['user_id', 'organization_id'],
   employee_pin_credentials: ['employee_id'],
   push_tokens: ['expo_token'],
+  /*
+   * UN DIA LIBRE ES UN HECHO POR PERSONA Y POR DIA, asi que su identificador lo dice y no
+   * puede haber dos. Sin esto, pegar la misma tabla dos veces —que es lo que hace
+   * cualquiera cuando duda de si se guardo— dejaria el descanso duplicado, y quitarlo
+   * desde la rejilla borraria uno y dejaria el otro puesto: el descanso «no se quita».
+   */
+  rest_days: ['location_id', 'employee_id', 'date_key'],
 };
 
 export function documentId(table: string, row: DocumentData): string | null {

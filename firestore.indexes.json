@@ -269,6 +269,25 @@
       ]
     },
     {
+      "//": "Horario: los dias libres marcados de una semana en una sede. Rango sobre date_key, asi que el indice lleva los dos filtros de igualdad primero.",
+      "collectionGroup": "rest_days",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date_key",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "//": "Ultima version publicada de la semana de una tienda. Lleva `organization_id` DELANTE porque la regla lo exige: una consulta que no acota por el campo que la regla mira se deniega entera, no devuelve menos filas. Sustituye al indice sin organizacion, que servia una consulta que Firestore rechazaba de todas formas.",
       "collectionGroup": "shift_publications",
       "queryScope": "COLLECTION",

@@ -5,6 +5,7 @@ import { View } from 'react-native';
 import {
   parsearHorarioPegado,
   problemaBloquea,
+  type DescansoPegado,
   type EmpleadoConocido,
   type ProblemaPegado,
   type TurnoPegado,
@@ -50,24 +51,22 @@ export function PegarHorarioSheet({
   /** Turnos que ya hay en la semana: pegar añade, no reemplaza, y conviene decirlo. */
   turnosExistentes: number;
   onClose: () => void;
-  onSubmit: (turnos: TurnoPegado[]) => void;
+  onSubmit: (datos: { turnos: TurnoPegado[]; descansos: DescansoPegado[] }) => void;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
   const [texto, setTexto] = useState('');
 
   const horario = useMemo(
-    () =>
-      texto.trim() === ''
-        ? null
-        : parsearHorarioPegado({ texto, dias, empleados, timezone }),
+    () => (texto.trim() === '' ? null : parsearHorarioPegado({ texto, dias, empleados, timezone })),
     [texto, dias, empleados, timezone],
   );
 
   const bloqueantes = horario?.problemas.filter(problemaBloquea) ?? [];
   const avisos = horario?.problemas.filter((problema) => !problemaBloquea(problema)) ?? [];
   const turnos = horario?.turnos ?? [];
-  const puedeCrear = turnos.length > 0 && bloqueantes.length === 0;
+  const descansos = horario?.descansos ?? [];
+  const puedeCrear = turnos.length + descansos.length > 0 && bloqueantes.length === 0;
 
   return (
     <AdminSheet
@@ -78,11 +77,13 @@ export function PegarHorarioSheet({
       footer={
         <PrimaryButton
           label={
-            turnos.length === 0
-              ? t('schedule.pasteCreateEmpty')
-              : t('schedule.pasteCreate', { count: turnos.length })
+            turnos.length > 0
+              ? t('schedule.pasteCreate', { count: turnos.length })
+              : descansos.length > 0
+                ? t('schedule.pasteMarkRest', { count: descansos.length })
+                : t('schedule.pasteCreateEmpty')
           }
-          onPress={() => onSubmit(turnos)}
+          onPress={() => onSubmit({ turnos, descansos })}
           disabled={!puedeCrear}
           loading={saving}
           testID="paste-week-confirm"
@@ -163,6 +164,9 @@ export function PegarHorarioSheet({
                   count: fila.turnos,
                   hours: minutesToHHmm(fila.minutos),
                 })}
+                {fila.descansos === 0
+                  ? ''
+                  : ` · ${t('schedule.pasteRowRest', { count: fila.descansos })}`}
                 {fila.minutosDeclarados === null
                   ? ''
                   : fila.minutosDeclarados === fila.minutos
@@ -173,6 +177,11 @@ export function PegarHorarioSheet({
               </AppText>
             </Row>
           ))}
+          {turnos.length > 0 && descansos.length > 0 ? (
+            <AppText variant="label" tone="subtle" testID="paste-week-rest-total">
+              {t('schedule.pasteRestAlso', { count: descansos.length })}
+            </AppText>
+          ) : null}
           <AppText variant="help" tone="subtle">
             {t('schedule.pasteBreakRule')}
           </AppText>

@@ -240,6 +240,25 @@ service cloud.firestore {
       );
     }
 
+    /*
+     * DIAS LIBRES MARCADOS. Mismos permisos que un turno —lo decide quien gestiona la
+     * sede, lo lee cualquier miembro de la empresa— porque es la misma decisión: parte
+     * del horario de la semana. Sin `update` no se podría volver a pegar la tabla: el
+     * identificador es determinista (sede_empleado_día) y pegar dos veces escribe encima
+     * del mismo documento, que es justo lo que evita duplicados.
+     */
+    match /rest_days/{id} {
+      allow read: if isMember(resource.data.organization_id);
+      allow create: if managesLocation(
+        request.resource.data.organization_id,
+        request.resource.data.location_id
+      );
+      allow update, delete: if managesLocation(
+        resource.data.organization_id,
+        resource.data.location_id
+      );
+    }
+
     match /shift_publications/{id} {
       allow read: if managesLocation(resource.data.organization_id, resource.data.location_id);
       allow create: if managesLocation(

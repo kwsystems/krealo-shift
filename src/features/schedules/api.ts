@@ -113,6 +113,88 @@ export async function fetchWeekShifts(params: {
   );
 }
 
+/**
+ * DIAS LIBRES MARCADOS: la diferencia entre «este día lo tienes libre» y un hueco.
+ *
+ * POR QUE ES UNA COLECCION Y NO UN TURNO RARO. La tentación es guardarlo en `shifts` con
+ * duración cero, y así saldría gratis en la consulta de la semana, en la rejilla y en
+ * publicar. Pero un turno de cero minutos lo ve TODO lo que lee turnos, y dos de esos
+ * consumidores hacen cuentas con él: el aviso de «descanso corto entre turnos» mediría
+ * horas contra un turno que no existe, y el kiosco compara el fichaje con el turno del
+ * día para decidir si alguien llega tarde. Un día libre que el kiosco pueda confundir con
+ * un turno a las 00:00 es un riesgo sobre lo único que el equipo usa cada mañana. Una
+ * colección aparte no puede romper nada de eso, porque nada de eso la lee.
+ *
+ * NO TIENE BORRADOR NI PUBLICACION, y es deliberado: un día libre no tiene contenido que
+ * pueda salir mal —ni horas, ni puesto, ni notas— y el equipo ve lo mismo con él o sin
+ * él, porque en su día libre no hay turno que mirar. Vive como anotación de la semana. Si
+ * algún día el horario se le enseña al empleado en su propia pantalla, ESTE es el sitio
+ * donde habría que añadirle publicación.
+ */
+export const restDayRowSchema = z.object({
+  id: docId(),
+  employee_id: docId(),
+  location_id: docId(),
+  /** El día local («2026-09-28»), no un instante: un día libre no tiene horas. */
+  date_key: z.string(),
+  note: z.string().nullable().default(null),
+  updated_at: z.string().default(''),
+});
+
+export type RestDayRow = z.infer<typeof restDayRowSchema>;
+
+const REST_DAY_COLUMNS = 'id, employee_id, location_id, date_key, note, updated_at';
+
+export async function fetchWeekRestDays(params: {
+  organizationId: string;
+  locationId: string;
+  fromKey: string;
+  toKey: string;
+}): Promise<RestDayRow[]> {
+  return selectRows(z.array(restDayRowSchema), (db) =>
+    db
+      .from(TABLES.restDays)
+      .select(REST_DAY_COLUMNS)
+      // Acota por organizacion ADEMAS de por sede, por lo mismo que los turnos: la regla
+      // mira `organization_id` y una consulta que no lo filtre se deniega entera.
+      .eq('organization_id', params.organizationId)
+      .eq('location_id', params.locationId)
+      .gte('date_key', params.fromKey)
+      .lte('date_key', params.toKey)
+      .order('date_key', { ascending: true }),
+  );
+}
+
+/**
+ * Marca días libres. `upsert` y no `insert`: el identificador es
+ * sede_empleado_dia, así que pegar la misma tabla dos veces no duplica nada.
+ */
+export async function setRestDays(params: {
+  organizationId: string;
+  locationId: string;
+  days: { employeeId: string; dateKey: string; note?: string | null }[];
+}): Promise<number> {
+  if (params.days.length === 0) return 0;
+
+  const actor = actorId();
+  const rows = params.days.map((day) => ({
+    organization_id: params.organizationId,
+    location_id: params.locationId,
+    employee_id: day.employeeId,
+    date_key: day.dateKey,
+    note: day.note ?? null,
+    created_by: actor,
+    updated_by: actor,
+  }));
+
+  await execute((db) => db.from(TABLES.restDays).upsert(rows));
+  return rows.length;
+}
+
+export async function removeRestDay(params: { restDayId: string }): Promise<void> {
+  await execute((db) => db.from(TABLES.restDays).delete().eq('id', params.restDayId));
+}
+
 export type ShiftInput = {
   employeeId: string;
   jobRoleId: string | null;
@@ -304,11 +386,38 @@ export async function copyPreviousWeek(params: {
   timezone: string;
   targetWeekStart: string;
   employeeId?: string | null;
-}): Promise<number> {
+}): Promise<{ turnos: number; descansos: number }> {
   const { organizationId, locationId, timezone, targetWeekStart, employeeId } = params;
 
   const previousWeekStart = addDaysToKey(targetWeekStart, -7);
   const range = weekRangeInstants(previousWeekStart, timezone);
+
+  /*
+   * LOS DIAS LIBRES SE COPIAN TAMBIEN, y si no, copiar una semana perdía justo la mitad
+   * que no se ve: la semana nueva salía con los turnos y sin los descansos, o sea con
+   * seis huecos que parecen sin decidir cuando estaban decididos.
+   */
+  const descansosOrigen = (
+    await fetchWeekRestDays({
+      organizationId,
+      locationId,
+      fromKey: previousWeekStart,
+      toKey: addDaysToKey(previousWeekStart, 6),
+    })
+  ).filter(
+    (descanso) =>
+      employeeId === undefined || employeeId === null || descanso.employee_id === employeeId,
+  );
+
+  const descansos = await setRestDays({
+    organizationId,
+    locationId,
+    days: descansosOrigen.map((descanso) => ({
+      employeeId: descanso.employee_id,
+      dateKey: addDaysToKey(descanso.date_key, 7),
+      note: descanso.note,
+    })),
+  });
 
   const source = (
     await fetchWeekShifts({
@@ -323,7 +432,7 @@ export async function copyPreviousWeek(params: {
       (employeeId === undefined || employeeId === null || shift.employee_id === employeeId),
   );
 
-  if (source.length === 0) return 0;
+  if (source.length === 0) return { turnos: 0, descansos };
 
   const createdBy = actorId();
   const rows = source.map((shift) => {
@@ -356,7 +465,7 @@ export async function copyPreviousWeek(params: {
   });
 
   await execute((db) => db.from(TABLES.shifts).insert(rows));
-  return rows.length;
+  return { turnos: rows.length, descansos };
 }
 
 /**

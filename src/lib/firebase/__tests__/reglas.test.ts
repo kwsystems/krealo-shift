@@ -9,6 +9,7 @@ import {
 } from '@firebase/rules-unit-testing';
 import {
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -218,6 +219,130 @@ describe('reglas de Firestore', () => {
         ),
       );
       expect(resultado.size).toBe(1);
+    });
+  });
+
+  /**
+   * DIAS LIBRES MARCADOS: la coleccion nueva del importador de horarios.
+   *
+   * Se prueba aqui porque las reglas de una coleccion nueva son exactamente el sitio
+   * donde el razonamiento no vale: esta misma semana, las reglas de Storage para el
+   * logotipo se desplegaron con dos funciones que no existen en ese lenguaje —`get()` y
+   * `exists()` son de Firestore— y el despliegue las acepto con un aviso. El sintoma fue
+   * «el dueno no tiene permiso» sobre su propia empresa. Leerlas parecia correcto.
+   */
+  describe('dias libres marcados', () => {
+    const DESCANSO = `${SEDE}_empleada-1_2026-09-28`;
+
+    it('quien gestiona la sede lo marca, lo vuelve a escribir y lo quita', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      const referencia = doc(db, 'rest_days', DESCANSO);
+      const fila = {
+        id: DESCANSO,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'empleada-1',
+        date_key: '2026-09-28',
+        note: null,
+      };
+
+      await assertSucceeds(setDoc(referencia, fila));
+      // Volver a pegar la misma tabla escribe encima del mismo documento: eso es un
+      // `update`, y sin permiso de update pegar dos veces fallaria la segunda.
+      await assertSucceeds(setDoc(referencia, fila, { merge: true }));
+      await assertSucceeds(deleteDoc(referencia));
+    });
+
+    it('la consulta de la semana entera pasa como la hace la app', async () => {
+      await escribir(`rest_days/${DESCANSO}`, {
+        id: DESCANSO,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'empleada-1',
+        date_key: '2026-09-28',
+      });
+
+      const db = entorno.authenticatedContext(UID).firestore();
+      const resultado = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'rest_days'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+            where('date_key', '>=', '2026-09-28'),
+            where('date_key', '<=', '2026-10-04'),
+            orderBy('date_key', 'asc'),
+          ),
+        ),
+      );
+      expect(resultado.size).toBe(1);
+    });
+
+    it('alguien de fuera de la organizacion no los ve ni los marca', async () => {
+      await escribir(`rest_days/${DESCANSO}`, {
+        id: DESCANSO,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'empleada-1',
+        date_key: '2026-09-28',
+      });
+
+      const ajeno = entorno.authenticatedContext('otro-usuario').firestore();
+      await assertFails(
+        getDocs(query(collection(ajeno, 'rest_days'), where('organization_id', '==', ORG))),
+      );
+      await assertFails(
+        setDoc(doc(ajeno, 'rest_days', `${SEDE}_empleada-1_2026-09-29`), {
+          organization_id: ORG,
+          location_id: SEDE,
+          employee_id: 'empleada-1',
+          date_key: '2026-09-29',
+        }),
+      );
+      await assertFails(deleteDoc(doc(ajeno, 'rest_days', DESCANSO)));
+    });
+
+    it('un gerente de otra sede de la misma empresa no marca descansos en esta', async () => {
+      await escribir(`organization_memberships/${ORG}_gerente-de-otra`, {
+        id: `${ORG}_gerente-de-otra`,
+        organization_id: ORG,
+        user_id: 'gerente-de-otra',
+        role: 'manager',
+        status: 'active',
+        managed_location_ids: ['otra-sede'],
+        created_at: '2026-09-21T16:23:34.370Z',
+      });
+
+      await escribir('locations/otra-sede', {
+        id: 'otra-sede',
+        organization_id: ORG,
+        name: 'La otra',
+      });
+
+      const db = entorno.authenticatedContext('gerente-de-otra').firestore();
+      await assertFails(
+        setDoc(doc(db, 'rest_days', `${SEDE}_empleada-1_2026-09-30`), {
+          organization_id: ORG,
+          location_id: SEDE,
+          employee_id: 'empleada-1',
+          date_key: '2026-09-30',
+        }),
+      );
+
+      /*
+       * Y AHORA LA MITAD QUE HACE QUE LA DE ARRIBA SIGNIFIQUE ALGO: el mismo gerente SI
+       * puede marcarlo en SU sede. Sin esto, la denegacion anterior pasaria igual con una
+       * membresia mal sembrada o con el usuario equivocado, y estariamos midiendo que un
+       * desconocido no puede escribir —que es otra prueba, y ya esta mas arriba—.
+       */
+      await assertSucceeds(
+        setDoc(doc(db, 'rest_days', `otra-sede_empleada-9_2026-09-30`), {
+          organization_id: ORG,
+          location_id: 'otra-sede',
+          employee_id: 'empleada-9',
+          date_key: '2026-09-30',
+        }),
+      );
     });
   });
 

@@ -6,7 +6,13 @@ import type { ShiftInput } from './api';
 import { isValidLocalTime, localTimeToMinutes, type DateKey } from './week';
 import { formatDateKeyShort } from './week';
 import { FormField } from '@/components/ui/form-field';
-import { AdminSheet, InlineNotice, SelectField, type Option } from '@/components/schedule/fields';
+import {
+  AdminSheet,
+  InlineNotice,
+  SegmentedControl,
+  SelectField,
+  type Option,
+} from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
@@ -59,6 +65,13 @@ type Props = {
   saving: boolean;
   /** Estado del turno existente. Ausente cuando se está creando. */
   existingStatus?: 'draft' | 'published' | 'cancelled';
+  /**
+   * Con esto, la hoja también sirve para marcar un día libre. Solo al CREAR: sobre un
+   * turno que ya existe, «cambiar a descanso» tendría que decidir en silencio si borra el
+   * turno, y esa es una pregunta con dos respuestas razonables. Se borra el turno y se
+   * marca el descanso, en dos gestos que se ven.
+   */
+  onSubmitRestDay?: (params: { employeeId: string; dateKey: DateKey }) => void;
   onSubmit: (input: ShiftInput) => void;
   onDuplicate?: () => void;
   onRemove?: () => void;
@@ -74,6 +87,7 @@ export function ShiftFormSheet({
   language,
   saving,
   existingStatus,
+  onSubmitRestDay,
   onSubmit,
   onDuplicate,
   onRemove,
@@ -82,6 +96,8 @@ export function ShiftFormSheet({
   const { t } = useTranslation();
   const [values, setValues] = useState<ShiftFormValues>(initial);
   const [submitted, setSubmitted] = useState(false);
+  const [modo, setModo] = useState<'turno' | 'descanso'>('turno');
+  const esDescanso = onSubmitRestDay !== undefined && modo === 'descanso';
 
   const startValid = isValidLocalTime(values.startTime);
   const endValid = isValidLocalTime(values.endTime);
@@ -98,7 +114,14 @@ export function ShiftFormSheet({
 
   const handleSubmit = () => {
     setSubmitted(true);
-    if (!canSubmit || values.employeeId === null) return;
+    if (values.employeeId === null) return;
+
+    if (esDescanso) {
+      onSubmitRestDay?.({ employeeId: values.employeeId, dateKey: values.dateKey });
+      return;
+    }
+
+    if (!canSubmit) return;
 
     onSubmit({
       employeeId: values.employeeId,
@@ -126,11 +149,11 @@ export function ShiftFormSheet({
       footer={
         <Stack gap={spacing.sm}>
           <PrimaryButton
-            label={t('schedule.saveDraft')}
-            hint={t('schedule.saveDraftHint')}
+            label={esDescanso ? t('schedule.markRestDay') : t('schedule.saveDraft')}
+            hint={esDescanso ? t('schedule.markRestDayHint') : t('schedule.saveDraftHint')}
             onPress={handleSubmit}
             loading={saving}
-            disabled={submitted && !canSubmit}
+            disabled={submitted && !(esDescanso ? employeeValid : canSubmit)}
             testID="shift-form-save"
           />
           <Row gap={spacing.sm} wrap>
@@ -159,6 +182,24 @@ export function ShiftFormSheet({
         </Stack>
       }
     >
+      {/*
+        TURNO O DESCANSO, ARRIBA Y NO ESCONDIDO. Sin esto, marcar un día libre solo se
+        podría hacer pegando una tabla: una función a la que únicamente se llega por un
+        camino no existe para quien no conoce ese camino.
+      */}
+      {onSubmitRestDay === undefined ? null : (
+        <SegmentedControl
+          label={t('schedule.whatGoesHere')}
+          value={modo}
+          options={[
+            { value: 'turno', label: t('schedule.aShift') },
+            { value: 'descanso', label: t('schedule.restDay') },
+          ]}
+          onChange={setModo}
+          testID="shift-form-mode"
+        />
+      )}
+
       <SelectField
         label={t('schedule.employee')}
         value={values.employeeId}
@@ -174,20 +215,6 @@ export function ShiftFormSheet({
       ) : null}
 
       <SelectField
-        label={t('schedule.jobRole')}
-        value={values.jobRoleId}
-        options={jobRoles}
-        onChange={(jobRoleId) =>
-          setValues((current) => ({
-            ...current,
-            jobRoleId: current.jobRoleId === jobRoleId ? null : jobRoleId,
-          }))
-        }
-        emptyLabel={t('schedule.noJobRoles')}
-        testID="shift-job-role"
-      />
-
-      <SelectField
         label={t('schedule.date')}
         value={values.dateKey}
         options={dayOptions}
@@ -195,66 +222,90 @@ export function ShiftFormSheet({
         testID="shift-date"
       />
 
-      <Row gap={spacing.md} align="flex-start">
-        <Stack gap={spacing.xs} style={styles.half}>
-          <FormField
-            label={t('schedule.startsAt')}
-            value={values.startTime}
-            onChangeText={(startTime) => setValues((current) => ({ ...current, startTime }))}
-            placeholder="09:00"
-            keyboardType="numbers-and-punctuation"
-            error={submitted && !startValid ? t('schedule.invalidTime') : undefined}
-            testID="shift-start"
-          />
-        </Stack>
-        <Stack gap={spacing.xs} style={styles.half}>
-          <FormField
-            label={t('schedule.endsAt')}
-            value={values.endTime}
-            onChangeText={(endTime) => setValues((current) => ({ ...current, endTime }))}
-            placeholder="17:00"
-            keyboardType="numbers-and-punctuation"
-            error={submitted && !endValid ? t('schedule.invalidTime') : undefined}
-            testID="shift-end"
-          />
-        </Stack>
-      </Row>
-
-      {crossesMidnight ? (
-        <InlineNotice
-          tone="info"
-          icon="moon-outline"
-          title={t('schedule.crossesMidnight')}
-          body={t('schedule.crossesMidnightHint')}
-        />
+      {esDescanso ? (
+        <AppText variant="help" tone="subtle">
+          {t('schedule.restDayExplainer')}
+        </AppText>
       ) : null}
 
-      <FormField
-        label={t('schedule.plannedBreak')}
-        value={values.breakMinutes}
-        onChangeText={(breakValue) =>
-          setValues((current) => ({ ...current, breakMinutes: breakValue }))
-        }
-        keyboardType="number-pad"
-        error={submitted && !breakValid ? t('schedule.invalidBreak') : undefined}
-        testID="shift-break"
-      />
+      {esDescanso ? null : (
+        <>
+          <SelectField
+            label={t('schedule.jobRole')}
+            value={values.jobRoleId}
+            options={jobRoles}
+            onChange={(jobRoleId) =>
+              setValues((current) => ({
+                ...current,
+                jobRoleId: current.jobRoleId === jobRoleId ? null : jobRoleId,
+              }))
+            }
+            emptyLabel={t('schedule.noJobRoles')}
+            testID="shift-job-role"
+          />
 
-      <FormField
-        label={t('schedule.employeeNote')}
-        value={values.employeeNote}
-        onChangeText={(employeeNote) => setValues((current) => ({ ...current, employeeNote }))}
-        multiline
-        testID="shift-employee-note"
-      />
+          <Row gap={spacing.md} align="flex-start">
+            <Stack gap={spacing.xs} style={styles.half}>
+              <FormField
+                label={t('schedule.startsAt')}
+                value={values.startTime}
+                onChangeText={(startTime) => setValues((current) => ({ ...current, startTime }))}
+                placeholder="09:00"
+                keyboardType="numbers-and-punctuation"
+                error={submitted && !startValid ? t('schedule.invalidTime') : undefined}
+                testID="shift-start"
+              />
+            </Stack>
+            <Stack gap={spacing.xs} style={styles.half}>
+              <FormField
+                label={t('schedule.endsAt')}
+                value={values.endTime}
+                onChangeText={(endTime) => setValues((current) => ({ ...current, endTime }))}
+                placeholder="17:00"
+                keyboardType="numbers-and-punctuation"
+                error={submitted && !endValid ? t('schedule.invalidTime') : undefined}
+                testID="shift-end"
+              />
+            </Stack>
+          </Row>
 
-      <FormField
-        label={t('schedule.managerNote')}
-        value={values.managerNote}
-        onChangeText={(managerNote) => setValues((current) => ({ ...current, managerNote }))}
-        multiline
-        testID="shift-manager-note"
-      />
+          {crossesMidnight ? (
+            <InlineNotice
+              tone="info"
+              icon="moon-outline"
+              title={t('schedule.crossesMidnight')}
+              body={t('schedule.crossesMidnightHint')}
+            />
+          ) : null}
+
+          <FormField
+            label={t('schedule.plannedBreak')}
+            value={values.breakMinutes}
+            onChangeText={(breakValue) =>
+              setValues((current) => ({ ...current, breakMinutes: breakValue }))
+            }
+            keyboardType="number-pad"
+            error={submitted && !breakValid ? t('schedule.invalidBreak') : undefined}
+            testID="shift-break"
+          />
+
+          <FormField
+            label={t('schedule.employeeNote')}
+            value={values.employeeNote}
+            onChangeText={(employeeNote) => setValues((current) => ({ ...current, employeeNote }))}
+            multiline
+            testID="shift-employee-note"
+          />
+
+          <FormField
+            label={t('schedule.managerNote')}
+            value={values.managerNote}
+            onChangeText={(managerNote) => setValues((current) => ({ ...current, managerNote }))}
+            multiline
+            testID="shift-manager-note"
+          />
+        </>
+      )}
     </AdminSheet>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Platform, ScrollView, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { EmptyShiftSlot, ShiftCard } from './shift-card';
+import { EmptyShiftSlot, RestDayChip, ShiftCard } from './shift-card';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
@@ -86,10 +86,14 @@ const COLUMNA_PEGAJOSA = { position: 'sticky', left: 0, zIndex: 1 } as unknown a
  */
 export type DatedShift = ShiftRow & { dateKey: DateKey };
 
+/** Día libre marcado, ya asociado a su persona y a su día. */
+export type DatedRestDay = { id: string; employeeId: string; dateKey: DateKey };
+
 export type EmployeeRow = {
   employeeId: string;
   name: string;
   shifts: DatedShift[];
+  restDays: DatedRestDay[];
   scheduledMinutes: number;
 };
 
@@ -104,6 +108,7 @@ export type GridProps = {
   warningsFor: (shiftId: string) => ScheduleWarning[];
   onSelectShift: (shift: ShiftRow) => void;
   onAddShift: (params: { employeeId: string; dateKey: DateKey }) => void;
+  onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
 };
 
@@ -118,6 +123,7 @@ export function WeekGrid({
   warningsFor,
   onSelectShift,
   onAddShift,
+  onSelectRestDay,
   readOnly = false,
 }: GridProps) {
   const styles = useEstilos();
@@ -203,9 +209,21 @@ export function WeekGrid({
 
             {days.map((day) => {
               const dayShifts = row.shifts.filter((shift) => shift.dateKey === day);
+              const descanso = row.restDays.find((libre) => libre.dateKey === day);
               return (
                 <View key={`${row.employeeId}-${day}`} style={[styles.cell, { width: anchoDeDia }]}>
                   <Stack gap={spacing.xs}>
+                    {descanso === undefined ? null : (
+                      <RestDayChip
+                        label={t('schedule.restDay')}
+                        onPress={readOnly ? undefined : () => onSelectRestDay(descanso)}
+                        accessibilityLabel={t('schedule.restDayFor', {
+                          name: row.name,
+                          date: formatDateKeyShort(day, language),
+                        })}
+                        testID={`rest-day-${row.employeeId}-${day}`}
+                      />
+                    )}
                     {dayShifts.map((shift) => (
                       <ShiftCard
                         key={shift.id}
@@ -246,6 +264,7 @@ export function WeekGrid({
 export type DayListProps = {
   days: DateKey[];
   shiftsByDay: Map<DateKey, DatedShift[]>;
+  restDaysByDay: Map<DateKey, DatedRestDay[]>;
   employeeNames: Map<string, string>;
   jobRoleNames: Map<string, string>;
   todayKey: DateKey;
@@ -255,12 +274,14 @@ export type DayListProps = {
   warningsFor: (shiftId: string) => ScheduleWarning[];
   onSelectShift: (shift: ShiftRow) => void;
   onAddShift: (params: { dateKey: DateKey }) => void;
+  onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
 };
 
 export function DayList({
   days,
   shiftsByDay,
+  restDaysByDay,
   employeeNames,
   jobRoleNames,
   todayKey,
@@ -270,6 +291,7 @@ export function DayList({
   warningsFor,
   onSelectShift,
   onAddShift,
+  onSelectRestDay,
   readOnly = false,
 }: DayListProps) {
   const styles = useEstilos();
@@ -279,6 +301,7 @@ export function DayList({
     <Stack gap={spacing.base}>
       {days.map((day) => {
         const dayShifts = shiftsByDay.get(day) ?? [];
+        const descansos = restDaysByDay.get(day) ?? [];
         return (
           <View key={day} style={styles.dayBlock}>
             <Row justify="space-between">
@@ -290,11 +313,11 @@ export function DayList({
               </AppText>
             </Row>
 
-            {dayShifts.length === 0 ? (
+            {dayShifts.length === 0 && descansos.length === 0 ? (
               <AppText variant="help" tone="subtle">
                 {t('schedule.noShiftsThatDay')}
               </AppText>
-            ) : (
+            ) : dayShifts.length === 0 ? null : (
               <Stack gap={spacing.sm}>
                 {dayShifts.map((shift) => (
                   <ShiftCard
@@ -312,6 +335,30 @@ export function DayList({
                     warnings={warningsFor(shift.id)}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
+                  />
+                ))}
+              </Stack>
+            )}
+
+            {/*
+              LOS DIAS LIBRES, DESPUES DE LOS TURNOS Y CON NOMBRE. En la lista por días de
+              un teléfono no hay columna de persona, así que un «Descanso» a secas no
+              diría de quién es: el nombre va dentro de la etiqueta.
+            */}
+            {descansos.length === 0 ? null : (
+              <Stack gap={spacing.xs}>
+                {descansos.map((descanso) => (
+                  <RestDayChip
+                    key={descanso.id}
+                    label={t('schedule.restDayOf', {
+                      name: employeeNames.get(descanso.employeeId) ?? '',
+                    })}
+                    onPress={readOnly ? undefined : () => onSelectRestDay(descanso)}
+                    accessibilityLabel={t('schedule.restDayFor', {
+                      name: employeeNames.get(descanso.employeeId) ?? '',
+                      date: formatDateKeyShort(day, language),
+                    })}
+                    testID={`rest-day-${descanso.employeeId}-${day}`}
                   />
                 ))}
               </Stack>
