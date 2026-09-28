@@ -169,6 +169,43 @@ describe('un descanso marcado y una celda vacía no son lo mismo', () => {
   });
 });
 
+describe('una tabla de solo descansos, sin columna de horas', () => {
+  /*
+   * ES LA FORMA QUE SE MANDA PARA MARCAR LOS DESCANSOS DE UNA SEMANA YA CARGADA: los
+   * turnos ya existen, asi que volver a pegar la tabla entera los DUPLICARIA —pegar añade,
+   * no reemplaza—. Con las horas cambiadas por rayas no se crea ni un turno y se marcan
+   * solo los dias libres. Si esto se rompe, se rompe en su pantalla.
+   */
+  const SOLO_DESCANSOS = [
+    'Personal | 28 | 29 | 30 | 1 | 2 | 3 | 4',
+    'Ana Rivas | DESCANSO | - | - | - | - | - | -',
+    'Bruno Salas | - | - | - | - | DESCANSO | - | -',
+    'Carla Mendez | DESCANSO | DESCANSO | - | - | - | - | -',
+    'Diana Rojas | - | - | DESCANSO | - | - | - | -',
+    'Elena Vidal | DESCANSO | - | - | - | - | - | -',
+  ].join('\n');
+
+  const horario = pegar(SOLO_DESCANSOS);
+
+  it('no crea ni un turno', () => {
+    expect(horario.turnos).toEqual([]);
+  });
+
+  it('marca los seis descansos, en los mismos días que la tabla completa', () => {
+    expect(horario.descansos).toHaveLength(6);
+    expect(pegar(TABLA_REAL).descansos).toEqual(horario.descansos);
+  });
+
+  it('sin columna de horas no se queja de que los totales no cuadren', () => {
+    expect(horario.problemas).toEqual([]);
+  });
+
+  it('las cinco personas siguen saliendo en el resumen, con cero horas', () => {
+    expect(horario.resumen).toHaveLength(5);
+    expect(horario.resumen.every((fila) => fila.minutos === 0)).toBe(true);
+  });
+});
+
 describe('los totales de la tabla como oráculo', () => {
   it('avisa cuando lo leído no cuadra con lo declarado, sin bloquear', () => {
     // 17:30 leído como 7:30 da un horario perfectamente plausible y equivocado.
