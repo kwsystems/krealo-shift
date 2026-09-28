@@ -67,24 +67,54 @@ function motivosPagadosDe(settings: Record<string, unknown>): Record<string, boo
   return salida;
 }
 
+/**
+ * Un numero guardado, o el de fabrica. NUNCA `NaN`.
+ *
+ * `Number('seis')` es `NaN`, y un `NaN` aqui no se queda aqui: viaja dentro de
+ * `policies`, el esquema del reloj lo rechaza —un numero tiene que ser un numero— y con
+ * el se cae la respuesta ENTERA de activar o de arrancar. O sea que un solo valor mal
+ * guardado en los ajustes de una sede —y la primera organizacion de esta app se escribio
+ * a mano en la consola de Firestore— deja el reloj de esa tienda sin poder activarse, con
+ * un mensaje que no menciona ningun ajuste.
+ *
+ * El servidor es el sitio para atajarlo: es el que sabe cual es el valor de fabrica y el
+ * unico por el que pasan las dos respuestas.
+ */
+function numeroDeAjuste(valor: unknown, porDefecto: number): number {
+  if (valor === null || valor === undefined || valor === '') return porDefecto;
+  const numero = Number(valor);
+  return Number.isFinite(numero) ? numero : porDefecto;
+}
+
+/** Igual que el numero: un `timeFormat` inventado no puede tumbar la respuesta. */
+function formatoDeHora(valor: unknown): '12h' | '24h' {
+  return valor === '12h' || valor === '24h' ? valor : POLITICAS_POR_DEFECTO.timeFormat;
+}
+
 export function politicasDe(location: Record<string, unknown>) {
   const settings = (location.settings ?? {}) as Record<string, unknown>;
   return {
-    pinLength: Number(settings.pinLength ?? POLITICAS_POR_DEFECTO.pinLength),
+    pinLength: numeroDeAjuste(settings.pinLength, POLITICAS_POR_DEFECTO.pinLength),
     photoEnabled: Boolean(settings.photoEnabled ?? POLITICAS_POR_DEFECTO.photoEnabled),
-    earlyClockInMinutes: Number(
-      settings.earlyClockInMinutes ?? POLITICAS_POR_DEFECTO.earlyClockInMinutes,
+    earlyClockInMinutes: numeroDeAjuste(
+      settings.earlyClockInMinutes,
+      POLITICAS_POR_DEFECTO.earlyClockInMinutes,
     ),
-    lateGraceMinutes: Number(settings.lateGraceMinutes ?? POLITICAS_POR_DEFECTO.lateGraceMinutes),
+    lateGraceMinutes: numeroDeAjuste(
+      settings.lateGraceMinutes,
+      POLITICAS_POR_DEFECTO.lateGraceMinutes,
+    ),
     allowUnscheduledShifts: Boolean(
       settings.allowUnscheduledShifts ?? POLITICAS_POR_DEFECTO.allowUnscheduledShifts,
     ),
-    timeFormat: (settings.timeFormat ?? POLITICAS_POR_DEFECTO.timeFormat) as '12h' | '24h',
-    requiredBreakMinutes: Number(
-      settings.requiredBreakMinutes ?? POLITICAS_POR_DEFECTO.requiredBreakMinutes,
+    timeFormat: formatoDeHora(settings.timeFormat),
+    requiredBreakMinutes: numeroDeAjuste(
+      settings.requiredBreakMinutes,
+      POLITICAS_POR_DEFECTO.requiredBreakMinutes,
     ),
-    earlyDepartureReasonMinutes: Number(
-      settings.earlyDepartureReasonMinutes ?? POLITICAS_POR_DEFECTO.earlyDepartureReasonMinutes,
+    earlyDepartureReasonMinutes: numeroDeAjuste(
+      settings.earlyDepartureReasonMinutes,
+      POLITICAS_POR_DEFECTO.earlyDepartureReasonMinutes,
     ),
     paidBreakReasons: motivosPagadosDe(settings),
   };

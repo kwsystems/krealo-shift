@@ -2,6 +2,8 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import { BREAK_REASONS, type BreakReason } from '@/domain/break-reason';
+
 import { docId } from '@/lib/firebase/ids';
 
 import { track } from '@/lib/analytics';
@@ -51,6 +53,20 @@ export const DEFAULT_LOCATION_SETTINGS = {
   allowUnscheduledShifts: true,
   timeFormat: '24h' as TimeFormatPreference,
   requiredBreakMinutes: 0,
+  /*
+   * QUE MOTIVOS DE PAUSA SE PAGAN EN ESTA SEDE. Vacío significa «los de fábrica»
+   * (`DEFAULT_PAID_REASONS`): la comida y el permiso personal no se pagan, el resto sí.
+   *
+   * ESTABA EN EL SERVIDOR Y NO AQUI, Y ESO LO BORRABA. El servidor lo lee
+   * (`politicas.ts`), el reloj lo usa para decidir si una pausa descuenta horas... y el
+   * panel no lo conocía. Como este esquema descarta las claves que no declara, CUALQUIER
+   * guardado de la sede desde Ajustes se llevaba por delante la configuración de nómina
+   * de esa tienda, sin avisar y sin que nadie lo notara hasta la siguiente quincena.
+   *
+   * Hoy no hay ninguna sede que lo tenga puesto, así que no se perdió nada; el agujero
+   * estaba abierto desde que existe el guardado de sedes.
+   */
+  paidBreakReasons: {} as Partial<Record<BreakReason, boolean>>,
   /**
    * El día en que empieza la semana EN ESTA SEDE, o `null` para seguir a la empresa.
    *
@@ -133,6 +149,11 @@ const locationSettingsSchema = z
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.requiredBreakMinutes),
+    /* `partialRecord`: la sede manda solo los motivos que cambió. Ver el porqué largo
+       en `src/features/kiosk/api.ts`, donde `record` tenía el reloj sin poder activarse. */
+    paidBreakReasons: z
+      .partialRecord(z.enum(BREAK_REASONS), z.boolean())
+      .default(DEFAULT_LOCATION_SETTINGS.paidBreakReasons),
     earlyDepartureReasonMinutes: z
       .number()
       .int()

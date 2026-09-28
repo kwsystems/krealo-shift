@@ -41,7 +41,7 @@ export type KioskApiError =
 
 export type KioskApiResult<T> = { ok: true; data: T } | { ok: false; error: KioskApiError };
 
-const policiesSchema = z.object({
+export const kioskPoliciesSchema = z.object({
   pinLength: z.number().int().min(4).max(6),
   photoEnabled: z.boolean(),
   earlyClockInMinutes: z.number().int().min(0),
@@ -64,8 +64,29 @@ const policiesSchema = z.object({
    *
    * `catchall` no vale aquí: los motivos son una lista cerrada y una clave inventada
    * debe caer, no colarse hasta el botón de pausa.
+   *
+   * ------------------------------------------------------------------------------
+   * `partialRecord` Y NO `record`, Y ESTO TENIA EL RELOJ ROTO EN PRODUCCION.
+   * ------------------------------------------------------------------------------
+   *
+   * En Zod 4 un `z.record(z.enum([...]), ...)` es EXHAUSTIVO al parsear: exige las siete
+   * claves. Y el servidor manda a propósito solo lo que la sede haya cambiado —su propio
+   * comentario lo dice: «vacío significa manda lo de fábrica»—, o sea `{}` en cualquier
+   * sede que no lo haya tocado. Que son todas.
+   *
+   * Resultado medido: `politicasDe({settings:{}})` devuelve `paidBreakReasons: {}` y este
+   * esquema lo rechazaba con siete errores. `policies` va dentro de la respuesta de
+   * ACTIVAR y de la de arranque, así que la activación del reloj fallaba SIEMPRE —el
+   * aparato veía «No pudimos completar la acción» después de que el servidor ya hubiera
+   * creado el reloj y quemado el código— y el arranque no traía ni turnos ni roster.
+   *
+   * Es la segunda vez que este mismo campo rompe la activación por el mismo sitio: la
+   * primera fue por venir anidado dentro de `location` (el comentario está en
+   * `kiosk-api.ts`). Por eso ahora hay una prueba de FRONTERA —lo que manda el servidor
+   * pasado por el esquema del cliente, las dos mitades de verdad— y no solo pruebas de
+   * cada lado: ninguna de las dos mitades por separado puede ver este fallo.
    */
-  paidBreakReasons: z.record(z.enum(BREAK_REASONS), z.boolean()).optional(),
+  paidBreakReasons: z.partialRecord(z.enum(BREAK_REASONS), z.boolean()).optional(),
 });
 
 const activateResponseSchema = z.object({
@@ -99,7 +120,7 @@ const activateResponseSchema = z.object({
     name: z.string().min(1),
     timezone: z.string().min(1),
   }),
-  policies: policiesSchema,
+  policies: kioskPoliciesSchema,
 });
 
 /**
@@ -492,7 +513,7 @@ const rosterSchema = z.object({
       logoPath: z.string().nullable().default(null),
     })
     .default({ name: null, logoPath: null }),
-  policies: policiesSchema,
+  policies: kioskPoliciesSchema,
   roster: z.array(
     z.object({
       opaqueId: z.string().min(1),
