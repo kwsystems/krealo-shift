@@ -1,22 +1,39 @@
 import { execute, requireClient, toAdminError } from '@/hooks/use-admin-query';
 import { getDataClient } from '@/lib/firebase/query';
-import { TABLES } from '@/lib/firebase/tables';
+import { RPC, TABLES } from '@/lib/firebase/tables';
 
 /**
  * Logotipo de la organización (§11.6).
  *
- * SUBE DIRECTO A STORAGE, sin Edge Function, y la diferencia con las fotos de
- * fichaje merece explicación porque son el mismo problema resuelto al revés:
+ * YA NO SUBE DIRECTO A STORAGE, y el texto que había aquí es la mejor explicación de
+ * por qué. Decía:
  *
- *   * la foto de fichaje la sube el KIOSCO, que no tiene sesión de Supabase y nunca
- *     debe recibir permiso de escritura sobre Storage. Va por `attach-photo`.
- *   * el logotipo lo sube el PANEL, que sí tiene sesión, y las políticas de
- *     `20260827001200_organization_logo.sql` ya limitan la escritura a owner o admin
- *     de la organización del primer segmento de la ruta. Una función intermedia no
- *     añadiría ninguna barrera; solo un salto más donde equivocarse.
+ *   «el logotipo lo sube el PANEL, que sí tiene sesión, y las políticas de
+ *   20260827001200_organization_logo.sql ya limitan la escritura a owner o admin.
+ *   Una función intermedia no añadiría ninguna barrera; solo un salto más donde
+ *   equivocarse. La barrera real, como siempre en este proyecto, es la política.»
  *
- * La barrera real, como siempre en este proyecto, es la política: si alguien llama a
- * esto con otro `organizationId`, Storage lo rechaza.
+ * ERA VERDAD, EN SUPABASE. Esa política de Postgres funcionaba. Al migrar a Firebase
+ * se tradujo a `storage.rules` así:
+ *
+ *     exists(/databases/(default)/documents/organization_memberships/$(orgId + '_' + uid))
+ *
+ * y las reglas de Firebase Storage NO TIENEN `get()` ni `exists()`: son funciones de
+ * las reglas de Firestore, y Storage no puede consultar Firestore. El despliegue
+ * aceptó la regla con dos advertencias «Invalid function name» que nadie leyó, y en
+ * ejecución una función inexistente hace reventar la condición. Reventar deniega, así
+ * que subir el logo devolvía `storage/unauthorized` y NUNCA funcionó desde la
+ * migración. Lo descubrió Andree el 2026-09-28 al intentar poner el logo de su tienda.
+ *
+ * LA LECCIÓN NO ES «revisa las reglas»: es que un razonamiento correcto puede
+ * quedarse falso cuando cambia la plataforma debajo, y nadie vuelve a leerlo porque
+ * suena bien. El comentario seguía siendo convincente un mes después de dejar de ser
+ * cierto.
+ *
+ * Ahora la comprobación pasa donde SE PUEDE hacer: `setOrganizationLogo`, una Cloud
+ * Function con sesión, Firestore y rol a mano. O sea, el mismo patrón que la foto de
+ * fichaje —el que este comentario descartaba— y por el mismo motivo. Y `storage.rules`
+ * cierra ese prefijo a escritura: cerrado significa cerrado.
  */
 
 export const LOGO_BUCKET = 'organization-logos';
@@ -88,35 +105,55 @@ export async function uploadOrganizationLogo(params: {
   /** Contenido del archivo. `ArrayBuffer` funciona igual en web y en nativo. */
   body: ArrayBuffer;
   contentType: LogoMimeType;
-  /** Ruta anterior, para borrarla si la extensión cambió. */
+  /**
+   * Ruta anterior. Ya no se usa aquí: borrar la versión con otra extensión lo hace la
+   * función, en la misma llamada. Se mantiene en la firma para no tocar a quien llama,
+   * y porque el borrado del lado del cliente era otra cosa que podía fallar a medias
+   * y dejar un archivo huérfano en un prefijo de lectura pública.
+   */
   previousPath: string | null;
 }): Promise<string> {
   const db = requireClient();
   const path = logoStoragePath(params.organizationId, params.contentType);
 
-  const { error } = await db.storage.from(LOGO_BUCKET).upload(path, params.body, {
-    contentType: params.contentType,
-    // Sustituir, no acumular. Ver la nota de `logoStoragePath`.
-    upsert: true,
+  const { data, error } = await db.rpc(RPC.setOrganizationLogo, {
+    p_organization_id: params.organizationId,
+    p_content_type: params.contentType,
+    p_image_base64: aBase64(params.body),
   });
   if (error !== null) throw toAdminError(error);
 
-  // `logo_path` se escribe DESPUÉS de que el archivo esté arriba, igual que
-  // `photo_path` en los fichajes. Al revés, un fallo de subida deja la columna
-  // apuntando a un objeto que no existe, y la pantalla muestra una imagen rota sin
-  // ninguna forma de saber por qué.
-  await execute((client) =>
-    client.from(TABLES.organizations).update({ logo_path: path }).eq('id', params.organizationId),
-  );
+  /*
+   * La ruta que devuelve el servidor manda sobre la calculada aquí: si algún día las
+   * dos dejan de coincidir, la buena es la del sitio que escribió el archivo.
+   */
+  const devuelta = (data as { path?: unknown } | null)?.path;
+  return typeof devuelta === 'string' ? devuelta : path;
+}
 
-  // Si antes había un PNG y ahora es un JPG, el viejo queda huérfano en un bucket
-  // público. Se borra después de actualizar la columna: si el borrado falla, lo que
-  // sobra es un archivo, no un logotipo que no se ve.
-  if (params.previousPath !== null && params.previousPath !== path) {
-    await db.storage.from(LOGO_BUCKET).remove([params.previousPath]);
+/**
+ * Bytes a base64, a mano y sin `btoa`.
+ *
+ * `btoa` no existe en React Native, y en web revienta con un array grande si se le
+ * pasa por `String.fromCharCode(...bytes)` —desborda la pila de argumentos—. Veinte
+ * líneas propias funcionan igual en las dos plataformas y no dependen de qué trae el
+ * entorno, que es justo la clase de suposición que rompió la subida del logo.
+ */
+const ALFABETO = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+export function aBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let salida = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i] ?? 0;
+    const b1 = bytes[i + 1];
+    const b2 = bytes[i + 2];
+    salida += ALFABETO[b0 >> 2];
+    salida += ALFABETO[((b0 & 0x03) << 4) | ((b1 ?? 0) >> 4)];
+    salida += b1 === undefined ? '=' : ALFABETO[((b1 & 0x0f) << 2) | ((b2 ?? 0) >> 6)];
+    salida += b2 === undefined ? '=' : ALFABETO[b2 & 0x3f];
   }
-
-  return path;
+  return salida;
 }
 
 export async function removeOrganizationLogo(params: {

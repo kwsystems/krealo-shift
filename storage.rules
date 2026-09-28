@@ -9,17 +9,6 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
-    function membership(orgId) {
-      return get(/databases/(default)/documents/organization_memberships/$(orgId + '_' + request.auth.uid)).data;
-    }
-
-    function isAdmin(orgId) {
-      return request.auth != null
-        && exists(/databases/(default)/documents/organization_memberships/$(orgId + '_' + request.auth.uid))
-        && membership(orgId).status == 'active'
-        && membership(orgId).role in ['owner', 'admin'];
-    }
-
     // LA FOTO DE UN FICHAJE NO SE SIRVE NUNCA DIRECTO. Es la cara de un trabajador
     // en su puesto: retrato identificable, con hora y tienda. Se lee solo por URL
     // firmada de caducidad corta, que emite la Cloud Function tras comprobar que
@@ -33,12 +22,27 @@ service firebase.storage {
     }
 
     // El logo se muestra en el kiosco, que no tiene sesion: por eso su lectura es
-    // publica. Lo cambia solo un administrador de esa misma organizacion.
+    // publica. La ESCRITURA esta cerrada, y eso es un arreglo del 2026-09-28.
+    //
+    // Antes esta regla intentaba comprobar «eres administrador de esta empresa» con
+    //
+    //     exists(/databases/(default)/documents/organization_memberships/...)
+    //
+    // y LAS REGLAS DE STORAGE NO TIENEN `get()` NI `exists()`: son funciones de las
+    // reglas de Firestore, y Storage no puede consultar Firestore. El despliegue
+    // acepto la regla con dos advertencias «Invalid function name» que nadie leyo, y
+    // en ejecucion llamar a una funcion inexistente hace REVENTAR la condicion.
+    // Reventar deniega, asi que subir un logo devolvia `storage/unauthorized` y no
+    // funciono nunca desde la migracion de Supabase, donde la politica equivalente si
+    // era valida. Lo encontro Andree al intentar poner el logo de su tienda.
+    //
+    // La comprobacion pasa ahora donde SE PUEDE hacer: la Cloud Function
+    // `setOrganizationLogo`, que tiene sesion, Firestore y rol a mano, y escribe con
+    // el SDK de administrador, que no pasa por estas reglas. Igual que las fotos de
+    // fichaje. Aqui solo queda la lectura.
     match /organization-logos/{orgId}/{fileName} {
       allow read: if true;
-      allow write: if isAdmin(orgId)
-        && request.resource.size < 2 * 1024 * 1024
-        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      allow write: if false;
     }
 
     match /{allPaths=**} {

@@ -117,6 +117,13 @@ export const RPC = {
   createKioskActivationCode: 'create_kiosk_activation_code',
   revokeKioskDevice: 'revoke_kiosk_device',
   setEmployeePin: 'set_employee_pin',
+  /**
+   * El logo NO se sube directo a Storage, y la razon esta en la propia funcion:
+   * las reglas de Storage no pueden consultar Firestore, asi que la comprobacion de
+   * «eres administrador de esta empresa» no se puede hacer alli. Ver
+   * `setOrganizationLogo` en functions/src/manager.ts.
+   */
+  setOrganizationLogo: 'set_organization_logo',
   managerAdjustTime: 'manager_adjust_time',
   /**
    * Fichaje manual del gerente (§11.4 "agregar fichaje manual con motivo").

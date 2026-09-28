@@ -5,6 +5,8 @@ import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
+import { getStorage } from 'firebase-admin/storage';
+
 import { auth, COLLECTIONS, db, nowISO } from './shared/admin';
 import {
   audit,
@@ -232,6 +234,93 @@ export const setEmployeePin = onCall(async (request) => {
  * su hash: si se pudiera volver a leer, un codigo filtrado del panel valdria para
  * activar un iPad ajeno en esa tienda.
  */
+/**
+ * SUBIR EL LOGO DE UNA EMPRESA, desde aqui y no desde el navegador.
+ *
+ * POR QUE EXISTE ESTA FUNCION, y es un fallo que estuvo una semana escondido.
+ *
+ * El logo se subia directo a Storage desde el cliente, y `storage.rules` intentaba
+ * comprobar que quien subia fuera administrador de esa empresa asi:
+ *
+ *     exists(/databases/(default)/documents/organization_memberships/$(orgId + '_' + uid))
+ *
+ * LAS REGLAS DE STORAGE NO TIENEN `get()` NI `exists()`. Son funciones de las reglas
+ * de FIRESTORE; Storage no puede consultar Firestore. El despliegue acepto la regla
+ * —con dos advertencias «Invalid function name» que nadie leyo— y en ejecucion la
+ * llamada a una funcion inexistente hace reventar la condicion. Una condicion que
+ * revienta DENIEGA, asi que subir el logo devolvia `storage/unauthorized` y nunca
+ * habia funcionado. Medido el 2026-09-28 con el simulador de reglas SIN mocks: con
+ * mocks «pasaba», porque los mocks inventaban justo las dos funciones que no existen.
+ *
+ * LA COMPROBACION TIENE QUE PASAR DONDE SE PUEDE HACER, y ese sitio es este: aqui hay
+ * sesion, hay Firestore y hay rol. Es el mismo patron que ya usaba `attachPhoto` para
+ * las fotos de fichaje, y por el mismo motivo. Con esto, `organization-logos` se
+ * cierra a escritura en las reglas: cerrado significa cerrado, y lo que escribe es el
+ * SDK de administrador, que no pasa por ellas.
+ */
+export const setOrganizationLogo = onCall(async (request) => {
+  const uid = requireUid(request);
+  const organizationId = textoRequerido(request.data?.p_organization_id, 'p_organization_id');
+  const contentType = textoRequerido(request.data?.p_content_type, 'p_content_type');
+  const base64 = textoRequerido(request.data?.p_image_base64, 'p_image_base64');
+
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin']);
+
+  const extension = EXTENSION_DE_LOGO[contentType];
+  if (extension === undefined) {
+    throw new HttpsError('invalid-argument', 'Ese formato no sirve: usa PNG, JPG o WebP.');
+  }
+
+  const cuerpo = Buffer.from(base64, 'base64');
+  /*
+   * EL TAMANO SE COMPRUEBA AQUI TAMBIEN, y no solo en el cliente. El cliente ya lo
+   * valida para dar un mensaje util —«pesa 4,2 MB y el maximo es 1»— pero esa
+   * validacion vive en el navegador de quien sube, o sea en el sitio menos fiable
+   * posible. El limite de verdad tiene que estar del lado que nadie puede editar.
+   */
+  if (cuerpo.byteLength > 1024 * 1024) {
+    throw new HttpsError('invalid-argument', 'La imagen pesa mas de 1 MB.');
+  }
+
+  const ruta = `organization-logos/${organizationId}/logo.${extension}`;
+  await getStorage().bucket().file(ruta).save(cuerpo, { contentType });
+
+  /*
+   * Y SE BORRA LA VERSION ANTERIOR SI CAMBIO LA EXTENSION. Antes lo hacia el cliente
+   * despues de subir; si esa segunda llamada fallaba quedaba un PNG huerfano en un
+   * prefijo de lectura publica. Aqui las dos cosas pasan en la misma llamada.
+   */
+  for (const otra of Object.values(EXTENSION_DE_LOGO)) {
+    if (otra === extension) continue;
+    const sobrante = `organization-logos/${organizationId}/logo.${otra}`;
+    await getStorage().bucket().file(sobrante).delete({ ignoreNotFound: true });
+  }
+
+  await db.collection(COLLECTIONS.organizations).doc(organizationId).set(
+    { logo_path: ruta, updated_at: nowISO() },
+    { merge: true },
+  );
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'organization.logo_set',
+    entityType: 'organization',
+    entityId: organizationId,
+    after: { logo_path: ruta },
+  });
+
+  return { path: ruta };
+});
+
+/** Las tres extensiones que acepta el logo, por tipo de contenido. */
+const EXTENSION_DE_LOGO: Record<string, string> = {
+  'image/png': 'png',
+  'image/jpeg': 'jpg',
+  'image/webp': 'webp',
+};
+
 export const createKioskActivationCode = onCall(async (request) => {
   const uid = requireUid(request);
   const locationId = textoRequerido(request.data?.p_location_id, 'p_location_id');
