@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -602,6 +603,8 @@ export function FormCard({
   style,
   collapsible = false,
   defaultOpen = false,
+  open,
+  onOpenChange,
   testID,
 }: {
   title: string;
@@ -611,12 +614,46 @@ export function FormCard({
   collapsible?: boolean;
   /** Solo la primera sección de una lista debería abrir de entrada. */
   defaultOpen?: boolean;
+  /**
+   * ABIERTA O CERRADA, DECIDIDO POR EL PADRE. Sin esto, la tarjeta guarda ese estado
+   * ella misma, y eso se pierde si la desmontan.
+   *
+   * POR QUÉ HIZO FALTA (2026-09-28). La tarjeta de Ubicaciones se monta con
+   * `key={location.id}`, a propósito: al cambiar de sede React la desmonta y la vuelve a
+   * montar, y así los once campos del formulario se rellenan con los de la sede nueva en
+   * vez de arrastrar los de la anterior. Correcto para el FORMULARIO.
+   *
+   * Pero el selector de sede vive DENTRO de esa tarjeta: al usarlo, la tarjeta se
+   * desmontaba y volvía cerrada. Cambiar de sede cerraba la pantalla en la que estabas
+   * trabajando, y había que volver a abrirla para cada tienda.
+   *
+   * Lo que estaba mal no era la `key`: era de quién es cada estado. El del FORMULARIO es
+   * de la sede, y tiene que morir con ella. El de «está abierta» es de la PANTALLA, y no
+   * tiene nada que ver con qué sede miras. Así que se sube al padre, que no se desmonta.
+   * Resetear a mano los once campos habría sido lo otro, y se desincroniza el día que
+   * alguien añada el campo número doce.
+   */
+  open?: boolean;
+  onOpenChange?: (abierta: boolean) => void;
   testID?: string;
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
-  const [abierta, setAbierta] = useState(defaultOpen);
-  const [montada, setMontada] = useState(defaultOpen);
+  const controlada = open !== undefined;
+  const [abiertaInterna, setAbiertaInterna] = useState(defaultOpen);
+  const abierta = controlada ? open : abiertaInterna;
+
+  /*
+   * `montada` existe para dos cosas a la vez: no construir el contenido hasta que se abre
+   * la primera vez, y CONSERVAR lo escrito al cerrarla (se oculta con `display: none`, no
+   * se quita del árbol). Con el estado controlado desde fuera ya no sirve un `useState`
+   * inicializado una vez: el padre puede abrirla después, y entonces nunca se montaría.
+   * Se ajusta durante el renderizado, que es el patrón de React para derivar estado de
+   * props sin un efecto que provoque un segundo pintado.
+   */
+  const [yaSeAbrio, setYaSeAbrio] = useState(abierta);
+  if (abierta && !yaSeAbrio) setYaSeAbrio(true);
+  const montada = yaSeAbrio;
 
   if (!collapsible) {
     return (
@@ -636,15 +673,31 @@ export function FormCard({
     <Card style={style} testID={testID}>
       <Pressable
         onPress={() => {
-          setMontada(true);
-          setAbierta((v) => !v);
+          setYaSeAbrio(true);
+          if (controlada) onOpenChange?.(!abierta);
+          else setAbiertaInterna((v) => !v);
         }}
         accessibilityRole="button"
         accessibilityLabel={title}
-        // `expanded` es lo que hace que un lector de pantalla lo anuncie como algo que
-        // se abre y no como un botón cualquiera. Sin esto, la pantalla se puede usar
-        // pero no se entiende: nada dice que haya contenido detrás del título.
+        /*
+          `expanded` es lo que hace que un lector de pantalla lo anuncie como algo que se
+          abre y no como un botón cualquiera. Sin esto, la pantalla se puede usar pero no
+          se entiende: nada dice que haya contenido detrás del título.
+
+          Y ESTABA PUESTO SIN LLEGAR AL DOM. Medido el 2026-09-28 sobre la web ya
+          construida: `aria-expanded` valía `null` en la cabecera. react-native-web no
+          traduce `expanded` de `accessibilityState` —sí traduce `selected`, `disabled` y
+          `checked`— así que TODAS las secciones plegables de la app se anunciaban como
+          botones normales, mientras el código decía lo contrario. Es el patrón que este
+          repositorio ya conoce: un campo que existe en los dos extremos y está muerto en
+          el medio. Lo descubrió un arnés que intentaba LEER ese atributo para medir si la
+          tarjeta seguía abierta, y no lo encontró.
+
+          Se deja `accessibilityState` —es lo correcto en nativo— y en web se pone el
+          atributo a mano.
+        */
         accessibilityState={{ expanded: abierta }}
+        {...(Platform.OS === 'web' ? ({ 'aria-expanded': abierta } as object) : null)}
         testID={testID === undefined ? undefined : `${testID}-toggle`}
         style={({ pressed }) => [styles.cabeceraPlegable, pressed ? styles.cabeceraPulsada : null]}
       >

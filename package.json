@@ -36,7 +36,8 @@
     "emulador:check": "node scripts/emulador-check.mjs",
     "relieve:check": "node scripts/relieve-check.mjs dist-demo",
     "funciones:check": "tsc -p functions --noEmit",
-    "paquete:check": "node scripts/paquete-check.mjs --despues"
+    "paquete:check": "node scripts/paquete-check.mjs --despues",
+    "plegables:check": "node scripts/plegables-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

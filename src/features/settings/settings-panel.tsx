@@ -66,6 +66,12 @@ export function SettingsPanel() {
    * porque es esta pantalla la que sabe qué tarjeta corresponde a cada valor.
    */
   const { abrir } = useLocalSearchParams<{ abrir?: string }>();
+  /*
+   * ESTE ESTADO VIVE AQUI Y NO EN LA TARJETA, y la razon esta en el comentario de donde
+   * se monta `LocationCard`: esa tarjeta se desmonta al cambiar de sede, y con ella se
+   * iria «esta abierta».
+   */
+  const [sedeAbierta, setSedeAbierta] = useState(abrir === 'sede');
 
   return (
     <Stack gap={spacing.lg}>
@@ -107,12 +113,20 @@ export function SettingsPanel() {
               canEdit={scope.isAdmin}
               abiertaDeEntrada={abrir === 'marca'}
             />
+            {/*
+              LA TARJETA DE SEDE SE REMONTA AL CAMBIAR DE SEDE —esa es la `key`, y es
+              correcta: reinicia los once campos del formulario con los de la sede nueva
+              en vez de arrastrar los de la anterior—. Pero «está abierta» NO es estado de
+              la sede, es de la pantalla, así que vive aquí, donde no se desmonta. Sin
+              esto, usar el selector de sede que vive DENTRO de la tarjeta la cerraba.
+            */}
             {scope.location !== null ? (
               <LocationCard
                 key={scope.location.id}
                 location={scope.location}
                 canEdit={scope.isAdmin}
-                abiertaDeEntrada={abrir === 'sede'}
+                desplegada={sedeAbierta}
+                onDesplegadaChange={setSedeAbierta}
               />
             ) : null}
             {/*
@@ -560,12 +574,21 @@ const NUMERIC_SETTINGS: { key: NumericSettingKey; labelKey: string }[] = (
 function LocationCard({
   location,
   canEdit,
-  abiertaDeEntrada = false,
+  desplegada,
+  onDesplegadaChange,
 }: {
   location: ManagerLocation;
   canEdit: boolean;
-  /** La abre el conmutador de la barra de arriba al venir a abrir una sede. */
-  abiertaDeEntrada?: boolean;
+  /**
+   * Vienen del panel y no de aqui: esta tarjeta se desmonta al cambiar de sede (ver la
+   * `key` donde se monta) y con ella se iria el estado de desplegada.
+   *
+   * Se llama `desplegada` y no `abierta` porque dentro de la tarjeta ya hay un `abierta`
+   * que es otra cosa —cual de las sub-secciones esta desplegada— y dos nombres iguales
+   * para dos estados distintos en el mismo archivo es como se cambia el que no era.
+   */
+  desplegada: boolean;
+  onDesplegadaChange: (desplegada: boolean) => void;
 }) {
   const { t } = useTranslation();
   const scope = useManagerScope();
@@ -632,9 +655,11 @@ function LocationCard({
   return (
     <FormCard
       collapsible
-      defaultOpen={abiertaDeEntrada}
+      open={desplegada}
+      onOpenChange={onDesplegadaChange}
       title={t('settings.locations')}
       description={location.name}
+      testID="location-card"
     >
       {/*
         QUE SEDE SE ESTA EDITANDO, y antes no se podia elegir: esta tarjeta recibia la

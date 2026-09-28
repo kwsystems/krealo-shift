@@ -81,17 +81,76 @@ export async function servirExport(raiz, puerto) {
 }
 
 /** Playwright, esté instalado en el proyecto o en el Node global del contenedor. */
+/**
+ * EL TEXTO SIN LOS GLIFOS DE LOS ICONOS.
+ *
+ * `Ionicons` es un TIPO DE LETRA, así que cada icono es un carácter de verdad dentro del
+ * `textContent`, del área de uso privado de Unicode (U+E000–U+F8FF). No se ve en una
+ * terminal y `trim()` no lo quita, porque no es un espacio.
+ *
+ * Eso convierte cualquier comparación de textos en una trampa: la cabecera de una tarjeta
+ * acaba en el chevron y un chip seleccionado empieza por el check, así que
+ * `"UbicacionesSede Principal\uF241".includes("\uF21DSede Principal")` es FALSO aunque
+ * las dos cosas digan lo mismo en pantalla.
+ *
+ * `responsive-check.mjs` ya documentaba esta trampa —«me costó una hora»— y el 2026-09-28
+ * volvió a morder en un arnés nuevo, con una hora más. Por eso sube aquí: una lección que
+ * vive en un solo arnés depende de que el siguiente que escriba uno se acuerde de leerlo.
+ */
+export function sinGlifos(texto) {
+  return (texto ?? '').replace(/[\u{E000}-\u{F8FF}]/gu, '').trim();
+}
+
 export function cargarPlaywright() {
+  let pw;
   try {
-    return require('playwright');
+    pw = require('playwright');
   } catch {
     try {
-      return require('/opt/node22/lib/node_modules/playwright/index.js');
+      pw = require('/opt/node22/lib/node_modules/playwright/index.js');
     } catch {
       console.error('Falta playwright. Instalalo o define NODE_PATH.');
       process.exit(2);
     }
   }
+  return { ...pw, chromium: conNavegadorDelSistema(pw.chromium) };
+}
+
+/**
+ * EL NAVEGADOR DEL CONTENEDOR, cuando el que playwright espera no esta.
+ *
+ * POR QUE HACE FALTA. Estos arneses son la espina dorsal del proyecto y en un contenedor
+ * RECIEN CREADO no arrancaba ninguno: playwright busca una revision concreta de Chromium
+ * dentro de su propia carpeta y muere con «Please run: npx playwright install». El
+ * contenedor SI trae un Chromium —en `/opt/pw-browsers`— pero con otro numero de
+ * revision, asi que playwright no lo reconoce como el suyo.
+ *
+ * Y el sintoma engaña: parece que falta una dependencia del proyecto cuando lo que hay es
+ * un desajuste de version entre el paquete y el navegador preinstalado.
+ *
+ * SE ARREGLA AQUI Y NO EN CADA ARNES porque son doce y todos llaman a `chromium.launch()`
+ * igual. Y se hace REINTENTANDO, no imponiendo la ruta: donde el navegador de playwright
+ * si esta —una maquina de desarrollo normal— se usa ese, que es el que le corresponde a
+ * la version instalada. La ruta del sistema es el respaldo, no la preferencia.
+ */
+function conNavegadorDelSistema(chromium) {
+  const lanzarOriginal = chromium.launch.bind(chromium);
+  return {
+    ...chromium,
+    launch: async (opciones = {}) => {
+      try {
+        return await lanzarOriginal(opciones);
+      } catch (error) {
+        const alternativo =
+          opciones.executablePath ??
+          process.env.CHROMIUM_PATH ??
+          '/opt/pw-browsers/chromium';
+        if (opciones.executablePath !== undefined || !existsSync(alternativo)) throw error;
+        console.log(`  (el navegador de playwright no esta; se usa ${alternativo})`);
+        return await lanzarOriginal({ ...opciones, executablePath: alternativo });
+      }
+    },
+  };
 }
 
 /**
