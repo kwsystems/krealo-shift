@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -13,6 +13,10 @@ import {
 } from './export';
 import { useBreakTimeByReason } from './hooks';
 import { periodoDe, semanasDelMes, type TipoDePeriodo } from './periodo';
+import { bonoDeAsistencia } from './bono';
+import { BonoCard } from './bono-card';
+import { fetchWeekShifts } from '@/features/schedules/api';
+import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { ShareReportSheet } from './share-sheet';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { InlineNotice, SegmentedControl, StatTile } from '@/components/schedule/fields';
@@ -30,7 +34,7 @@ import {
   formatDayColumn,
   formatWeekdayShort,
 } from '@/features/schedules/week';
-import { useEmployeeNames } from '@/features/team/hooks';
+import { useEmployeeNames, useEmployees } from '@/features/team/hooks';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerScope } from '@/hooks/use-manager-scope';
@@ -118,6 +122,25 @@ export function ReportsScreen() {
   const breaks = useBreakTimeByReason({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
 
+  /*
+   * LO QUE PIDE EL BONO, y solo por mes: los turnos del mes —para saber a qué tenía que
+   * venir cada uno— y los empleados —su estado y su fecha de alta—. Las jornadas ya están
+   * arriba (`sessions`), sin el filtro de persona: el bono es de todos. Ver `bono.ts`.
+   */
+  const turnosDelMes = useQuery({
+    queryKey: ['reports', 'turnos', scope.locationId ?? 'none', from, to],
+    queryFn: () =>
+      fetchWeekShifts({
+        organizationId: organizationId ?? '',
+        locationId: scope.locationId ?? '',
+        fromISO: periodo.fromISO,
+        toISO: periodo.toISO,
+      }),
+    enabled: tipo === 'mes' && scope.locationId !== null && organizationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+  });
+  const empleados = useEmployees(organizationId);
+
   const nombre = (employeeId: string) => names.get(employeeId) ?? t('reports.unknownPerson');
   const etiquetaMotivo = breakReasonLabels(t);
 
@@ -171,6 +194,17 @@ export function ReportsScreen() {
   // Hoy en la zona de la SEDE, no en la del navegador: un gerente que mira el tablero
   // desde otro huso subrayaria el dia equivocado.
   const hoyKey = dateKeyOf(nowISO, scope.timezone);
+
+  // Sin `useMemo`, como `dias` y `range`: ver el comentario de `range`, arriba.
+  const bonoDelMes = bonoDeAsistencia({
+    turnos: turnosDelMes.data ?? [],
+    sesiones: filasSesiones,
+    empleados: empleados.data ?? [],
+    desde: from,
+    finISO: periodo.toISO,
+    nowISO,
+    timezone: scope.timezone,
+  });
 
   const cargando = summaries.isPending || sessions.isPending;
   const error = summaries.error ?? sessions.error;
@@ -556,6 +590,29 @@ export function ReportsScreen() {
                   testID="report-ontime"
                 />
               </Row>
+
+              {/*
+                EL BONO, SOLO POR MES, y arriba: es lo que se viene a mirar a fin de mes. Por
+                semana no tiene sentido —el bono es mensual— y no se enseña a medias.
+              */}
+              {tipo === 'mes' ? (
+                <AsyncSection
+                  isPending={turnosDelMes.isPending || empleados.isPending}
+                  error={turnosDelMes.error ?? empleados.error}
+                  onRetry={() => {
+                    void turnosDelMes.refetch();
+                    void empleados.refetch();
+                  }}
+                >
+                  <BonoCard
+                    resultados={bonoDelMes.resultados}
+                    diasSinReloj={bonoDelMes.diasSinReloj}
+                    mesTerminado={nowISO >= periodo.toISO}
+                    nombre={nombre}
+                    language={language}
+                  />
+                </AsyncSection>
+              ) : null}
 
               <ChartCard
                 title={t('reports.whoWorkedMost')}
