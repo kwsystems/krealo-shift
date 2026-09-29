@@ -1,4 +1,4 @@
-import type { TimesheetAlert } from './alerts';
+import { alertsForSession, type TimesheetAlert } from './alerts';
 import type { WorkSession } from './api';
 import { minutesBetween } from '@/utils/time';
 
@@ -120,4 +120,63 @@ export function totalEnCurso(
     minutos += minutosEnCurso(session, enCursoPorSesion.get(session.id), nowISO);
   }
   return { personas, minutos };
+}
+
+/** Lo que hace falta de una fila de «quién está dentro» (`employees_working_now`). */
+export type FilaDentro = {
+  work_session_id: string;
+  attendance_state: string;
+  break_started_at: string | null;
+};
+
+/**
+ * De las filas de «quién está dentro» al estado de cada sesión abierta.
+ *
+ * Vive aquí, y no copiada en cada pantalla, porque Horas y Equipo la necesitan igual: dos
+ * copias de «qué es estar en descanso» acabarían discrepando sobre la misma persona.
+ */
+export function enCursoPorSesionDe(filas: readonly FilaDentro[] | undefined): Map<string, EnCurso> {
+  const map = new Map<string, EnCurso>();
+  for (const fila of filas ?? []) {
+    map.set(fila.work_session_id, {
+      estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
+      descansoDesde: fila.break_started_at,
+    });
+  }
+  return map;
+}
+
+export type DentroDeLaPersona = {
+  estado: 'trabajando' | 'descanso';
+  /** Cuándo entró. */
+  desde: string;
+  /** Lo que lleva trabajado en la jornada abierta, con la misma cuenta que Horas. */
+  minutos: number;
+};
+
+/**
+ * Quién está dentro ahora, por persona, y cuánto lleva.
+ *
+ * Es la MISMA cuenta que las filas de Horas —`estadoDeFila` y `minutosEnCurso`—, así que
+ * Equipo y Horas no pueden dar dos números distintos de la misma jornada. Una salida
+ * olvidada no está aquí: no es alguien dentro, y sus horas no se saben.
+ */
+export function dentroPorEmpleado(
+  sessions: readonly WorkSession[],
+  enCursoPorSesion: Map<string, EnCurso>,
+  nowISO: string,
+): Map<string, DentroDeLaPersona> {
+  const map = new Map<string, DentroDeLaPersona>();
+  for (const session of sessions) {
+    if (session.ends_at !== null) continue;
+    const enCurso = enCursoPorSesion.get(session.id);
+    const estado = estadoDeFila(session, alertsForSession(session, nowISO), enCurso);
+    if (estado !== 'trabajando' && estado !== 'descanso') continue;
+    map.set(session.employee_id, {
+      estado,
+      desde: session.starts_at,
+      minutos: minutosEnCurso(session, enCurso, nowISO),
+    });
+  }
+  return map;
 }

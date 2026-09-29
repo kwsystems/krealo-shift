@@ -4,7 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { SeparadorDeCabecera, SeparadorDeRegistro } from '@/components/ui/layout';
-import { MemberRow } from './member-row';
+import { ANCHO_DE_COLUMNA, MemberRow, type DentroEnEquipo } from './member-row';
+import { useResponsive } from '@/hooks/use-responsive';
 import type { TeamMember } from '@/features/team/hooks';
 import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
@@ -35,6 +36,8 @@ export type MemberListProps = {
   members: TeamMember[];
   /** Minutos recientes por empleado. Un `Map` y no un array: se busca por id en cada fila. */
   recentMinutesByMember: Map<string, number>;
+  /** Quién está dentro ahora. Sus minutos de hoy ya van sumados en `recentMinutesByMember`. */
+  dentroPorMiembro?: Map<string, DentroEnEquipo>;
   jobRoleNames: Map<string, string>;
   onSelect: (id: string) => void;
   testID?: string;
@@ -43,6 +46,7 @@ export type MemberListProps = {
 export function MemberList({
   members,
   recentMinutesByMember,
+  dentroPorMiembro,
   jobRoleNames,
   onSelect,
   testID = 'team-member-list',
@@ -52,11 +56,12 @@ export function MemberList({
       <MemberRow
         member={item}
         recentMinutes={recentMinutesByMember.get(item.id) ?? 0}
+        dentro={dentroPorMiembro?.get(item.id)}
         jobRoleNames={jobRoleNames}
         onPress={onSelect}
       />
     ),
-    [recentMinutesByMember, jobRoleNames, onSelect],
+    [recentMinutesByMember, dentroPorMiembro, jobRoleNames, onSelect],
   );
 
   return (
@@ -113,6 +118,9 @@ const styles = StyleSheet.create({
 function CabeceraDeColumnas() {
   const { t } = useTranslation();
   const estilos = useEstilosDeCabecera();
+  // Sin barra lateral no hay columna de estado: va bajo el nombre. Ver `member-row`.
+  const { isWide } = useResponsive();
+  const isCompact = !isWide;
   return (
     <>
       <View style={estilos.cabecera}>
@@ -123,12 +131,19 @@ function CabeceraDeColumnas() {
         es exactamente lo que una cabecera existe para evitar. Pasó en el primer intento,
         con la columna a 72 px.
       */}
-        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.horas}>
+        <AppText
+          variant="label"
+          tone="subtle"
+          accessibilityRole="header"
+          style={isCompact ? estilos.horasCompacta : estilos.horas}
+        >
           {t('team.recentHours')}
         </AppText>
-        <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>
-          {t('team.statusColumn')}
-        </AppText>
+        {isCompact ? null : (
+          <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>
+            {t('team.statusColumn')}
+          </AppText>
+        )}
       </View>
       <SeparadorDeCabecera />
     </>
@@ -147,6 +162,7 @@ const useEstilosDeCabecera = estilosDelTema((colors) => ({
   },
   hueco: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   /* Los MISMOS anchos que en la fila: si no coinciden, el rótulo señala otra columna. */
-  horas: { width: 104, textAlign: 'right', flexShrink: 0 },
-  estado: { width: 104, textAlign: 'right', flexShrink: 0 },
+  horas: { width: ANCHO_DE_COLUMNA.horas, textAlign: 'right', flexShrink: 0 },
+  horasCompacta: { width: ANCHO_DE_COLUMNA.horasCompacta, textAlign: 'right', flexShrink: 0 },
+  estado: { width: ANCHO_DE_COLUMNA.estado, textAlign: 'right', flexShrink: 0 },
 }));

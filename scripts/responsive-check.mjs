@@ -27,6 +27,10 @@
  *      kiosco (§25) y que en el panel no se aplicaba: los siete destinos de la barra
  *      lateral median 30 px de alto, en un panel que se usa en un iPad.
  *
+ *   2b. PALABRAS PARTIDAS POR LA MITAD. Todo cabe y nada se recorta, pero la caja es más
+ *      estrecha que una palabra y el navegador la parte: «Bru / no / Sal / aza / r». Se
+ *      pregunta al navegador en cuántos renglones cae cada palabra ya pintada.
+ *
  *   4. CONTENEDORES QUE SCROLLEAN EN HORIZONTAL POR DENTRO. Este es el que hace falta de
  *      verdad. `react-native-web` mete casi todo en scrollers, así que un desborde interno
  *      NO mueve el `scrollWidth` del documento: una medida ingenua del documento da «todo
@@ -308,6 +312,7 @@ const MEDIR = (minimoTactil) => {
       .trim();
   const fuera = [];
   const recortes = [];
+  const partidas = [];
   const tactiles = [];
   const scrollers = [];
   let medidos = 0;
@@ -345,6 +350,38 @@ const MEDIR = (minimoTactil) => {
     if (el.children.length === 0 && texto.length > 0) {
       if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
         recortes.push({ texto, visible: el.clientWidth, necesario: anchoDeVerdad(el) });
+      }
+    }
+
+    /*
+     * 2b. PALABRAS PARTIDAS POR LA MITAD. El fallo que las otras medidas no ven: el texto no
+     * se sale ni se recorta, envuelve —así que todo «cabe»— pero su caja es más estrecha que
+     * una de sus palabras y el navegador la parte por donde puede. Así se leían los nombres
+     * de Equipo en un teléfono: «Bru / no / Sal / aza / r». Se vio en una captura; el arnés
+     * estaba en verde.
+     *
+     * NO SE ESTIMA CON LA FUENTE, SE PREGUNTA. La primera versión medía cada palabra en un
+     * lienzo y daba casos de 2 px falsos: el lienzo no aplica las cifras tabulares, que
+     * cambian el ancho de «03:00». Ahora se le pide al navegador el rectángulo de cada
+     * palabra ya pintada: si ocupa dos renglones, está partida. Es lo que ve el ojo.
+     */
+    if (el.children.length === 0 && texto.length > 0 && r.width > 0) {
+      const nodo = el.firstChild;
+      if (nodo !== null && nodo.nodeType === Node.TEXT_NODE) {
+        const contenido = nodo.textContent || '';
+        const rango = document.createRange();
+        for (const encontrada of contenido.matchAll(/\S{2,}/g)) {
+          const inicio = encontrada.index ?? 0;
+          rango.setStart(nodo, inicio);
+          rango.setEnd(nodo, inicio + encontrada[0].length);
+          const renglones = new Set(
+            [...rango.getClientRects()].filter((c) => c.width > 0).map((c) => Math.round(c.top)),
+          );
+          if (renglones.size > 1) {
+            partidas.push({ texto, palabra: encontrada[0], tiene: Math.floor(r.width) });
+            break;
+          }
+        }
       }
     }
 
@@ -391,7 +428,7 @@ const MEDIR = (minimoTactil) => {
     }
   }
 
-  return { fuera, recortes, tactiles, scrollers, medidos, vw };
+  return { fuera, recortes, partidas, tactiles, scrollers, medidos, vw };
 };
 
 const { base, cerrar } = await servirExport(DIR, 8260);
@@ -552,6 +589,13 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
         'recorte',
         c.texto,
         `«${c.texto}» está recortado: ${c.visible}px visibles de ${c.necesario} que necesita`,
+      );
+    }
+    for (const p of m.partidas) {
+      anotar(
+        'palabra',
+        p.texto,
+        `«${p.palabra}» se parte por la mitad en una caja de ${p.tiene}px («${p.texto}»)`,
       );
     }
     for (const t of m.tactiles) {
@@ -937,5 +981,5 @@ if (problemas.length > 0) {
 console.log(
   `\nOK: ${PANTALLAS.length} pantallas × ${ANCHOS.length} anchos, ${HOJAS.length} hojas y ` +
     `${PANTALLAS_LARGAS.length} pantallas con un nombre de empresa largo. ` +
-    'Nada se sale, nada se recorta sin querer, y todo lo que se pulsa llega al mínimo táctil.',
+    'Nada se sale, nada se recorta sin querer, ninguna palabra se parte, y todo lo que se pulsa llega al mínimo táctil.',
 );

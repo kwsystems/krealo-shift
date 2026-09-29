@@ -6,13 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { fetchExportRows, type WorkSession } from './api';
 import { alertsForSession, overlappingSessionIds, type TimesheetAlert } from './alerts';
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
-import { dentroPrimero, totalEnCurso, type EnCurso } from './en-curso';
+import { dentroPrimero, enCursoPorSesionDe, totalEnCurso } from './en-curso';
 import {
   useAdjustments,
   useDailySummaries,
   usePeriod,
   useTimeEvents,
   useTimesheetMutations,
+  useSesionesAlDiaCon,
   useTimesheetTotals,
   useWorkSessions,
 } from './hooks';
@@ -133,16 +134,9 @@ export function TimesheetsScreen() {
   const overlapping = useMemo(() => overlappingSessionIds(allSessions), [allSessions]);
 
   const workingNow = useWorkingNow(scope.locationId);
-  const enCursoPorSesion = useMemo(() => {
-    const map = new Map<string, EnCurso>();
-    for (const fila of workingNow.data ?? []) {
-      map.set(fila.work_session_id, {
-        estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
-        descansoDesde: fila.break_started_at,
-      });
-    }
-    return map;
-  }, [workingNow.data]);
+  const enCursoPorSesion = useMemo(() => enCursoPorSesionDe(workingNow.data), [workingNow.data]);
+  // Una salida o un descanso cambian quién está dentro: ver `useSesionesAlDiaCon`.
+  useSesionesAlDiaCon(scope.locationId, workingNow.data);
 
   const alertsBySession = useMemo(() => {
     const map = new Map<string, TimesheetAlert[]>();

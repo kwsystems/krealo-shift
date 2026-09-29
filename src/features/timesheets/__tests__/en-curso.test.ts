@@ -1,7 +1,9 @@
 import { alertsForSession } from '../alerts';
 import type { WorkSession } from '../api';
 import {
+  dentroPorEmpleado,
   dentroPrimero,
+  enCursoPorSesionDe,
   estadoDeFila,
   minutosEnCurso,
   totalEnCurso,
@@ -153,5 +155,47 @@ describe('lista de Horas con gente dentro', () => {
       personas: 1,
       minutos: 135,
     });
+  });
+});
+
+describe('quién está dentro, por persona (Equipo)', () => {
+  it('lee las filas de «quién está dentro»', () => {
+    const map = enCursoPorSesionDe([
+      { work_session_id: 'a', attendance_state: 'WORKING', break_started_at: null },
+      {
+        work_session_id: 'b',
+        attendance_state: 'ON_BREAK',
+        break_started_at: '2026-09-29T17:00:00.000Z',
+      },
+    ]);
+    expect(map.get('a')).toEqual({ estado: 'trabajando', descansoDesde: null });
+    expect(map.get('b')).toEqual({
+      estado: 'descanso',
+      descansoDesde: '2026-09-29T17:00:00.000Z',
+    });
+    expect(enCursoPorSesionDe(undefined).size).toBe(0);
+  });
+
+  it('da lo que lleva cada persona, con la misma cuenta que Horas', () => {
+    const trabajando = abierta({ id: 'a', employee_id: 'e1', unpaid_break_minutes: 60 });
+    const enCurso = enCursoPorSesionDe([
+      { work_session_id: 'a', attendance_state: 'WORKING', break_started_at: null },
+    ]);
+    const persona = dentroPorEmpleado([trabajando], enCurso, AHORA).get('e1');
+    expect(persona).toEqual({ estado: 'trabajando', desde: trabajando.starts_at, minutos: 75 });
+    // Y es exactamente lo que diría su fila en Horas.
+    expect(persona?.minutos).toBe(minutosEnCurso(trabajando, enCurso.get('a'), AHORA));
+  });
+
+  it('ni la jornada cerrada ni la salida olvidada son alguien dentro', () => {
+    const cerrada = abierta({
+      id: 'c',
+      employee_id: 'e1',
+      ends_at: '2026-09-29T16:00:00.000Z',
+      status: 'complete',
+      net_minutes: 65,
+    });
+    const olvidada = abierta({ id: 'o', employee_id: 'e2', starts_at: '2026-09-28T14:00:00.000Z' });
+    expect(dentroPorEmpleado([cerrada, olvidada], new Map(), AHORA).size).toBe(0);
   });
 });

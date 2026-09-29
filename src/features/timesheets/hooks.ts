@@ -1,5 +1,5 @@
 import type { BreakReason } from '@/domain/break-reason';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -72,6 +72,45 @@ export function useWorkSessions(params: {
     enabled: params.locationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
+}
+
+/**
+ * LAS SESIONES SE VUELVEN A PEDIR CUANDO CAMBIA QUIÉN ESTÁ DENTRO.
+ *
+ * «Quién está dentro» se consulta cada minuto; las sesiones y los resúmenes no. Así que
+ * al marcar alguien su salida, la fila seguía abierta en la caché y Horas seguía
+ * diciendo «Trabajando · en curso» de quien ya se había ido, hasta recargar. Lo mismo al
+ * volver del refrigerio: el descanso recién cerrado no se descontaba.
+ *
+ * En vez de pedir la semana entera cada minuto, se pide SOLO cuando algo cambia: una
+ * entrada, una salida, un descanso que empieza o acaba. Cada uno de esos cambia la firma
+ * de abajo, y es justo cuando las horas cambian.
+ *
+ * El primer resultado no dispara nada: es la foto inicial, no un cambio. Y cambiar de
+ * sede tampoco, porque es otra sede y no un cambio en esta.
+ */
+export function useSesionesAlDiaCon(
+  locationId: string | null,
+  filas: readonly { work_session_id: string; attendance_state: string }[] | undefined,
+) {
+  const queryClient = useQueryClient();
+  const firma =
+    filas === undefined
+      ? null
+      : filas
+          .map((fila) => `${fila.work_session_id}:${fila.attendance_state}`)
+          .sort()
+          .join('|');
+  const anterior = useRef<{ locationId: string; firma: string } | null>(null);
+
+  useEffect(() => {
+    if (firma === null || locationId === null) return;
+    const antes = anterior.current;
+    anterior.current = { locationId, firma };
+    if (antes === null || antes.locationId !== locationId || antes.firma === firma) return;
+    void queryClient.invalidateQueries({ queryKey: ['timesheet', 'sessions', locationId] });
+    void queryClient.invalidateQueries({ queryKey: ['timesheet', 'summaries', locationId] });
+  }, [firma, locationId, queryClient]);
 }
 
 export function useTimeEvents(params: {

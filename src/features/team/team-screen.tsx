@@ -18,10 +18,19 @@ import {
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
-import { addDaysToKey, dateKeyOf } from '@/features/schedules/week';
+import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 import { useRequests } from '@/features/requests/hooks';
 import { useJobRoles } from './hooks';
-import { useDailySummaries } from '@/features/timesheets/hooks';
+import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
+import {
+  useDailySummaries,
+  useSesionesAlDiaCon,
+  useWorkSessions,
+} from '@/features/timesheets/hooks';
+import { useLiveClock } from '@/hooks/use-live-clock';
+import { useWorkingNow } from '@/hooks/use-manager-dashboard';
+import type { DentroEnEquipo } from '@/components/team/member-row';
+import { formatClockTime } from '@/utils/time';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { currentLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
@@ -63,13 +72,53 @@ export function TeamScreen() {
   const jobRolesQuery = useJobRoles(organizationId);
   const mutations = useTeamMutations(organizationId);
 
-  const todayKey = dateKeyOf(new Date().toISOString(), scope.timezone);
+  const now = useLiveClock('minute');
+  const nowISO = now.toISOString();
+  const todayKey = dateKeyOf(nowISO, scope.timezone);
   const requests = useRequests({ organizationId, locationId: scope.locationId });
   const recent = useDailySummaries({
     locationId: scope.locationId,
     from: addDaysToKey(todayKey, -6),
     to: todayKey,
   });
+
+  /*
+   * QUIÉN ESTÁ DENTRO Y CUÁNTO LLEVA, con la misma cuenta que Horas.
+   *
+   * Los resúmenes de arriba solo suman jornadas CERRADAS: la de hoy entraba al marcar la
+   * salida, y a media mañana la fila de quien estaba trabajando decía lo mismo que si no
+   * hubiera venido. Lo vio Andree el 29-sep: «¿por qué no salen sus horas corriendo, así
+   * como en Horas?».
+   *
+   * Hace falta la sesión y no solo «quién está dentro», porque el refrigerio que ya tomó
+   * se descuenta de la sesión. Se piden desde ayer: un turno de noche abierto desde ayer
+   * sigue siendo alguien dentro.
+   */
+  const ayer = addDaysToKey(todayKey, -1);
+  const manana = addDaysToKey(todayKey, 1);
+  const abiertas = useWorkSessions({
+    organizationId,
+    locationId: scope.locationId,
+    fromISO: localDateTimeToInstant(ayer, '00:00', scope.timezone) ?? nowISO,
+    toISO: localDateTimeToInstant(manana, '00:00', scope.timezone) ?? nowISO,
+    cacheKey: { from: ayer, to: manana },
+  });
+  const workingNow = useWorkingNow(scope.locationId);
+  useSesionesAlDiaCon(scope.locationId, workingNow.data);
+  const dentro = useMemo(
+    () => dentroPorEmpleado(abiertas.data ?? [], enCursoPorSesionDe(workingNow.data), nowISO),
+    [abiertas.data, workingNow.data, nowISO],
+  );
+  const dentroPorMiembro = useMemo(() => {
+    const map = new Map<string, DentroEnEquipo>();
+    for (const [employeeId, persona] of dentro) {
+      map.set(employeeId, {
+        estado: persona.estado,
+        desde: formatClockTime(persona.desde, scope.timezone, scope.timeFormat, language),
+      });
+    }
+    return map;
+  }, [dentro, scope.timezone, scope.timeFormat, language]);
 
   const locationNames = useMemo(() => {
     const map = new Map<string, string>();
@@ -153,8 +202,12 @@ export function TeamScreen() {
     for (const day of recent.data ?? []) {
       total.set(day.employee_id, (total.get(day.employee_id) ?? 0) + day.net_minutes);
     }
+    // Lo que lleva hoy quien sigue dentro: ver `dentro`, arriba.
+    for (const [employeeId, persona] of dentro) {
+      total.set(employeeId, (total.get(employeeId) ?? 0) + persona.minutos);
+    }
     return total;
-  }, [recent.data]);
+  }, [recent.data, dentro]);
 
   const submitForm = (draft: EmployeeDraft) => {
     if (form === null) return;
@@ -311,6 +364,7 @@ export function TeamScreen() {
                 <MemberList
                   members={filtered}
                   recentMinutesByMember={recentMinutesByMember}
+                  dentroPorMiembro={dentroPorMiembro}
                   jobRoleNames={jobRoleNames}
                   onSelect={setSelectedId}
                 />
@@ -330,6 +384,7 @@ export function TeamScreen() {
           recentSummaries={recentForSelected}
           recentPending={recent.isPending}
           recentError={recent.error}
+          enCurso={dentro.get(selected.id)}
           requests={requestsForSelected}
           timezone={scope.timezone}
           timeFormat={scope.timeFormat}

@@ -857,7 +857,7 @@
     "period": "Period",
     "regular": "Regular",
     "breaks": "Breaks",
-    "overtimeInformative": "Overtime (informational)",
+    "overtimeInformative": "Overtime (info only)",
     "netHours": "Net hours",
     "dailyDetail": "Daily detail",
     "addManualEntry": "Add manual entry",

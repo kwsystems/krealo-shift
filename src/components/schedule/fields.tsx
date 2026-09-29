@@ -151,8 +151,8 @@ export function StatTile({
     <View style={[styles.tile, tinte === null ? null : { backgroundColor: tinte.bg }]}>
       {/*
         LA ETIQUETA TIENE QUE PODER ENVOLVER, y esto es la consecuencia de estrechar la
-        ficha a 104 px: le quedan 72 de contenido, y «Regulares» con su icono y su hueco
-        pide 81. Sin envolver, la fila desbordaba su ficha 5 px y la fila de seis fichas
+        ficha a 104 px: le quedaban 72 de contenido —80 desde que el relleno bajó a 12—, y
+        «Regulares» con su icono y su hueco pide 81. Sin envolver, la fila desbordaba su ficha 5 px y la fila de seis fichas
         desbordaba su contenedor 6 px a 360 px de ancho, recortados en silencio por un
         `overflow: hidden`. Lo midió `responsive:check`; a ojo no se veía porque lo que
         sobraba quedaba justo fuera del borde.
@@ -798,7 +798,12 @@ const useEstilos = estilosDelTema((colors) => ({
     borderTopWidth: borderWidth.hairline,
     borderTopColor: colors.filoElevado,
     paddingVertical: spacing.md,
-    paddingHorizontal: spacing.base,
+    /*
+     * 12 Y NO 16 DE RELLENO LATERAL, y son los ocho píxeles que partían «(informativo)» por
+     * la mitad en un teléfono de 360: la ficha mide 104, con 16 por lado le quedaban 72, y
+     * esa palabra pide 74. Lo cazó la medida de palabras partidas de `responsive:check`.
+     */
+    paddingHorizontal: spacing.md,
     ...shadows.card,
   },
   chipRow: {
