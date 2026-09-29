@@ -71,4 +71,18 @@ describe('paridad de traducciones es-PE / en', () => {
       expect(enKeys).toContain(`${base}_other`);
     }
   });
+
+  /*
+   * LA RAYA QUE ABRE UN INCISO VA PEGADA A SU PALABRA. El navegador puede cortar la línea
+   * justo después de una raya, y entonces «—cinco,» queda con la raya colgando al final de
+   * una línea y «cinco,» empezando la siguiente. Lo cazó `responsive:check` el 29-sep en
+   * el manual a dos columnas. El arreglo es un WORD JOINER (U+2060) tras la raya: invisible,
+   * y el navegador no corta ahí. En inglés no hace falta: allí la raya va entre espacios.
+   */
+  it('ninguna raya que abre un inciso puede quedarse colgando al final de una línea', () => {
+    const colgantes = esKeys.filter((key) =>
+      /(^|\s)—[^\s\u2060]/.test(valueAt(esPE as Json, key) ?? ''),
+    );
+    expect(colgantes).toEqual([]);
+  });
 });
