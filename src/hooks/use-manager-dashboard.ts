@@ -110,7 +110,14 @@ export type RightNowEntry = {
 export type ManagerDashboard = {
   isPending: boolean;
   isFetching: boolean;
+  /** Error de lo que sostiene la pantalla: turnos y jornadas de la semana. */
   error: unknown;
+  /**
+   * Error SOLO de «quién está dentro», aparte. Antes iba en `error` y un fallo de esa
+   * consulta tapaba Inicio entero, turnos y todo: así se vio el 29-sep en San Miguel. Ver
+   * `viewEmployeesWorkingNow` y `indices.test.ts`.
+   */
+  workingNowError: unknown;
   refetch: () => void;
   workingCount: number;
   onBreakCount: number;
@@ -370,7 +377,8 @@ export function useManagerDashboard(params: {
     return {
       isPending: workingNow.isPending || weekShifts.isPending,
       isFetching: workingNow.isFetching || weekShifts.isFetching || weekSessions.isFetching,
-      error: workingNow.error ?? weekShifts.error ?? weekSessions.error,
+      error: weekShifts.error ?? weekSessions.error,
+      workingNowError: workingNow.error,
       refetch: () => {
         void workingNow.refetch();
         void weekShifts.refetch();

@@ -91,17 +91,28 @@ export const viewEmployeesWorkingNow = onCall(async (request) => {
        * Contar pares parece mas limpio y falla con el evento que falta: si alguien
        * marco inicio de pausa y el iPad se quedo sin bateria, el conteo dice «no hay
        * pausa» y el panel lo pinta trabajando.
+       *
+       * EN ORDEN ASCENDENTE, Y NO DESCENDENTE CON LIMITE. Era `orderBy('occurred_at',
+       * 'desc').limit(20)`, y esa consulta pide el indice (employee_id, occurred_at DESC)
+       * que en produccion NO EXISTE: el que hay en esa direccion lleva ademas `seq`, y
+       * Firestore no usa un indice con un campo de orden de mas. Asi que en cuanto habia
+       * alguien con la jornada abierta la vista entera fallaba, e Inicio decia «error» en
+       * San Miguel y no en Asia, donde no habia nadie dentro. El emulador no exige indices,
+       * por eso ninguna prueba lo vio: ver `indices.test.ts`.
+       *
+       * Ascendente la sirve (employee_id, occurred_at ASC), que existe y usan ya las
+       * funciones de fichaje. Sin limite: son los eventos de UNA jornada, un punado.
        */
       const eventos = await db
         .collection(COLLECTIONS.timeEvents)
         .where('employee_id', '==', sesion.employee_id)
         .where('occurred_at', '>=', sesion.starts_at)
-        .orderBy('occurred_at', 'desc')
-        .limit(20)
+        .orderBy('occurred_at', 'asc')
         .get();
 
       const ultimaPausa = eventos.docs
         .map((e) => e.data())
+        .reverse()
         .find((e) => tipoEfectivo(e) === 'break_start' || tipoEfectivo(e) === 'break_end');
 
       const enPausa = ultimaPausa !== undefined && tipoEfectivo(ultimaPausa) === 'break_start';

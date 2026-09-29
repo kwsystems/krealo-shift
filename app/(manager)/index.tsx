@@ -105,7 +105,12 @@ export default function ManagerHomeScreen() {
     () =>
       marcasDeHora(ventana, scope.timezone, isWide ? 6 : 4).map((marca) => ({
         fraccion: marca.fraccion,
-        texto: formatClockTime(marca.instante.toISOString(), scope.timezone, scope.timeFormat, language),
+        texto: formatClockTime(
+          marca.instante.toISOString(),
+          scope.timezone,
+          scope.timeFormat,
+          language,
+        ),
       })),
     [ventana, scope.timezone, scope.timeFormat, language, isWide],
   );
@@ -311,7 +316,28 @@ export default function ManagerHomeScreen() {
                   <AppText variant="section" accessibilityRole="header">
                     {t('admin.rightNow')}
                   </AppText>
-                  {dashboard.rightNow.length === 0 ? (
+                  {/*
+                    SI NO SE PUDO SABER QUIÉN ESTÁ DENTRO, SE DICE AQUÍ Y SOLO AQUÍ. Antes ese
+                    fallo tapaba Inicio entero con un error, aunque los turnos y las
+                    jornadas se hubieran leído bien. Y decir «no hay nadie» sería peor: es
+                    justo lo que no se sabe.
+                  */}
+                  {dashboard.workingNowError !== null ? (
+                    <InlineNotice
+                      tone="warning"
+                      icon="alert-circle-outline"
+                      title={t('admin.workingNowFailed')}
+                      body={t('admin.workingNowFailedHint')}
+                      action={
+                        <SecondaryButton
+                          label={t('common.retry')}
+                          onPress={dashboard.refetch}
+                          fullWidth={false}
+                          testID="home-working-now-retry"
+                        />
+                      }
+                    />
+                  ) : dashboard.rightNow.length === 0 ? (
                     <InlineNotice
                       tone="offShift"
                       icon="moon-outline"

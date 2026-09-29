@@ -26,6 +26,8 @@
     "workedHours": "Worked",
     "nobodyRightNow": "Nobody is clocked in right now",
     "nobodyRightNowHint": "People working, on break, late or absent show up here.",
+    "workingNowFailed": "We couldn't load who's in right now",
+    "workingNowFailedHint": "The rest of today is up to date. Try again in a moment.",
     "openSchedule": "Open the schedule",
     "sinceLabel": "Since {{time}}",
     "elapsedLabel": "{{duration}} so far",

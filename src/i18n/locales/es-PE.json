@@ -26,6 +26,8 @@
     "workedHours": "Registradas",
     "nobodyRightNow": "Nadie está fichado ahora",
     "nobodyRightNowHint": "Aquí aparecen quienes están trabajando, en descanso, atrasados o ausentes.",
+    "workingNowFailed": "No pudimos saber quién está dentro ahora",
+    "workingNowFailedHint": "El resto del día sí está al día. Vuelve a intentarlo en un momento.",
     "openSchedule": "Abrir el horario",
     "sinceLabel": "Desde las {{time}}",
     "elapsedLabel": "Lleva {{duration}}",
