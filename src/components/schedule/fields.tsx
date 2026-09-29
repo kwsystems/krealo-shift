@@ -117,6 +117,8 @@ export function KeyValueRow({
 const estilosDeFicha = StyleSheet.create({
   /* `minWidth: 0` con `flexShrink`: en la web, sin los dos, un texto no baja de su ancho. */
   etiquetaQueEncoge: { flexShrink: 1, minWidth: 0 },
+  /* Rótulo y detalle juntos, arriba: el `space-between` de la ficha deja el número abajo. */
+  arriba: { gap: spacing.xs },
 });
 
 export function StatTile({
@@ -125,11 +127,14 @@ export function StatTile({
   tone,
   icon,
   tintada = false,
+  detalle,
   onPress,
   testID,
 }: {
   label: string;
   value: string;
+  /** Una línea pequeña bajo el número: «2 personas». Para que el rótulo quepa en una. */
+  detalle?: string;
   /** SOLO cuando el número es una excepción que pide acción. Por defecto, neutra. */
   tone?: StatusTone;
   icon?: IconName;
@@ -152,23 +157,38 @@ export function StatTile({
       {/*
         LA ETIQUETA TIENE QUE PODER ENVOLVER, y esto es la consecuencia de estrechar la
         ficha a 104 px: le quedaban 72 de contenido —80 desde que el relleno bajó a 12—, y
-        «Regulares» con su icono y su hueco pide 81. Sin envolver, la fila desbordaba su ficha 5 px y la fila de seis fichas
-        desbordaba su contenedor 6 px a 360 px de ancho, recortados en silencio por un
+        «Regulares» con su icono y su hueco pide 81. Sin envolver, la fila desbordaba su
+        ficha 5 px y la fila de seis fichas desbordaba su contenedor 6 px a 360 px de ancho,
+        recortados en silencio por un
         `overflow: hidden`. Lo midió `responsive:check`; a ojo no se veía porque lo que
         sobraba quedaba justo fuera del borde.
       */}
-      <Row gap={spacing.xs} wrap align="center">
-        {icon !== undefined ? (
-          <Ionicons name={icon} size={16} color={palette === null ? colors.ink500 : palette.fg} />
-        ) : null}
-        <AppText
-          variant="label"
-          tone={palette === null ? 'subtle' : undefined}
-          style={estilosDeFicha.etiquetaQueEncoge}
-        >
-          {label}
-        </AppText>
-      </Row>
+      <View style={estilosDeFicha.arriba}>
+        <Row gap={spacing.xs} wrap align="center">
+          {icon !== undefined ? (
+            <Ionicons name={icon} size={16} color={palette === null ? colors.ink500 : palette.fg} />
+          ) : null}
+          <AppText
+            variant="label"
+            tone={palette === null ? 'subtle' : undefined}
+            style={estilosDeFicha.etiquetaQueEncoge}
+          >
+            {label}
+          </AppText>
+        </Row>
+        {detalle === undefined ? null : (
+          <AppText variant="label" tone="muted">
+            {detalle}
+          </AppText>
+        )}
+      </View>
+      {/*
+        EL NÚMERO VA ABAJO, y SOLO. Con `justifyContent: 'space-between'` en la ficha, en una
+        fila donde todas miden lo mismo los números caen en la misma línea aunque un rótulo
+        ocupe una línea y otro dos. Antes iban centrados, y cada número quedaba a la altura
+        que le tocara según su rótulo. El `detalle` va arriba, con el rótulo: debajo del
+        número lo subía 16 px respecto a sus vecinos (medido).
+      */}
       <AppText variant="section" tabular>
         {value}
       </AppText>
@@ -180,7 +200,7 @@ export function StatTile({
       <View
         style={styles.tileWrap}
         accessible
-        accessibilityLabel={`${label}: ${value}`}
+        accessibilityLabel={`${label}: ${value}${detalle === undefined ? '' : `, ${detalle}`}`}
         testID={testID}
       >
         {content}
@@ -192,7 +212,7 @@ export function StatTile({
     <Pressable
       style={styles.tileWrap}
       accessibilityRole="button"
-      accessibilityLabel={`${label}: ${value}`}
+      accessibilityLabel={`${label}: ${value}${detalle === undefined ? '' : `, ${detalle}`}`}
       onPress={onPress}
       testID={testID}
     >
@@ -386,16 +406,24 @@ export function SegmentedControl<T extends string>({
   value,
   options,
   onChange,
+  rotuloVisible = false,
   testID,
 }: {
   label: string;
   value: T;
   options: Option<T>[];
   onChange: (value: T) => void;
+  /**
+   * Pinta el rótulo encima, como `SelectField`. Hace falta cuando va en una
+   * `BarraDeControl` junto a otros mandos con rótulo: sin él, el segmentado quedaba una
+   * línea más arriba que sus vecinos y la barra se leía torcida. Lo señaló Andree en Horas
+   * el 29-sep: «parece todo desalineado».
+   */
+  rotuloVisible?: boolean;
   testID?: string;
 }) {
   const styles = useEstilos();
-  return (
+  const control = (
     <View accessibilityLabel={label} style={styles.segmentWrapper} testID={testID}>
       {options.map((option) => {
         const selected = option.value === value;
@@ -415,6 +443,15 @@ export function SegmentedControl<T extends string>({
           </Pressable>
         );
       })}
+    </View>
+  );
+  if (!rotuloVisible) return control;
+  return (
+    <View style={styles.field}>
+      <AppText variant="label" tone="muted">
+        {label}
+      </AppText>
+      {control}
     </View>
   );
 }
@@ -790,7 +827,8 @@ const useEstilos = estilosDelTema((colors) => ({
      * las tres fichas aplastadas con el número cortado.
      */
     minHeight: sizes.touchTargetPreferred + spacing.lg,
-    justifyContent: 'center',
+    // Rótulo arriba, número abajo: ver el comentario del número en `StatTile`.
+    justifyContent: 'space-between',
     gap: spacing.xs,
     borderRadius: radii.card,
     backgroundColor: colors.raised,

@@ -354,11 +354,19 @@ export function TimesheetsScreen() {
                         { value: 'approved', label: t('timesheet.statusApproved') },
                       ]}
                       onChange={setStatusFilter}
+                      rotuloVisible
                       testID="timesheet-status-filter"
                     />
                   </BarraDeControl>
 
-                  <Row gap={spacing.sm} wrap align="flex-start">
+                  {/*
+                    `stretch` Y NO `flex-start`: todas las casillas de un renglón miden lo que
+                    la más alta, y con el número abajo (ver `StatTile`) los números quedan en
+                    la misma línea. Con `flex-start` cada casilla medía lo que su rótulo, y
+                    «Dentro ahora» y «Horas extra (informativo)», de dos líneas, dejaban la
+                    fila en escalera.
+                  */}
+                  <Row gap={spacing.sm} wrap align="stretch">
                     {/*
                       LA ÚNICA CASILLA VERDE, y es la excepción a la regla de esta fila —«tono
                       solo cuando el número pide acción»— a propósito: no pide acción, pero es
@@ -367,8 +375,9 @@ export function TimesheetsScreen() {
                     */}
                     {enCursoAhora.personas > 0 ? (
                       <StatTile
-                        label={t('timesheet.liveTile', { count: enCursoAhora.personas })}
+                        label={t('timesheet.liveTile')}
                         value={minutesToHHmm(enCursoAhora.minutos)}
+                        detalle={t('timesheet.livePeople', { count: enCursoAhora.personas })}
                         icon="radio-button-on"
                         tone="working"
                         tintada

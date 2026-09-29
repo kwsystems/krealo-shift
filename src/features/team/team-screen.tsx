@@ -319,6 +319,7 @@ export function TeamScreen() {
                     { value: 'all', label: t('team.statusAll') },
                   ]}
                   onChange={setStatusFilter}
+                  rotuloVisible
                   testID="team-status-filter"
                 />
 
