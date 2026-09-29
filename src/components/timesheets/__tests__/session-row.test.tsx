@@ -95,6 +95,19 @@ describe('SessionRow con la jornada abierta', () => {
     expect(screen.getByText('en pausa')).toBeTruthy();
   });
 
+  it('si su pausa es la comida, dice «Almorzando»', async () => {
+    await pintar({
+      enCurso: {
+        estado: 'descanso',
+        descansoDesde: '2026-09-29T16:55:00.000Z',
+        motivo: 'meal',
+      },
+    }).render();
+    expect(screen.getByText('Almorzando')).toBeTruthy();
+    expect(screen.queryByText('En descanso')).toBeNull();
+    expect(screen.getByTestId('fila').props.accessibilityLabel).toMatch(/Almorzando/);
+  });
+
   it('la salida olvidada de verdad sigue diciendo «Sin salida», en rojo y sin cifra', async () => {
     await pintar({
       session: sesion({ starts_at: '2026-09-28T14:55:00.000Z' }),

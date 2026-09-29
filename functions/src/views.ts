@@ -125,6 +125,13 @@ export const viewEmployeesWorkingNow = onCall(async (request) => {
         starts_at: sesion.starts_at,
         shift_id: sesion.shift_id ?? null,
         break_started_at: enPausa ? ultimaPausa?.occurred_at : null,
+        /*
+         * EL MOTIVO DE LA PAUSA ABIERTA, para poder decir «Almorzando» y no solo «En
+         * descanso». Lo pidió Andree: en la tienda importa saber quién está comiendo. Es
+         * el motivo que eligió al fichar (`meal`, `errand`...); `null` si no lo dijo o si
+         * no está en pausa.
+         */
+        break_reason: enPausa ? ((ultimaPausa?.break_reason as string | null) ?? null) : null,
         attendance_state: enPausa ? 'ON_BREAK' : 'WORKING',
       };
     }),

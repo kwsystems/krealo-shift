@@ -46,6 +46,15 @@ describe('estado de un turno del Horario ahora mismo', () => {
     expect(estadoDelTurnoAhora(turno(), dentro({ estado: 'descanso' }), AHORA)).toBe('descanso');
   });
 
+  it('en su almuerzo sale «almorzando»; en otra pausa, en descanso', () => {
+    expect(
+      estadoDelTurnoAhora(turno(), dentro({ estado: 'descanso', motivo: 'meal' }), AHORA),
+    ).toBe('almorzando');
+    expect(
+      estadoDelTurnoAhora(turno(), dentro({ estado: 'descanso', motivo: 'errand' }), AHORA),
+    ).toBe('descanso');
+  });
+
   it('un turno en su horario SIN fichaje no se pinta', () => {
     expect(estadoDelTurnoAhora(turno(), undefined, AHORA)).toBeNull();
   });

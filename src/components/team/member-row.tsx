@@ -7,6 +7,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { TeamMember } from '@/features/team/hooks';
+import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO, estadoVisible } from '@/features/timesheets/en-curso';
 import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
@@ -29,6 +30,8 @@ import { minutesToHHmm } from '@/utils/time';
 /** Quien está dentro ahora: si trabaja o está en su descanso, y desde qué hora entró. */
 export type DentroEnEquipo = {
   estado: 'trabajando' | 'descanso';
+  /** El motivo de la pausa abierta: «Almorzando» si es la comida. Ver `estadoVisible`. */
+  motivo?: string | null;
   /** La hora de entrada, ya escrita en el formato de la sede. */
   desde: string;
 };
@@ -56,16 +59,15 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
    * fila —«Activo» y «Trabajando»— se leerían como dos cosas del mismo peso cuando solo
    * una es noticia. Es la misma palabra, el mismo icono y el mismo verde que en Horas.
    */
+  const visible = dentro === undefined ? null : estadoVisible(dentro.estado, dentro.motivo);
   const estado =
-    dentro?.estado === 'trabajando'
-      ? t('timesheet.stateWorking')
-      : dentro?.estado === 'descanso'
-        ? t('timesheet.stateOnBreak')
-        : member.status === 'active'
-          ? t('team.statusActive')
-          : member.status === 'inactive'
-            ? t('team.statusInactive')
-            : t('team.statusInvited');
+    visible !== null
+      ? t(CLAVE_DE_ESTADO[visible])
+      : member.status === 'active'
+        ? t('team.statusActive')
+        : member.status === 'inactive'
+          ? t('team.statusInactive')
+          : t('team.statusInvited');
 
   const puestos =
     member.jobRoleIds.length === 0
@@ -88,13 +90,11 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
               : 'offShift'
       }
       icon={
-        dentro?.estado === 'trabajando'
-          ? 'radio-button-on'
-          : dentro?.estado === 'descanso'
-            ? 'cafe-outline'
-            : member.status === 'active'
-              ? 'checkmark-circle'
-              : 'pause-circle-outline'
+        visible !== null
+          ? ICONO_DE_ESTADO[visible]
+          : member.status === 'active'
+            ? 'checkmark-circle'
+            : 'pause-circle-outline'
       }
       compact
     />

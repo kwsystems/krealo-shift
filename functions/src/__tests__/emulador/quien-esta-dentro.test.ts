@@ -28,7 +28,7 @@ const verComoGerente = (): Promise<unknown> =>
   });
 
 let contador = 0;
-async function evento(tipo: string, instante: string) {
+async function evento(tipo: string, instante: string, motivo: string | null = null) {
   contador += 1;
   await db
     .collection(COLLECTIONS.timeEvents)
@@ -41,6 +41,7 @@ async function evento(tipo: string, instante: string) {
       event_type: tipo,
       occurred_at: instante,
       seq: contador,
+      break_reason: motivo,
     });
 }
 
@@ -87,6 +88,17 @@ type Fila = { attendance_state: string; break_started_at: string | null; shift_i
 const filas = async () => (await verComoGerente()) as Fila[];
 
 describe('quién está dentro', () => {
+  it('dice el motivo de la pausa abierta, para poder decir «Almorzando»', async () => {
+    await evento('break_start', '2026-09-29T18:00:00.000Z', 'meal');
+    const [enPausa] = (await verComoGerente()) as { break_reason: string | null }[];
+    expect(enPausa?.break_reason).toBe('meal');
+
+    // Al volver, el motivo se va con la pausa.
+    await evento('break_end', '2026-09-29T19:00:00.000Z', 'meal');
+    const [deVuelta] = (await verComoGerente()) as { break_reason: string | null }[];
+    expect(deVuelta?.break_reason).toBeNull();
+  });
+
   it('recién entrada, trabajando', async () => {
     const [fila] = await filas();
     expect(fila).toMatchObject({

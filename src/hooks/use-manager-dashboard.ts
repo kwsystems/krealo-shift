@@ -31,6 +31,11 @@ const workingNowSchema = z.object({
   starts_at: z.string(),
   shift_id: docId().nullable(),
   break_started_at: z.string().nullable(),
+  /*
+   * El motivo de la pausa abierta. `default(null)` y no obligatorio: un servidor de antes
+   * de este campo no lo manda, y un campo obligatorio tumbaría Inicio, Horas y Horario.
+   */
+  break_reason: z.string().nullable().default(null),
   attendance_state: z.enum(['WORKING', 'ON_BREAK']),
 });
 
@@ -41,7 +46,7 @@ async function fetchWorkingNow(locationId: string): Promise<WorkingNowRow[]> {
     db
       .from(VIEWS.employeesWorkingNow)
       .select(
-        'work_session_id, employee_id, full_name, preferred_name, starts_at, shift_id, break_started_at, attendance_state',
+        'work_session_id, employee_id, full_name, preferred_name, starts_at, shift_id, break_started_at, break_reason, attendance_state',
       )
       .eq('location_id', locationId)
       .order('starts_at', { ascending: true }),

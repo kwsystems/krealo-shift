@@ -57,6 +57,11 @@ describe('fila de Equipo', () => {
     expect(screen.getByText('en pausa')).toBeTruthy();
   });
 
+  it('en su almuerzo sale «Almorzando»', async () => {
+    await pintar({ dentro: { estado: 'descanso', motivo: 'meal', desde: '09:55' } });
+    expect(screen.getByText('Almorzando')).toBeTruthy();
+  });
+
   it('quien no está dentro sigue como siempre', async () => {
     await pintar();
     expect(screen.getByText('Activo')).toBeTruthy();

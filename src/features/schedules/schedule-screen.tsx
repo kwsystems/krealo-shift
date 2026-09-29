@@ -12,6 +12,8 @@ import {
 } from './hooks';
 import { warningsForShift } from './conflicts';
 import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
+import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
+import { estadoVisible } from '@/features/timesheets/en-curso';
 import { PegarHorarioSheet } from './pegar-horario-sheet';
 import type { EmpleadoConocido } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
@@ -58,7 +60,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing } from '@/theme/tokens';
-import { minutesToHHmm } from '@/utils/time';
+import { formatClockTime, minutesToHHmm } from '@/utils/time';
 
 /**
  * Editor de horarios semanales (§11.3): la función principal del panel.
@@ -118,6 +120,8 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
         estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
         shiftId: fila.shift_id,
         desde: fila.starts_at,
+        motivo: fila.break_reason,
+        descansoDesde: fila.break_started_at,
       });
     }
     return map;
@@ -147,6 +151,27 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
     weekStart,
   });
   const names = useEmployeeNames(scope.organization?.id ?? null);
+  const enTurnoAhora = useMemo<PersonaEnTurno[]>(
+    () =>
+      (workingNow.data ?? []).map((fila) => {
+        const estado = estadoVisible(
+          fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
+          fila.break_reason,
+        );
+        const desde =
+          estado !== 'trabajando' && fila.break_started_at !== null
+            ? fila.break_started_at
+            : fila.starts_at;
+        return {
+          id: fila.employee_id,
+          nombre: names.get(fila.employee_id) ?? fila.preferred_name ?? fila.full_name,
+          estado,
+          motivo: fila.break_reason,
+          desde: formatClockTime(desde, scope.timezone, scope.timeFormat, language),
+        };
+      }),
+    [workingNow.data, names, scope.timezone, scope.timeFormat, language],
+  );
   const jobRolesQuery = useJobRoles(scope.organization?.id ?? null);
   const team = useTeam({
     organizationId: scope.organization?.id ?? null,
@@ -515,6 +540,9 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               ) : null}
 
               <ScheduleWarnings warnings={analysis.warnings} />
+
+              {/* Quién está en la tienda ahora mismo: solo tiene sentido en esta semana. */}
+              {position === 'current' ? <EnTurnoAhora personas={enTurnoAhora} /> : null}
 
               <AsyncSection
                 isPending={shiftsQuery.isPending || team.isPending}

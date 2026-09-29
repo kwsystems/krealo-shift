@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/states';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
+import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -69,12 +70,7 @@ export function ShiftCard({
           ? t('schedule.changedBadge')
           : t('schedule.statusDraft');
 
-  const estadoAhora =
-    enCurso === 'trabajando'
-      ? t('timesheet.stateWorking')
-      : enCurso === 'descanso'
-        ? t('timesheet.stateOnBreak')
-        : null;
+  const estadoAhora = enCurso === null ? null : t(CLAVE_DE_ESTADO[enCurso]);
 
   const accessibilityLabel = [
     showEmployeeName && employeeName !== undefined ? employeeName : null,
@@ -94,7 +90,7 @@ export function ShiftCard({
       style={[
         styles.card,
         enCurso === 'trabajando' ? styles.trabajando : null,
-        enCurso === 'descanso' ? styles.enDescanso : null,
+        enCurso === 'descanso' || enCurso === 'almorzando' ? styles.enDescanso : null,
         shift.status === 'cancelled' ? styles.cancelled : null,
         warnings.length > 0 ? styles.warned : null,
       ]}
@@ -139,7 +135,7 @@ export function ShiftCard({
           testID={testID === undefined ? undefined : `${testID}-ahora`}
         >
           <Ionicons
-            name={enCurso === 'trabajando' ? 'radio-button-on' : 'cafe'}
+            name={enCurso === null ? 'radio-button-on' : ICONO_DE_ESTADO[enCurso]}
             size={14}
             color={enCurso === 'trabajando' ? colors.success600 : colors.warning600}
           />

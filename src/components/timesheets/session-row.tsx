@@ -7,7 +7,14 @@ import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
-import { estadoDeFila, minutosEnCurso, type EnCurso } from '@/features/timesheets/en-curso';
+import {
+  CLAVE_DE_ESTADO,
+  ICONO_DE_ESTADO,
+  estadoDeFila,
+  estadoVisible,
+  minutosEnCurso,
+  type EnCurso,
+} from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -124,10 +131,15 @@ export function SessionRow({
         ? t('timesheet.sinceTime', { time: descansoDesde ?? start })
         : `${start} – ${end}`;
 
+  // «Almorzando» si su pausa es la comida: ver `estadoVisible`.
+  const visible =
+    estado === 'trabajando' || estado === 'descanso'
+      ? estadoVisible(estado, enCurso?.motivo)
+      : null;
+  const etiquetaDeEstado = visible === null ? '' : t(CLAVE_DE_ESTADO[visible]);
+
   const nombreAccesible = dentro
-    ? `${employeeName}. ${
-        estado === 'trabajando' ? t('timesheet.stateWorking') : t('timesheet.stateOnBreak')
-      }, ${segundaLinea}. ${t('timesheet.netHours')}: ${net}, ${t('timesheet.live')}`
+    ? `${employeeName}. ${etiquetaDeEstado}, ${segundaLinea}. ${t('timesheet.netHours')}: ${net}, ${t('timesheet.live')}`
     : `${employeeName}. ${start} – ${end}. ${t('timesheet.netHours')}: ${net}`;
 
   return (
@@ -179,13 +191,9 @@ export function SessionRow({
               {dentro ? (
                 <Row gap={spacing.xs} wrap align="center">
                   <StatusBadge
-                    label={
-                      estado === 'trabajando'
-                        ? t('timesheet.stateWorking')
-                        : t('timesheet.stateOnBreak')
-                    }
+                    label={etiquetaDeEstado}
                     tone={estado === 'trabajando' ? 'working' : 'onBreak'}
-                    icon={estado === 'trabajando' ? 'radio-button-on' : 'cafe-outline'}
+                    icon={ICONO_DE_ESTADO[visible ?? 'trabajando']}
                     compact
                   />
                   <AppText variant="help" tone="muted" tabular>

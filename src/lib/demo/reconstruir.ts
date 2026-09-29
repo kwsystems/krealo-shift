@@ -229,6 +229,9 @@ function reconstruir(almacen: Almacen, employeeId: string, locationId: string, z
             starts_at: startsAt,
             shift_id: null,
             break_started_at: pausaAbierta === null ? null : String(pausaAbierta.occurred_at),
+            // El motivo de la pausa, como lo devuelve el servidor: ver `viewEmployeesWorkingNow`.
+            break_reason:
+              pausaAbierta === null ? null : ((pausaAbierta.break_reason as string | null) ?? null),
             attendance_state: pausaAbierta === null ? 'WORKING' : 'ON_BREAK',
           },
         ]

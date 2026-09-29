@@ -114,6 +114,7 @@ export function TeamScreen() {
     for (const [employeeId, persona] of dentro) {
       map.set(employeeId, {
         estado: persona.estado,
+        motivo: persona.motivo,
         desde: formatClockTime(persona.desde, scope.timezone, scope.timeFormat, language),
       });
     }

@@ -27,6 +27,40 @@ export type EnCurso = {
   estado: 'trabajando' | 'descanso';
   /** Si está en descanso, desde cuándo. `null` si está trabajando. */
   descansoDesde: string | null;
+  /** El motivo de la pausa abierta (`meal`, `errand`…). `null` si trabaja o no lo dijo. */
+  motivo?: string | null;
+};
+
+/**
+ * CÓMO SE DICE EL ESTADO DE ALGUIEN DENTRO: «Trabajando», «Almorzando» o «En descanso».
+ *
+ * «Almorzando» cuando su pausa abierta es la comida. Lo pidió Andree el 29-sep: en la
+ * tienda importa saber quién está comiendo, y «En descanso» no lo decía. Vive aquí, una
+ * vez, porque lo dicen Horas, Equipo y Horario: tres copias acabarían llamando distinto a
+ * la misma persona en el mismo minuto.
+ */
+export type EstadoVisible = 'trabajando' | 'almorzando' | 'descanso';
+
+export function estadoVisible(
+  estado: 'trabajando' | 'descanso',
+  motivo: string | null | undefined,
+): EstadoVisible {
+  if (estado === 'trabajando') return 'trabajando';
+  return motivo === 'meal' ? 'almorzando' : 'descanso';
+}
+
+export const CLAVE_DE_ESTADO: Readonly<Record<EstadoVisible, string>> = {
+  trabajando: 'timesheet.stateWorking',
+  almorzando: 'timesheet.stateAtMeal',
+  descanso: 'timesheet.stateOnBreak',
+};
+
+export const ICONO_DE_ESTADO: Readonly<
+  Record<EstadoVisible, 'radio-button-on' | 'restaurant-outline' | 'cafe-outline'>
+> = {
+  trabajando: 'radio-button-on',
+  almorzando: 'restaurant-outline',
+  descanso: 'cafe-outline',
 };
 
 export type EstadoDeFila = 'cerrada' | 'trabajando' | 'descanso' | 'sinSalida';
@@ -127,6 +161,7 @@ export type FilaDentro = {
   work_session_id: string;
   attendance_state: string;
   break_started_at: string | null;
+  break_reason?: string | null;
 };
 
 /**
@@ -141,6 +176,7 @@ export function enCursoPorSesionDe(filas: readonly FilaDentro[] | undefined): Ma
     map.set(fila.work_session_id, {
       estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
       descansoDesde: fila.break_started_at,
+      motivo: fila.break_reason ?? null,
     });
   }
   return map;
@@ -148,6 +184,8 @@ export function enCursoPorSesionDe(filas: readonly FilaDentro[] | undefined): Ma
 
 export type DentroDeLaPersona = {
   estado: 'trabajando' | 'descanso';
+  /** El motivo de la pausa abierta: ver `estadoVisible`. */
+  motivo: string | null;
   /** Cuándo entró. */
   desde: string;
   /** Lo que lleva trabajado en la jornada abierta, con la misma cuenta que Horas. */
@@ -174,6 +212,7 @@ export function dentroPorEmpleado(
     if (estado !== 'trabajando' && estado !== 'descanso') continue;
     map.set(session.employee_id, {
       estado,
+      motivo: enCurso?.motivo ?? null,
       desde: session.starts_at,
       minutos: minutosEnCurso(session, enCurso, nowISO),
     });

@@ -1,5 +1,6 @@
 import type { ShiftRow } from './api';
 import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
+import { estadoVisible, type EstadoVisible } from '@/features/timesheets/en-curso';
 import { minutesBetween } from '@/utils/time';
 
 /**
@@ -21,9 +22,14 @@ export type DentroAhora = {
   shiftId: string | null;
   /** Cuándo empezó la jornada abierta. */
   desde: string;
+  /** El motivo de la pausa abierta: `meal` es «Almorzando». */
+  motivo?: string | null;
+  /** Desde cuándo está en pausa, si lo está. */
+  descansoDesde?: string | null;
 };
 
-export type EstadoDelTurno = 'trabajando' | 'descanso' | null;
+/** `almorzando` es un descanso cuyo motivo es la comida: ver `estadoVisible`. */
+export type EstadoDelTurno = EstadoVisible | null;
 
 export function estadoDelTurnoAhora(
   shift: ShiftRow,
@@ -44,14 +50,13 @@ export function estadoDelTurnoAhora(
    * tarde— solo se pinta aquel en el que entró. Y cubre a quien entra unos minutos antes
    * de su hora, que por reloj todavía no estaría «en turno».
    */
-  if (dentro.shiftId !== null) return dentro.shiftId === shift.id ? dentro.estado : null;
+  const visible = estadoVisible(dentro.estado, dentro.motivo);
+  if (dentro.shiftId !== null) return dentro.shiftId === shift.id ? visible : null;
 
   /*
    * FICHÓ SIN TURNO: se pinta el suyo que esté en curso, si lo hay. Pasa cuando el reloj no
    * encontró turno al que asociar la entrada —por ejemplo, porque se publicó después—.
    */
   const ahora = Date.parse(nowISO);
-  return Date.parse(shift.starts_at) <= ahora && ahora < Date.parse(shift.ends_at)
-    ? dentro.estado
-    : null;
+  return Date.parse(shift.starts_at) <= ahora && ahora < Date.parse(shift.ends_at) ? visible : null;
 }

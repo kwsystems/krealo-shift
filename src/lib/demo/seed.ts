@@ -669,6 +669,8 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       starts_at: aISO(entrada),
       shift_id: null,
       break_started_at: inicioDescanso === null ? null : aISO(inicioDescanso),
+      // Quien está en pausa en la demostración está comiendo: lo más común a media jornada.
+      break_reason: quien.enDescanso ? 'meal' : null,
       attendance_state: quien.enDescanso ? 'ON_BREAK' : 'WORKING',
     });
   }
