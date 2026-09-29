@@ -5,7 +5,7 @@ import { useUpcomingShifts, type TeamMember } from './hooks';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { AdminSheet, KeyValueRow } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
-import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { TimeEditRequest } from '@/features/requests/api';
@@ -40,6 +40,7 @@ export function EmployeeDetailSheet({
   onEdit,
   onToggleStatus,
   onResetPin,
+  onDelete,
   onClose,
 }: {
   /**
@@ -66,6 +67,11 @@ export function EmployeeDetailSheet({
   onEdit: () => void;
   onToggleStatus: () => void;
   onResetPin: () => void;
+  /**
+   * Eliminar definitivamente. Solo llega para dueño o administrador, y solo se ofrece con
+   * la persona ya inactiva: primero se desactiva, luego se elimina.
+   */
+  onDelete?: () => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -160,6 +166,14 @@ export function EmployeeDetailSheet({
               )}
             </View>
           </Row>
+          {member.status === 'inactive' && onDelete !== undefined ? (
+            <GhostButton
+              label={t('team.deleteAction')}
+              hint={t('team.deleteActionHint')}
+              onPress={onDelete}
+              testID="employee-delete"
+            />
+          ) : null}
         </Stack>
       }
     >

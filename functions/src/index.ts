@@ -52,6 +52,12 @@ export { purgarFotosDeFichaje } from './purga-fotos';
 
 export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './members';
 
+/*
+ * Eliminar a un empleado de PRUEBA con todo su historial. A quien se va se le desactiva;
+ * esto es para quien no debió existir. Ver sus tres seguros en el propio archivo.
+ */
+export { deleteEmployee } from './eliminar-empleado';
+
 export {
   activateKiosk,
   refreshKioskRoster,

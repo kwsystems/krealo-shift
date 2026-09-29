@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { EmployeeDraft } from './api';
 import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
+import { EliminarEmpleadoSheet } from './eliminar-empleado-sheet';
 import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from './employee-form';
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
 import { FormField } from '@/components/ui/form-field';
@@ -60,6 +61,8 @@ export function TeamScreen() {
     values: EmployeeFormValues;
   } | null>(null);
   const [pin, setPin] = useState<{ value: string; name: string } | null>(null);
+  /** A quién se está eliminando: ver `EliminarEmpleadoSheet`. */
+  const [eliminando, setEliminando] = useState<TeamMember | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const organizationId = scope.organization?.id ?? null;
@@ -423,6 +426,16 @@ export function TeamScreen() {
             )
           }
           onResetPin={() => resetPin(selected)}
+          onDelete={
+            scope.isAdmin
+              ? () => {
+                  // Una hoja encima de otra no: se cierra la ficha y se abre la de borrar.
+                  setSelectedId(null);
+                  mutations.remove.reset();
+                  setEliminando(selected);
+                }
+              : undefined
+          }
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -443,6 +456,27 @@ export function TeamScreen() {
 
       {pin !== null ? (
         <TemporaryPinSheet pin={pin.value} employeeName={pin.name} onClose={() => setPin(null)} />
+      ) : null}
+
+      {eliminando !== null ? (
+        <EliminarEmpleadoSheet
+          key={eliminando.id}
+          member={eliminando}
+          busy={mutations.remove.isPending}
+          error={mutations.remove.error}
+          onConfirm={(confirmName) =>
+            mutations.remove.mutate(
+              { employeeId: eliminando.id, confirmName },
+              {
+                onSuccess: () => {
+                  setFeedback(t('team.deleted', { name: eliminando.displayName }));
+                  setEliminando(null);
+                },
+              },
+            )
+          }
+          onClose={() => setEliminando(null)}
+        />
       ) : null}
     </AppScreen>
   );

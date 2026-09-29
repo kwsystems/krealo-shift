@@ -563,8 +563,53 @@ function registrarEventoDemo(
 
 function crearFunctions(almacen: Almacen) {
   return {
-    invoke: async (nombre: string, _opciones?: { body?: unknown }) => {
+    invoke: async (nombre: string, opciones?: { body?: unknown }) => {
       switch (nombre) {
+        /*
+         * ELIMINAR A UN EMPLEADO DE PRUEBA, de verdad: quita sus filas de cada tabla, igual
+         * que el servidor. Con un `{ ok: true }` que no borrara nada, la pantalla diría
+         * «eliminada» y la persona seguiría en la lista: dos cosas contradiciéndose.
+         */
+        case 'deleteEmployee': {
+          const cuerpo = (opciones?.body ?? {}) as { employeeId?: string; dryRun?: boolean };
+          const id = cuerpo.employeeId ?? '';
+          const suyas = (tabla: string) =>
+            (almacen.get(tabla) ?? []).filter((f) => f.employee_id === id);
+          const empleado = (almacen.get('employees') ?? []).find((f) => f.id === id);
+          const nombreCompleto = String(empleado?.full_name ?? '');
+          const recuento = {
+            fichajes: suyas('time_events').length,
+            jornadas: suyas('work_sessions').length,
+            turnos: suyas('shifts').length,
+            descansosLibres: suyas('rest_days').length,
+            solicitudes: suyas('time_edit_requests').length,
+            correcciones: 0,
+            otros:
+              suyas('employee_location_assignments').length + suyas('employee_job_roles').length,
+          };
+          if (cuerpo.dryRun === true) return sinError({ nombre: nombreCompleto, recuento });
+          for (const tabla of [
+            'time_events',
+            'work_sessions',
+            'shifts',
+            'rest_days',
+            'time_edit_requests',
+            'employee_location_assignments',
+            'employee_job_roles',
+            'daily_time_summary',
+            'employees_working_now',
+          ]) {
+            almacen.set(
+              tabla,
+              (almacen.get(tabla) ?? []).filter((f) => f.employee_id !== id),
+            );
+          }
+          almacen.set(
+            'employees',
+            (almacen.get('employees') ?? []).filter((f) => f.id !== id),
+          );
+          return sinError({ nombre: nombreCompleto, recuento });
+        }
         /*
          * EL PIN TIENE QUE FUNCIONAR, y con la primera versión no funcionaba.
          *
@@ -655,7 +700,7 @@ function crearFunctions(almacen: Almacen) {
         }
 
         case 'submit-time-event': {
-          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const cuerpo = (opciones?.body ?? {}) as Record<string, unknown>;
           const tipo = String(cuerpo.eventType ?? '');
           registrarEventoDemo(almacen, tipo, cuerpo.breakReason, cuerpo.breakNote);
           return sinError({
@@ -727,7 +772,7 @@ function crearFunctions(almacen: Almacen) {
          * bandeja seguiría igual: otra contradicción silenciosa.
          */
         case 'submit-time-edit-request': {
-          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const cuerpo = (opciones?.body ?? {}) as Record<string, unknown>;
           const empleada = (almacen.get('employees') ?? [])[0];
           const kind = String(cuerpo.kind ?? 'forgot_clock_out');
           const proposedAt = String(cuerpo.proposedAt ?? new Date().toISOString());
@@ -758,7 +803,7 @@ function crearFunctions(almacen: Almacen) {
           // (`attachPhotoResponseSchema`). Sin ella, la demostración daba la subida
           // por fallida y la reintentaba en cada pase, en silencio: no se podía ver
           // funcionar el camino entero de la foto.
-          const cuerpo = (_opciones?.body ?? {}) as Record<string, unknown>;
+          const cuerpo = (opciones?.body ?? {}) as Record<string, unknown>;
           const eventoId = typeof cuerpo.eventId === 'string' ? cuerpo.eventId : 'sin-evento';
           return sinError({
             ok: true,

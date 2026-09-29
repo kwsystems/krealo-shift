@@ -10,6 +10,7 @@ import {
   toAdminError,
 } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
+import { callFunction } from '@/lib/firebase/functions';
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
 /**
@@ -410,6 +411,44 @@ export async function resetEmployeePin(params: { employeeId: string }): Promise<
   } catch (error) {
     throw toAdminError(error);
   }
+}
+
+/**
+ * ELIMINAR A UN EMPLEADO DE PRUEBA, con todo su historial. Ver `deleteEmployee` en
+ * `functions/src/eliminar-empleado.ts`: solo a alguien ya inactivo, solo dueño o
+ * administrador, y con el nombre escrito.
+ */
+const recuentoSchema = z.object({
+  fichajes: z.number().int(),
+  jornadas: z.number().int(),
+  turnos: z.number().int(),
+  descansosLibres: z.number().int(),
+  solicitudes: z.number().int(),
+  correcciones: z.number().int(),
+  otros: z.number().int(),
+});
+const borradoSchema = z.object({ nombre: z.string(), recuento: recuentoSchema });
+export type RecuentoDeBorrado = z.infer<typeof recuentoSchema>;
+
+async function llamarBorrado(payload: {
+  employeeId: string;
+  dryRun?: boolean;
+  confirmName?: string;
+}): Promise<z.infer<typeof borradoSchema>> {
+  const { data, error } = await callFunction<unknown>('deleteEmployee', payload);
+  if (error !== null) throw toAdminError(error);
+  const parsed = borradoSchema.safeParse(data);
+  if (!parsed.success) throw new AdminError('unexpectedShape', parsed.error.message);
+  return parsed.data;
+}
+
+/** Cuánto se borraría, SIN borrar nada: lo que la pantalla enseña antes de confirmar. */
+export function previewDeleteEmployee(employeeId: string) {
+  return llamarBorrado({ employeeId, dryRun: true });
+}
+
+export function deleteEmployee(params: { employeeId: string; confirmName: string }) {
+  return llamarBorrado(params);
 }
 
 const upcomingShiftSchema = z.object({

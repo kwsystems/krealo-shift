@@ -10,6 +10,7 @@ import {
   fetchUpcomingShifts,
   createJobRole,
   renameJobRole,
+  deleteEmployee,
   resetEmployeePin,
   setJobRoleActive,
   setEmployeeStatus,
@@ -171,6 +172,21 @@ export function useTeamMutations(organizationId: string | null) {
   });
 
   /*
+   * ELIMINAR invalida también Horas, Inicio y Reportes: lo que se borra son sus fichajes,
+   * y esas pantallas los estaban enseñando. Con solo `team`, sus horas de prueba seguirían
+   * en Horas hasta recargar.
+   */
+  const remove = useMutation({
+    mutationFn: (params: { employeeId: string; confirmName: string }) => deleteEmployee(params),
+    onSuccess: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
+
+  /*
    * Los puestos invalidan lo MISMO que los empleados: la lista de puestos vive bajo la
    * clave `team`, y el horario pinta turnos que llevan puesto. Abrir uno nuevo tiene que
    * verse en el selector del formulario de empleado sin recargar.
@@ -191,7 +207,7 @@ export function useTeamMutations(organizationId: string | null) {
     onSuccess: invalidate,
   });
 
-  return { create, update, changeStatus, resetPin, addJobRole, renameRole, toggleJobRole };
+  return { create, update, changeStatus, resetPin, remove, addJobRole, renameRole, toggleJobRole };
 }
 
 export function useUpcomingShifts(organizationId: string | null, employeeId: string | null) {

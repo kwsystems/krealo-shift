@@ -63,6 +63,7 @@ export const COLLECTIONS = {
   kioskRejectedAttempts: 'kiosk_rejected_attempts',
   shifts: 'shifts',
   shiftPublications: 'shift_publications',
+  restDays: 'rest_days',
   timeEvents: 'time_events',
   workSessions: 'work_sessions',
   breakIntervals: 'break_intervals',
