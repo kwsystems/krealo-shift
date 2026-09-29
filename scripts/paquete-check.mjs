@@ -37,7 +37,11 @@
 import { existsSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { faltaEnElPaquete, VARIABLES_EXIGIDAS } from './lib/configuracion-horneada.mjs';
+import {
+  faltaEnElPaquete,
+  sobraEnElPaquete,
+  VARIABLES_EXIGIDAS,
+} from './lib/configuracion-horneada.mjs';
 
 const MODO = process.argv[2];
 const DIST = 'dist';
@@ -100,7 +104,19 @@ if (MODO === '--despues') {
     process.exit(1);
   }
 
-  const faltan = faltaEnElPaquete(readFileSync(join(carpeta, entrada), 'utf8'));
+  const texto = readFileSync(join(carpeta, entrada), 'utf8');
+  const sobran = sobraEnElPaquete(texto);
+  if (sobran.length > 0) {
+    console.error(`\nFALLA: el paquete construido lleva ${sobran.join(' y ')}.`);
+    console.error('  Con eso horneado nadie puede entrar: la app hablaría con un emulador que');
+    console.error('  no existe fuera de esta máquina. Quita `EXPO_PUBLIC_AUTH_EMULATOR_URL` de');
+    console.error('  `.env` y del entorno, y vuelve a construir.');
+    rmSync(DIST, { recursive: true, force: true });
+    console.error(`\n  Se borró \`${DIST}/\` para que no se pueda desplegar por error.`);
+    process.exit(1);
+  }
+
+  const faltan = faltaEnElPaquete(texto);
   if (faltan.length > 0) {
     console.error(`\nFALLA: el paquete construido no lleva ${faltan.join(' ni ')}.`);
     console.error('  Se construyó sin configuración, así que desplegarlo dejaría el sitio');

@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-import { COLLECTIONS, db, nowISO } from './shared/admin';
+import { cerrarContrasenaAjena, proveedorDeLaSesion } from './acceso-por-correo';
+import { COLLECTIONS, auth, db, nowISO } from './shared/admin';
 import { audit, membershipOf, requireRole, requireUid, type AppRole } from './shared/caller';
 
 /**
@@ -57,6 +58,19 @@ export const claimInvitation = onCall(async (request) => {
     throw new HttpsError('failed-precondition', 'Tu correo no está verificado.');
   }
 
+  /*
+   * UNA SESIÓN ABIERTA CON CONTRASEÑA NO CANJEA NADA. La app no ofrece contraseña en ningún
+   * sitio; solo existe porque encender el acceso por enlace la enciende también en la API.
+   * Quien llegue por ahí no se ganó ninguna invitación. Ver `acceso-por-correo.ts`.
+   */
+  const proveedor = proveedorDeLaSesion(token);
+  if (proveedor === 'password') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Entra con Google o con el enlace que te llega al correo.',
+    );
+  }
+
   const pendientes = await db
     .collection(COLLECTIONS.invitations)
     .where('email', '==', correo)
@@ -67,6 +81,13 @@ export const claimInvitation = onCall(async (request) => {
   if (invitacion === undefined) {
     return { claimed: false, reason: 'sin-invitacion' as const };
   }
+
+  /*
+   * ANTES DE CANJEAR POR ENLACE, SE CIERRA CUALQUIER CONTRASEÑA QUE LA CUENTA TUVIERA: es el
+   * secuestro previo de `acceso-por-correo.ts`. En el caso normal no hay ninguna.
+   */
+  const contrasenaAnulada =
+    proveedor === 'emailLink' ? await cerrarContrasenaAjena(uid, auth) : false;
 
   const datos = invitacion.data();
   const organizationId = datos.organization_id as string;
@@ -136,7 +157,7 @@ export const claimInvitation = onCall(async (request) => {
     action: 'invitation_claimed',
     entityType: 'organization_membership',
     entityId: membresiaRef.id,
-    after: { role: rol, email: correo },
+    after: { role: rol, email: correo, via: proveedor, contrasenaAnulada },
   });
 
   return { claimed: true, organizationId, role: rol };

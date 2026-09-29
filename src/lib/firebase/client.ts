@@ -3,6 +3,7 @@ import { getApps, initializeApp, type FirebaseApp } from 'firebase/app';
 import * as firebaseAuth from 'firebase/auth';
 import {
   browserLocalPersistence,
+  connectAuthEmulator,
   getAuth,
   initializeAuth,
   type Auth,
@@ -96,6 +97,10 @@ export function getFirebaseAuth(): Auth | null {
   if (Platform.OS === 'web') {
     authInstance = getAuth(instance);
     void authInstance.setPersistence(browserLocalPersistence);
+    // Solo en el paquete de pruebas de `correo:check`: ver `EXPO_PUBLIC_AUTH_EMULATOR_URL`.
+    const emulador = env.EXPO_PUBLIC_AUTH_EMULATOR_URL;
+    if (emulador !== undefined)
+      connectAuthEmulator(authInstance, emulador, { disableWarnings: true });
     return authInstance;
   }
 

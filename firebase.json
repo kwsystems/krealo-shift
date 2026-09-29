@@ -80,6 +80,11 @@
       "host": "127.0.0.1",
       "port": 9199
     },
+    "//auth": "Hace falta desde el acceso por enlace al correo (29-sep): claimInvitation anula la contraseña de una cuenta secuestrada, y eso solo se comprueba con usuarios de verdad en el emulador de Auth. También lo usa correo:check para entrar con un enlace sin mandar ningún correo.",
+    "auth": {
+      "host": "127.0.0.1",
+      "port": 9099
+    },
     "singleProjectMode": true,
     "hub": {
       "host": "127.0.0.1",

@@ -27,7 +27,7 @@
 import { readdirSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
-import { faltaEnElPaquete } from './lib/configuracion-horneada.mjs';
+import { faltaEnElPaquete, sobraEnElPaquete } from './lib/configuracion-horneada.mjs';
 
 const BASE = (process.argv[2] ?? 'https://krealo-shift.web.app').replace(/\/$/, '');
 const DIST = 'dist';
@@ -140,6 +140,13 @@ if (fallos.length === 0) {
     console.error(`\nFALLA: el paquete publicado no lleva ${faltan.join(' ni ')}.`);
     console.error('  Se construyó sin `.env`, así que el sitio enseña «Falta configuración');
     console.error('  del entorno» en vez de la aplicación. Copia `.env.example` a `.env`,');
+    console.error('  reconstruye y vuelve a desplegar.');
+    process.exit(1);
+  }
+  const sobran = sobraEnElPaquete(paquete);
+  if (sobran.length > 0) {
+    console.error(`\nFALLA: el paquete publicado lleva ${sobran.join(' y ')}.`);
+    console.error('  Nadie puede entrar al panel: quita `EXPO_PUBLIC_AUTH_EMULATOR_URL`,');
     console.error('  reconstruye y vuelve a desplegar.');
     process.exit(1);
   }

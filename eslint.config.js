@@ -13,6 +13,8 @@ module.exports = defineConfig([
       // Salida de `npm run demo:export`: es un paquete compilado, no codigo fuente.
       'dist-demo/*',
       'dist-demo-prod/*',
+      // Salida de `npm run correo:export`, conectada al emulador de Auth: tampoco es fuente.
+      'dist-correo/*',
       '.expo/*',
       'node_modules/*',
       'coverage/*',

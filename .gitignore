@@ -8,6 +8,8 @@ node_modules/
 dist/
 dist-demo/
 dist-demo-prod/
+# El paquete de pruebas de `correo:check`, conectado al emulador de Auth. Nunca se despliega.
+dist-correo/
 # Las capturas que deja `inicio:check` (el CI las sube como artefacto).
 capturas/
 web-build/

@@ -6,7 +6,9 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { AccesoPorCorreo } from '@/features/acceso/acceso-por-correo';
 import { isDemoMode } from '@/lib/demo/config';
+import { accesoPorCorreoDisponible } from '@/lib/firebase/enlace-por-correo';
 import { useGoogleSignIn } from '@/lib/firebase/auth';
 import { authSource } from '@/lib/firebase/session';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
@@ -147,6 +149,14 @@ export default function SignInScreen() {
                 {mensajeError}
               </AppText>
             ) : null}
+
+            {/*
+              SIN GOOGLE: UN ENLACE AL CORREO. Para quien tiene el correo en Microsoft o en
+              cualquier otro sitio y no usa Google. Va debajo y plegado: la mayoría entra con
+              Google. Solo en web, y no en la demostración, que no tiene servidor que mande
+              correos. Ver `src/lib/firebase/enlace-por-correo.ts`.
+            */}
+            {accesoPorCorreoDisponible && !isDemoMode ? <AccesoPorCorreo /> : null}
 
             {/*
               ATAJO DE DEMOSTRACIÓN, y solo ahí: con la demostración apagada esto no

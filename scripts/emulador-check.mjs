@@ -54,7 +54,8 @@ const emulador = spawnSync(
     'firebase',
     'emulators:exec',
     '--only',
-    'firestore,storage',
+    // `auth` desde el 29-sep: ver el emulador de Auth en `firebase.json`.
+    'firestore,storage,auth',
     '--project',
     'demo-krealo-shift',
     orden,

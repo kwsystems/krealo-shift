@@ -72,6 +72,13 @@ const envSchema = z.object({
     vacioEsAusente,
     z.string().url().optional().default('https://krealomedia.com/privacidad'),
   ),
+  /**
+   * SOLO PARA PROBAR: el emulador de Auth, p. ej. `http://127.0.0.1:9099`. Lo usa
+   * `correo:check` para entrar con un enlace al correo sin mandar ningún correo de verdad.
+   * En producción NO va: con él, nadie podría entrar, porque la app hablaría con un
+   * emulador que no existe. `paquete-check` se niega a construir un paquete que lo lleve.
+   */
+  EXPO_PUBLIC_AUTH_EMULATOR_URL: z.preprocess(vacioEsAusente, z.string().url().optional()),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -88,6 +95,7 @@ const raw = {
   EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   EXPO_PUBLIC_SUPPORT_EMAIL: process.env.EXPO_PUBLIC_SUPPORT_EMAIL,
   EXPO_PUBLIC_PRIVACY_URL: process.env.EXPO_PUBLIC_PRIVACY_URL,
+  EXPO_PUBLIC_AUTH_EMULATOR_URL: process.env.EXPO_PUBLIC_AUTH_EMULATOR_URL,
 };
 
 const parsed = envSchema.safeParse(raw);
@@ -140,6 +148,7 @@ export const env: Env = parsed.success
       EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: raw.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
       EXPO_PUBLIC_SUPPORT_EMAIL: raw.EXPO_PUBLIC_SUPPORT_EMAIL ?? 'soporte@krealomedia.com',
       EXPO_PUBLIC_PRIVACY_URL: raw.EXPO_PUBLIC_PRIVACY_URL ?? 'https://krealomedia.com/privacidad',
+      EXPO_PUBLIC_AUTH_EMULATOR_URL: raw.EXPO_PUBLIC_AUTH_EMULATOR_URL,
     };
 
 export const isProduction = env.EXPO_PUBLIC_APP_ENV === 'production';
