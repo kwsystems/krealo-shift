@@ -51,6 +51,23 @@ async function codigoDelFallo(promesa: Promise<unknown>): Promise<string> {
   }
 }
 
+/**
+ * El motivo LEGIBLE POR CODIGO que viaja en los detalles del error.
+ *
+ * Es lo que la pantalla del reloj necesita para decir «Ese PIN no es correcto» en vez de
+ * «No pudimos completar la accion». Sin esto, el error llega y el reloj no sabe de que
+ * era: durante un tiempo el servidor no lo mandaba y el cliente lo buscaba donde no
+ * estaba, asi que TODOS los fallos se veian iguales.
+ */
+async function motivoDelFallo(promesa: Promise<unknown>): Promise<unknown> {
+  try {
+    await promesa;
+    return '(no fallo)';
+  } catch (error) {
+    return (error as { details?: unknown }).details ?? '(sin detalles)';
+  }
+}
+
 async function ponerEmpleado(id: string, pin: string, estado: string): Promise<void> {
   await db
     .collection(COLLECTIONS.employees)
@@ -129,6 +146,16 @@ describe('verifyPin', () => {
    */
   it('el PIN de alguien desactivado NO abre el reloj', async () => {
     expect(await codigoDelFallo(llamar(conAparato(PIN_DESACTIVADO)))).toBe('permission-denied');
+  });
+
+  it('el fallo dice POR CODIGO que fue el PIN, para que el reloj pueda explicarlo', async () => {
+    expect(await motivoDelFallo(llamar(conAparato('9999')))).toMatchObject({
+      code: 'invalid_pin',
+    });
+    // Y el de alguien desactivado dice lo MISMO: el codigo no puede delatar quien existe.
+    expect(await motivoDelFallo(llamar(conAparato(PIN_DESACTIVADO)))).toMatchObject({
+      code: 'invalid_pin',
+    });
   });
 
   it('un PIN que no es de nadie da el mismo error que uno equivocado', async () => {

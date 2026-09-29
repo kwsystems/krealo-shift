@@ -152,7 +152,9 @@ export async function authenticateKiosk(payload: unknown): Promise<KioskContext>
       locationId: device.location_id as string,
       deviceId: deviceDoc.id,
     });
-    throw new HttpsError('permission-denied', 'Este reloj fue desactivado.');
+    throw new HttpsError('permission-denied', 'Este reloj fue desactivado.', {
+      code: 'revoked',
+    });
   }
 
   /*

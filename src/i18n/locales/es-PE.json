@@ -232,6 +232,7 @@
     "setupTitle": "Configura este dispositivo como reloj",
     "setupCodeLabel": "Código de activación",
     "setupCodeHint": "Pídelo a un administrador. Vence pronto.",
+    "setupCodeInvalid": "Ese código no vale: está mal escrito, ya se usó o venció. Genera uno nuevo desde Ajustes → «Relojes (kioscos)» y escríbelo dentro de los 30 minutos.",
     "setupDeviceName": "Nombre de este dispositivo",
     "setupActivate": "Activar reloj",
     "setupActivated": "Este dispositivo quedó vinculado a {{location}}.",

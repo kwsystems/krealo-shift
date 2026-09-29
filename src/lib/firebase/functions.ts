@@ -18,7 +18,7 @@ import { getFirebaseFunctions } from './client';
  * «simplificar»: seria quitar la unica pared que hay.
  */
 
-export type CallableError = { code: string; message: string };
+export type CallableError = { code: string; message: string; details?: unknown };
 
 /**
  * Llama una funcion y devuelve `{data, error}`, la misma forma que usaba el panel.
@@ -65,12 +65,25 @@ export async function callFunction<T>(
     const result = (await httpsCallable(functions, name)(payload)) as HttpsCallableResult<T>;
     return { data: result.data, error: null };
   } catch (error) {
-    const source = error as { code?: unknown; message?: unknown };
+    const source = error as { code?: unknown; message?: unknown; details?: unknown };
     return {
       data: null,
       error: {
         code: typeof source.code === 'string' ? source.code : 'internal',
         message: typeof source.message === 'string' ? source.message : String(error),
+        /*
+         * `details` SE CONSERVA, y tirarlo tenia el reloj dando mensajes genericos.
+         *
+         * Es donde una Cloud Function manda el motivo legible por codigo —«invalid_pin»,
+         * «locked», «revoked»—. El kiosco ya sabia traducir esos codigos a sus frases,
+         * pero aqui se perdian: el `catch` copiaba `code` y `message` y nada mas, asi que
+         * al kiosco llegaba siempre lo mismo y quien se equivocaba de PIN leia «No
+         * pudimos completar la accion» en vez de «Ese PIN no es correcto».
+         *
+         * El patron de siempre: declarado en los dos extremos y muerto en el medio. El
+         * servidor podia mandarlo y el cliente sabia leerlo; el cable no estaba.
+         */
+        details: source.details ?? null,
       },
     };
   }

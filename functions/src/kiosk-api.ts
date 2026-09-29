@@ -90,7 +90,9 @@ export const activateKiosk = onCall(async (request) => {
   const appVersion = (request.data?.appVersion as string | undefined) ?? null;
 
   if (!/^\d{4,8}$/.test(code)) {
-    throw new HttpsError('invalid-argument', 'Ese código no tiene la forma correcta.');
+    throw new HttpsError('invalid-argument', 'Ese código no tiene la forma correcta.', {
+      code: 'activation_code_invalid',
+    });
   }
 
   const candidatos = await db
@@ -110,7 +112,9 @@ export const activateKiosk = onCall(async (request) => {
   );
 
   if (encontrado === undefined) {
-    throw new HttpsError('not-found', 'Ese código no es válido o ya caducó.');
+    throw new HttpsError('not-found', 'Ese código no es válido o ya caducó.', {
+      code: 'activation_code_invalid',
+    });
   }
 
   const datosCodigo = encontrado.data();
@@ -134,7 +138,9 @@ export const activateKiosk = onCall(async (request) => {
   await db.runTransaction(async (tx) => {
     const actual = await tx.get(encontrado.ref);
     if ((actual.data()?.used_count ?? 0) !== 0) {
-      throw new HttpsError('aborted', 'Ese código ya se usó en otro dispositivo.');
+      throw new HttpsError('aborted', 'Ese código ya se usó en otro dispositivo.', {
+        code: 'activation_code_invalid',
+      });
     }
     tx.update(encontrado.ref, { used_count: 1 });
 
@@ -339,9 +345,15 @@ async function comprobarBloqueo(deviceId: string): Promise<void> {
     Date.now(),
   );
   if (bloqueado) {
+    /*
+     * `lockedUntil` VIAJA EN LOS DETALLES porque la pantalla del reloj dice «espera N
+     * minutos», y sin la fecha no puede decir cuántos: se queda en un mensaje genérico
+     * que no distingue «espera» de «algo se rompió».
+     */
     throw new HttpsError(
       'resource-exhausted',
       'Demasiados intentos en este reloj. Espera unos minutos.',
+      { code: 'locked', lockedUntil: (dispositivo?.pin_locked_until as string | null) ?? null },
     );
   }
 }
@@ -371,7 +383,10 @@ export const verifyPin = onCall(OPCIONES_CON_SECRETO, async (request) => {
   const pin = String(request.data?.pin ?? '');
 
   if (!/^\d{4,6}$/.test(pin)) {
-    throw new HttpsError('invalid-argument', 'Ese PIN no tiene la forma correcta.');
+    throw new HttpsError('invalid-argument', 'Ese PIN no tiene la forma correcta.', {
+      code: 'invalid_pin',
+      remainingAttempts: null,
+    });
   }
 
   await comprobarBloqueo(kiosk.deviceId);
@@ -461,7 +476,16 @@ export const verifyPin = onCall(OPCIONES_CON_SECRETO, async (request) => {
       locationId: kiosk.locationId,
       deviceId: kiosk.deviceId,
     });
-    throw new HttpsError('permission-denied', 'Ese PIN no es correcto.');
+    /*
+     * EL CODIGO EN LOS DETALLES, y sin el la pantalla del reloj decia «No pudimos
+     * completar la accion» a quien simplemente se equivoco de PIN. El cliente ya sabia
+     * traducir `invalid_pin` a «Ese PIN no es correcto. Vuelve a intentarlo»; lo que no
+     * habia es nadie que se lo mandara.
+     */
+    throw new HttpsError('permission-denied', 'Ese PIN no es correcto.', {
+      code: 'invalid_pin',
+      remainingAttempts: null,
+    });
   }
 
   // Un acierto limpia la cuenta del aparato: si no, cinco errores repartidos a lo

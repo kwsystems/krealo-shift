@@ -232,6 +232,7 @@
     "setupTitle": "Set up this device as a time clock",
     "setupCodeLabel": "Activation code",
     "setupCodeHint": "Ask an admin for it. It expires soon.",
+    "setupCodeInvalid": "That code does not work: it is mistyped, already used, or expired. Generate a new one from Settings → “Clocks (kiosks)” and type it within 30 minutes.",
     "setupDeviceName": "Name for this device",
     "setupActivate": "Activate time clock",
     "setupActivated": "This device is now linked to {{location}}.",

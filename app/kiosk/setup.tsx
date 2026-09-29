@@ -64,7 +64,19 @@ export default function KioskSetupScreen() {
       });
 
       if (!result.ok) {
-        setError(result.error.kind === 'offline' ? t('errors.network') : t('errors.generic'));
+        /*
+         * EL CODIGO VENCIDO TENIA EL MISMO MENSAJE QUE UN FALLO DEL SERVIDOR, y son dos
+         * cosas que se arreglan de forma distinta: uno se resuelve generando otro codigo
+         * en treinta segundos, el otro no lo resuelve quien esta delante del iPad. Con el
+         * mensaje generico, lo primero parecia lo segundo.
+         */
+        setError(
+          result.error.kind === 'offline'
+            ? t('errors.network')
+            : result.error.kind === 'activation_code_invalid'
+              ? t('kiosk.setupCodeInvalid')
+              : t('errors.generic'),
+        );
         return;
       }
 

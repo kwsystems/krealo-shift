@@ -37,6 +37,8 @@ export type KioskApiError =
   | { kind: 'locked'; lockedUntil: string }
   | { kind: 'wrong_location' }
   | { kind: 'invalid_transition' }
+  /** El código de activación no vale: mal escrito, ya usado o vencido. */
+  | { kind: 'activation_code_invalid' }
   | { kind: 'server'; message: string };
 
 export type KioskApiResult<T> = { ok: true; data: T } | { ok: false; error: KioskApiError };
@@ -289,17 +291,40 @@ async function invoke<T>(
   }
 }
 
-/** Traduce el error del backend a un caso que la interfaz sabe explicar (§20). */
-function mapInvokeError(error: unknown, payload: unknown): KioskApiError {
+/**
+ * Traduce el error del backend a un caso que la interfaz sabe explicar (§20).
+ *
+ * MIRA LOS DETALLES DEL ERROR, Y ANTES SOLO MIRABA EL CUERPO DE LA RESPUESTA. Cuando una
+ * función falla no hay cuerpo: `callFunction` devuelve `data: null` y el motivo viaja en
+ * `error.details`. Así que este `switch` —cinco casos, cada uno con su frase escrita y
+ * traducida— NO SE EJECUTABA NUNCA: todo caía en `server`, y la pantalla del reloj tiene
+ * un `default` que dice «No pudimos completar la acción».
+ *
+ * O sea que quien se equivocaba de PIN no leía «Ese PIN no es correcto», y un reloj
+ * bloqueado por intentos no decía cuántos minutos esperar. Las frases estaban escritas,
+ * el servidor sabía qué había pasado, y en medio no había cable.
+ *
+ * Se siguen mirando los dos sitios: el cuerpo por si alguna función devuelve el motivo
+ * como datos en vez de como error, y los detalles, que es el camino real.
+ */
+export function mapInvokeError(error: unknown, payload: unknown): KioskApiError {
+  const detalles = (error as { details?: unknown } | null)?.details ?? null;
   const shape = z
     .object({
       code: z
-        .enum(['revoked', 'invalid_pin', 'locked', 'wrong_location', 'invalid_transition'])
+        .enum([
+          'revoked',
+          'invalid_pin',
+          'locked',
+          'wrong_location',
+          'invalid_transition',
+          'activation_code_invalid',
+        ])
         .optional(),
       remainingAttempts: z.number().int().nullable().optional(),
-      lockedUntil: z.string().optional(),
+      lockedUntil: z.string().nullable().optional(),
     })
-    .safeParse(payload);
+    .safeParse(detalles ?? payload);
 
   if (shape.success && shape.data.code !== undefined) {
     switch (shape.data.code) {
@@ -313,6 +338,8 @@ function mapInvokeError(error: unknown, payload: unknown): KioskApiError {
         return { kind: 'wrong_location' };
       case 'invalid_transition':
         return { kind: 'invalid_transition' };
+      case 'activation_code_invalid':
+        return { kind: 'activation_code_invalid' };
     }
   }
 
