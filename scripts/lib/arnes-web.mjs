@@ -142,9 +142,7 @@ function conNavegadorDelSistema(chromium) {
         return await lanzarOriginal(opciones);
       } catch (error) {
         const alternativo =
-          opciones.executablePath ??
-          process.env.CHROMIUM_PATH ??
-          '/opt/pw-browsers/chromium';
+          opciones.executablePath ?? process.env.CHROMIUM_PATH ?? '/opt/pw-browsers/chromium';
         if (opciones.executablePath !== undefined || !existsSync(alternativo)) throw error;
         console.log(`  (el navegador de playwright no esta; se usa ${alternativo})`);
         return await lanzarOriginal({ ...opciones, executablePath: alternativo });
@@ -359,6 +357,7 @@ export const MARCADORES = {
   '/reports': 'Mide presencia, no trabajo hecho',
   '/requests': 'Correcciones de hora',
   '/settings': 'Cambia el idioma de esta app',
+  '/ayuda': { testid: 'manual-screen' },
   /*
    * El reloj de fichaje se identifica por su teclado, y `visible` NO es adorno: hay DOS
    * teclados en el DOM —el del PIN y el de la autorización del gerente— y el segundo

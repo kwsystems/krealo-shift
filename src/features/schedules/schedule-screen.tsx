@@ -11,6 +11,7 @@ import {
   useWeekShifts,
 } from './hooks';
 import { warningsForShift } from './conflicts';
+import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { PegarHorarioSheet } from './pegar-horario-sheet';
 import type { EmpleadoConocido } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
@@ -51,6 +52,7 @@ import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/but
 import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { useEmployeeNames, useJobRoles, useTeam } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
+import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { currentLanguage } from '@/i18n';
@@ -103,6 +105,25 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   // `weekStart` sea estable, así que memorizarlo aquí solo añadiría ruido.
   const days = weekDays(weekStart);
   const todayKey = dateKeyOf(nowISO, scope.timezone);
+
+  /*
+   * QUIÉN ESTÁ DENTRO AHORA, de la misma consulta que Inicio y Horas: ver `en-turno.ts`.
+   * Solo pinta tarjetas, así que si tarda o falla el Horario se ve como siempre.
+   */
+  const workingNow = useWorkingNow(scope.locationId);
+  const dentroPorPersona = useMemo(() => {
+    const map = new Map<string, DentroAhora>();
+    for (const fila of workingNow.data ?? []) {
+      map.set(fila.employee_id, {
+        estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
+        shiftId: fila.shift_id,
+        desde: fila.starts_at,
+      });
+    }
+    return map;
+  }, [workingNow.data]);
+  const enCursoFor = (shift: ShiftRow) =>
+    estadoDelTurnoAhora(shift, dentroPorPersona.get(shift.employee_id), nowISO);
 
   const position = weekPosition(weekStart, nowISO, scope.weekStartsOn, scope.timezone);
   // Corregir una semana pasada es solo para administradores, con advertencia
@@ -362,7 +383,15 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                 es la acción de esta pantalla.
               */}
               <Row gap={spacing.md} wrap align="center" justify="space-between">
-                <Row gap={spacing.md} wrap align="center">
+                {/*
+                  ESTA FILA TAMBIÉN TIENE QUE PODER ENCOGER, no solo el título de dentro. Sin
+                  `minWidth: 0` medía su ancho de contenido —583 px, navegador más «Semana |
+                  Día»— dentro de un teléfono de 358, y el título acababa en el píxel 415:
+                  «Semana del 28 de septiembre de 20…». El título ya sabía encoger; su
+                  contenedor no le dejaba sitio para hacerlo. Lo tapaba una exención de
+                  `responsive:check` demasiado ancha, ver allí.
+                */}
+                <Row gap={spacing.md} wrap align="center" style={estilos.encoge}>
                   <WeekNavigator
                     weekStart={weekStart}
                     language={language}
@@ -384,7 +413,13 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                 </Row>
 
                 {readOnly ? null : (
-                  <Row gap={spacing.sm} wrap>
+                  /*
+                    Y ESTA, por lo mismo: sin poder encoger, sus tres botones medían 547 px en
+                    un teléfono de 360 y «Agregar turno» —la acción de esta pantalla— quedaba
+                    entero fuera, a la derecha. Salió en cuanto se arregló el título de arriba:
+                    la misma exención demasiado ancha tapaba los dos.
+                  */
+                  <Row gap={spacing.sm} wrap style={estilos.encoge}>
                     <GhostButton
                       label={t('schedule.copyPreviousWeek')}
                       onPress={() => setCopyOpen(true)}
@@ -504,6 +539,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     language={language}
                     jobRoleNames={jobRoleNames}
                     warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
+                    enCursoFor={enCursoFor}
                     onSelectShift={openEdit}
                     onAddShift={openCreate}
                     onSelectRestDay={setRemovingRestDay}
@@ -521,6 +557,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     timeFormat={scope.timeFormat}
                     language={language}
                     warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
+                    enCursoFor={enCursoFor}
                     onSelectShift={openEdit}
                     onAddShift={({ dateKey }) => openCreate({ dateKey })}
                     onSelectRestDay={setRemovingRestDay}
@@ -550,6 +587,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                       timeFormat={scope.timeFormat}
                       language={language}
                       warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
+                      enCursoFor={enCursoFor}
                       onSelectShift={openEdit}
                       onAddShift={({ dateKey }) => openCreate({ dateKey })}
                       onSelectRestDay={setRemovingRestDay}
@@ -901,4 +939,5 @@ const useEstilosDeHorario = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.base,
   },
   creceEnLaBarra: { flexGrow: 1, flexShrink: 1 },
+  encoge: { flexShrink: 1, minWidth: 0 },
 }));

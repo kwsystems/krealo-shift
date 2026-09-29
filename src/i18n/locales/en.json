@@ -34,7 +34,8 @@
     "shouldHaveEnteredLabel": "Was due at {{time}}",
     "tabReports": "Reports",
     "tabRequests": "Inbox",
-    "tabSettings": "Settings"
+    "tabSettings": "Settings",
+    "tabManual": "Manual"
   },
   "app": {
     "name": "Krealo Shift"

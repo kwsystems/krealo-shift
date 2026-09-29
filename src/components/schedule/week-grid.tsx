@@ -7,6 +7,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
+import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { formatDateKeyShort, formatDayColumn, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { borderWidth, radii, spacing } from '@/theme/tokens';
@@ -106,6 +107,8 @@ export type GridProps = {
   language: SupportedLanguage;
   jobRoleNames: Map<string, string>;
   warningsFor: (shiftId: string) => ScheduleWarning[];
+  /** Si la persona de ese turno está dentro ahora. Sin él, ninguna tarjeta se pinta. */
+  enCursoFor?: (shift: ShiftRow) => EstadoDelTurno;
   onSelectShift: (shift: ShiftRow) => void;
   onAddShift: (params: { employeeId: string; dateKey: DateKey }) => void;
   onSelectRestDay: (restDay: DatedRestDay) => void;
@@ -121,6 +124,7 @@ export function WeekGrid({
   language,
   jobRoleNames,
   warningsFor,
+  enCursoFor,
   onSelectShift,
   onAddShift,
   onSelectRestDay,
@@ -159,6 +163,8 @@ export function WeekGrid({
       horizontal
       showsHorizontalScrollIndicator
       contentContainerStyle={styles.grid}
+      /* Lo usa `responsive:check` para que su exención de arrastre sea SOLO de la rejilla. */
+      testID="week-grid"
       onLayout={(evento: LayoutChangeEvent) => setAnchoVisible(evento.nativeEvent.layout.width)}
     >
       <View>
@@ -236,6 +242,7 @@ export function WeekGrid({
                             : (jobRoleNames.get(shift.job_role_id) ?? null)
                         }
                         warnings={warningsFor(shift.id)}
+                        enCurso={enCursoFor?.(shift) ?? null}
                         onPress={readOnly ? undefined : onSelectShift}
                         testID={`shift-${shift.id}`}
                       />
@@ -272,6 +279,8 @@ export type DayListProps = {
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   warningsFor: (shiftId: string) => ScheduleWarning[];
+  /** Si la persona de ese turno está dentro ahora. Sin él, ninguna tarjeta se pinta. */
+  enCursoFor?: (shift: ShiftRow) => EstadoDelTurno;
   onSelectShift: (shift: ShiftRow) => void;
   onAddShift: (params: { dateKey: DateKey }) => void;
   onSelectRestDay: (restDay: DatedRestDay) => void;
@@ -289,6 +298,7 @@ export function DayList({
   timeFormat,
   language,
   warningsFor,
+  enCursoFor,
   onSelectShift,
   onAddShift,
   onSelectRestDay,
@@ -333,6 +343,7 @@ export function DayList({
                     timezone={timezone}
                     timeFormat={timeFormat}
                     warnings={warningsFor(shift.id)}
+                    enCurso={enCursoFor?.(shift) ?? null}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
                   />

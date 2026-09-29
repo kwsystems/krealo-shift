@@ -62,9 +62,7 @@ describe('cuadrícula semanal', () => {
       <WeekGrid
         {...baseProps}
         onSelectRestDay={onSelectRestDay}
-        rows={rows(shiftRow(), [
-          { id: 'd1', employeeId: 'e1', dateKey: '2026-08-25' },
-        ])}
+        rows={rows(shiftRow(), [{ id: 'd1', employeeId: 'e1', dateKey: '2026-08-25' }])}
         onSelectShift={() => undefined}
         onAddShift={() => undefined}
       />,
@@ -214,5 +212,47 @@ describe('cuadrícula semanal', () => {
 
     await fireEvent.press(view.getByTestId('shift-s1'));
     expect(onSelectShift).not.toHaveBeenCalled();
+  });
+
+  it('el turno de quien está dentro dice «Trabajando», y el nombre accesible también', async () => {
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        rows={rows(shiftRow({ status: 'published' }))}
+        enCursoFor={() => 'trabajando'}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+
+    expect(view.getByTestId('shift-s1-ahora')).toHaveTextContent(/Trabajando/);
+    expect(view.getByTestId('shift-s1').props.accessibilityLabel).toMatch(/Trabajando/);
+  });
+
+  it('en su refrigerio dice «En descanso»', async () => {
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        rows={rows(shiftRow({ status: 'published' }))}
+        enCursoFor={() => 'descanso'}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+    expect(view.getByTestId('shift-s1-ahora')).toHaveTextContent(/En descanso/);
+  });
+
+  it('sin nadie dentro, la tarjeta no dice nada de ahora', async () => {
+    const view = await renderWithProviders(
+      <WeekGrid
+        {...baseProps}
+        rows={rows(shiftRow({ status: 'published' }))}
+        enCursoFor={() => null}
+        onSelectShift={() => undefined}
+        onAddShift={() => undefined}
+      />,
+    );
+    expect(view.queryByTestId('shift-s1-ahora')).toBeNull();
+    expect(view.getByTestId('shift-s1').props.accessibilityLabel).not.toMatch(/Trabajando/);
   });
 });

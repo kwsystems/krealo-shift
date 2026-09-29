@@ -7,6 +7,7 @@ import { Row, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
+import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -31,6 +32,7 @@ export function ShiftCard({
   timeFormat,
   warnings = [],
   showEmployeeName = false,
+  enCurso = null,
   onPress,
   testID,
 }: {
@@ -41,6 +43,8 @@ export function ShiftCard({
   timeFormat: TimeFormatPreference;
   warnings?: ScheduleWarning[];
   showEmployeeName?: boolean;
+  /** Si la persona está dentro AHORA en este turno. Ver `estadoDelTurnoAhora`. */
+  enCurso?: EstadoDelTurno;
   onPress?: (shift: ShiftRow) => void;
   testID?: string;
 }) {
@@ -65,9 +69,17 @@ export function ShiftCard({
           ? t('schedule.changedBadge')
           : t('schedule.statusDraft');
 
+  const estadoAhora =
+    enCurso === 'trabajando'
+      ? t('timesheet.stateWorking')
+      : enCurso === 'descanso'
+        ? t('timesheet.stateOnBreak')
+        : null;
+
   const accessibilityLabel = [
     showEmployeeName && employeeName !== undefined ? employeeName : null,
     range,
+    estadoAhora,
     minutesToHHmm(netMinutes),
     statusLabel,
     ...warnings.map((warning) =>
@@ -81,6 +93,8 @@ export function ShiftCard({
     <View
       style={[
         styles.card,
+        enCurso === 'trabajando' ? styles.trabajando : null,
+        enCurso === 'descanso' ? styles.enDescanso : null,
         shift.status === 'cancelled' ? styles.cancelled : null,
         warnings.length > 0 ? styles.warned : null,
       ]}
@@ -108,6 +122,32 @@ export function ShiftCard({
           {jobRoleName}
         </AppText>
       ) : null}
+
+      {/*
+        QUIÉN ESTÁ DENTRO AHORA, en la misma tarjeta de su turno. Verde si trabaja, ámbar si
+        está en su refrigerio: los mismos dos tonos que Inicio y Horas usan para lo mismo.
+
+        UNA LÍNEA, NO UNA INSIGNIA. La columna del día baja a 136 px y a la tarjeta le quedan
+        104 de contenido; la píldora de «En descanso» pedía 106. Y el texto va en tinta, no en
+        verde: el color ya lo llevan el fondo y el borde, y en tinta se lee igual con el
+        puntero encima. El icono y la palabra dicen el estado sin depender del color (§21).
+      */}
+      {estadoAhora === null ? null : (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-ahora`}
+        >
+          <Ionicons
+            name={enCurso === 'trabajando' ? 'radio-button-on' : 'cafe'}
+            size={14}
+            color={enCurso === 'trabajando' ? colors.success600 : colors.warning600}
+          />
+          <AppText variant="label" tone="muted" numberOfLines={1}>
+            {estadoAhora}
+          </AppText>
+        </Row>
+      )}
 
       {/*
         LA DURACIÓN Y LA PAUSA SALEN DE LA TARJETA.
@@ -219,10 +259,13 @@ export function EmptyShiftSlot({
 /**
  * Día libre marcado: lo que antes era un hueco idéntico a un hueco sin decidir.
  *
- * SE PARECE A LA CELDA VACIA A PROPOSITO —el mismo plano hundido, porque las dos son
- * «aquí no se trabaja»— y se distingue por lo único que importa: lo dice. Un día libre y
- * un día sin cubrir se veían igual, así que ni el equipo podía leer su descanso en la
- * rejilla ni quien arma el horario podía repasarlo buscando huecos.
+ * ÁMBAR CON LA LUNA RELLENA, y no gris. En gris se parecía demasiado a la celda vacía de
+ * al lado —las dos «aquí no se trabaja»— y repasar la semana buscando huecos obligaba a
+ * leer cada celda. Con color, los días libres se cuentan de un vistazo y los huecos sin
+ * decidir son lo único gris que queda. Lo pidió Andree mirando la rejilla del 29-sep.
+ *
+ * La palabra va en tinta y no en ámbar: ámbar sobre ámbar quedaba a 4,65:1 en reposo y por
+ * debajo de 4,5 con el puntero encima. El color lo llevan el fondo, el borde y la luna.
  */
 export function RestDayChip({
   label,
@@ -241,8 +284,8 @@ export function RestDayChip({
 
   const cuerpo = (
     <>
-      <Ionicons name="moon-outline" size={16} color={colors.ink500} />
-      <AppText variant="label" tone="subtle" numberOfLines={1}>
+      <Ionicons name="moon" size={16} color={colors.warning600} />
+      <AppText variant="label" tone="muted" numberOfLines={1}>
         {label}
       </AppText>
     </>
@@ -263,7 +306,7 @@ export function RestDayChip({
       accessibilityLabel={accessibilityLabel}
       testID={testID}
       {...respuesta.props}
-      style={({ pressed }) => [styles.descanso, ...respuesta.estilo(pressed)]}
+      style={({ pressed }) => [styles.descanso, ...respuesta.estilo(pressed, colors.warning100)]}
     >
       {cuerpo}
     </Pressable>
@@ -295,6 +338,12 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.sm,
     minHeight: sizes.touchTargetPreferred,
   },
+  /*
+   * EL BORDE DEL MISMO TONO QUE EL FONDO. Con el gris de siempre, una tarjeta verde tenía
+   * un filo que no era de ella; con el del estado se lee como una sola pieza.
+   */
+  trabajando: { backgroundColor: colors.success50, borderColor: colors.success600 },
+  enDescanso: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
   cancelled: { opacity: 0.55, borderStyle: 'dashed' },
   warned: { borderColor: colors.warning600, borderWidth: borderWidth.focus },
   pressed: { opacity: 0.7 },
@@ -321,9 +370,9 @@ const useEstilos = estilosDelTema((colors) => ({
   descanso: {
     minHeight: sizes.touchTargetMin,
     borderRadius: radii.input,
-    backgroundColor: colors.hundido,
+    backgroundColor: colors.warning50,
     borderWidth: borderWidth.hairline,
-    borderColor: colors.border,
+    borderColor: colors.warning600,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

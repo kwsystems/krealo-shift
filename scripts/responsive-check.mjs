@@ -105,6 +105,11 @@ const PANTALLAS = [
   ['reportes', '/reports', 'Mide presencia, no trabajo hecho'],
   ['solicitudes', '/requests', 'Correcciones de hora'],
   ['ajustes', '/settings', 'Cambia el idioma de esta app'],
+  /*
+   * El manual DENTRO del panel, con el menú lateral quitándole ancho. `manual:check` mide
+   * `/manual`, que se abre sin sesión y a lo ancho de la ventana; esta es otra caja.
+   */
+  ['manual', '/ayuda', 'Guía corta'],
 ];
 
 /**
@@ -225,12 +230,21 @@ const EXENCIONES = new Map([
     'marcas del gráfico: les aplica el mínimo de 24×24 de WCAG 2.5.8, y miden 25×24',
   ],
   [
-    'horario/scroller',
+    'horario/scroller/testid:week-grid',
     'la rejilla de la semana se arrastra a propósito (comprimir más deja los turnos ' +
       'ilegibles) y la columna de nombres se queda fija: lo mide la cuarta pasada',
   ],
+  /*
+   * `horario/fuera` A SECAS PERDONABA LA PANTALLA ENTERA, y se comió un fallo de verdad: a
+   * 390 px el título «Semana del 28 de septiembre de 2026» acababa en el píxel 415, fuera
+   * del teléfono. En un teléfono ni siquiera hay rejilla —cae en la lista por días—, así
+   * que la exención no tenía nada que excusar ahí y aun así lo excusaba todo. Ahora es
+   * solo para lo que está DENTRO de la rejilla (`testID="week-grid"`), y `horario/scroller`
+   * igual, por la misma razón. Destapó un segundo fallo detrás del primero: «Agregar
+   * turno» entero fuera de la pantalla en un teléfono.
+   */
   [
-    'horario/fuera',
+    'horario/fuera/testid:week-grid',
     'la rejilla de la semana se arrastra a propósito (comprimir más deja los turnos ' +
       'ilegibles) y la columna de nombres se queda fija: lo mide la cuarta pasada',
   ],
@@ -317,7 +331,13 @@ const MEDIR = (minimoTactil) => {
       const pr = p === null ? null : p.getBoundingClientRect();
       const padreYaSale = pr !== null && (pr.right > vw + 1 || pr.left < -1);
       if (!padreYaSale) {
-        fuera.push({ texto, derecha: Math.round(r.right), ancho: Math.round(r.width) });
+        fuera.push({
+          texto,
+          derecha: Math.round(r.right),
+          ancho: Math.round(r.width),
+          // Dónde está, para que una exención pueda ser de UNA zona y no de la pantalla.
+          zona: el.closest('[data-testid="week-grid"]') === null ? null : 'week-grid',
+        });
       }
     }
 
@@ -365,6 +385,7 @@ const MEDIR = (minimoTactil) => {
           overflowX: cs.overflowX,
           visible: el.clientWidth,
           contenido: el.scrollWidth,
+          zona: el.closest('[data-testid="week-grid"]') === null ? null : 'week-grid',
         });
       }
     }
@@ -523,6 +544,7 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
         f.texto,
         `«${f.texto}» se sale ${f.derecha - m.vw}px por la derecha (acaba en ${f.derecha} ` +
           `de ${m.vw})`,
+        f.zona ?? undefined,
       );
     }
     for (const c of m.recortes) {
@@ -548,6 +570,7 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
         `hay ${s.contenido}px de contenido en ${s.visible}px visibles con ` +
           `overflow-x:${s.overflowX} («${s.texto}»), así que ${s.contenido - s.visible}px ` +
           'quedan fuera de vista',
+        s.zona ?? undefined,
       );
     }
 
@@ -692,7 +715,9 @@ const PANTALLAS_LARGAS = [
   ['horario', '/schedule', 'Copiar semana anterior'],
 ];
 
-for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a === 360 || a === 768 || a === 1920)) {
+for (const [nombreAncho, ancho, alto] of ANCHOS.filter(
+  ([, a]) => a === 360 || a === 768 || a === 1920,
+)) {
   const ctx = await navegador.newContext({ viewport: { width: ancho, height: alto } });
   const pagina = await ctx.newPage();
   /*
@@ -753,13 +778,19 @@ for (const [nombreAncho, ancho, alto] of ANCHOS.filter(([, a]) => a === 360 || a
     };
 
     for (const f of m.fuera) {
-      anotarLargo('fuera', f.texto, `«${f.texto}» se sale ${f.derecha - m.vw}px por la derecha`);
+      anotarLargo(
+        'fuera',
+        f.texto,
+        `«${f.texto}» se sale ${f.derecha - m.vw}px por la derecha`,
+        f.zona ?? undefined,
+      );
     }
     for (const sc of m.scrollers) {
       anotarLargo(
         'scroller',
         sc.texto,
         `hay ${sc.contenido}px de contenido en ${sc.visible}px visibles («${sc.texto}»)`,
+        sc.zona ?? undefined,
       );
     }
     for (const t of m.tactiles) {

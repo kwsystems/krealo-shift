@@ -318,6 +318,26 @@ function PanelConMarca() {
             ),
           }}
         />
+        {/*
+          EL MANUAL, EN EL MENÚ LATERAL Y NO EN LA BARRA DE ABAJO. Lo pidió Andree: el menú
+          estaba incompleto sin él. En la barra inferior de un teléfono ya van siete destinos
+          en 51 px cada uno —ver el tracking de las etiquetas, arriba—, y un octavo volvería a
+          cortarlas. Ahí el manual sigue a un toque desde Ajustes.
+
+          `href: null` SOLO CUANDO SE OCULTA. expo-router, al ver `href`, reescribe
+          `tabBarItemStyle` de esta pestaña con el suyo, y en el menú lateral se perdería el
+          alto y el margen que tienen las demás. Visible, no se le pasa.
+        */}
+        <Tabs.Screen
+          name="ayuda"
+          options={{
+            title: t('admin.tabManual'),
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="book-outline" size={sizes.iconMobile} color={color} />
+            ),
+            ...(useSidebar ? null : { href: null }),
+          }}
+        />
       </Tabs>
     </>
   );

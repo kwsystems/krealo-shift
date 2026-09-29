@@ -34,7 +34,8 @@
     "shouldHaveEnteredLabel": "Debía entrar a las {{time}}",
     "tabReports": "Reportes",
     "tabRequests": "Bandeja",
-    "tabSettings": "Ajustes"
+    "tabSettings": "Ajustes",
+    "tabManual": "Manual"
   },
   "app": {
     "name": "Krealo Shift"

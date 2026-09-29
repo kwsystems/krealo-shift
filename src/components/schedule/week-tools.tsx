@@ -51,28 +51,38 @@ export function WeekNavigator({
    */
   return (
     <Row gap={spacing.sm} wrap align="center" style={estilosFlex.fila}>
-      <FlechaDeSemana
-        direccion="anterior"
-        etiqueta={t('schedule.previousWeek')}
-        onPress={onPrevious}
-        testID="week-previous"
-      />
       {/*
+        LAS FLECHAS Y EL TÍTULO NO SE SEPARAN NUNCA: van en su propia fila, que no parte
+        línea. Antes compartían la fila que sí la parte, y en un teléfono el título no cabía
+        junto a las flechas, así que cada una caía en su renglón —«‹», el título, «›», uno
+        debajo de otro— y la flecha de avanzar quedaba lejos de lo que avanza. Ahora lo que
+        cede es el título, que se parte en dos líneas entre sus flechas; y lo único que baja
+        de renglón es «Ir a esta semana».
+      */}
+      <Row gap={spacing.sm} align="center" style={estilosFlex.fila}>
+        <FlechaDeSemana
+          direccion="anterior"
+          etiqueta={t('schedule.previousWeek')}
+          onPress={onPrevious}
+          testID="week-previous"
+        />
+        {/*
         SE TIENE QUE PODER ENCOGER. Sin `flexShrink`, un texto dentro de una fila mide lo
         que mide y empuja: «Semana del 21 de septiembre de 2026» con las dos flechas se
         salía 62 px por la derecha en un teléfono de 414 px, y con `overflow-x: hidden`
         eso no es un texto apretado sino un texto que no está. Lo midió
         `responsive:check`, no se vio leyendo el código.
       */}
-      <AppText variant="section" accessibilityRole="header" style={estilosFlex.creceYEncoge}>
-        {weekLabel}
-      </AppText>
-      <FlechaDeSemana
-        direccion="siguiente"
-        etiqueta={t('schedule.nextWeek')}
-        onPress={onNext}
-        testID="week-next"
-      />
+        <AppText variant="section" accessibilityRole="header" style={estilosFlex.creceYEncoge}>
+          {weekLabel}
+        </AppText>
+        <FlechaDeSemana
+          direccion="siguiente"
+          etiqueta={t('schedule.nextWeek')}
+          onPress={onNext}
+          testID="week-next"
+        />
+      </Row>
       {isCurrentWeek ? null : (
         <GhostButton
           label={t('schedule.goToThisWeek')}
