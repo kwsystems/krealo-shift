@@ -252,6 +252,16 @@ export function formatDateKeyLong(key: DateKey, language: SupportedLanguage): st
   return format(local, pattern, { locale: dateFnsLocales[language] });
 }
 
+/** El mes de una fecha, para el navegador de Reportes: "Septiembre de 2026". */
+export function formatMonthLong(key: DateKey, language: SupportedLanguage): string {
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  const pattern = language === 'es-PE' ? "LLLL 'de' yyyy" : 'LLLL yyyy';
+  const texto = format(local, pattern, { locale: dateFnsLocales[language] });
+  // En español el mes va en minúscula; como título de un navegador, con mayúscula.
+  return texto.charAt(0).toLocaleUpperCase(language) + texto.slice(1);
+}
+
 /** Fecha corta para tarjetas y filtros: "25 ago". */
 export function formatDateKeyShort(key: DateKey, language: SupportedLanguage): string {
   const local = keyToLocal(key);

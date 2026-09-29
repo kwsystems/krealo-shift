@@ -8,7 +8,7 @@ import { GhostButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
 import type { ShiftPublication } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
-import { formatDateKeyLong, type DateKey } from '@/features/schedules/week';
+import { formatDateKeyLong, formatMonthLong, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { useTheme } from '@/theme/use-theme';
 import { estilosDelTema } from '@/theme/estilos';
@@ -89,6 +89,64 @@ export function WeekNavigator({
           onPress={onGoToCurrent}
           fullWidth={false}
           testID="week-current"
+        />
+      )}
+    </Row>
+  );
+}
+
+/**
+ * El navegador de MES, gemelo del de semana: las mismas flechas pegadas al título y el
+ * mismo «Ir a este mes» que solo sale cuando sirve. Lo usa Reportes cuando se mira por
+ * mes, que es como se lleva todo en la tienda.
+ */
+export function MonthNavigator({
+  monthStart,
+  language,
+  isCurrentMonth,
+  onPrevious,
+  onNext,
+  onGoToCurrent,
+}: {
+  /** Cualquier día del mes; se usa el 1. */
+  monthStart: DateKey;
+  language: SupportedLanguage;
+  isCurrentMonth: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  onGoToCurrent: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row gap={spacing.sm} wrap align="center" style={estilosFlex.fila}>
+      <Row gap={spacing.sm} align="center" style={estilosFlex.fila}>
+        <FlechaDeSemana
+          direccion="anterior"
+          etiqueta={t('schedule.previousMonth')}
+          onPress={onPrevious}
+          testID="month-previous"
+        />
+        <AppText
+          variant="section"
+          accessibilityRole="header"
+          style={estilosFlex.creceYEncoge}
+          testID="month-title"
+        >
+          {formatMonthLong(monthStart, language)}
+        </AppText>
+        <FlechaDeSemana
+          direccion="siguiente"
+          etiqueta={t('schedule.nextMonth')}
+          onPress={onNext}
+          testID="month-next"
+        />
+      </Row>
+      {isCurrentMonth ? null : (
+        <GhostButton
+          label={t('schedule.goToThisMonth')}
+          onPress={onGoToCurrent}
+          fullWidth={false}
+          testID="month-current"
         />
       )}
     </Row>

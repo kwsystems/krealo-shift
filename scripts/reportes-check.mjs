@@ -547,6 +547,48 @@ function soloHoras(texto) {
   await contexto.close();
 }
 
+/*
+ * POR MES, TAMBIÉN CUADRA. Lo que se comprueba vale cualquier día del año, a propósito:
+ * «semana actual + anterior = mes» solo es cierto en fechas concretas y haría el arnés
+ * rojo a fin de mes sin nada roto. Lo que SIEMPRE tiene que cumplirse es que el mes se
+ * reparta en sus semanas sin perder ni inventar un minuto: la suma de las columnas
+ * semanales es el total del mes, y hay entre 4 y 6 columnas —las semanas de un mes—.
+ */
+{
+  const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+  const pagina = await contexto.newPage();
+  await entrar(pagina);
+  await irA(pagina, base, '/reports', { asentar: 800 });
+  await pagina.locator('[data-testid="report-period-mes"]').click();
+  await pagina.locator('[data-testid="month-title"]').waitFor({ timeout: 10000 });
+  await pagina.waitForTimeout(1500);
+
+  const aMinutos = (texto) => {
+    const m = /(\d+):(\d\d)/.exec(texto ?? '');
+    return m === null ? null : Number(m[1]) * 60 + Number(m[2]);
+  };
+  const total = aMinutos(await pagina.locator('[data-testid="report-total"]').innerText());
+  const etiquetas = await pagina
+    .locator('[data-testid^="day-column-"]')
+    .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('aria-label') ?? ''));
+  const suma = etiquetas.reduce((acumulado, e) => acumulado + (aMinutos(e) ?? 0), 0);
+  const titulo = await pagina.locator('[data-testid="month-title"]').innerText();
+
+  if (total === null) problemas.push('por mes no se pudo leer el total del periodo');
+  if (etiquetas.length < 4 || etiquetas.length > 6) {
+    problemas.push(
+      `por mes el gráfico tiene ${etiquetas.length} columnas: un mes tiene de 4 a 6 semanas`,
+    );
+  }
+  if (total !== null && suma !== total) {
+    problemas.push(`por mes las semanas suman ${suma} min y el total dice ${total}: no cuadra`);
+  }
+  console.log(
+    `  por mes (${titulo})   ${etiquetas.length} semanas, suman ${suma} min, total ${total} min`,
+  );
+  await contexto.close();
+}
+
 await navegador.close();
 await cerrar();
 
@@ -557,5 +599,5 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  '\nOK: Reportes cuadra con Horas, los gráficos tienen escala y las siete pestañas caben.',
+  '\nOK: Reportes cuadra con Horas y por mes consigo mismo, los gráficos tienen escala y las siete pestañas caben.',
 );

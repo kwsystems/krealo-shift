@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { hoursByEmployee, minutesByDay, minutesByReason, punctuality } from './aggregate';
@@ -11,10 +12,11 @@ import {
   reportFileName,
 } from './export';
 import { useBreakTimeByReason } from './hooks';
+import { periodoDe, semanasDelMes, type TipoDePeriodo } from './periodo';
 import { ShareReportSheet } from './share-sheet';
 import { AsyncSection } from '@/components/schedule/data-states';
-import { InlineNotice, StatTile } from '@/components/schedule/fields';
-import { WeekNavigator } from '@/components/schedule/week-tools';
+import { InlineNotice, SegmentedControl, StatTile } from '@/components/schedule/fields';
+import { MonthNavigator, WeekNavigator } from '@/components/schedule/week-tools';
 import { ChartCard } from '@/components/charts/chart-frame';
 import { DayColumns, type DayColumn } from '@/components/charts/day-columns';
 import { RankingBars, type RankingRow } from '@/components/charts/ranking-bars';
@@ -22,16 +24,11 @@ import { AppText } from '@/components/ui/app-text';
 import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import {
-  addWeeks,
-  currentWeekStart,
   dateKeyOf,
   formatDateKeyLong,
   formatDateKeyShort,
   formatDayColumn,
   formatWeekdayShort,
-  weekDays,
-  weekEnd,
-  weekRangeInstants,
 } from '@/features/schedules/week';
 import { useEmployeeNames } from '@/features/team/hooks';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
@@ -75,17 +72,27 @@ export function ReportsScreen() {
   const language = currentLanguage();
   const now = useLiveClock('minute');
 
-  const [weekOffset, setWeekOffset] = useState(0);
+  /*
+   * SEMANA O MES. Por semana sigue siendo lo de siempre; por mes, todo el reporte se
+   * calcula sobre el mes civil. Ver `periodo.ts`. Cambiar de uno a otro vuelve al actual:
+   * «tres semanas atrás» no significa nada contado en meses.
+   */
+  const [tipo, setTipo] = useState<TipoDePeriodo>('semana');
+  const [offset, setOffset] = useState(0);
   const [señalado, setSeñalado] = useState<Señalado>(null);
   const [compartirAbierto, setCompartirAbierto] = useState(false);
   const [personaElegida, setPersonaElegida] = useState<string | null>(null);
   const [motivoAbierto, setMotivoAbierto] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
-  const thisWeekStart = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
-  const weekStart = addWeeks(thisWeekStart, weekOffset);
-  const from = weekStart;
-  const to = weekEnd(weekStart);
+  const periodo = periodoDe({
+    tipo,
+    offset,
+    nowISO,
+    weekStartsOn: scope.weekStartsOn,
+    timezone: scope.timezone,
+  });
+  const { from, to } = periodo;
   /*
    * Sin `useMemo`, a proposito, y aqui y en `dias` por la misma razon.
    *
@@ -97,7 +104,7 @@ export function ReportsScreen() {
    * buscaba. Lo dice `react-hooks/preserve-manual-memoization`, que aqui esta como
    * error. Quitandolo, memoriza el compilador y memoriza todo.
    */
-  const range = weekRangeInstants(weekStart, scope.timezone);
+  const range = { fromISO: periodo.fromISO, toISO: periodo.toISO };
 
   const organizationId = scope.organization?.id ?? null;
   const summaries = useDailySummaries({ locationId: scope.locationId, from, to });
@@ -152,7 +159,7 @@ export function ReportsScreen() {
       : filas.filter((fila) => fila.employee_id === personaElegida);
   }, [breaks.data, personaElegida]);
 
-  const dias = minutesByDay(resumenFiltrado, weekDays(weekStart));
+  const dias = minutesByDay(resumenFiltrado, periodo.dias);
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
   const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
   // Para el resumen que se comparte: los motivos del local entero, sin filtro.
@@ -230,15 +237,39 @@ export function ReportsScreen() {
   const motivoConNotas = motivos.find((fila) => fila.notes.length > 0);
 
   // ------------------------------------------------------------------ días
-  const columnas: DayColumn[] = dias.map((dia) => ({
-    key: dia.dateKey,
-    short: formatDayColumn(dia.dateKey, language),
-    tiny: formatWeekdayShort(dia.dateKey, language),
-    long: formatDateKeyLong(dia.dateKey, language),
-    value: dia.netMinutes,
-    valueText: minutesToHHmm(dia.netMinutes),
-    isToday: dia.dateKey === hoyKey,
-  }));
+  /*
+   * POR MES, UNA COLUMNA POR SEMANA y no una por día. Treinta columnas en un teléfono de
+   * 360 son rayas de 9 px sin rótulo que se pueda leer; cinco semanas se comparan de un
+   * vistazo, que es para lo que está el gráfico.
+   */
+  const minutosPorDia = new Map(dias.map((dia) => [dia.dateKey, dia.netMinutes]));
+  const columnas: DayColumn[] =
+    tipo === 'semana'
+      ? dias.map((dia) => ({
+          key: dia.dateKey,
+          short: formatDayColumn(dia.dateKey, language),
+          tiny: formatWeekdayShort(dia.dateKey, language),
+          long: formatDateKeyLong(dia.dateKey, language),
+          value: dia.netMinutes,
+          valueText: minutesToHHmm(dia.netMinutes),
+          isToday: dia.dateKey === hoyKey,
+        }))
+      : semanasDelMes(periodo.dias, scope.weekStartsOn).map((semana) => {
+          const minutos = semana.dias.reduce((suma, d) => suma + (minutosPorDia.get(d) ?? 0), 0);
+          return {
+            key: semana.inicio,
+            short: `${formatDateKeyShort(semana.inicio, language)}`,
+            tiny: semana.inicio.slice(8).replace(/^0/, ''),
+            long: t('reports.weekColumn', {
+              from: formatDateKeyShort(semana.inicio, language),
+              to: formatDateKeyShort(semana.fin, language),
+            }),
+            value: minutos,
+            valueText: minutesToHHmm(minutos),
+            isToday: semana.dias.includes(hoyKey),
+            isFuture: semana.inicio > hoyKey,
+          };
+        });
 
   /*
    * Compartir. El contenido se arma AQUÍ, con lo que ya está en pantalla, y no con una
@@ -393,14 +424,41 @@ export function ReportsScreen() {
             compartir un archivo con solo la fila de cabecera.
           */}
           <Row gap={spacing.md} wrap align="center" justify="space-between">
-            <WeekNavigator
-              weekStart={weekStart}
-              language={language}
-              isCurrentWeek={weekOffset === 0}
-              onPrevious={() => setWeekOffset((valor) => valor - 1)}
-              onNext={() => setWeekOffset((valor) => valor + 1)}
-              onGoToCurrent={() => setWeekOffset(0)}
-            />
+            <Row gap={spacing.md} wrap align="center" style={estilosDeCabecera.encoge}>
+              {tipo === 'semana' ? (
+                <WeekNavigator
+                  weekStart={from}
+                  language={language}
+                  isCurrentWeek={offset === 0}
+                  onPrevious={() => setOffset((valor) => valor - 1)}
+                  onNext={() => setOffset((valor) => valor + 1)}
+                  onGoToCurrent={() => setOffset(0)}
+                />
+              ) : (
+                <MonthNavigator
+                  monthStart={from}
+                  language={language}
+                  isCurrentMonth={offset === 0}
+                  onPrevious={() => setOffset((valor) => valor - 1)}
+                  onNext={() => setOffset((valor) => valor + 1)}
+                  onGoToCurrent={() => setOffset(0)}
+                />
+              )}
+              <SegmentedControl
+                label={t('reports.periodType')}
+                value={tipo}
+                options={[
+                  { value: 'semana', label: t('reports.periodWeek') },
+                  { value: 'mes', label: t('reports.periodMonth') },
+                ]}
+                onChange={(valor) => {
+                  setTipo(valor);
+                  setOffset(0);
+                  setSeñalado(null);
+                }}
+                testID="report-period"
+              />
+            </Row>
             <SecondaryButton
               label={t('reports.share')}
               onPress={() => setCompartirAbierto(true)}
@@ -525,8 +583,14 @@ export function ReportsScreen() {
               </ChartCard>
 
               <ChartCard
-                title={t('reports.howTheWeekGoes')}
-                subtitle={t('reports.howTheWeekGoesHint')}
+                title={
+                  tipo === 'semana' ? t('reports.howTheWeekGoes') : t('reports.howTheMonthGoes')
+                }
+                subtitle={
+                  tipo === 'semana'
+                    ? t('reports.howTheWeekGoesHint')
+                    : t('reports.howTheMonthGoesHint')
+                }
                 readout={señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null}
                 testID="chart-week"
               >
@@ -684,3 +748,8 @@ export function ReportsScreen() {
     </AppScreen>
   );
 }
+
+const estilosDeCabecera = StyleSheet.create({
+  /* Sin `minWidth: 0` esta fila no encoge y el navegador se sale en un teléfono. */
+  encoge: { flexShrink: 1, minWidth: 0 },
+});
