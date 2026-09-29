@@ -172,6 +172,7 @@ function PanelConMarca() {
           tabBarItemStyle: {
             minHeight: sizes.touchTargetPreferred,
             justifyContent: 'center',
+
             /*
              * En vertical, cada pestaña se queda con el alto que necesita en vez de
              * repartirse la columna entera: si no, siete pestañas ocupan toda la
@@ -210,6 +211,30 @@ function PanelConMarca() {
              * el texto más difícil de leer.
              */
             fontSize: useSidebar ? fontSize.label : 10,
+            /*
+             * TRACKING NEGATIVO EN LA BARRA INFERIOR, y es lo que recupera «Reportes».
+             * Conviene dejar escrito el camino, porque lo obvio no funciona.
+             *
+             * Medido en el DOM a 360 px: la pestaña mide 51 px y el pulsable que dibuja
+             * react-navigation lleva 5 px de relleno a cada lado, así que a la etiqueta le
+             * quedan 41 px de caja para un texto que pide 43: se leía «Report…». Siete
+             * destinos en 360 px tocan a 51 px cada uno, o sea que no hay ancho que ganar
+             * repartiendo.
+             *
+             * Lo intentado, y por qué no sirvió —los dos medidos, no razonados—:
+             *   1. `paddingHorizontal: 0` en `tabBarItemStyle`. De todo ese estilo,
+             *      `BottomTabItem` reenvía al pulsable UNA SOLA propiedad, `flex` (está
+             *      escrito arriba, por otro fallo distinto). El DOM salió idéntico.
+             *   2. `marginHorizontal: -4` en la etiqueta. El margen SÍ llega —se ve en el
+             *      computado—, pero la caja se queda en 41: la sigue midiendo el ancho de
+             *      contenido de su padre.
+             *
+             * Lo que sí cabe es apretar el tracking: a 10 px, -0.3 por letra son ~2,4 px
+             * en «Reportes», que es exactamente lo que faltaba. No se baja la letra a 9 px
+             * a propósito: una etiqueta de navegación que no se lee de un vistazo no hace
+             * su único trabajo.
+             */
+            ...(useSidebar ? null : { letterSpacing: -0.3 }),
           },
         }}
       >
