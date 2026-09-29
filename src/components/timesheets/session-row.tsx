@@ -7,8 +7,10 @@ import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
+import { estadoDeFila, minutosEnCurso, type EnCurso } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 
@@ -55,6 +57,8 @@ export function SessionRow({
   session,
   employeeName,
   alerts,
+  enCurso,
+  nowISO,
   timezone,
   timeFormat,
   language,
@@ -64,6 +68,10 @@ export function SessionRow({
   session: WorkSession;
   employeeName: string;
   alerts: TimesheetAlert[];
+  /** Si está dentro ahora mismo: trabajando o en descanso. Sale de la misma consulta que Inicio. */
+  enCurso?: EnCurso;
+  /** Para contar en vivo las horas de una jornada abierta. */
+  nowISO: string;
   timezone: string;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
@@ -72,27 +80,82 @@ export function SessionRow({
 }) {
   const { t } = useTranslation();
   const styles = useEstilos();
+  const { colors } = useTheme();
   const respuesta = useRespuestaAlPuntero();
+
+  const estado = estadoDeFila(session, alerts, enCurso);
+  const dentro = estado === 'trabajando' || estado === 'descanso';
 
   const start = formatClockTime(session.starts_at, timezone, timeFormat, language);
   const end =
     session.ends_at === null
       ? t('timesheet.stillOpen')
       : formatClockTime(session.ends_at, timezone, timeFormat, language);
-  const net = minutesToHHmm(session.net_minutes ?? 0);
+
+  /*
+   * LAS HORAS DE ALGUIEN QUE SIGUE DENTRO SE CUENTAN EN VIVO. Antes salía «00:00», que es
+   * lo que vale `net_minutes` mientras la sesión no se cierra: cierto para la base, falso
+   * para quien mira. Y una jornada olvidada no enseña ninguna cifra —una raya—, porque la
+   * suya no se puede saber hasta que alguien diga a qué hora salió de verdad.
+   */
+  const net = dentro
+    ? minutesToHHmm(minutosEnCurso(session, enCurso, nowISO))
+    : estado === 'sinSalida'
+      ? '–'
+      : minutesToHHmm(session.net_minutes ?? 0);
+
+  // «A tiempo» solo tiene sentido si había un turno contra el que medir y no llegó tarde.
+  const aTiempo = dentro && session.shift_id !== null && !alerts.includes('lateArrival');
+
+  const descansoDesde =
+    estado === 'descanso' && enCurso !== undefined && enCurso.descansoDesde !== null
+      ? formatClockTime(enCurso.descansoDesde, timezone, timeFormat, language)
+      : null;
+
+  /*
+   * «desde» a secas también en el descanso: la insignia de al lado ya dice «En descanso», y
+   * repetirlo —«En descanso · descanso desde 10:27»— partía la línea en dos en un teléfono
+   * sin decir nada más.
+   */
+  const segundaLinea =
+    estado === 'trabajando'
+      ? t('timesheet.sinceTime', { time: start })
+      : estado === 'descanso'
+        ? t('timesheet.sinceTime', { time: descansoDesde ?? start })
+        : `${start} – ${end}`;
+
+  const nombreAccesible = dentro
+    ? `${employeeName}. ${
+        estado === 'trabajando' ? t('timesheet.stateWorking') : t('timesheet.stateOnBreak')
+      }, ${segundaLinea}. ${t('timesheet.netHours')}: ${net}, ${t('timesheet.live')}`
+    : `${employeeName}. ${start} – ${end}. ${t('timesheet.netHours')}: ${net}`;
 
   return (
     <Pressable
       onPress={() => onPress(session)}
       accessibilityRole="button"
       /* El nombre accesible SÍ dice qué es cada número: quien no ve la cabecera lo necesita. */
-      accessibilityLabel={`${employeeName}. ${start} – ${end}. ${t('timesheet.netHours')}: ${net}`}
+      accessibilityLabel={nombreAccesible}
       accessibilityHint={t('timesheet.openDetailHint')}
       testID={testID}
       {...respuesta.props}
     >
       {({ pressed }) => (
-        <View style={[styles.fila, ...respuesta.estilo(pressed)]}>
+        <View
+          style={[
+            styles.fila,
+            estado === 'trabajando' ? styles.filaTrabajando : null,
+            estado === 'descanso' ? styles.filaDescanso : null,
+            ...respuesta.estilo(
+              pressed,
+              estado === 'trabajando'
+                ? colors.success100
+                : estado === 'descanso'
+                  ? colors.warning100
+                  : undefined,
+            ),
+          ]}
+        >
           <Row gap={spacing.md} align="center">
             {/*
             EL MISMO ANCLA QUE EN EQUIPO, y del mismo color para la misma persona.
@@ -108,9 +171,32 @@ export function SessionRow({
             <AnclaDePersona semilla={session.employee_id} nombre={employeeName} tamano="sm" />
             <Stack gap={spacing.xs} style={styles.creceYEncoge}>
               <AppText variant="bodyStrong">{employeeName}</AppText>
-              <AppText variant="help" tone="muted" tabular>
-                {`${start} – ${end}`}
-              </AppText>
+              {/*
+                EL ESTADO VA CON PALABRA E ICONO, NO SOLO CON COLOR (§21): el verde dice
+                «está dentro» de un vistazo, y «Trabajando» lo dice a quien no distingue el
+                verde o lee con un lector de pantalla.
+              */}
+              {dentro ? (
+                <Row gap={spacing.xs} wrap align="center">
+                  <StatusBadge
+                    label={
+                      estado === 'trabajando'
+                        ? t('timesheet.stateWorking')
+                        : t('timesheet.stateOnBreak')
+                    }
+                    tone={estado === 'trabajando' ? 'working' : 'onBreak'}
+                    icon={estado === 'trabajando' ? 'radio-button-on' : 'cafe-outline'}
+                    compact
+                  />
+                  <AppText variant="help" tone="muted" tabular>
+                    {aTiempo ? `${segundaLinea} · ${t('timesheet.onTime')}` : segundaLinea}
+                  </AppText>
+                </Row>
+              ) : (
+                <AppText variant="help" tone="muted" tabular>
+                  {segundaLinea}
+                </AppText>
+              )}
             </Stack>
             {/*
             DOS COLUMNAS DE ANCHO FIJO, que es lo que hace que las horas se puedan comparar
@@ -121,9 +207,30 @@ export function SessionRow({
             La pausa pierde su rótulo repetido: la cabecera lo dice una vez y aquí queda el
             número, que es lo que cambia de fila en fila.
           */}
-            <AppText variant="bodyStrong" tabular style={estilosDeColumna.netas}>
-              {net}
-            </AppText>
+            {dentro ? (
+              <Stack gap={0} style={estilosDeColumna.netas}>
+                {/*
+                  EL NÚMERO EN TINTA, NO EN VERDE. En verde sobre el verde de la fila quedaba a
+                  4,71:1, y al pasar el puntero a 4,26: por debajo de lo que se lee. El verde
+                  ya lo dicen el fondo y la insignia; el número es texto y va en color de texto.
+                */}
+                <AppText
+                  variant="bodyStrong"
+                  tabular
+                  style={estilosDeColumna.derecha}
+                  testID={testID === undefined ? undefined : `${testID}-en-curso`}
+                >
+                  {net}
+                </AppText>
+                <AppText variant="label" tone="subtle" style={estilosDeColumna.derecha}>
+                  {estado === 'trabajando' ? t('timesheet.live') : t('timesheet.paused')}
+                </AppText>
+              </Stack>
+            ) : (
+              <AppText variant="bodyStrong" tabular style={estilosDeColumna.netas}>
+                {net}
+              </AppText>
+            )}
             <AppText variant="label" tone="subtle" tabular style={estilosDeColumna.pausas}>
               {session.unpaid_break_minutes > 0 ? minutesToHHmm(session.unpaid_break_minutes) : '–'}
             </AppText>
@@ -163,6 +270,14 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.lg,
     gap: spacing.sm,
   },
+  /*
+   * UN TINTE, NO UNA TARJETA. Quien está dentro ahora se encuentra de un vistazo bajando por
+   * la lista, sin leer ninguna fila: verde si trabaja, ámbar si está en su descanso. Los
+   * mismos dos tonos que Inicio usa para lo mismo, así que no hay que aprender un color
+   * nuevo en cada pestaña.
+   */
+  filaTrabajando: { backgroundColor: colors.success50 },
+  filaDescanso: { backgroundColor: colors.warning50 },
 }));
 
 /**
@@ -174,5 +289,6 @@ const useEstilos = estilosDelTema((colors) => ({
  */
 const estilosDeColumna = StyleSheet.create({
   netas: { width: 80, textAlign: 'right', flexShrink: 0 },
+  derecha: { textAlign: 'right' },
   pausas: { width: 72, textAlign: 'right', flexShrink: 0 },
 });

@@ -362,10 +362,25 @@ export function useRespuestaAlPuntero() {
       onFocus: () => setConFoco(true),
       onBlur: () => setConFoco(false),
     },
-    /** `pressed` manda sobre el puntero: si estás pulsando, da igual que además estés encima. */
-    estilo: (pressed: boolean) => [
-      encima && !pressed ? estilos.encima : null,
-      pressed ? estilos.pulsado : null,
+    /**
+     * `pressed` manda sobre el puntero: si estás pulsando, da igual que además estés encima.
+     *
+     * `fondoDeTinte` es el fondo que toma una fila QUE YA TRAE COLOR —la de alguien
+     * trabajando— al pasar por encima o pulsarla. El gris de siempre le quitaba el color y
+     * apenas se notaba sobre él; su mismo tono un paso más marcado (más oscuro en claro,
+     * más claro en oscuro) responde al puntero y conserva lo que la fila decía.
+     */
+    estilo: (pressed: boolean, fondoDeTinte?: string) => [
+      encima && !pressed
+        ? fondoDeTinte === undefined
+          ? estilos.encima
+          : { backgroundColor: fondoDeTinte }
+        : null,
+      pressed
+        ? fondoDeTinte === undefined
+          ? estilos.pulsado
+          : { backgroundColor: fondoDeTinte }
+        : null,
       conFoco ? estilos.conFoco : null,
     ],
   };

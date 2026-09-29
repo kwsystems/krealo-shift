@@ -124,6 +124,7 @@ export function StatTile({
   value,
   tone,
   icon,
+  tintada = false,
   onPress,
   testID,
 }: {
@@ -132,14 +133,22 @@ export function StatTile({
   /** SOLO cuando el número es una excepción que pide acción. Por defecto, neutra. */
   tone?: StatusTone;
   icon?: IconName;
+  /**
+   * El fondo del color de su tono; el número sigue en tinta. NO es para marcar una excepción
+   * —eso ya lo hace `tone` con el icono—: es para la ficha que habla de lo que está
+   * pasando AHORA, y que tiene que leerse como la misma cosa que las filas verdes de
+   * debajo. Una sola por pantalla, o vuelve la fila de marcos de colores que se quitó.
+   */
+  tintada?: boolean;
   onPress?: () => void;
   testID?: string;
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
   const palette = tone === undefined ? null : paletaDeEstado(colors)[tone];
+  const tinte = tintada && palette !== null ? palette : null;
   const content = (
-    <View style={styles.tile}>
+    <View style={[styles.tile, tinte === null ? null : { backgroundColor: tinte.bg }]}>
       {/*
         LA ETIQUETA TIENE QUE PODER ENVOLVER, y esto es la consecuencia de estrechar la
         ficha a 104 px: le quedan 72 de contenido, y «Regulares» con su icono y su hueco

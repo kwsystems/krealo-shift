@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { fetchExportRows, type WorkSession } from './api';
 import { alertsForSession, overlappingSessionIds, type TimesheetAlert } from './alerts';
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
+import { dentroPrimero, totalEnCurso, type EnCurso } from './en-curso';
 import {
   useAdjustments,
   useDailySummaries,
@@ -43,6 +44,7 @@ import {
 import { useEmployeeNames, useTeam } from '@/features/team/hooks';
 import { adminErrorKind } from '@/hooks/use-admin-query';
 import { useLiveClock } from '@/hooks/use-live-clock';
+import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
@@ -130,6 +132,18 @@ export function TimesheetsScreen() {
   const allSessions = useMemo(() => sessions.data ?? [], [sessions.data]);
   const overlapping = useMemo(() => overlappingSessionIds(allSessions), [allSessions]);
 
+  const workingNow = useWorkingNow(scope.locationId);
+  const enCursoPorSesion = useMemo(() => {
+    const map = new Map<string, EnCurso>();
+    for (const fila of workingNow.data ?? []) {
+      map.set(fila.work_session_id, {
+        estado: fila.attendance_state === 'ON_BREAK' ? 'descanso' : 'trabajando',
+        descansoDesde: fila.break_started_at,
+      });
+    }
+    return map;
+  }, [workingNow.data]);
+
   const alertsBySession = useMemo(() => {
     const map = new Map<string, TimesheetAlert[]>();
     for (const session of allSessions) {
@@ -150,17 +164,32 @@ export function TimesheetsScreen() {
 
   const totals = useTimesheetTotals(visibleSummaries, scope.settings.dailyOvertimeThresholdMinutes);
 
-  const visibleSessions = useMemo(
-    () =>
-      allSessions.filter((session) => {
-        if (employeeFilter !== null && session.employee_id !== employeeFilter) return false;
-        if (statusFilter === 'needsReview') {
-          return (alertsBySession.get(session.id) ?? []).length > 0;
-        }
-        if (statusFilter === 'approved') return session.status === 'approved';
-        return true;
-      }),
-    [allSessions, employeeFilter, statusFilter, alertsBySession],
+  const visibleSessions = useMemo(() => {
+    const filtradas = allSessions.filter((session) => {
+      if (employeeFilter !== null && session.employee_id !== employeeFilter) return false;
+      if (statusFilter === 'needsReview') {
+        return (alertsBySession.get(session.id) ?? []).length > 0;
+      }
+      if (statusFilter === 'approved') return session.status === 'approved';
+      return true;
+    });
+    // Quien está dentro, arriba: ver `dentroPrimero`.
+    return dentroPrimero(filtradas, alertsBySession, enCursoPorSesion);
+  }, [allSessions, employeeFilter, statusFilter, alertsBySession, enCursoPorSesion]);
+
+  /*
+   * LO QUE SE ESTÁ TRABAJANDO AHORA, APARTE DEL TOTAL. «Horas netas» suma jornadas
+   * cerradas y así se queda: es el número que se aprueba y se exporta, y mezclarle minutos
+   * que siguen corriendo lo haría cambiar solo mientras alguien lo mira. Pero con gente
+   * dentro, un 00:00 arriba decía «no ha trabajado nadie». Por eso va en su propia casilla,
+   * y solo cuando hay alguien dentro.
+   *
+   * Se cuenta sobre la MISMA lista que se ve: con el filtro puesto en una persona, las
+   * demás casillas hablan de ella y esta hablaba del local entero.
+   */
+  const enCursoAhora = useMemo(
+    () => totalEnCurso(visibleSessions, alertsBySession, enCursoPorSesion, nowISO),
+    [visibleSessions, alertsBySession, enCursoPorSesion, nowISO],
   );
 
   const employeeOptions = useMemo<Option<string>[]>(
@@ -260,6 +289,8 @@ export function TimesheetsScreen() {
               sessions={visibleSessions}
               employeeNames={names}
               alertsBySession={alertsBySession}
+              enCursoPorSesion={enCursoPorSesion}
+              nowISO={nowISO}
               unknownEmployeeLabel={t('team.unknownEmployee')}
               timezone={scope.timezone}
               timeFormat={scope.timeFormat}
@@ -334,6 +365,22 @@ export function TimesheetsScreen() {
                   </BarraDeControl>
 
                   <Row gap={spacing.sm} wrap align="flex-start">
+                    {/*
+                      LA ÚNICA CASILLA VERDE, y es la excepción a la regla de esta fila —«tono
+                      solo cuando el número pide acción»— a propósito: no pide acción, pero es
+                      el único número de la pantalla que está VIVO. Se distingue del resto
+                      porque se lee distinto: los demás son lo que pasó, este es lo que pasa.
+                    */}
+                    {enCursoAhora.personas > 0 ? (
+                      <StatTile
+                        label={t('timesheet.liveTile', { count: enCursoAhora.personas })}
+                        value={minutesToHHmm(enCursoAhora.minutos)}
+                        icon="radio-button-on"
+                        tone="working"
+                        tintada
+                        testID="total-en-curso"
+                      />
+                    ) : null}
                     <StatTile
                       label={t('timesheet.netHours')}
                       value={minutesToHHmm(totals.netMinutes)}

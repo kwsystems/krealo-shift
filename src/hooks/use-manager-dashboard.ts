@@ -48,6 +48,25 @@ async function fetchWorkingNow(locationId: string): Promise<WorkingNowRow[]> {
   );
 }
 
+/**
+ * Quién está dentro ahora mismo, y si trabaja o está en descanso.
+ *
+ * SE EXPORTA PARA QUE HORAS LO LEA DE AQUÍ, con la misma clave de caché que Inicio. Las
+ * dos pantallas hablan de lo mismo —esta persona está trabajando— y si cada una lo
+ * calculara por su cuenta acabarían discrepando: Inicio diría «en descanso» y Horas
+ * «trabajando» sobre la misma persona en el mismo minuto. Con una sola consulta, cambiar
+ * de pestaña tampoco cuesta otra lectura.
+ */
+export function useWorkingNow(locationId: string | null) {
+  return useQuery({
+    queryKey: dashboardKeys.workingNow(locationId ?? 'none'),
+    queryFn: () => fetchWorkingNow(locationId ?? ''),
+    enabled: locationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+    refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
 export const dashboardKeys = {
   workingNow: (locationId: string) => ['dashboard', 'workingNow', locationId] as const,
   weekShifts: (locationId: string, weekStart: string) =>
@@ -128,13 +147,7 @@ export function useManagerDashboard(params: {
   const weekRange = weekRangeInstants(weekStart, timezone);
   const enabled = locationId !== null;
 
-  const workingNow = useQuery({
-    queryKey: dashboardKeys.workingNow(locationId ?? 'none'),
-    queryFn: () => fetchWorkingNow(locationId ?? ''),
-    enabled,
-    staleTime: ADMIN_LIST_STALE_MS,
-    refetchInterval: DASHBOARD_POLL_MS,
-  });
+  const workingNow = useWorkingNow(locationId);
 
   const weekShifts = useQuery({
     queryKey: dashboardKeys.weekShifts(locationId ?? 'none', weekStart),

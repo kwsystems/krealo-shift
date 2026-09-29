@@ -254,7 +254,15 @@ export function FilaDeFranja({
       */}
       <AnclaDePersona semilla={semilla} nombre={nombre} tamano="sm" />
       <View style={estilos.quien}>
-        <AppText variant="bodyStrong" numberOfLines={1}>
+        {/*
+          DOS LÍNEAS, NO UNA. Con una, «Héctor Ramírez Pinto» —un nombre y dos apellidos,
+          lo normal aquí— pedía 163 px de los 160 de la columna y salía «Héctor Ramírez
+          Pint…». Ensanchar la columna solo mueve el problema al siguiente apellido largo;
+          dejarla partir en dos líneas conserva lo que la columna fija existe para dar —que
+          todas las franjas empiecen en la misma vertical— y el nombre entero. Solo se veía
+          los días en que esa persona tenía turno, por eso tardó en reproducirse.
+        */}
+        <AppText variant="bodyStrong" numberOfLines={2}>
           {nombre}
         </AppText>
         {detalle === undefined ? null : (

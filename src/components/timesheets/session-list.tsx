@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { SessionRow } from './session-row';
 import { AppText } from '@/components/ui/app-text';
+import type { EnCurso } from '@/features/timesheets/en-curso';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { SupportedLanguage } from '@/i18n';
@@ -28,6 +29,10 @@ export type SessionListProps = {
   sessions: WorkSession[];
   employeeNames: Map<string, string>;
   alertsBySession: Map<string, TimesheetAlert[]>;
+  /** Quién está dentro ahora, por sesión. Vacío mientras no llega: las abiertas se pintan «trabajando». */
+  enCursoPorSesion?: Map<string, EnCurso>;
+  /** El minuto actual, para contar en vivo las jornadas abiertas. */
+  nowISO: string;
   unknownEmployeeLabel: string;
   timezone: string;
   timeFormat: TimeFormatPreference;
@@ -51,6 +56,8 @@ export function SessionList({
   sessions,
   employeeNames,
   alertsBySession,
+  enCursoPorSesion,
+  nowISO,
   unknownEmployeeLabel,
   timezone,
   timeFormat,
@@ -66,6 +73,8 @@ export function SessionList({
         session={item}
         employeeName={employeeNames.get(item.employee_id) ?? unknownEmployeeLabel}
         alerts={alertsBySession.get(item.id) ?? []}
+        enCurso={enCursoPorSesion?.get(item.id)}
+        nowISO={nowISO}
         timezone={timezone}
         timeFormat={timeFormat}
         language={language}
@@ -76,6 +85,8 @@ export function SessionList({
     [
       employeeNames,
       alertsBySession,
+      enCursoPorSesion,
+      nowISO,
       unknownEmployeeLabel,
       timezone,
       timeFormat,

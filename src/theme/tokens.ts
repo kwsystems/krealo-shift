@@ -98,8 +98,18 @@ export const lightColors = {
    */
   reglaFuerte: '#959499',
   success50: '#EAF9F1',
+  /**
+   * Un paso más que `success50`: una fila de alguien trabajando CON EL PUNTERO ENCIMA. El
+   * `encima` gris de las demás filas le quitaba el verde y apenas se notaba (1,016 de salto,
+   * lo midió `relieve:check`). El paso es el MÍNIMO que se nota, a propósito: uno mayor deja
+   * el texto gris de la fila por debajo de 4,5:1. Calculado, no elegido: salto 1,053 y
+   * `ink500` a 4,52.
+   */
+  success100: '#E1F4EB',
   success600: '#157D56',
   warning50: '#FFF6E5',
+  /** Lo mismo para quien está en su descanso. Salto 1,062, `ink500` a 4,54. */
+  warning100: '#FAEFDA',
   warning600: '#A26000',
   danger50: '#FFF0F1',
   /** Un paso más que `danger50`: el fondo de un botón de peligro PULSADO. */
@@ -209,8 +219,12 @@ export const darkColors = {
   pulsado: '#322E3E',
   reglaFuerte: '#6B6280',
   success50: '#12261D',
+  /** Ver el claro. Salto 1,069, `ink500` a 4,57. */
+  success100: '#142C21',
   success600: '#4ADE9B',
   warning50: '#2B2011',
+  /** Salto 1,060, `ink500` a 4,62. */
+  warning100: '#322412',
   warning600: '#C4831F',
   danger50: '#2C1519',
   danger100: '#3A1B21',
