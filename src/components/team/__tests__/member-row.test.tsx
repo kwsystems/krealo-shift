@@ -69,4 +69,24 @@ describe('fila de Equipo', () => {
     expect(screen.queryByText('en curso')).toBeNull();
     expect(screen.queryByTestId('team-member-e1-en-curso')).toBeNull();
   });
+
+  it('en «eliminar varios» es una casilla que dice si está marcada, y no abre la ficha', async () => {
+    const onPress = jest.fn();
+    await pintar({ marcado: false, onPress });
+    const fila = screen.getByTestId('team-member-e1');
+    expect(fila.props.accessibilityRole).toBe('checkbox');
+    expect(fila).not.toBeChecked();
+    expect(screen.getByTestId('team-member-e1-casilla')).toBeTruthy();
+  });
+
+  it('marcada, lo dice', async () => {
+    await pintar({ marcado: true });
+    expect(screen.getByTestId('team-member-e1')).toBeChecked();
+  });
+
+  it('fuera de ese modo es la fila de siempre: un botón, sin casilla', async () => {
+    await pintar();
+    expect(screen.getByTestId('team-member-e1').props.accessibilityRole).toBe('button');
+    expect(screen.queryByTestId('team-member-e1-casilla')).toBeNull();
+  });
 });

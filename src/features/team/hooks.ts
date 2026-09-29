@@ -187,6 +187,41 @@ export function useTeamMutations(organizationId: string | null) {
   });
 
   /*
+   * ELIMINAR VARIOS: los de prueba, de una vez. Uno detrás de otro y con la MISMA función
+   * de servidor que el borrado de uno —que exige que la persona esté inactiva y que el
+   * nombre coincida—, así que no hay una segunda puerta con reglas distintas. El nombre lo
+   * pone la app porque la confirmación ya se hizo en la hoja, con la lista delante.
+   *
+   * No se para en el primer fallo: se borra lo que se pueda y se devuelve quién no, para
+   * que la pantalla lo diga con nombre. Invalida UNA vez al final, no una por persona.
+   */
+  const removeMany = useMutation({
+    mutationFn: async (params: {
+      members: { id: string; full_name: string }[];
+      onProgreso?: (hechos: number) => void;
+    }) => {
+      const eliminados: string[] = [];
+      const fallidos: string[] = [];
+      for (const [i, member] of params.members.entries()) {
+        try {
+          await deleteEmployee({ employeeId: member.id, confirmName: member.full_name });
+          eliminados.push(member.id);
+        } catch {
+          fallidos.push(member.id);
+        }
+        params.onProgreso?.(i + 1);
+      }
+      return { eliminados, fallidos };
+    },
+    onSettled: () => {
+      invalidate();
+      void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+    },
+  });
+
+  /*
    * Los puestos invalidan lo MISMO que los empleados: la lista de puestos vive bajo la
    * clave `team`, y el horario pinta turnos que llevan puesto. Abrir uno nuevo tiene que
    * verse en el selector del formulario de empleado sin recargar.
@@ -207,7 +242,17 @@ export function useTeamMutations(organizationId: string | null) {
     onSuccess: invalidate,
   });
 
-  return { create, update, changeStatus, resetPin, remove, addJobRole, renameRole, toggleJobRole };
+  return {
+    create,
+    update,
+    changeStatus,
+    resetPin,
+    remove,
+    removeMany,
+    addJobRole,
+    renameRole,
+    toggleJobRole,
+  };
 }
 
 export function useUpcomingShifts(organizationId: string | null, employeeId: string | null) {

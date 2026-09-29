@@ -40,6 +40,8 @@ export type MemberListProps = {
   dentroPorMiembro?: Map<string, DentroEnEquipo>;
   jobRoleNames: Map<string, string>;
   onSelect: (id: string) => void;
+  /** En modo «eliminar varios», quiénes están marcados. Sin definir, modo normal. */
+  marcados?: ReadonlySet<string>;
   testID?: string;
 };
 
@@ -49,6 +51,7 @@ export function MemberList({
   dentroPorMiembro,
   jobRoleNames,
   onSelect,
+  marcados,
   testID = 'team-member-list',
 }: MemberListProps) {
   const renderItem = useCallback(
@@ -59,14 +62,17 @@ export function MemberList({
         dentro={dentroPorMiembro?.get(item.id)}
         jobRoleNames={jobRoleNames}
         onPress={onSelect}
+        marcado={marcados === undefined ? undefined : marcados.has(item.id)}
       />
     ),
-    [recentMinutesByMember, dentroPorMiembro, jobRoleNames, onSelect],
+    [recentMinutesByMember, dentroPorMiembro, jobRoleNames, onSelect, marcados],
   );
 
   return (
     <FlatList
       data={members}
+      // Sin esto, marcar una fila no la repinta: `FlatList` solo mira `data`.
+      extraData={marcados}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
       /*

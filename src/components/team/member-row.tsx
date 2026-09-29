@@ -1,6 +1,7 @@
 import { memo } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 
 import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
@@ -43,9 +44,22 @@ export type MemberRowProps = {
   dentro?: DentroEnEquipo;
   jobRoleNames: Map<string, string>;
   onPress: (id: string) => void;
+  /**
+   * EN MODO «ELIMINAR VARIOS», si está marcada. Sin definir, la fila es la de siempre y
+   * abre la ficha; definida, es una casilla: tocarla la marca o la desmarca.
+   */
+  marcado?: boolean;
 };
 
-function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }: MemberRowProps) {
+function MemberRowBase({
+  member,
+  recentMinutes,
+  dentro,
+  jobRoleNames,
+  onPress,
+  marcado,
+}: MemberRowProps) {
+  const marcable = marcado !== undefined;
   const { t } = useTranslation();
   const styles = useEstilos();
   const { colors } = useTheme();
@@ -103,7 +117,13 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
   return (
     <Pressable
       onPress={() => onPress(member.id)}
-      accessibilityRole="button"
+      /*
+       * MARCABLE, ES UNA CASILLA, y lo dice también a quien no ve: rol `checkbox` y
+       * `aria-checked`. Con `accessibilityState` solo no bastaría: react-native-web 0.21
+       * ya no lo traduce al HTML, y en la web la casilla no diría si está marcada.
+       */
+      accessibilityRole={marcable ? 'checkbox' : 'button'}
+      aria-checked={marcable ? marcado : undefined}
       /*
        * EL NOMBRE ACCESIBLE SÍ DICE «horas recientes», aunque la columna ya no lo escriba.
        * Quien mira tiene la cabecera de la columna para saber qué es ese número; quien
@@ -114,7 +134,7 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
       }. ${t('team.recentHours')}: ${minutesToHHmm(recentMinutes)}${
         dentro === undefined ? '' : `, ${t('timesheet.live')}`
       }`}
-      accessibilityHint={t('team.openEmployeeHint')}
+      accessibilityHint={marcable ? t('team.markHint') : t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
       {...respuesta.props}
     >
@@ -122,6 +142,7 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
         <View
           style={[
             styles.fila,
+            marcado === true ? styles.filaMarcada : null,
             dentro?.estado === 'trabajando' ? styles.filaTrabajando : null,
             dentro?.estado === 'descanso' ? styles.filaDescanso : null,
             ...respuesta.estilo(
@@ -149,6 +170,18 @@ function MemberRowBase({ member, recentMinutes, dentro, jobRoleNames, onPress }:
             `aria-hidden` no hace falta: el `accessibilityLabel` del Pressable ya dice el
             nombre completo, y las iniciales no añaden nada que oír.
           */}
+            {/*
+              MARCABLE, LA CASILLA VA DELANTE DE LAS INICIALES, donde el ojo empieza la fila.
+              Marcada lleva el check relleno y la fila se tiñe: dos señales, no solo color.
+            */}
+            {marcable ? (
+              <Ionicons
+                name={marcado ? 'checkmark-circle' : 'ellipse-outline'}
+                size={24}
+                color={marcado ? colors.danger600 : colors.ink500}
+                testID={`team-member-${member.id}-casilla`}
+              />
+            ) : null}
             <AnclaDePersona semilla={member.id} nombre={member.displayName} />
             <Stack gap={spacing.xs} style={styles.creceYEncoge}>
               <AppText variant="bodyStrong">{member.displayName}</AppText>
@@ -268,6 +301,8 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.sm,
   },
   /* El mismo tinte que la fila de Horas de quien está dentro, y por lo mismo. */
+  /* Rojo muy claro: lo marcado aquí es para borrarlo. */
+  filaMarcada: { backgroundColor: colors.danger50 },
   filaTrabajando: { backgroundColor: colors.success50 },
   filaDescanso: { backgroundColor: colors.warning50 },
 }));

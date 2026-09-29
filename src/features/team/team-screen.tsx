@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { EmployeeDraft } from './api';
 import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
 import { EliminarEmpleadoSheet } from './eliminar-empleado-sheet';
+import { EliminarVariosSheet } from './eliminar-varios-sheet';
 import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from './employee-form';
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
 import { FormField } from '@/components/ui/form-field';
@@ -17,7 +18,7 @@ import {
   type Option,
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
-import { SecondaryButton } from '@/components/ui/buttons';
+import { DangerButton, GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 import { useRequests } from '@/features/requests/hooks';
@@ -63,6 +64,14 @@ export function TeamScreen() {
   const [pin, setPin] = useState<{ value: string; name: string } | null>(null);
   /** A quién se está eliminando: ver `EliminarEmpleadoSheet`. */
   const [eliminando, setEliminando] = useState<TeamMember | null>(null);
+  /*
+   * «ELIMINAR VARIOS»: quiénes están marcados, o `null` fuera de ese modo. Solo existe en
+   * el filtro Inactivo —el servidor no borra a nadie activo— y cambiar de filtro lo cierra.
+   */
+  const [marcados, setMarcados] = useState<ReadonlySet<string> | null>(null);
+  const [confirmandoVarios, setConfirmandoVarios] = useState(false);
+  const [progresoVarios, setProgresoVarios] = useState<number | null>(null);
+  const [fallidosVarios, setFallidosVarios] = useState<string[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const organizationId = scope.organization?.id ?? null;
@@ -188,6 +197,54 @@ export function TeamScreen() {
   }, [team.members, search, statusFilter, jobRoleFilter, scope.locationId]);
 
   const selected = team.members.find((member) => member.id === selectedId) ?? null;
+
+  /*
+   * LO QUE SE VA A BORRAR ES LO MARCADO QUE SE VE. Si después de marcar se escribe en el
+   * buscador, lo marcado que queda fuera de la vista no se borra: en la hoja solo sale lo
+   * que estaba en pantalla, y es lo único que se revisó.
+   */
+  const aBorrar = marcados === null ? [] : filtered.filter((member) => marcados.has(member.id));
+  const modoVarios = marcados !== null && statusFilter === 'inactive';
+
+  const alternarMarca = (id: string) =>
+    setMarcados((actual) => {
+      if (actual === null) return actual;
+      const siguiente = new Set(actual);
+      if (siguiente.has(id)) siguiente.delete(id);
+      else siguiente.add(id);
+      return siguiente;
+    });
+
+  const salirDeVarios = () => {
+    setMarcados(null);
+    setConfirmandoVarios(false);
+    setFallidosVarios([]);
+  };
+
+  const borrarVarios = () => {
+    const lista = aBorrar;
+    setProgresoVarios(0);
+    setFallidosVarios([]);
+    mutations.removeMany.mutate(
+      { members: lista, onProgreso: setProgresoVarios },
+      {
+        onSuccess: ({ eliminados, fallidos }) => {
+          setProgresoVarios(null);
+          if (fallidos.length === 0) {
+            salirDeVarios();
+          } else {
+            // Los que fallaron siguen marcados, para poder reintentar solo esos.
+            setMarcados(new Set(fallidos));
+            setFallidosVarios(lista.filter((m) => fallidos.includes(m.id)).map((m) => m.full_name));
+          }
+          if (eliminados.length > 0) {
+            setFeedback(t('team.deletedMany', { count: eliminados.length }));
+          }
+        },
+        onError: () => setProgresoVarios(null),
+      },
+    );
+  };
 
   const requestsForSelected = useMemo(
     () =>
@@ -330,7 +387,10 @@ export function TeamScreen() {
                     { value: 'inactive', label: t('team.statusInactive') },
                     { value: 'all', label: t('team.statusAll') },
                   ]}
-                  onChange={setStatusFilter}
+                  onChange={(valor) => {
+                    setStatusFilter(valor);
+                    if (valor !== 'inactive') salirDeVarios();
+                  }}
                   rotuloVisible
                   testID="team-status-filter"
                 />
@@ -350,6 +410,62 @@ export function TeamScreen() {
 
               {feedback !== null ? (
                 <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
+              ) : null}
+
+              {/*
+                ELIMINAR VARIOS, SOLO EN INACTIVO Y SOLO PARA QUIEN ADMINISTRA: es donde están
+                los de prueba, y el servidor no borra a nadie activo. Fuera de ese filtro el
+                botón no existe, para que nadie lo encuentre mirando al equipo que trabaja.
+              */}
+              {statusFilter === 'inactive' && scope.isAdmin && filtered.length > 0 ? (
+                modoVarios ? (
+                  <Row gap={spacing.sm} align="center" wrap testID="team-delete-many-bar">
+                    <AppText variant="bodyStrong" style={styles.flexOne}>
+                      {t('team.deleteManyMarked', { count: aBorrar.length })}
+                    </AppText>
+                    <GhostButton
+                      label={
+                        aBorrar.length === filtered.length
+                          ? t('team.deleteManyNone')
+                          : t('team.deleteManyAll')
+                      }
+                      onPress={() =>
+                        setMarcados(
+                          aBorrar.length === filtered.length
+                            ? new Set()
+                            : new Set(filtered.map((member) => member.id)),
+                        )
+                      }
+                      fullWidth={false}
+                      testID="team-delete-many-all"
+                    />
+                    <DangerButton
+                      label={t('team.deleteManyGo', { count: aBorrar.length })}
+                      onPress={() => setConfirmandoVarios(true)}
+                      disabled={aBorrar.length === 0}
+                      fullWidth={false}
+                      testID="team-delete-many-review"
+                    />
+                    <SecondaryButton
+                      label={t('common.cancel')}
+                      onPress={salirDeVarios}
+                      fullWidth={false}
+                      testID="team-delete-many-exit"
+                    />
+                  </Row>
+                ) : (
+                  <Row gap={spacing.sm} align="center" wrap>
+                    <GhostButton
+                      label={t('team.deleteManyStart')}
+                      onPress={() => setMarcados(new Set())}
+                      fullWidth={false}
+                      testID="team-delete-many-start"
+                    />
+                    <AppText variant="help" tone="subtle" style={styles.flexOne}>
+                      {t('team.deleteManyHint')}
+                    </AppText>
+                  </Row>
+                )
               ) : null}
 
               <AsyncSection
@@ -379,7 +495,8 @@ export function TeamScreen() {
                   recentMinutesByMember={recentMinutesByMember}
                   dentroPorMiembro={dentroPorMiembro}
                   jobRoleNames={jobRoleNames}
-                  onSelect={setSelectedId}
+                  onSelect={modoVarios ? alternarMarca : setSelectedId}
+                  marcados={modoVarios ? (marcados ?? undefined) : undefined}
                 />
               </AsyncSection>
             </Stack>
@@ -484,6 +601,16 @@ export function TeamScreen() {
             )
           }
           onClose={() => setEliminando(null)}
+        />
+      ) : null}
+
+      {confirmandoVarios && aBorrar.length > 0 ? (
+        <EliminarVariosSheet
+          members={aBorrar}
+          progreso={progresoVarios}
+          fallidos={fallidosVarios}
+          onConfirm={borrarVarios}
+          onClose={() => setConfirmandoVarios(false)}
         />
       ) : null}
     </AppScreen>
