@@ -72,7 +72,7 @@ describe('cuadrícula semanal', () => {
 
     // Lo que antes era un hueco idéntico a un hueco sin decidir.
     expect(view.getByText('Descanso')).toBeTruthy();
-    fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
+    await fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
     expect(onSelectRestDay).toHaveBeenCalledWith({
       id: 'd1',
       employeeId: 'e1',
@@ -94,7 +94,7 @@ describe('cuadrícula semanal', () => {
     );
 
     expect(view.getByText('Descanso')).toBeTruthy();
-    fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
+    await fireEvent.press(view.getByTestId('rest-day-e1-2026-08-25'));
     expect(onSelectRestDay).not.toHaveBeenCalled();
   });
 

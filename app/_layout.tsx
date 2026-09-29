@@ -194,6 +194,8 @@ export default function RootLayout() {
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(manager)" />
             <Stack.Screen name="kiosk" />
+            {/* Abierta: el manual no pide sesión. Ver `app/manual.tsx`. */}
+            <Stack.Screen name="manual" />
           </Stack>
           {/*
             Va DESPUES del Stack a proposito. Los efectos de los hermanos corren en

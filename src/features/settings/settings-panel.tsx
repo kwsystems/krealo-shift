@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { Linking } from 'react-native';
+import { Linking, Platform } from 'react-native';
 import Constants from 'expo-constants';
 import { useTranslation } from 'react-i18next';
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { esZonaValida, zonaCanonica, ZONAS_DE_EJEMPLO } from '@/domain/zona-horaria';
 
 import { useKioskDevices, useNotificationPreferences, useSettingsMutations } from './hooks';
@@ -1076,6 +1076,11 @@ function SessionCard({ canSignOutEverywhere }: { canSignOutEverywhere: boolean }
  */
 function AboutCard() {
   const { t } = useTranslation();
+  /* La dirección sale del navegador y no de una constante: ver `manual-screen.tsx`. */
+  const direccionDelManual =
+    Platform.OS === 'web' && typeof window !== 'undefined'
+      ? `${window.location.origin}/manual`
+      : null;
 
   return (
     <FormCard collapsible title={t('settings.aboutTitle')}>
@@ -1083,6 +1088,18 @@ function AboutCard() {
         <KeyValueRow
           label={t('settings.appVersion')}
           value={Constants.expoConfig?.version ?? '—'}
+        />
+        {/*
+          EL MANUAL, CON SU DIRECCION A LA VISTA. El boton lo abre, pero lo que hace falta
+          de verdad es poder COPIAR el enlace para mandarlo al grupo de la tienda, y para
+          eso hay que verlo. Un boton que solo navega deja a quien administra buscando la
+          direccion en la barra del navegador —o peor, mandando una captura—.
+        */}
+        <SecondaryButton
+          label={t('manual.title')}
+          hint={direccionDelManual ?? undefined}
+          onPress={() => router.push('/manual')}
+          testID="settings-manual"
         />
         <SecondaryButton
           label={t('settings.privacy')}

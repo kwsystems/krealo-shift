@@ -75,6 +75,18 @@ export default function KioskHelpScreen() {
             </Stack>
           </Card>
 
+          {/*
+            EL MANUAL COMPLETO, desde la unica pantalla que el empleado puede abrir sin
+            sesion. Aqui solo caben cuatro parrafos —es la ayuda del reloj, no un curso—,
+            y lo que falta es justo lo que se pregunta en el mostrador: que pasa si olvide
+            marcar, si llegue antes, si hoy descansaba y vine a cubrir.
+          */}
+          <SecondaryButton
+            label={t('manual.title')}
+            onPress={() => router.push('/manual')}
+            testID="kiosk-help-manual"
+          />
+
           <SecondaryButton label={t('common.back')} onPress={() => router.back()} />
         </Stack>
       </ResponsiveContainer>
