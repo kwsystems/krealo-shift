@@ -39,7 +39,8 @@
     "paquete:check": "node scripts/paquete-check.mjs --despues",
     "plegables:check": "node scripts/plegables-check.mjs dist-demo",
     "pegar:check": "node scripts/pegar-check.mjs dist-demo",
-    "manual:check": "node scripts/manual-check.mjs dist-demo"
+    "manual:check": "node scripts/manual-check.mjs dist-demo",
+    "sedes:check": "node scripts/sedes-check.mjs dist-demo"
   },
   "dependencies": {
     "@date-fns/tz": "^1.5.0",

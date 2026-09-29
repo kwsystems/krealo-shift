@@ -66,9 +66,17 @@ export function TeamScreen() {
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const organizationId = scope.organization?.id ?? null;
+  /*
+   * LAS ASIGNACIONES SE LEEN DE TODAS LAS SEDES, TAMBIÉN DE LAS CERRADAS, aunque en
+   * pantalla solo salgan las activas. No es un descuido: guardar un empleado BORRA todas
+   * sus sedes y escribe las del formulario (`replaceAssignments`). Si aquí se leyeran
+   * solo las activas, editar a alguien de «Asia» y «San Miguel» con Asia cerrada le
+   * quitaría Asia en silencio, y al reabrirla ya no estaría. El formulario conserva la
+   * sede que no enseña, así que el guardado la deja como estaba.
+   */
   const locationIds = useMemo(
-    () => scope.locations.map((location) => location.id),
-    [scope.locations],
+    () => scope.allLocations.map((location) => location.id),
+    [scope.allLocations],
   );
 
   const team = useTeam({ organizationId, locationIds });

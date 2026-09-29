@@ -463,16 +463,19 @@ export function ManagerScopeProvider({ children }: { children: ReactNode }) {
   const [chosenLocationId, setChosenLocationId] = useState<string | null>(null);
 
   const value = useMemo<ScopeContextValue>(() => {
-    const locations = query.data?.locations ?? [];
-    // La elección se deriva, no se escribe en un efecto: la primera ubicación
-    // activa es el valor por defecto hasta que el usuario elija otra.
-    const fallback = locations.find((location) => location.is_active) ?? locations[0];
-    const isChosenValid =
-      chosenLocationId !== null && locations.some((location) => location.id === chosenLocationId);
+    /*
+     * SOLO LAS SEDES ACTIVAS SE PUEDEN ELEGIR. Una sede desactivada no se ofrece en ningún
+     * selector —ver `sedesActivas`—, así que tampoco puede ser la elegida: si lo era y la
+     * acaban de cerrar, el panel pasa a la primera activa en vez de quedarse mirando una
+     * tienda cerrada. Antes el valor por defecto caía en `locations[0]` aunque estuviera
+     * cerrada; ahora, sin ninguna activa, no hay sede elegida.
+     */
+    const locations = sedesActivas(query.data?.locations ?? []);
 
     return {
       query,
-      locationId: isChosenValid ? chosenLocationId : (fallback?.id ?? null),
+      // La elección se deriva, no se escribe en un efecto: ver `sedeElegida`.
+      locationId: sedeElegida(locations, chosenLocationId),
       setLocationId: setChosenLocationId,
       organizationId: chosenOrganizationId,
       /*
@@ -509,7 +512,17 @@ export type ManagerScope = {
   /** Todas las empresas a las que perteneces. Con una sola, el selector no se pinta. */
   organizations: { id: string; name: string; role: AppRole }[];
   setOrganizationId: (id: string) => void;
+  /**
+   * Las sedes ACTIVAS. Es lo que ofrece cualquier selector y cualquier filtro: una sede
+   * desactivada no aparece en ninguna pantalla. Ver `sedesActivas`.
+   */
   locations: ManagerLocation[];
+  /**
+   * TODAS, también las desactivadas. Solo para Ajustes, que es donde se reactiva una
+   * sede, y para lo que no puede perder datos al guardar —las asignaciones de Equipo—.
+   * Si otra pantalla la usa para pintar opciones, vuelve el fallo del 29-sep.
+   */
+  allLocations: ManagerLocation[];
   locationId: string | null;
   location: ManagerLocation | null;
   setLocationId: (id: string) => void;
@@ -519,6 +532,35 @@ export type ManagerScope = {
   settings: LocationSettings;
   weekStartsOn: number;
 };
+
+/**
+ * LAS SEDES QUE SE OFRECEN: solo las activas.
+ *
+ * Lo pidió Andree el 29-sep: desactivó «Asia» y seguía saliendo en los filtros de
+ * Equipo, en la cabecera y en cada selector de sede. «Si desactivas una, ahí no debería
+ * aparecer más.» Desactivar ya existía, pero solo cambiaba la etiqueta en Ajustes: todas
+ * las pantallas leían la lista entera.
+ *
+ * Se filtra AQUÍ, en el alcance, y no en cada pantalla: son siete pantallas y una cabecera
+ * que leen `locations`, y un filtro por pantalla es un filtro que a la octava se olvida.
+ * Ajustes, que es donde se reactiva, lee `allLocations`.
+ */
+export function sedesActivas<T extends { is_active: boolean }>(sedes: readonly T[]): T[] {
+  return sedes.filter((sede) => sede.is_active);
+}
+
+/**
+ * La sede que mira el panel: la elegida si sigue abierta; si no, la primera abierta.
+ * Sin ninguna abierta, ninguna: el panel dice que no hay sedes en vez de enseñar una
+ * cerrada como si funcionara.
+ */
+export function sedeElegida(
+  activas: readonly { id: string }[],
+  elegida: string | null,
+): string | null {
+  if (elegida !== null && activas.some((sede) => sede.id === elegida)) return elegida;
+  return activas[0]?.id ?? null;
+}
 
 export function useManagerScope(): ManagerScope {
   const context = useContext(ScopeContext);
@@ -536,6 +578,7 @@ export function useManagerScope(): ManagerScope {
       organizations: [],
       setOrganizationId: () => undefined,
       locations: [],
+      allLocations: [],
       locationId: null,
       location: null,
       setLocationId: () => undefined,
@@ -548,7 +591,8 @@ export function useManagerScope(): ManagerScope {
 
   const { query, locationId, setLocationId } = context;
   const organization = query.data?.organization ?? null;
-  const locations = query.data?.locations ?? [];
+  const allLocations = query.data?.locations ?? [];
+  const locations = sedesActivas(allLocations);
   const location = locations.find((item) => item.id === locationId) ?? null;
   const role = query.data?.role ?? null;
 
@@ -562,6 +606,7 @@ export function useManagerScope(): ManagerScope {
     organizations: query.data?.organizations ?? [],
     setOrganizationId: context.setOrganizationId,
     locations,
+    allLocations,
     locationId,
     location,
     setLocationId,

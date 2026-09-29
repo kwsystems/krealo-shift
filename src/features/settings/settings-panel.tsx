@@ -72,6 +72,18 @@ export function SettingsPanel() {
    * iria «esta abierta».
    */
   const [sedeAbierta, setSedeAbierta] = useState(abrir === 'sede');
+  /*
+   * LA SEDE QUE SE CONFIGURA AQUÍ PUEDE ESTAR CERRADA, y por eso no es la del alcance.
+   * El alcance solo elige entre sedes activas —una cerrada no sale en ningún selector—,
+   * pero Ajustes es justo donde se reactiva, así que necesita poder mostrar una cerrada.
+   * Sin elección propia, sigue a la del alcance, como antes.
+   */
+  const [sedeEnAjustes, setSedeEnAjustes] = useState<string | null>(null);
+  const sedeMostrada =
+    scope.allLocations.find((sede) => sede.id === (sedeEnAjustes ?? scope.locationId)) ??
+    scope.location ??
+    scope.allLocations[0] ??
+    null;
 
   return (
     <Stack gap={spacing.lg}>
@@ -120,13 +132,19 @@ export function SettingsPanel() {
               la sede, es de la pantalla, así que vive aquí, donde no se desmonta. Sin
               esto, usar el selector de sede que vive DENTRO de la tarjeta la cerraba.
             */}
-            {scope.location !== null ? (
+            {sedeMostrada !== null ? (
               <LocationCard
-                key={scope.location.id}
-                location={scope.location}
+                key={sedeMostrada.id}
+                location={sedeMostrada}
                 canEdit={scope.isAdmin}
                 desplegada={sedeAbierta}
                 onDesplegadaChange={setSedeAbierta}
+                onElegirSede={(id) => {
+                  setSedeEnAjustes(id);
+                  // Una activa se elige también en todo el panel, como antes; una cerrada
+                  // solo aquí, porque en el resto del panel no existe.
+                  if (scope.locations.some((sede) => sede.id === id)) scope.setLocationId(id);
+                }}
               />
             ) : null}
             {/*
@@ -581,6 +599,7 @@ function LocationCard({
   canEdit,
   desplegada,
   onDesplegadaChange,
+  onElegirSede,
 }: {
   location: ManagerLocation;
   canEdit: boolean;
@@ -594,6 +613,8 @@ function LocationCard({
    */
   desplegada: boolean;
   onDesplegadaChange: (desplegada: boolean) => void;
+  /** Cambiar de sede desde el selector de la tarjeta. Ver `sedeEnAjustes`. */
+  onElegirSede: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const scope = useManagerScope();
@@ -672,15 +693,19 @@ function LocationCard({
         segunda solo se podia configurar yendo a otra pantalla a cambiar la seleccion y
         volviendo, lo cual no se le ocurre a nadie.
       */}
-      {scope.locations.length > 1 ? (
+      {/*
+        AQUÍ SÍ SALEN LAS CERRADAS, con su etiqueta: es el único sitio del panel donde se
+        puede volver a abrir una. En cualquier otro selector no existen.
+      */}
+      {scope.allLocations.length > 1 ? (
         <SelectField
           label={t('settings.locationPick')}
           value={location.id}
-          options={scope.locations.map((sede) => ({
+          options={scope.allLocations.map((sede) => ({
             value: sede.id,
             label: sede.is_active ? sede.name : `${sede.name} · ${t('settings.locationInactive')}`,
           }))}
-          onChange={scope.setLocationId}
+          onChange={onElegirSede}
           testID="location-pick"
         />
       ) : null}
@@ -976,6 +1001,12 @@ function LocationCard({
         onConfirm={() => {
           mutations.toggleLocation.mutate({ locationId: location.id, isActive: false });
           setACerrar(false);
+          /*
+           * SE QUEDA EN PANTALLA LA QUE SE ACABA DE CERRAR. Al cerrarla, el resto del panel
+           * pasa a otra sede activa; sin esto la tarjeta saltaría con él, y quien acaba de
+           * cerrar una tienda por error no vería el botón de reabrirla donde estaba.
+           */
+          onElegirSede(location.id);
         }}
         onCancel={() => setACerrar(false)}
       />
