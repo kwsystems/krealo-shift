@@ -143,10 +143,21 @@ try {
   await pagina.locator('[data-testid="team-delete-many-totals"]').waitFor({ timeout: 15000 });
   const textoHoja = await pagina.locator('[data-testid="team-delete-many-list"]').innerText();
   const renglones = textoHoja.split('\n').filter((l) => l.trim() !== '');
-  await pagina.locator('[data-testid="team-delete-many-confirm"]').click({ force: true });
+  /*
+   * EL BOTÓN VA EN EL PIE DE LA HOJA, que se desplaza: sin llevarlo a la vista, el toque cae
+   * fuera de la ventana y no mide nada. Se le da el toque de todas formas —forzado, porque
+   * desactivado Playwright no lo pulsaría— y se comprueba que no borra.
+   */
+  const confirmar = pagina.locator('[data-testid="team-delete-many-confirm"]');
+  await confirmar.scrollIntoViewIfNeeded();
+  const desactivado =
+    (await confirmar.getAttribute('aria-disabled')) === 'true' || (await confirmar.isDisabled());
+  await confirmar.click({ force: true, timeout: 5000 }).catch(() => undefined);
   await pagina.waitForTimeout(600);
   const siguenTrasToque = await filas();
-  if (!(await hoja.isVisible())) {
+  if (!desactivado) {
+    fallar(caso3, 'sin la palabra escrita, el botón de eliminar no está desactivado');
+  } else if (!(await hoja.isVisible())) {
     fallar(caso3, 'un toque sin escribir la palabra cerró la hoja');
   } else if (siguenTrasToque.length !== inactivosAntes.length) {
     fallar(caso3, 'un toque sin escribir la palabra borró a alguien');
@@ -165,7 +176,8 @@ try {
     )
     .first()
     .fill('eliminar');
-  await pagina.locator('[data-testid="team-delete-many-confirm"]').click();
+  await confirmar.scrollIntoViewIfNeeded();
+  await confirmar.click();
   await hoja.waitFor({ state: 'detached', timeout: 30000 });
   await pagina.waitForTimeout(800);
   const inactivosDespues = await filas();
