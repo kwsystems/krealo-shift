@@ -12,5 +12,6 @@ import { ManualScreen } from '@/features/manual/manual-screen';
  * chocaría con `app/manual.tsx`.
  */
 export default function AyudaRoute() {
-  return <ManualScreen />;
+  // Dentro del panel: sin la cabecera propia, que repetía la de la app. Ver `ManualScreen`.
+  return <ManualScreen dentroDelPanel />;
 }

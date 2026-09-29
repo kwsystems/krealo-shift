@@ -53,4 +53,49 @@ describe('manual de uso', () => {
     expect(view.getByText(esPE.manual.mark1)).toBeTruthy();
     expect(view.queryByText(esPE.manual.adminPublishTitle)).toBeNull();
   });
+
+  it('el enlace abierto lleva su cabecera, con el selector de idioma', async () => {
+    const view = await renderWithProviders(<ManualScreen />);
+    expect(view.queryByTestId('language-switch')).toBeTruthy();
+  });
+
+  it('dentro del panel no la repite: la app ya la tiene alrededor', async () => {
+    const view = await renderWithProviders(<ManualScreen dentroDelPanel />);
+    expect(view.queryByTestId('language-switch')).toBeNull();
+    expect(view.getByText(esPE.manual.title)).toBeTruthy();
+  });
+
+  it('a dos columnas no se pierde nada: los siete casos y la parte de administrar', async () => {
+    const view = await renderWithProviders(<ManualScreen />);
+    // El ancho lo da el contenedor exterior al medirse; aquí se le dice que mide 1100.
+    await fireEvent(view.getByTestId('manual-medida'), 'layout', {
+      nativeEvent: { layout: { width: 1100, height: 800 } },
+    });
+
+    for (const clave of [
+      'casePinTitle',
+      'caseEarlyTitle',
+      'caseLateTitle',
+      'caseForgotTitle',
+      'caseRestTitle',
+      'caseEarlyOutTitle',
+      'caseOfflineTitle',
+    ] as const) {
+      expect(view.getByText(esPE.manual[clave])).toBeTruthy();
+    }
+    expect(view.getByText(esPE.manual.howTitle)).toBeTruthy();
+
+    await fireEvent.press(view.getByTestId('manual-parte-administra'));
+    for (const clave of [
+      'adminPublishTitle',
+      'adminScheduleTitle',
+      'adminTeamTitle',
+      'adminHoursTitle',
+      'adminInboxTitle',
+      'adminKioskTitle',
+      'adminBreakTitle',
+    ] as const) {
+      expect(view.getByText(esPE.manual[clave])).toBeTruthy();
+    }
+  });
 });
