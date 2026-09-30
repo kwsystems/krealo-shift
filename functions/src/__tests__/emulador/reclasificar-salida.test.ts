@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import { managerReclassifyDeparture } from '../../manager';
 import { submitTimeEvent, verifyPin } from '../../kiosk-api';
 import { COLLECTIONS, db } from '../../shared/admin';
-import { rebuildWorkSession, recordTimeEvent } from '../../shared/attendance';
+import { rebuildJornadaDe, recordTimeEvent } from '../../shared/attendance';
 
 /**
  * «Se fue al almacen, no se fue a casa»: reclasificar una salida como pausa.
@@ -474,8 +474,13 @@ describe('una reconstruccion posterior', () => {
     );
     expect(await sesiones()).toHaveLength(1);
 
-    // Lo que dispara cualquier fichaje posterior de esa persona.
-    await rebuildWorkSession(ORG, PERSONA, SEDE);
+    /*
+     * Lo que dispara cualquier fichaje de esa jornada: recalcularla desde sus eventos.
+     * Era `rebuildWorkSession(ORG, PERSONA, SEDE)`, «las últimas 36 h desde ahora», y con
+     * la fecha fija de esta prueba eso dejó de tocar la jornada dos días después de
+     * escribirse: la prueba pasaba sin comprobar nada. Así no depende del calendario.
+     */
+    await rebuildJornadaDe(ORG, PERSONA, SEDE, H(21));
 
     const despues = await sesiones();
     expect(despues).toHaveLength(1);

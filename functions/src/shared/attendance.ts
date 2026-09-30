@@ -8,7 +8,7 @@ import {
 } from '../../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './admin';
 import { tipoEfectivo } from './eventos';
-import { enOrden, jornadaVigente } from './secuencia';
+import { enOrden, jornadaVigente, recorrer } from './secuencia';
 import { marcasDeLaSesion } from './marcas';
 import { politicasDe } from './politicas';
 
@@ -195,9 +195,58 @@ export async function recordTimeEvent(input: TimeEventInput): Promise<{
 
   await eventsRef.doc(idempotencyId).create(filaDelEvento(input, idempotencyId, seq));
 
-  await rebuildWorkSession(input.organizationId, input.employeeId, input.locationId);
+  await rebuildJornadaDe(
+    input.organizationId,
+    input.employeeId,
+    input.locationId,
+    input.occurredAt,
+  );
 
   return { eventId: idempotencyId, duplicated: false, state: result.nextState };
+}
+
+const HORAS_36_MS = 36 * 60 * 60 * 1000;
+
+/**
+ * RECALCULA LA JORNADA A LA QUE PERTENECE UN FICHAJE, sea de cuando sea (30-sep).
+ *
+ * Antes se recalculaba «lo de las últimas 36 horas desde ahora», que es lo mismo mientras
+ * el fichaje es de ahora —el reloj en línea— y no lo es en cuanto llega tarde. Un iPad que
+ * pasó dos días sin red sincroniza al volver: los fichajes se guardaban y su jornada no se
+ * formaba nunca, porque caían fuera de la ventana. Esos días salían vacíos en Horas aunque
+ * la gente marcó. Lo destaparon las pruebas de reclasificar una salida, que usaban una
+ * fecha fija y dejaron de formar jornada dos días después de escribirse.
+ *
+ * La ventana es la de la jornada del fichaje: desde 36 h antes de él —donde está su
+ * entrada— hasta justo antes de la entrada SIGUIENTE, para que se recalcule esa jornada y
+ * no la última. Con un fichaje de ahora no hay entrada siguiente y la ventana queda como
+ * siempre: el reloj en línea no cambia.
+ */
+export async function rebuildJornadaDe(
+  organizationId: string,
+  employeeId: string,
+  locationId: string,
+  instante: string,
+): Promise<void> {
+  const desde = new Date(Date.parse(instante) - HORAS_36_MS).toISOString();
+  const snapshot = await db
+    .collection(COLLECTIONS.timeEvents)
+    .where('employee_id', '==', employeeId)
+    .where('occurred_at', '>=', desde)
+    .orderBy('occurred_at', 'asc')
+    .get();
+
+  const siguiente = recorrer(enOrden(snapshot.docs.map((doc) => doc.data()))).find(
+    (paso) => paso.cuenta && paso.tipo === 'clock_in' && String(paso.evento.occurred_at) > instante,
+  );
+
+  await rebuildWorkSession(organizationId, employeeId, locationId, {
+    desde,
+    hasta:
+      siguiente === undefined
+        ? '9999-12-31T23:59:59.999Z'
+        : new Date(Date.parse(String(siguiente.evento.occurred_at)) - 1).toISOString(),
+  });
 }
 
 /**

@@ -263,3 +263,63 @@ describe('syncOfflineEvents', () => {
     expect(r.pending).toBe(0);
   });
 });
+
+/**
+ * UN IPAD QUE PASÓ DÍAS SIN RED (30-sep).
+ *
+ * Los fichajes se guardaban, pero la jornada no se formaba: `recordTimeEvent` recalculaba
+ * solo «las últimas 36 horas desde ahora», y un fichaje de hace tres días queda fuera. Un
+ * fin de semana con el wifi caído dejaba esos días vacíos en Horas aunque la gente marcó.
+ * Lo destaparon las pruebas de reclasificar una salida, que usaban una fecha fija y
+ * empezaron a fallar dos días después de escribirse.
+ */
+describe('un lote de hace días', () => {
+  const HACE_TRES_DIAS = new Date(Date.now() - 3 * 24 * 3600_000);
+  const dia = (dias: number, horaUtc: number) => {
+    const d = new Date(HACE_TRES_DIAS);
+    d.setUTCDate(d.getUTCDate() + dias);
+    d.setUTCHours(horaUtc, 0, 0, 0);
+    return d.toISOString();
+  };
+  const jornadas = async () =>
+    (await db.collection(COLLECTIONS.workSessions).where('employee_id', '==', PERSONA).get()).docs
+      .map((d) => d.data())
+      .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)));
+
+  it('forma cada jornada con sus horas, aunque llegue días después', async () => {
+    const r = await sincronizar([
+      evento({ clave: 'v-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 13) }),
+      evento({ clave: 'v-2', tipo: 'break_start', seq: 2, cuando: dia(0, 17) }),
+      evento({ clave: 'v-3', tipo: 'break_end', seq: 3, cuando: dia(0, 18) }),
+      evento({ clave: 'v-4', tipo: 'clock_out', seq: 4, cuando: dia(0, 21) }),
+      evento({ clave: 'v-5', tipo: 'clock_in', seq: 5, cuando: dia(1, 13) }),
+      evento({ clave: 'v-6', tipo: 'clock_out', seq: 6, cuando: dia(1, 21) }),
+    ]);
+    expect(r.accepted).toBe(6);
+
+    const [primera, segunda, ...otras] = await jornadas();
+    expect(otras).toHaveLength(0);
+    expect(primera).toMatchObject({
+      starts_at: dia(0, 13),
+      ends_at: dia(0, 21),
+      status: 'complete',
+      net_minutes: 420,
+    });
+    expect(segunda).toMatchObject({
+      starts_at: dia(1, 13),
+      ends_at: dia(1, 21),
+      status: 'complete',
+      net_minutes: 480,
+    });
+  });
+
+  it('la salida que llega tarde cierra SU jornada, no la de hoy', async () => {
+    // Entró hace tres días; el iPad perdió la red antes de que marcara la salida.
+    await sincronizar([evento({ clave: 'w-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 13) })]);
+    await sincronizar([evento({ clave: 'w-2', tipo: 'clock_out', seq: 2, cuando: dia(0, 21) })]);
+
+    const [unica, ...otras] = await jornadas();
+    expect(otras).toHaveLength(0);
+    expect(unica).toMatchObject({ ends_at: dia(0, 21), status: 'complete', net_minutes: 480 });
+  });
+});
