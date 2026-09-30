@@ -73,8 +73,10 @@ if (aComprobar.length === 0) {
 
 console.log(`Comprobando ${aComprobar.length} archivos de ${DIST}/ contra ${BASE}\n`);
 
-const fallos = [];
-for (const ruta of aComprobar) {
+/**
+ * UN ARCHIVO, UNA PREGUNTA: ¿se sirve con su tipo? Devuelve el motivo del fallo, o `null`.
+ */
+async function comprobar(ruta) {
   const url = `${BASE}/${relative(DIST, ruta).split(sep).join('/')}`;
   const extension = Object.keys(TIPOS_ESPERADOS).find((ext) => ruta.endsWith(ext));
   const esperado = TIPOS_ESPERADOS[extension];
@@ -83,20 +85,59 @@ for (const ruta of aComprobar) {
   try {
     respuesta = await fetch(url, { method: 'HEAD' });
   } catch (error) {
-    fallos.push({ url, motivo: `no se pudo pedir: ${String(error)}` });
-    continue;
+    return { url, motivo: `no se pudo pedir: ${String(error)}` };
   }
 
   const tipo = respuesta.headers.get('content-type') ?? '(sin tipo)';
-
-  if (!respuesta.ok) {
-    fallos.push({ url, motivo: `HTTP ${respuesta.status}` });
-  } else if (/text\/html/.test(tipo)) {
-    // El caso que importa: existe según el código, y lo que llega es la página.
-    fallos.push({ url, motivo: `LA REESCRITURA LO TAPÓ: llegó HTML, no ${extension}` });
-  } else if (!esperado.test(tipo)) {
-    fallos.push({ url, motivo: `tipo inesperado: ${tipo}` });
+  if (!respuesta.ok) return { url, motivo: `HTTP ${respuesta.status}` };
+  // El caso que importa: existe según el código, y lo que llega es la página.
+  if (/text\/html/.test(tipo)) {
+    return { url, motivo: `LA REESCRITURA LO TAPÓ: llegó HTML, no ${extension}` };
   }
+  if (!esperado.test(tipo)) return { url, motivo: `tipo inesperado: ${tipo}` };
+  return null;
+}
+
+/**
+ * LOS REINTENTOS, y por qué no son «esperar un rato antes de empezar» (30-sep).
+ *
+ * Justo después de `firebase deploy --only hosting`, la CDN tarda unos segundos en tener
+ * todos los archivos en todos los bordes. Tres veces el 28 y el 29-sep esta comprobación
+ * falló en el acto —un 503 en una fuente, un archivo «que no se servía», el paquete
+ * llegando como HTML— y la segunda pasada, sin tocar nada, salió verde. Una comprobación
+ * que da falsos positivos se deja de leer, y esta es la que dice si producción quedó bien.
+ *
+ * Una espera fija antes de empezar lo escondería —y alargaría todos los despliegues por el
+ * caso raro—. Así que se DISTINGUE: se mira todo una vez, y solo lo que falló se vuelve a
+ * pedir, a los 3, 6 y 12 segundos. Lo que se arregla solo era propagación, y se DICE
+ * cuántos hicieron falta: una propagación lenta se ve como lo que es y no desaparece. Lo
+ * que sigue mal a los 21 segundos no es propagación, y ahí sí falla.
+ */
+const ESPERAS_MS = [3000, 6000, 12000];
+const esperar = (ms) => new Promise((resolver) => setTimeout(resolver, ms));
+
+let fallos = [];
+for (const ruta of aComprobar) {
+  const fallo = await comprobar(ruta);
+  if (fallo !== null) fallos.push({ ...fallo, ruta });
+}
+
+const reintentados = fallos.length;
+for (const espera of ESPERAS_MS) {
+  if (fallos.length === 0) break;
+  await esperar(espera);
+  const siguen = [];
+  for (const fallo of fallos) {
+    const otraVez = await comprobar(fallo.ruta);
+    if (otraVez !== null) siguen.push({ ...otraVez, ruta: fallo.ruta });
+  }
+  fallos = siguen;
+}
+if (reintentados > 0 && fallos.length < reintentados) {
+  console.log(
+    `${reintentados - fallos.length} archivo(s) no estaban aún en la CDN y aparecieron al ` +
+      'reintentar: era la propagación del despliegue, no un archivo que falte.',
+  );
 }
 
 /**
@@ -128,7 +169,18 @@ if (fallos.length === 0) {
   // no URLs. Usarlas tal cual pedía una dirección inexistente y la comprobación acusaba
   // de «sin configuración» a un despliegue correcto.
   const urlEntrada = `${BASE}/${relative(DIST, entrada).split(sep).join('/')}`;
-  const paquete = await (await fetch(urlEntrada)).text();
+  /*
+   * CON LOS MISMOS REINTENTOS: en plena propagación el paquete también puede llegar como
+   * la página HTML, y entonces «no lleva la configuración» sería otro falso positivo.
+   */
+  let paquete = '';
+  for (const espera of [0, ...ESPERAS_MS]) {
+    if (espera > 0) await esperar(espera);
+    const respuesta = await fetch(urlEntrada);
+    paquete = await respuesta.text();
+    const esJs = /javascript/.test(respuesta.headers.get('content-type') ?? '');
+    if (respuesta.ok && esJs && faltaEnElPaquete(paquete).length === 0) break;
+  }
   /*
    * LA MISMA FUNCIÓN QUE USA `paquete-check.mjs`, y compartida a propósito: la pregunta
    * «¿lleva este paquete su configuración?» se hace antes de desplegar y después, y si
@@ -164,5 +216,9 @@ for (const { url, motivo } of fallos.slice(0, 25)) {
   console.error(`    ${url}`);
 }
 if (fallos.length > 25) console.error(`  ... y ${fallos.length - 25} más.`);
-console.error('\nCausa habitual: `ignore` en firebase.json excluyendo algo del subido.');
+console.error(
+  `\nSe reintentó durante ${ESPERAS_MS.reduce((a, b) => a + b, 0) / 1000} s, así que no es la ` +
+    'propagación de la CDN.',
+);
+console.error('Causa habitual: `ignore` en firebase.json excluyendo algo del subido.');
 process.exit(1);
