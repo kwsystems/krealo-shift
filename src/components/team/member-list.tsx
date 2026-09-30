@@ -137,8 +137,10 @@ function CabeceraDeColumnas() {
   const { t } = useTranslation();
   const estilos = useEstilosDeCabecera();
   // Sin barra lateral no hay columna de estado: va bajo el nombre. Ver `member-row`.
-  const { isWide } = useResponsive();
+  const { isWide, density } = useResponsive();
   const isCompact = !isWide;
+  // La tira va al lado del total solo desde 1024: ver `member-row`.
+  const tiraAlLado = density === 'extraWide';
   return (
     <>
       <View style={estilos.cabecera}>
@@ -153,7 +155,9 @@ function CabeceraDeColumnas() {
           variant="label"
           tone="subtle"
           accessibilityRole="header"
-          style={isCompact ? estilos.horasCompacta : estilos.horas}
+          style={
+            isCompact ? estilos.horasCompacta : tiraAlLado ? estilos.horasConTira : estilos.horas
+          }
         >
           {t('team.thisWeek')}
         </AppText>
@@ -181,6 +185,7 @@ const useEstilosDeCabecera = estilosDelTema((colors) => ({
   hueco: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   /* Los MISMOS anchos que en la fila: si no coinciden, el rótulo señala otra columna. */
   horas: { width: ANCHO_DE_COLUMNA.horas, textAlign: 'right', flexShrink: 0 },
+  horasConTira: { width: ANCHO_DE_COLUMNA.horasConTira, textAlign: 'right', flexShrink: 0 },
   horasCompacta: { width: ANCHO_DE_COLUMNA.horasCompacta, textAlign: 'right', flexShrink: 0 },
   estado: { width: ANCHO_DE_COLUMNA.estado, textAlign: 'right', flexShrink: 0 },
 }));

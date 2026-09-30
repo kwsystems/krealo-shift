@@ -72,8 +72,15 @@ function MemberRowBase({
   const { t } = useTranslation();
   const styles = useEstilos();
   const { colors } = useTheme();
-  const { isWide } = useResponsive();
+  const { isWide, density } = useResponsive();
   const isCompact = !isWide;
+  /*
+   * LA TIRA VA AL LADO DEL TOTAL SOLO DESDE 1024 PX. En un iPad vertical (768) la barra
+   * lateral se come 248 y, con la tira, el total y el estado a la derecha, al nombre le
+   * quedaban 44 px: «Bru / no», medido por `responsive:check`. Por debajo va bajo el
+   * nombre, como en el teléfono.
+   */
+  const tiraAlLado = density === 'extraWide';
   const respuesta = useRespuestaAlPuntero();
   const language = currentLanguage();
 
@@ -230,7 +237,7 @@ function MemberRowBase({
                 quedaban unos 40 px y se partía por sílabas —«Bru / no / Sal / aza / r»—:
                 todo cabía, nada se recortaba, y ningún arnés lo veía, pero no se leía.
               */}
-              {isCompact ? tira : null}
+              {tiraAlLado ? null : tira}
               {isCompact ? (
                 <Row gap={spacing.xs} wrap align="center">
                   {insignia}
@@ -274,9 +281,15 @@ function MemberRowBase({
             <Row
               gap={spacing.md}
               align="center"
-              style={isCompact ? estilosDeColumna.horasCompacta : estilosDeColumna.horas}
+              style={
+                isCompact
+                  ? estilosDeColumna.horasCompacta
+                  : tiraAlLado
+                    ? estilosDeColumna.horasConTira
+                    : estilosDeColumna.horas
+              }
             >
-              {isCompact ? null : tira}
+              {tiraAlLado ? tira : null}
               <Stack gap={0} style={estilosDeColumna.total}>
                 <AppText
                   variant="bodyStrong"
@@ -357,14 +370,20 @@ const useEstilos = estilosDelTema((colors) => ({
  * para «00:00» y «en curso», que es lo que le devuelve al nombre el sitio para leerse.
  */
 export const ANCHO_DE_COLUMNA = {
-  /* La tira de la semana, su hueco y el total: ver `TiraDeLaSemana`. */
-  horas: ANCHO_DE_LA_TIRA + spacing.md + 60,
+  horas: 104,
+  /* Desde 1024 px: la tira de la semana, su hueco y el total. Ver `TiraDeLaSemana`. */
+  horasConTira: ANCHO_DE_LA_TIRA + spacing.md + 60,
   horasCompacta: 72,
   estado: 120,
 } as const;
 
 const estilosDeColumna = StyleSheet.create({
   horas: { width: ANCHO_DE_COLUMNA.horas, flexShrink: 0, justifyContent: 'flex-end' },
+  horasConTira: {
+    width: ANCHO_DE_COLUMNA.horasConTira,
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+  },
   horasCompacta: {
     width: ANCHO_DE_COLUMNA.horasCompacta,
     flexShrink: 0,
