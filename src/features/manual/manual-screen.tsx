@@ -179,15 +179,25 @@ export function ManualScreen({ dentroDelPanel = false }: { dentroDelPanel?: bool
                   )}
                 </Seccion>
 
+                {/*
+                  LAS DOS REGLAS DEL FINAL, CON EL MISMO TRATO. Los motivos del descanso iban
+                  como texto suelto al lado del aviso del PIN, que es tarjeta: a dos columnas
+                  el título de uno quedaba 20 px por encima del otro y la fila se leía torcida
+                  (30-sep). Y es una regla con consecuencia —de eso dependen tus horas—, igual
+                  que la del PIN: le toca aviso, no párrafo.
+                */}
                 <Columnas dos={dos}>
-                  <Bloque
+                  <Aviso
+                    icono="cafe-outline"
                     titulo={t('manual.breakReasonsTitle')}
                     cuerpo={t('manual.breakReasonsBody')}
+                    lleno={dos}
                   />
                   <Aviso
                     icono="lock-closed-outline"
                     titulo={t('manual.pinTitle')}
                     cuerpo={t('manual.pinBody')}
+                    lleno={dos}
                   />
                 </Columnas>
               </Stack>
@@ -314,20 +324,25 @@ function Paso({ numero, titulo, cuerpo }: { numero: number; titulo?: string; cue
   );
 }
 
-/** Lo que no se puede leer por encima: va en una tarjeta con icono. */
+/**
+ * Lo que no se puede leer por encima: va en una tarjeta con icono. `lleno` la estira a la
+ * altura de su pareja cuando van dos en fila, como las tarjetas de los casos.
+ */
 function Aviso({
   icono,
   titulo,
   cuerpo,
+  lleno = false,
 }: {
   icono: React.ComponentProps<typeof Ionicons>['name'];
   titulo: string;
   cuerpo: string;
+  lleno?: boolean;
 }) {
   const { colors } = useTheme();
   const estilos = useEstilos();
   return (
-    <Card style={estilos.aviso}>
+    <Card style={lleno ? { ...estilos.aviso, ...estilos.caso } : estilos.aviso}>
       <Row gap={spacing.sm} align="flex-start">
         <Ionicons name={icono} size={sizes.iconMobile} color={colors.primary500} />
         <Stack gap={spacing.xs} style={estilos.crece}>

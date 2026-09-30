@@ -115,10 +115,37 @@ type CardProps = {
 export function Card({ children, floating = false, style, testID }: CardProps) {
   const styles = useEstilos();
   return (
-    <View testID={testID} style={[styles.card, floating ? shadows.floating : shadows.card, style]}>
+    <View
+      testID={testID}
+      style={[styles.card, floating ? shadows.floating : shadows.card, style, marcoEntero(style)]}
+    >
       {children}
     </View>
   );
+}
+
+/**
+ * EL MARCO QUE SE LE PONE A UNA TARJETA LLEGA TAMBIÉN AL BORDE DE ARRIBA.
+ *
+ * La tarjeta trae de base un filo arriba (`borderTopColor`, ver `card`). En React Native
+ * —en web y en el iPad— el borde de un lado GANA al general, sin importar el orden: así
+ * que un `borderColor` puesto encima pintaba tres lados, y arriba seguía el filo, que en
+ * claro es transparente. Los avisos del manual salían con la tapa quitada, «como
+ * cortados», y así se publicaron (lo vio Andree el 30-sep).
+ *
+ * Se resuelve aquí y no en cada tarjeta con marco: cada una que se escriba después
+ * volvería a caer, y el fallo no se ve en ninguna prueba que no mire píxeles.
+ */
+function marcoEntero(style: ViewStyle | undefined): ViewStyle | null {
+  if (style === undefined) return null;
+  const arriba: ViewStyle = {};
+  if (style.borderColor !== undefined && style.borderTopColor === undefined) {
+    arriba.borderTopColor = style.borderColor;
+  }
+  if (style.borderWidth !== undefined && style.borderTopWidth === undefined) {
+    arriba.borderTopWidth = style.borderWidth;
+  }
+  return Object.keys(arriba).length > 0 ? arriba : null;
 }
 
 export function Stack({

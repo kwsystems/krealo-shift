@@ -23,6 +23,12 @@
  * panel (`/ayuda`), donde el menú lateral se come parte de la ventana, y ahí además sin
  * la cabecera propia del enlace abierto, que repetiría la de la app.
  *
+ * Y UNA QUINTA desde el 30-sep: que cada tarjeta con marco tenga sus CUATRO lados. Los
+ * avisos se publicaron con el de arriba quitado —la tarjeta base trae su propio filo
+ * arriba y en React Native ese lado le gana al marco— y Andree lo vio como «cortado».
+ * Ninguna de las medidas de antes lo podía ver: el texto estaba, cabía y caía donde
+ * debía. En los dos temas, porque el filo de arriba es distinto en cada uno.
+ *
  * Uso:
  *   npm run demo:export
  *   node scripts/manual-check.mjs dist-demo
@@ -104,6 +110,43 @@ async function medirColumnas(pagina, nombre, dosColumnas) {
   }
 }
 
+/**
+ * Las tarjetas con marco a las que les falta un lado: las que tienen un borde de color y
+ * no pintan los cuatro iguales. Devuelve cada una con sus lados, arriba primero.
+ */
+async function marcosPartidos(pagina) {
+  return pagina.evaluate(() => {
+    const transparente = (color) => color === 'transparent' || /^rgba\(.*,\s*0\)$/.test(color);
+    const partidos = [];
+    for (const nodo of Array.from(document.querySelectorAll('[data-testid="manual-screen"] div'))) {
+      const estilo = getComputedStyle(nodo);
+      if (parseFloat(estilo.borderLeftWidth) === 0 || transparente(estilo.borderLeftColor)) {
+        continue;
+      }
+      const lados = ['Top', 'Right', 'Bottom', 'Left'].map(
+        (lado) => `${estilo[`border${lado}Color`]} ${estilo[`border${lado}Width`]}`,
+      );
+      if (new Set(lados).size > 1) {
+        partidos.push(`«${(nodo.textContent ?? '').slice(0, 30)}» (${lados.join(' / ')})`);
+      }
+    }
+    return partidos;
+  });
+}
+
+/** Las dos partes del manual, cada una con sus marcos enteros. */
+async function comprobarMarcos(pagina, nombre) {
+  for (const parte of ['trabajadora', 'administra']) {
+    await pagina.locator(`[data-testid="manual-parte-${parte}"]`).click();
+    await pagina.waitForTimeout(300);
+    for (const partido of await marcosPartidos(pagina)) {
+      problemas.push(
+        `${nombre}, ${parte}: una tarjeta con marco tiene un lado distinto: ${partido}`,
+      );
+    }
+  }
+}
+
 const { base, cerrar } = await servirExport(DIR, 8285);
 const { chromium } = cargarPlaywright();
 const navegador = await chromium.launch();
@@ -140,6 +183,9 @@ try {
     }
     for (const frase of EN_LA_PARTE_DE_QUIEN_FICHA) {
       if (!texto.includes(frase)) problemas.push(`${nombre}: no encontré «${frase}»`);
+    }
+    for (const partido of await marcosPartidos(pagina)) {
+      problemas.push(`${nombre}: una tarjeta con marco tiene un lado distinto: ${partido}`);
     }
 
     /*
@@ -190,6 +236,11 @@ try {
     if (textoAdmin.includes('Tus cuatro marcas del día')) {
       problemas.push(`${nombre}: al cambiar de parte se quedó el contenido de la anterior`);
     }
+    for (const partido of await marcosPartidos(pagina)) {
+      problemas.push(
+        `${nombre}, administra: una tarjeta con marco tiene un lado distinto: ${partido}`,
+      );
+    }
 
     await pagina.screenshot({
       path: `capturas/manual-${ancho}-administra.png`,
@@ -218,7 +269,21 @@ try {
     problemas.push('panel: el manual repite su propia cabecera con selector de idioma');
   }
   await pagina.screenshot({ path: 'capturas/manual-panel-1440.png' });
+  await comprobarMarcos(pagina, 'panel');
   await ctx.close();
+
+  /* En OSCURO el filo de arriba no es transparente sino un blanco tenue: el lado que
+     faltaba salía de otro color, no vacío. Se mira aparte por eso. */
+  const oscuro = await navegador.newContext({
+    viewport: { width: 1440, height: 900 },
+    colorScheme: 'dark',
+  });
+  const paginaOscura = await oscuro.newPage();
+  await entrarComoDemo(paginaOscura, base);
+  await irA(paginaOscura, base, '/ayuda');
+  await paginaOscura.waitForTimeout(400);
+  await comprobarMarcos(paginaOscura, 'panel en oscuro');
+  await oscuro.close();
 } catch (error) {
   problemas.push(`el arnés no pudo completar la medida: ${error.message}`);
 } finally {
