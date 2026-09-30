@@ -4,7 +4,13 @@ import { z } from 'zod';
 import type { BreakReason } from '@/domain/break-reason';
 import { docId } from '@/lib/firebase/ids';
 
-import { execute, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
+import {
+  AdminError,
+  execute,
+  requireClient,
+  selectRows,
+  toAdminError,
+} from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
 import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
 
@@ -16,8 +22,8 @@ import { RPC, TABLES, VIEWS } from '@/lib/firebase/tables';
  *   - una corrección es un ajuste auditable con motivo obligatorio, y la hace
  *     `manager_adjust_time` en el servidor, que guarda valor anterior, valor
  *     nuevo, autor, fecha de servidor y motivo;
- *   - aprobar un periodo lo hace `approve_timesheet_period`, que se niega si
- *     quedan sesiones por revisar.
+ *   - aprobar y reabrir un periodo lo hace el servidor (`approve_timesheet_period`,
+ *     `reopen_timesheet_period`), que se niega a aprobar mientras haya jornadas abiertas.
  */
 
 const dailySummarySchema = z.object({
@@ -257,47 +263,62 @@ export async function fetchPeriod(params: {
 }
 
 /** El periodo se crea la primera vez que alguien lo aprueba o lo consulta. */
-export async function ensurePeriod(params: {
-  organizationId: string;
-  locationId: string;
-  from: string;
-  to: string;
-}): Promise<TimesheetPeriod> {
-  const existing = await fetchPeriod(params);
-  if (existing !== null) return existing;
-
-  return selectRows(periodSchema, (db) =>
-    db
-      .from(TABLES.timesheetPeriods)
-      .insert({
-        organization_id: params.organizationId,
-        location_id: params.locationId,
-        starts_on: params.from,
-        ends_on: params.to,
-      })
-      .select('id, location_id, starts_on, ends_on, status, approved_at')
-      .single(),
-  );
+/**
+ * LO QUE IMPIDE APROBAR, dicho por el servidor con nombres. Antes la pantalla decía siempre
+ * «Hay fichajes que necesitan revisión», fuera cual fuera el error, y el error real era
+ * que el panel no podía ni crear el periodo (30-sep).
+ */
+export class PeriodoBloqueado extends AdminError {
+  constructor(
+    readonly motivo: string,
+    readonly nombres: string[],
+    message: string,
+  ) {
+    super('conflict', message, motivo);
+  }
 }
 
-export async function approvePeriod(periodId: string): Promise<void> {
+async function llamarPeriodo(rpc: string, args: Record<string, unknown>): Promise<void> {
   const db = requireClient();
   try {
-    const { error } = await db.rpc(RPC.approveTimesheetPeriod, { p_period_id: periodId });
-    if (error !== null) throw toAdminError(error);
+    const { error } = await db.rpc(rpc, args);
+    if (error !== null) {
+      const detalles = ((error as { details?: unknown }).details ?? {}) as Record<string, unknown>;
+      if (typeof detalles.motivo === 'string') {
+        throw new PeriodoBloqueado(
+          detalles.motivo,
+          Array.isArray(detalles.nombres) ? detalles.nombres.map(String) : [],
+          error.message,
+        );
+      }
+      throw toAdminError(error);
+    }
   } catch (error) {
+    if (error instanceof PeriodoBloqueado) throw error;
     throw toAdminError(error);
   }
 }
 
-/** Reabrir devuelve el periodo a edición y queda constancia del estado. */
+/**
+ * Aprueba el periodo de una sede entre dos fechas. El SERVIDOR lo crea si no existe: las
+ * reglas no dejan que la app escriba periodos —sellan horas— y crearlo desde aquí fallaba
+ * siempre, así que «Aprobar periodo» nunca había funcionado para una semana nueva.
+ */
+export async function approvePeriod(params: {
+  locationId: string;
+  from: string;
+  to: string;
+}): Promise<void> {
+  await llamarPeriodo(RPC.approveTimesheetPeriod, {
+    p_location_id: params.locationId,
+    p_from: params.from,
+    p_to: params.to,
+  });
+}
+
+/** Reabrir devuelve el periodo a edición y queda constancia. También va por el servidor. */
 export async function reopenPeriod(periodId: string): Promise<void> {
-  await execute((db) =>
-    db
-      .from(TABLES.timesheetPeriods)
-      .update({ status: 'reopened', approved_at: null, approved_by: null })
-      .eq('id', periodId),
-  );
+  await llamarPeriodo(RPC.reopenTimesheetPeriod, { p_period_id: periodId });
 }
 
 const exportRowSchema = z.object({

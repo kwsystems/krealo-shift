@@ -8,7 +8,6 @@ import {
   reclassifyDeparture,
   approvePeriod,
   createManualEntryRequest,
-  ensurePeriod,
   fetchAdjustments,
   fetchDailySummaries,
   fetchPeriod,
@@ -279,15 +278,8 @@ export function useTimesheetMutations(params: {
   });
 
   const approve = useMutation({
-    mutationFn: async () => {
-      const period = await ensurePeriod({
-        organizationId: params.organizationId ?? '',
-        locationId: params.locationId ?? '',
-        from: params.from,
-        to: params.to,
-      });
-      await approvePeriod(period.id);
-    },
+    mutationFn: () =>
+      approvePeriod({ locationId: params.locationId ?? '', from: params.from, to: params.to }),
     onSuccess: invalidate,
   });
 

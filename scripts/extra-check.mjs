@@ -181,6 +181,41 @@ try {
   else if (!/Avisar de posible hora extra desde/.test(conTarjeta))
     fallar(caso7, 'no encontré «Avisar de posible hora extra desde»');
   else pasa(caso7);
+
+  /* ---------------------------------------------------------------- 8 */
+  /*
+   * APROBAR EL PERIODO (30-sep). Nunca había funcionado en la tienda —el panel no podía ni
+   * crear el periodo— y el aviso decía «Hay fichajes que necesitan revisión» fuera cual
+   * fuera el error. La semana en curso tiene gente dentro: tiene que negarse diciendo
+   * quién. La anterior está cerrada: reabrir y aprobar tiene que funcionar.
+   */
+  const caso8 = 'aprobar el periodo dice quién tiene la jornada abierta, y si no hay, aprueba';
+  await irA(pagina, base, '/hours', { asentar: 800 });
+  await pagina.locator('[data-testid="timesheet-approve"]').first().click();
+  const aviso = pagina.locator('[data-testid="timesheet-approve-error"]');
+  await aviso.waitFor({ timeout: 10000 }).catch(() => undefined);
+  const dice = sinGlifos((await aviso.textContent().catch(() => '')) ?? '');
+  if (/necesitan revisión/.test(dice)) fallar(caso8, `sigue el aviso genérico: «${dice}»`);
+  else if (!/jornada abierta|jornadas? abiertas?/.test(dice) || !/\p{L}{3,}/u.test(dice))
+    fallar(caso8, `con gente dentro el aviso dice «${dice}»`);
+  else {
+    await pagina.locator('[data-testid="week-previous"]').first().click();
+    await pagina.waitForTimeout(1200);
+    const reabrir = pagina.locator('[data-testid="timesheet-reopen"]');
+    if ((await reabrir.count()) > 0) {
+      await reabrir.first().click();
+      await pagina.locator('[data-testid="timesheet-approve"]').waitFor({ timeout: 10000 });
+    }
+    await pagina.locator('[data-testid="timesheet-approve"]').first().click();
+    const aprobado = await pagina
+      .locator('[data-testid="timesheet-reopen"]')
+      .waitFor({ timeout: 10000 })
+      .then(() => true)
+      .catch(() => false);
+    const errorAnterior = await pagina.locator('[data-testid="timesheet-approve-error"]').count();
+    if (!aprobado || errorAnterior > 0) fallar(caso8, 'la semana anterior, cerrada, no se aprobó');
+    else pasa(caso8, `«${dice.slice(0, 90)}…»`);
+  }
 } catch (error) {
   fallar('el arnés no pudo completar la medida', error.message.split('\n')[0]);
 } finally {
@@ -194,5 +229,5 @@ if (problemas.length > 0) {
   process.exit(1);
 }
 console.log(
-  '\nEXTRA — OK: sin aprobar no hay extra, se avisa de la posible, se aprueba, cuadra con Reportes y se quita.',
+  '\nEXTRA — OK: sin aprobar no hay extra, se avisa de la posible, se aprueba, cuadra con Reportes y se quita; y el periodo se aprueba o dice quién lo impide.',
 );

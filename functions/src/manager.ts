@@ -21,6 +21,7 @@ import { generatePin } from '../../src/domain/pin';
 import { estaReclasificado, tipoEfectivo } from './shared/eventos';
 import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
 import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/turnos';
+import { instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
@@ -669,37 +670,184 @@ export const managerAddTimeEvent = onCall(async (request) => {
 // Periodos y exportacion
 // ---------------------------------------------------------------------------
 
+/**
+ * APROBAR UN PERIODO DE HORAS (30-sep: reescrita).
+ *
+ * NUNCA HABÍA FUNCIONADO PARA UNA SEMANA NUEVA. El panel creaba el periodo escribiendo
+ * directo en `timesheet_periods`, las reglas lo prohíben con razón —«aprobar y reabrir
+ * sellan horas: van por función»— y la pantalla enseñaba SIEMPRE «Hay fichajes que
+ * necesitan revisión», fuera cual fuera el error. Mentía dos veces: no se había aprobado, y
+ * no era por ningún fichaje. Lo vio Andree en Horas.
+ *
+ * Ahora el periodo lo crea aquí si no existe, y la única negativa es la que tiene sentido y
+ * dice a quién: no se aprueban horas que todavía se están trabajando. Una jornada abierta
+ * —alguien dentro, o que no marcó la salida— no tiene horas finales que sellar.
+ *
+ * Acepta también `p_period_id`, que es lo que mandaba el panel de antes.
+ */
 export const approveTimesheetPeriod = onCall(async (request) => {
   const uid = requireUid(request);
-  const periodId = textoRequerido(request.data?.p_period_id, 'p_period_id');
+  const periodo = await periodoPedido(request.data, uid);
 
-  const periodRef = db.collection(COLLECTIONS.timesheetPeriods).doc(periodId);
-  const periodo = (await periodRef.get()).data();
-  if (periodo === undefined) throw new HttpsError('not-found', 'Ese período no existe.');
-
-  const membership = await membershipOf(uid, periodo.organization_id as string);
-  requireRole(membership, ['owner', 'admin', 'manager']);
-  if (typeof periodo.location_id === 'string') {
-    requireManagesLocation(membership, periodo.location_id);
+  const abiertas = await jornadasAbiertasDelPeriodo(periodo);
+  if (abiertas.length > 0) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Hay jornadas abiertas en el periodo: no se pueden aprobar horas que no terminaron.',
+      { motivo: 'JORNADAS_ABIERTAS', nombres: abiertas },
+    );
   }
 
-  await periodRef.update({
-    status: 'approved',
-    approved_by: uid,
-    approved_at: nowISO(),
-    updated_at: nowISO(),
-  });
+  await periodo.ref.set(
+    {
+      ...periodo.datos,
+      status: 'approved',
+      approved_by: uid,
+      approved_at: nowISO(),
+      updated_at: nowISO(),
+    },
+    { merge: true },
+  );
 
   await audit({
-    organizationId: periodo.organization_id as string,
+    organizationId: periodo.organizationId,
     actorUserId: uid,
     action: 'timesheet_period_approved',
     entityType: 'timesheet_period',
-    entityId: periodId,
+    entityId: periodo.ref.id,
   });
 
-  return null;
+  return { periodId: periodo.ref.id, status: 'approved' };
 });
+
+/** Reabrir: vuelve a edición y queda constancia. Era otra escritura directa que las reglas cerraban. */
+export const reopenTimesheetPeriod = onCall(async (request) => {
+  const uid = requireUid(request);
+  const periodo = await periodoPedido(request.data, uid);
+  await periodo.ref.set(
+    {
+      ...periodo.datos,
+      status: 'reopened',
+      approved_at: null,
+      approved_by: null,
+      reopened_by: uid,
+      reopened_at: nowISO(),
+      updated_at: nowISO(),
+    },
+    { merge: true },
+  );
+  await audit({
+    organizationId: periodo.organizationId,
+    actorUserId: uid,
+    action: 'timesheet_period_reopened',
+    entityType: 'timesheet_period',
+    entityId: periodo.ref.id,
+  });
+  return { periodId: periodo.ref.id, status: 'reopened' };
+});
+
+const DIA_CLAVE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** El periodo que se pide —por id, o por sede y fechas—, con los permisos ya comprobados. */
+async function periodoPedido(data: unknown, uid: string) {
+  const datos = (data ?? {}) as Record<string, unknown>;
+
+  if (typeof datos.p_period_id === 'string' && datos.p_period_id !== '') {
+    const ref = db.collection(COLLECTIONS.timesheetPeriods).doc(datos.p_period_id);
+    const fila = (await ref.get()).data();
+    if (fila === undefined) throw new HttpsError('not-found', 'Ese período no existe.');
+    const membership = await membershipOf(uid, String(fila.organization_id));
+    requireRole(membership, ['owner', 'admin', 'manager']);
+    if (typeof fila.location_id === 'string') requireManagesLocation(membership, fila.location_id);
+    return {
+      ref,
+      datos: {},
+      organizationId: String(fila.organization_id),
+      locationId: String(fila.location_id),
+      desde: String(fila.starts_on),
+      hasta: String(fila.ends_on),
+    };
+  }
+
+  const locationId = textoRequerido(datos.p_location_id, 'p_location_id');
+  const desde = textoRequerido(datos.p_from, 'p_from');
+  const hasta = textoRequerido(datos.p_to, 'p_to');
+  if (!DIA_CLAVE.test(desde) || !DIA_CLAVE.test(hasta) || hasta < desde) {
+    throw new HttpsError('invalid-argument', 'El periodo va de AAAA-MM-DD a AAAA-MM-DD.');
+  }
+  const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+  if (location === undefined) throw new HttpsError('not-found', 'Esa ubicación no existe.');
+  const organizationId = String(location.organization_id);
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin', 'manager']);
+  requireManagesLocation(membership, locationId);
+
+  const existente = await db
+    .collection(COLLECTIONS.timesheetPeriods)
+    .where('organization_id', '==', organizationId)
+    .where('location_id', '==', locationId)
+    .where('starts_on', '==', desde)
+    .where('ends_on', '==', hasta)
+    .limit(1)
+    .get();
+  const ref =
+    existente.docs[0]?.ref ??
+    db.collection(COLLECTIONS.timesheetPeriods).doc(`${locationId}_${desde}_${hasta}`);
+  return {
+    ref,
+    // Lo que lleva un periodo nuevo; en uno que ya existe, `merge` no pisa nada de esto.
+    datos:
+      existente.docs[0] === undefined
+        ? {
+            id: ref.id,
+            organization_id: organizationId,
+            location_id: locationId,
+            starts_on: desde,
+            ends_on: hasta,
+            created_at: nowISO(),
+          }
+        : {},
+    organizationId,
+    locationId,
+    desde,
+    hasta,
+  };
+}
+
+/** Los nombres de quien tiene una jornada abierta en el periodo, en la zona de la sede. */
+async function jornadasAbiertasDelPeriodo(periodo: {
+  locationId: string;
+  desde: string;
+  hasta: string;
+}): Promise<string[]> {
+  const sede = (await db.collection(COLLECTIONS.locations).doc(periodo.locationId).get()).data();
+  const zona = zonaSegura(sede?.timezone ?? 'America/Lima', 'jornadasAbiertasDelPeriodo');
+  const inicio = instanteLocal(periodo.desde, '00:00', zona);
+  const dia = new Date(Date.parse(`${periodo.hasta}T12:00:00.000Z`) + 24 * 3600_000)
+    .toISOString()
+    .slice(0, 10);
+  const fin = instanteLocal(dia, '00:00', zona);
+  if (inicio === null || fin === null) return [];
+
+  const sesiones = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('location_id', '==', periodo.locationId)
+    .where('starts_at', '>=', inicio)
+    .where('starts_at', '<', fin)
+    .get();
+  const nombres: string[] = [];
+  for (const doc of sesiones.docs) {
+    const sesion = doc.data();
+    if (sesion.ends_at !== null && sesion.ends_at !== undefined) continue;
+    const empleado = (
+      await db.collection(COLLECTIONS.employees).doc(String(sesion.employee_id)).get()
+    ).data();
+    nombres.push(
+      String(empleado?.preferred_name ?? empleado?.full_name ?? sesion.employee_id ?? ''),
+    );
+  }
+  return [...new Set(nombres)];
+}
 
 export const exportTimesheetRows = onCall(async (request) => {
   const uid = requireUid(request);
@@ -1263,6 +1411,41 @@ async function revisarJornadasDeTurnos(
  * CANCELAR UN TURNO PUBLICADO también cambia jornadas: la de quien ya fichó ese turno deja
  * de tenerlo. La cancelación la escribe el panel directamente, así que después llama aquí.
  */
+/**
+ * LAS JORNADAS QUE SE ESTÁN MIRANDO, AL DÍA CON EL HORARIO DE AHORA (30-sep).
+ *
+ * Revisar al publicar y al cancelar no bastaba: Andree volvió a Horas y seguía «Sin turno
+ * programado» en una jornada guardada ANTES de que existiera esa revisión. Una marca que
+ * solo se corrige cuando pasa algo depende de que pase; esta no. Horas, Reportes e Inicio
+ * llaman aquí con el periodo que enseñan, y lo que esté viejo se corrige antes de verse.
+ *
+ * Solo turno y marcas, como al publicar: las horas no se tocan. Devuelve cuántas cambió,
+ * para que la pantalla se refresque solo si hizo falta.
+ */
+export const recheckSessionsForPeriod = onCall(async (request) => {
+  const uid = requireUid(request);
+  const locationId = textoRequerido(request.data?.p_location_id, 'p_location_id');
+  const desde = textoRequerido(request.data?.p_from, 'p_from');
+  const hasta = textoRequerido(request.data?.p_to, 'p_to');
+  if (!DIA_CLAVE.test(desde) || !DIA_CLAVE.test(hasta) || hasta < desde) {
+    throw new HttpsError('invalid-argument', 'El periodo va de AAAA-MM-DD a AAAA-MM-DD.');
+  }
+  const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+  if (location === undefined) throw new HttpsError('not-found', 'Esa ubicación no existe.');
+  requireManagesLocation(await membershipOf(uid, String(location.organization_id)), locationId);
+
+  const zona = zonaSegura(location.timezone ?? 'America/Lima', 'recheckSessionsForPeriod');
+  const dia = new Date(Date.parse(`${hasta}T12:00:00.000Z`) + 24 * 3600_000)
+    .toISOString()
+    .slice(0, 10);
+  const inicio = instanteLocal(desde, '00:00', zona);
+  const fin = instanteLocal(dia, '00:00', zona);
+  if (inicio === null || fin === null) return { cambiadas: 0 };
+
+  const cambiadas = await revisarJornadasDeLaSede({ locationId, desde: inicio, hasta: fin });
+  return { cambiadas };
+});
+
 export const recheckSessionsForShift = onCall(async (request) => {
   const uid = requireUid(request);
   const shiftId = textoRequerido(request.data?.p_shift_id, 'p_shift_id');

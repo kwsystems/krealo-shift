@@ -1,4 +1,9 @@
-import { managerAdjustTime, publishShiftsForWeek, recheckSessionsForShift } from '../../manager';
+import {
+  managerAdjustTime,
+  publishShiftsForWeek,
+  recheckSessionsForPeriod,
+  recheckSessionsForShift,
+} from '../../manager';
 import { COLLECTIONS, db } from '../../shared/admin';
 import { recordTimeEvent } from '../../shared/attendance';
 import { elegirTurno } from '../../shared/turnos';
@@ -213,6 +218,43 @@ describe('el turno de la jornada', () => {
     const sesion = await jornada();
     expect(sesion.shift_id).toBe('t-suyo');
     expect(sesion.flags).toEqual([]);
+  });
+
+  it('al MIRAR el periodo, una jornada vieja con «sin turno» se pone al día sin publicar nada', async () => {
+    // El caso de la segunda captura: la jornada se guardó antes del arreglo y nadie ha
+    // publicado nada desde entonces.
+    await turno('t-publicado', H(10), H(19));
+    await db
+      .collection(COLLECTIONS.workSessions)
+      .doc(`${PERSONA}_${H(10)}`)
+      .set({
+        organization_id: ORG,
+        employee_id: PERSONA,
+        location_id: SEDE,
+        shift_id: null,
+        starts_at: H(10),
+        ends_at: null,
+        status: 'open',
+        flags: ['unscheduled'],
+      });
+
+    const r = (await correr(recheckSessionsForPeriod, {
+      p_location_id: SEDE,
+      p_from: '2026-09-21',
+      p_to: '2026-09-27',
+    })) as { cambiadas: number };
+
+    expect(r.cambiadas).toBe(1);
+    const sesion = await jornada();
+    expect(sesion).toMatchObject({ shift_id: 't-publicado', flags: [], starts_at: H(10) });
+
+    // Y mirarla otra vez no cambia nada: ya está al día.
+    const otra = (await correr(recheckSessionsForPeriod, {
+      p_location_id: SEDE,
+      p_from: '2026-09-21',
+      p_to: '2026-09-27',
+    })) as { cambiadas: number };
+    expect(otra.cambiadas).toBe(0);
   });
 
   it('ni un borrador ni el turno de otra sede cuentan como su turno', async () => {

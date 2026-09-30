@@ -286,18 +286,85 @@ function crearRpc(almacen: Almacen) {
         return sinError({ organizationId, locationId });
       }
 
-      case 'approve_timesheet_period': {
-        const id = argumentos.p_period_id;
-        almacen.set(
-          'timesheet_periods',
-          filas('timesheet_periods').map((fila) =>
-            fila.id === id
-              ? { ...fila, status: 'approved', approved_at: new Date().toISOString() }
-              : fila,
-          ),
+      /*
+       * APROBAR Y REABRIR, como el servidor: por sede y fechas, creando el periodo si no
+       * existe, y negándose con nombres mientras haya jornadas abiertas en él. La versión
+       * de antes aprobaba cualquier cosa por id, y por eso la demo nunca enseñó que en la
+       * tienda aprobar no funcionaba.
+       */
+      case 'approve_timesheet_period':
+      case 'reopen_timesheet_period': {
+        const sede = argumentos.p_location_id;
+        const desde = String(argumentos.p_from ?? '');
+        const hasta = String(argumentos.p_to ?? '');
+        const existente = filas('timesheet_periods').find((fila) =>
+          argumentos.p_period_id !== undefined
+            ? fila.id === argumentos.p_period_id
+            : fila.location_id === sede && fila.starts_on === desde && fila.ends_on === hasta,
         );
-        return sinError(null);
+        const periodo = existente ?? {
+          id: `periodo-${String(sede)}-${desde}-${hasta}`,
+          organization_id: DEMO_ORG_ID,
+          location_id: sede,
+          starts_on: desde,
+          ends_on: hasta,
+          status: 'open',
+          approved_at: null,
+        };
+        const aprobar = nombre === 'approve_timesheet_period';
+        if (aprobar) {
+          const zona = String(
+            filas('locations').find((fila) => fila.id === periodo.location_id)?.timezone ??
+              'America/Lima',
+          );
+          const diaDe = (instante: unknown) =>
+            new Intl.DateTimeFormat('en-CA', {
+              timeZone: zona,
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            }).format(new Date(String(instante)));
+          const nombres = new Map(
+            filas('employees').map((fila) => [fila.id, fila.preferred_name ?? fila.full_name]),
+          );
+          const abiertas = [
+            ...new Set(
+              filas('work_sessions')
+                .filter(
+                  (fila) =>
+                    fila.location_id === periodo.location_id &&
+                    fila.ends_at === null &&
+                    diaDe(fila.starts_at) >= String(periodo.starts_on) &&
+                    diaDe(fila.starts_at) <= String(periodo.ends_on),
+                )
+                .map((fila) => String(nombres.get(fila.employee_id) ?? '')),
+            ),
+          ];
+          if (abiertas.length > 0) {
+            return {
+              data: null,
+              error: {
+                code: 'failed-precondition',
+                message: 'Hay jornadas abiertas en el periodo.',
+                details: { motivo: 'JORNADAS_ABIERTAS', nombres: abiertas },
+              },
+            };
+          }
+        }
+        almacen.set('timesheet_periods', [
+          ...filas('timesheet_periods').filter((fila) => fila.id !== periodo.id),
+          {
+            ...periodo,
+            status: aprobar ? 'approved' : 'reopened',
+            approved_at: aprobar ? new Date().toISOString() : null,
+          },
+        ]);
+        return sinError({ periodId: periodo.id, status: aprobar ? 'approved' : 'reopened' });
       }
+
+      // En la demostración las marcas no se derivan del horario: no hay nada que revisar.
+      case 'recheck_sessions_for_period':
+        return sinError({ cambiadas: 0 });
 
       case 'manager_adjust_time': {
         const id = argumentos.p_work_session_id;

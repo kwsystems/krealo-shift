@@ -40,6 +40,8 @@ import {
   minutesToHHmm,
   type TimeFormatPreference,
 } from '@/utils/time';
+import { dateKeyOf } from '@/features/schedules/week';
+import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 
 /**
  * Inicio administrativo (§11.1).
@@ -71,6 +73,10 @@ export default function ManagerHomeScreen() {
   });
 
   const names = useEmployeeNames(scope.organization?.id ?? null);
+
+  // Las jornadas de hoy, al día con el horario publicado: «tarde» y «sin turno» salen de ahí.
+  const hoy = dateKeyOf(now, scope.timezone);
+  useJornadasAlDia({ locationId: scope.locationId, from: hoy, to: hoy });
 
   /*
    * LA VENTANA DE LA FRANJA SALE DE LA JORNADA REAL, no de «las 24 horas del día». Una

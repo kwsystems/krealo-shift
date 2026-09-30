@@ -22,6 +22,7 @@ import {
 } from './export';
 import { useBreakTimeByReason } from './hooks';
 import { useCorrecciones } from './correcciones';
+import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { CasillaDeCorrecciones } from './casilla-de-correcciones';
 import { periodoDe, semanasDelMes, type TipoDePeriodo } from './periodo';
 import { bonoDeAsistencia } from './bono';
@@ -132,6 +133,8 @@ export function ReportsScreen() {
   });
   const breaks = useBreakTimeByReason({ locationId: scope.locationId, from, to });
   const correcciones = useCorrecciones({ locationId: scope.locationId, from, to });
+  // Las jornadas del periodo, al día con el horario publicado antes de contar tardanzas.
+  useJornadasAlDia({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
 
   /*

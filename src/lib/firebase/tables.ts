@@ -203,6 +203,13 @@ export const RPC = {
   recheckSessionsForShift: 'recheck_sessions_for_shift',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
+  /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */
+  reopenTimesheetPeriod: 'reopen_timesheet_period',
+  /**
+   * Las jornadas del periodo que se está mirando, al día con el horario de ahora (30-sep).
+   * Horas, Reportes e Inicio la llaman al abrirse. Ver `useJornadasAlDia`.
+   */
+  recheckSessionsForPeriod: 'recheck_sessions_for_period',
   exportTimesheetRows: 'export_timesheet_rows',
   rebuildWorkSession: 'rebuild_work_session',
   currentAttendanceState: 'current_attendance_state',

@@ -3,7 +3,8 @@ import { StyleSheet } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { fetchExportRows, type WorkSession } from './api';
+import { fetchExportRows, PeriodoBloqueado, type WorkSession } from './api';
+import { useJornadasAlDia } from './jornadas-al-dia';
 import { alertsForSession, overlappingSessionIds, type TimesheetAlert } from './alerts';
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
 import { dentroPrimero, enCursoPorSesionDe, totalEnCurso } from './en-curso';
@@ -108,6 +109,8 @@ export function TimesheetsScreen() {
     cacheKey: { from, to },
   });
   const period = usePeriod({ organizationId, locationId: scope.locationId, from, to });
+  // Las jornadas de la semana que se mira, al día con el horario publicado de ahora.
+  useJornadasAlDia({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
   const team = useTeam({
     organizationId,
@@ -607,12 +610,40 @@ export function TimesheetsScreen() {
                   </Row>
 
                   <>
+                    {/*
+                      EL MOTIVO DE VERDAD, con nombres. Aquí decía siempre «Hay fichajes que
+                      necesitan revisión», fuera cual fuera el error: lo vio Andree el 30-sep y
+                      era falso —el periodo ni siquiera se podía crear—.
+                    */}
                     {mutations.approve.error !== null ? (
                       <InlineNotice
                         tone="late"
                         icon="warning-outline"
                         title={t('timesheet.approveBlockedTitle')}
-                        body={t('timesheet.approveBlockedBody')}
+                        body={
+                          mutations.approve.error instanceof PeriodoBloqueado &&
+                          mutations.approve.error.motivo === 'JORNADAS_ABIERTAS'
+                            ? t('timesheet.approveBlockedOpen', {
+                                count: mutations.approve.error.nombres.length,
+                                names: mutations.approve.error.nombres.join(', '),
+                              })
+                            : adminErrorKind(mutations.approve.error) === 'forbidden'
+                              ? t('states.noAccessBody')
+                              : t('timesheet.approveFailedBody')
+                        }
+                        testID="timesheet-approve-error"
+                      />
+                    ) : null}
+                    {mutations.reopen.error !== null ? (
+                      <InlineNotice
+                        tone="late"
+                        icon="warning-outline"
+                        title={t('timesheet.reopenFailedTitle')}
+                        body={
+                          adminErrorKind(mutations.reopen.error) === 'forbidden'
+                            ? t('states.noAccessBody')
+                            : t('timesheet.approveFailedBody')
+                        }
                       />
                     ) : null}
                     {exportCsv.error !== null ? (
