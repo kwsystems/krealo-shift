@@ -153,19 +153,37 @@ export function EmployeeFormSheet({
         testID="employee-full-name"
       />
 
-      <FormField
-        label={t('team.preferredName')}
-        value={values.preferredName}
-        onChangeText={(preferredName) => setValues((current) => ({ ...current, preferredName }))}
-        testID="employee-preferred-name"
-      />
+      {/*
+        CADA CAMPO DICE PARA QUÉ SIRVE (30-sep). Andree, creando a su primera empleada:
+        «¿qué es número de empleado?». Tenía la etiqueta a secas, sin decir que es opcional
+        ni para qué: un campo que hay que adivinar es diseño que falta. Los que se explican
+        solos —el nombre completo— no llevan línea.
+      */}
+      <Stack gap={spacing.xs}>
+        <FormField
+          label={t('team.preferredName')}
+          value={values.preferredName}
+          onChangeText={(preferredName) => setValues((current) => ({ ...current, preferredName }))}
+          testID="employee-preferred-name"
+        />
+        <AppText variant="help" tone="subtle">
+          {t('team.preferredNameHint')}
+        </AppText>
+      </Stack>
 
-      <FormField
-        label={t('team.employeeNumber')}
-        value={values.employeeNumber}
-        onChangeText={(employeeNumber) => setValues((current) => ({ ...current, employeeNumber }))}
-        testID="employee-number"
-      />
+      <Stack gap={spacing.xs}>
+        <FormField
+          label={t('team.employeeNumber')}
+          value={values.employeeNumber}
+          onChangeText={(employeeNumber) =>
+            setValues((current) => ({ ...current, employeeNumber }))
+          }
+          testID="employee-number"
+        />
+        <AppText variant="help" tone="subtle" testID="employee-number-hint">
+          {t('team.employeeNumberHint')}
+        </AppText>
+      </Stack>
 
       <Stack gap={spacing.xs}>
         <FormField
@@ -193,28 +211,38 @@ export function EmployeeFormSheet({
         </AppText>
       </Stack>
 
-      <MultiSelectField
-        label={t('team.locations')}
-        values={values.locationIds}
-        options={locations}
-        onToggle={(value) => toggle('locationIds', value)}
-        emptyLabel={t('settings.noLocations')}
-        testID="employee-locations"
-      />
-      {submitted && !locationsValid ? (
-        <AppText variant="help" tone="danger" accessibilityRole="alert">
-          {t('team.locationRequired')}
+      <Stack gap={spacing.xs}>
+        <MultiSelectField
+          label={t('team.locations')}
+          values={values.locationIds}
+          options={locations}
+          onToggle={(value) => toggle('locationIds', value)}
+          emptyLabel={t('settings.noLocations')}
+          testID="employee-locations"
+        />
+        <AppText variant="help" tone="subtle">
+          {t('team.locationsHint')}
         </AppText>
-      ) : null}
+        {submitted && !locationsValid ? (
+          <AppText variant="help" tone="danger" accessibilityRole="alert">
+            {t('team.locationRequired')}
+          </AppText>
+        ) : null}
+      </Stack>
 
-      <MultiSelectField
-        label={t('team.jobRoles')}
-        values={values.jobRoleIds}
-        options={jobRoles}
-        onToggle={(value) => toggle('jobRoleIds', value)}
-        emptyLabel={t('schedule.noJobRoles')}
-        testID="employee-job-roles"
-      />
+      <Stack gap={spacing.xs}>
+        <MultiSelectField
+          label={t('team.jobRoles')}
+          values={values.jobRoleIds}
+          options={jobRoles}
+          onToggle={(value) => toggle('jobRoleIds', value)}
+          emptyLabel={t('schedule.noJobRoles')}
+          testID="employee-job-roles"
+        />
+        <AppText variant="help" tone="subtle">
+          {t('team.jobRolesHint')}
+        </AppText>
+      </Stack>
 
       <InlineNotice
         tone="info"
