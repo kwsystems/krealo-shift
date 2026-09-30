@@ -14,7 +14,9 @@
  *   4. un día se puede quitar —la semana del 31 de agosto empieza en agosto— y lo que
  *      se registra es exactamente lo que queda marcado;
  *   5. Horas enseña esas jornadas con sus horas y con «Según horario», no como fichadas;
- *   6. y el día que se quitó sigue pendiente: el aviso lo sigue contando.
+ *   6. el día que se quitó sigue pendiente: el aviso lo sigue contando;
+ *   7. y el «Se registraron…» no se queda arriba al pasar a otra semana, donde no se
+ *      registró nada (lo vio Andree el 30-sep).
  *
  * USO
  *   npm run demo:export
@@ -166,6 +168,17 @@ try {
   if (!avisoDespues.includes('1 turno publicado')) fallar(caso6, `el aviso dice «${avisoDespues}»`);
   else pasa(caso6, '«1 turno publicado no tiene marcas»');
   await pagina.screenshot({ path: 'capturas/cumplido-horario.png' });
+
+  /* ---------------------------------------------------------------- 7 */
+  const caso7 = 'el aviso de lo registrado no se arrastra a otra semana';
+  await pagina.locator('[data-testid="week-next"]').first().click();
+  await pagina.waitForTimeout(500);
+  const enLaSiguiente = sinGlifos(await pagina.evaluate(() => document.body.innerText));
+  if (enLaSiguiente.includes('Se registraron 10 turnos')) {
+    fallar(caso7, 'en la semana siguiente seguía «Se registraron 10 turnos como cumplidos»');
+  } else pasa(caso7);
+  await pagina.locator('[data-testid="week-previous"]').first().click();
+  await pagina.waitForTimeout(300);
 
   /* ---------------------------------------------------------------- 5 */
   const caso5 = 'Horas las enseña con sus horas y «Según horario»';

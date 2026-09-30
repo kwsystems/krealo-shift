@@ -108,6 +108,18 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const [removingRestDay, setRemovingRestDay] = useState<DatedRestDay | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
+  /*
+   * AL CAMBIAR DE SEMANA SE VA EL AVISO DE LO QUE SE HIZO EN LA OTRA. «Se registraron 28
+   * turnos como cumplidos» seguía arriba al pasar a la semana siguiente, donde no se había
+   * registrado nada (lo vio Andree el 30-sep cargando septiembre semana por semana): un
+   * aviso que habla de otra semana se lee como si hablara de esta.
+   */
+  const cambiarDeSemana = (siguiente: (actual: number) => number) => {
+    setWeekOffset(siguiente);
+    setFeedback(null);
+    setDiscardFailed(false);
+  };
+
   const nowISO = now.toISOString();
   const thisWeekStart = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
   const weekStart = addWeeks(thisWeekStart, weekOffset);
@@ -479,9 +491,9 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                     weekStart={weekStart}
                     language={language}
                     isCurrentWeek={weekOffset === 0}
-                    onPrevious={() => setWeekOffset((current) => current - 1)}
-                    onNext={() => setWeekOffset((current) => current + 1)}
-                    onGoToCurrent={() => setWeekOffset(0)}
+                    onPrevious={() => cambiarDeSemana((current) => current - 1)}
+                    onNext={() => cambiarDeSemana((current) => current + 1)}
+                    onGoToCurrent={() => cambiarDeSemana(() => 0)}
                   />
                   <SegmentedControl
                     label={t('schedule.viewLabel')}
