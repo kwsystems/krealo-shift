@@ -283,10 +283,20 @@ function totalDeclarado(celda: string): number | null {
   return Math.round((horas + fraccion) * 60);
 }
 
-/** El nombre sin el apéndice de contrato ni de puesto: «Ana – FT» → «Ana». */
+/**
+ * El nombre sin el contrato ni el puesto, vaya detrás o delante: «Ana – FT» → «Ana», y
+ * «Full Time: Ana» → «Ana». Lo de delante lleva dos puntos en la tabla de la tienda
+ * (30-sep); sin quitarlo, ninguna fila se reconocía. Una celda de nombre nunca trae una
+ * hora, así que los dos puntos no se confunden con los de «10:00».
+ */
 function nombreDeCelda(celda: string): string {
   const sinParentesis = celda.replace(/\([^)]*\)/g, ' ');
-  const cortado = unGuion(sinParentesis).split(/\s+-\s*|\s*-\s+/)[0] ?? '';
+  const dosPuntos = sinParentesis.lastIndexOf(':');
+  const trasElContrato =
+    dosPuntos >= 0 && sinParentesis.slice(dosPuntos + 1).trim() !== ''
+      ? sinParentesis.slice(dosPuntos + 1)
+      : sinParentesis;
+  const cortado = unGuion(trasElContrato).split(/\s+-\s*|\s*-\s+/)[0] ?? '';
   return cortado.replace(/[·,:]+$/, '').trim();
 }
 

@@ -389,3 +389,33 @@ describe('nada que leer', () => {
     expect(pegar('   \n  ').problemas).toEqual([{ clave: 'nadaQueLeer' }]);
   });
 });
+
+describe('con el contrato DELANTE del nombre, como la tabla de la tienda', () => {
+  /*
+   * La tabla que Andree mandó el 30-sep pone el contrato antes del nombre —«Full Time:
+   * Ana», «Part Time: Diana»— y la cabecera dice «Puesto / Nombre». Copiada tal cual, cada
+   * fila salía como «nombre desconocido» y no se podía pegar ni una semana.
+   */
+  const CON_CONTRATO = TABLA_REAL.replace('Personal', 'Puesto / Nombre')
+    .replace(/^(\w+) – FT/gm, 'Full Time: $1')
+    .replace(/^(\w+) – PT/gm, 'Part Time: $1');
+
+  it('reconoce a las cinco personas y lee los mismos 25 turnos', () => {
+    const horario = pegar(CON_CONTRATO);
+    expect(CON_CONTRATO).toContain('Full Time: Ana\t');
+    expect(horario.problemas).toEqual([]);
+    expect(horario.turnos).toHaveLength(25);
+    expect(horario.resumen.map((fila) => fila.employeeId)).toEqual([
+      'e-ana',
+      'e-bruno',
+      'e-carla',
+      'e-diana',
+      'e-elena',
+    ]);
+  });
+
+  it('un nombre que no está en el equipo sigue sin pasar', () => {
+    const horario = pegar('Full Time: Nadie\t10:00-19:00\tDESCANSO');
+    expect(horario.problemas).toEqual([{ clave: 'nombreDesconocido', texto: 'Nadie' }]);
+  });
+});
