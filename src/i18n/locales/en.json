@@ -341,6 +341,22 @@
     "unavailableWeb": "The web version does not push alerts to a phone. You still see them inside the app; to get them on a phone you need the installed app."
   },
   "reports": {
+    "corrections": "Time corrections",
+    "correctionsNone": "None: everything in this period was clocked without corrections.",
+    "correctionsLoading": "Counting…",
+    "correctionsUnavailable": "They couldn't be counted. Try again.",
+    "correctionsFromSchedule_one": "Separately, {{count}} shift recorded from the schedule.",
+    "correctionsFromSchedule_other": "Separately, {{count}} shifts recorded from the schedule.",
+    "correctionsType": {
+      "fichaje_anadido_one": "{{count}} punch added",
+      "fichaje_anadido_other": "{{count}} punches added",
+      "hora_corregida_one": "{{count}} time corrected",
+      "hora_corregida_other": "{{count}} times corrected",
+      "salida_a_pausa_one": "{{count}} clock-out turned into a break",
+      "salida_a_pausa_other": "{{count}} clock-outs turned into breaks",
+      "solicitud_aprobada_one": "{{count}} request approved",
+      "solicitud_aprobada_other": "{{count}} requests approved"
+    },
     "title": "Reports",
     "subtitle": "Clocked hours for this location. It measures presence, not output: someone serving a rush and someone standing in an empty store clock the same.",
     "loading": "Working out the period…",

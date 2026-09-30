@@ -308,6 +308,9 @@ export const registerScheduleAsWorked = onCall({ timeoutSeconds: 300 }, async (r
     const sesionId = `${turno.employee_id}_${turno.starts_at}`;
     await db.collection(COLLECTIONS.timeAdjustments).add({
       organization_id: organizationId,
+      // Sede y persona en la fila, para contarlas en Reportes sin ir a buscarlas.
+      location_id: locationId,
+      employee_id: turno.employee_id,
       work_session_id: sesionId,
       target_type: 'work_session',
       target_id: sesionId,

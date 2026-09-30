@@ -21,6 +21,8 @@ import {
   reportFileName,
 } from './export';
 import { useBreakTimeByReason } from './hooks';
+import { useCorrecciones } from './correcciones';
+import { CasillaDeCorrecciones } from './casilla-de-correcciones';
 import { periodoDe, semanasDelMes, type TipoDePeriodo } from './periodo';
 import { bonoDeAsistencia } from './bono';
 import { BonoCard } from './bono-card';
@@ -129,6 +131,7 @@ export function ReportsScreen() {
     cacheKey: { from, to },
   });
   const breaks = useBreakTimeByReason({ locationId: scope.locationId, from, to });
+  const correcciones = useCorrecciones({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
 
   /*
@@ -603,6 +606,7 @@ export function ReportsScreen() {
                     testID="report-holidays"
                   />
                 ) : null}
+                <CasillaDeCorrecciones consulta={correcciones} personaId={personaElegida} />
                 <StatTile
                   label={t('reports.onTime')}
                   value={

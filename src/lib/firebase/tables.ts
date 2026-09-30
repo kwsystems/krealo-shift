@@ -191,6 +191,11 @@ export const RPC = {
    * fichajes que faltaban. Ver `functions/src/solicitudes.ts`.
    */
   reviewTimeEditRequest: 'review_time_edit_request',
+  /**
+   * Las correcciones de hora de un periodo, una fila por corrección y contada en el día que
+   * corrige (30-sep). Ver `functions/src/correcciones.ts`.
+   */
+  viewCorrectionsSummary: 'view_corrections_summary',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

@@ -464,6 +464,28 @@ function crearRpc(almacen: Almacen) {
             is_offline: false,
           },
         ]);
+        // Y su corrección, como en el servidor: la cuenta Reportes.
+        almacen.set('time_adjustments', [
+          ...filas('time_adjustments'),
+          {
+            id: `ajuste-${idEvento}`,
+            organization_id: DEMO_ORG_ID,
+            location_id: argumentos.p_location_id,
+            employee_id: argumentos.p_employee_id,
+            work_session_id: null,
+            target_type: 'time_event',
+            target_id: idEvento,
+            before_value: null,
+            after_value: {
+              event_type: argumentos.p_event_type,
+              occurred_at: argumentos.p_occurred_at,
+            },
+            reason: String(argumentos.p_reason ?? ''),
+            created_at: new Date().toISOString(),
+            channel: 'manager_app',
+            author_name: 'Andree (demostración)',
+          },
+        ]);
         return sinError([{ event_id: idEvento, work_session_id: null }]);
       }
 
@@ -849,6 +871,25 @@ function crearRpc(almacen: Almacen) {
           },
         ]);
 
+        almacen.set('time_adjustments', [
+          ...filas('time_adjustments'),
+          ...fichajes.map((fichaje, i) => ({
+            id: `ajuste-${eventIds[i]}`,
+            organization_id: DEMO_ORG_ID,
+            location_id: sede,
+            employee_id: empleado,
+            request_id: id,
+            work_session_id: final.id,
+            target_type: 'time_event',
+            target_id: eventIds[i],
+            before_value: null,
+            after_value: { event_type: fichaje.type, occurred_at: fichaje.occurred_at },
+            reason: `Solicitud aprobada: ${String(solicitud.reason ?? '')}`,
+            created_at: new Date().toISOString(),
+            channel: 'manager_app',
+            author_name: 'Andree (demostración)',
+          })),
+        ]);
         guardar({ ...resolucion, work_session_id: final.id, applied_event_ids: eventIds });
         return sinError({
           status: 'approved',
@@ -856,6 +897,62 @@ function crearRpc(almacen: Almacen) {
           eventIds,
           workSessionId: final.id,
         });
+      }
+
+      /*
+       * LAS CORRECCIONES DEL PERIODO, como `functions/src/correcciones.ts`: una fila por
+       * corrección, en el día que corrige, de la sede pedida. Mismo criterio de tipos.
+       */
+      case 'view_corrections_summary': {
+        const sede = argumentos.p_location_id;
+        const desde = String(argumentos.p_from ?? '');
+        const hasta = String(argumentos.p_to ?? '');
+        const zona = String(
+          filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+        );
+        const diaDe = (instante: string) =>
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(instante));
+        const sesiones = new Map(filas('work_sessions').map((fila) => [fila.id, fila]));
+        const resultado = [];
+        for (const fila of filas('time_adjustments')) {
+          const despues = (fila.after_value ?? {}) as Record<string, unknown>;
+          const antes = (fila.before_value ?? {}) as Record<string, unknown>;
+          const sesion = sesiones.get(fila.work_session_id);
+          const instante = [
+            despues.occurred_at,
+            despues.starts_at,
+            antes.occurred_at,
+            antes.starts_at,
+            sesion?.starts_at,
+            fila.created_at,
+          ].find((valor) => typeof valor === 'string');
+          if (typeof instante !== 'string') continue;
+          const dia = diaDe(instante);
+          if (dia < desde || dia > hasta) continue;
+          if ((fila.location_id ?? sesion?.location_id) !== sede) continue;
+          const tipo =
+            typeof fila.request_id === 'string'
+              ? 'solicitud_aprobada'
+              : despues.origen === 'horario'
+                ? 'segun_horario'
+                : typeof despues.reclassified_as === 'string'
+                  ? 'salida_a_pausa'
+                  : fila.target_type === 'time_event'
+                    ? 'fichaje_anadido'
+                    : 'hora_corregida';
+          resultado.push({
+            tipo,
+            employee_id: fila.employee_id ?? sesion?.employee_id ?? null,
+            work_date: dia,
+            author_name: fila.author_name ?? null,
+          });
+        }
+        return sinError({ filas: resultado });
       }
 
       case 'attendance_state_at':

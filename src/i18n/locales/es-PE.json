@@ -341,6 +341,22 @@
     "unavailableWeb": "La versión web no envía avisos al móvil. Los verás igualmente dentro de la app; para que lleguen al teléfono hace falta tenerla instalada."
   },
   "reports": {
+    "corrections": "Correcciones de hora",
+    "correctionsNone": "Ninguna: todo lo del periodo se fichó sin corregir.",
+    "correctionsLoading": "Contando…",
+    "correctionsUnavailable": "No se pudieron contar. Vuelve a intentarlo.",
+    "correctionsFromSchedule_one": "Aparte, {{count}} jornada registrada desde el horario.",
+    "correctionsFromSchedule_other": "Aparte, {{count}} jornadas registradas desde el horario.",
+    "correctionsType": {
+      "fichaje_anadido_one": "{{count}} fichaje añadido",
+      "fichaje_anadido_other": "{{count}} fichajes añadidos",
+      "hora_corregida_one": "{{count}} hora corregida",
+      "hora_corregida_other": "{{count}} horas corregidas",
+      "salida_a_pausa_one": "{{count}} salida convertida en pausa",
+      "salida_a_pausa_other": "{{count}} salidas convertidas en pausa",
+      "solicitud_aprobada_one": "{{count}} solicitud aprobada",
+      "solicitud_aprobada_other": "{{count}} solicitudes aprobadas"
+    },
     "title": "Reportes",
     "subtitle": "Horas fichadas de esta sede. Mide presencia, no trabajo hecho: quien atiende en hora punta y quien está en una tienda vacía marcan lo mismo.",
     "loading": "Calculando el periodo…",

@@ -497,12 +497,15 @@ export async function ajustarSesion(
     expectedUpdatedAt,
     newStartsAt,
     newEndsAt,
+    requestId,
   }: {
     workSessionId: string;
     reason: string;
     expectedUpdatedAt?: string;
     newStartsAt?: string | null;
     newEndsAt?: string | null;
+    /** La solicitud de la Bandeja que la origina, si la hay. */
+    requestId?: string;
   },
 ): Promise<void> {
   const sessionRef = db.collection(COLLECTIONS.workSessions).doc(workSessionId);
@@ -556,6 +559,10 @@ export async function ajustarSesion(
      */
     tx.create(db.collection(COLLECTIONS.timeAdjustments).doc(), {
       organization_id: sesion.organization_id,
+      // Sede y persona en la fila, para contarlas en Reportes sin ir a buscarlas.
+      location_id: sesion.location_id ?? null,
+      employee_id: sesion.employee_id ?? null,
+      ...(requestId === undefined ? {} : { request_id: requestId }),
       work_session_id: workSessionId,
       target_type: 'work_session',
       target_id: workSessionId,
@@ -625,6 +632,9 @@ export const managerAddTimeEvent = onCall(async (request) => {
 
   await db.collection(COLLECTIONS.timeAdjustments).add({
     organization_id: location.organization_id,
+    // Sede y persona en la fila, para contarlas en Reportes sin ir a buscarlas.
+    location_id: locationId,
+    employee_id: employeeId,
     work_session_id: null,
     target_type: 'time_event',
     target_id: eventId,
@@ -1037,6 +1047,9 @@ export const managerReclassifyDeparture = onCall(async (request) => {
      */
     tx.create(db.collection(COLLECTIONS.timeAdjustments).doc(), {
       organization_id: organizationId,
+      // Sede y persona en la fila, para contarlas en Reportes sin ir a buscarlas.
+      location_id: locationId,
+      employee_id: employeeId,
       work_session_id: sesionCortada.docs[0]?.id ?? null,
       target_type: 'time_event',
       target_id: eventId,

@@ -64,6 +64,12 @@ export { deleteEmployee } from './eliminar-empleado';
  */
 export { reviewTimeEditRequest } from './solicitudes';
 
+/*
+ * Las correcciones de hora de un periodo, para Reportes (30-sep): la semana de prueba pide
+ * contarlas y la app no sabía.
+ */
+export { viewCorrectionsSummary } from './correcciones';
+
 export {
   activateKiosk,
   refreshKioskRoster,

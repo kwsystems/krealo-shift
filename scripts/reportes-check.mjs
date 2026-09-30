@@ -589,6 +589,45 @@ function soloHoras(texto) {
   await contexto.close();
 }
 
+/*
+ * --- LAS CORRECCIONES DE HORA (30-sep). La lista de la semana de prueba pide «cuántas hubo
+ * y de qué tipo», y la app no lo contaba en ningún sitio. La demostración siembra una hora
+ * corregida hace tres días: tiene que salir, contada, en esta semana o en la anterior —tres
+ * días atrás cae en una de las dos, según el día—, y la casilla no puede quedarse en «—».
+ */
+{
+  const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+  const pagina = await contexto.newPage();
+  await entrar(pagina);
+  await irA(pagina, base, '/reports', { asentar: 800 });
+  const leer = async () => {
+    const casilla = pagina.locator('[data-testid="report-corrections"]');
+    if ((await casilla.count()) === 0) return null;
+    await pagina.waitForTimeout(600);
+    return (await casilla.first().innerText())
+      .replace(/[\uE000-\uF8FF]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  };
+  const estaSemana = await leer();
+  await pagina.locator('[data-testid="week-previous"]').click();
+  await pagina.waitForTimeout(1500);
+  const anterior = await leer();
+  if (estaSemana === null || anterior === null) {
+    problemas.push('Reportes no tiene la casilla de correcciones de hora');
+  } else if (/Contando|No se pudieron contar/.test(`${estaSemana} ${anterior}`)) {
+    problemas.push(`la casilla de correcciones no llegó a contar: «${estaSemana}» / «${anterior}»`);
+  } else if (!/1 hora corregida/.test(`${estaSemana} ${anterior}`)) {
+    problemas.push(
+      `la hora corregida de la demostración no se cuenta en ninguna de las dos semanas: ` +
+        `«${estaSemana}» / «${anterior}»`,
+    );
+  } else {
+    console.log(`  correcciones        esta semana «${estaSemana}» · la anterior «${anterior}»`);
+  }
+  await contexto.close();
+}
+
 await navegador.close();
 await cerrar();
 
@@ -599,5 +638,5 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  '\nOK: Reportes cuadra con Horas y por mes consigo mismo, los gráficos tienen escala y las siete pestañas caben.',
+  '\nOK: Reportes cuadra con Horas y por mes consigo mismo, los gráficos tienen escala, las siete pestañas caben y cuenta las correcciones.',
 );

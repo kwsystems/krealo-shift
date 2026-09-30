@@ -315,6 +315,7 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
         reason: motivo,
         newStartsAt: inicio,
         newEndsAt: fin,
+        requestId,
       });
     }
     await db.runTransaction(async (tx) => {
@@ -415,6 +416,8 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
       );
       tx.create(db.collection(COLLECTIONS.timeAdjustments).doc(), {
         organization_id: organizationId,
+        location_id: locationId,
+        employee_id: employeeId,
         work_session_id: sesionId,
         target_type: 'time_event',
         target_id: nuevo.id,
