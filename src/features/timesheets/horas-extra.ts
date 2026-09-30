@@ -6,6 +6,7 @@ import { dateKeyOf } from '@/features/schedules/week';
 import { ADMIN_LIST_STALE_MS, execute, selectRows } from '@/hooks/use-admin-query';
 import { TABLES } from '@/lib/firebase/tables';
 import { useSessionStore } from '@/stores/session-store';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /**
  * LAS HORAS EXTRA LAS DECIDE QUIEN GESTIONA, NO UN UMBRAL (30-sep).
@@ -178,11 +179,8 @@ export function useGuardarHoraExtra(params: {
         locationId: params.locationId ?? '',
         ...variables,
       }),
-    // Horas y Reportes leen lo mismo: se refrescan los dos.
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
-      void queryClient.invalidateQueries({ queryKey: ['reports'] });
-    },
+    // Horas, Reportes e Inicio leen lo mismo: se refrescan todas.
+    onSuccess: () => refrescarVistasDeHoras(queryClient),
   });
 }
 

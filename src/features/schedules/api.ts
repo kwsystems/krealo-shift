@@ -370,6 +370,15 @@ export async function removeShift(params: { shiftId: string; status: string }): 
         .update({ status: 'cancelled', updated_by: actorId() })
         .eq('id', params.shiftId),
     );
+    /*
+     * Y QUE LAS JORNADAS DE ESE TURNO LO SEPAN (30-sep). Quien ya fichó ese turno seguía
+     * «a tiempo» contra un turno que no existe. Si esto falla, el turno ya está cancelado
+     * —que es lo que se pidió— y la jornada se corrige en la próxima publicación.
+     */
+    const { error } = await requireClient().rpc(RPC.recheckSessionsForShift, {
+      p_shift_id: params.shiftId,
+    });
+    if (error !== null) console.warn('[krealo-shift] no se pudieron revisar las jornadas', error);
     return;
   }
 

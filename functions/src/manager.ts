@@ -20,6 +20,7 @@ import { transition, type TimeEventType } from '../../src/domain/attendance-stat
 import { generatePin } from '../../src/domain/pin';
 import { estaReclasificado, tipoEfectivo } from './shared/eventos';
 import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
+import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/turnos';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
@@ -1155,6 +1156,7 @@ export const publishShiftsForWeek = onCall(async (request) => {
     const ahora = nowISO();
 
     const publicados: string[] = [];
+    const afectados: { employeeId: string; startsAt: string; endsAt: string }[] = [];
     for (const doc of turnos) {
       const turno = doc.data();
       if (turno === undefined) continue;
@@ -1184,6 +1186,13 @@ export const publishShiftsForWeek = onCall(async (request) => {
         updated_at: ahora,
       });
       publicados.push(doc.id);
+      if (typeof turno.employee_id === 'string') {
+        afectados.push({
+          employeeId: turno.employee_id,
+          startsAt: String(turno.starts_at),
+          endsAt: String(turno.ends_at),
+        });
+      }
     }
 
     if (publicados.length === 0) {
@@ -1201,7 +1210,7 @@ export const publishShiftsForWeek = onCall(async (request) => {
       created_at: ahora,
     });
 
-    return { version: siguiente, publicados: publicados.length };
+    return { version: siguiente, publicados: publicados.length, afectados };
   });
 
   await audit({
@@ -1212,7 +1221,65 @@ export const publishShiftsForWeek = onCall(async (request) => {
     entityId: locationId,
   });
 
-  return version;
+  /*
+   * LAS JORNADAS DE ESOS TURNOS SE VUELVEN A MIRAR (30-sep). Quien fichó antes de que su
+   * turno se publicara —o con el turno de antes de cambiarlo— se quedaba con «Sin turno
+   * programado» o con una tardanza medida contra la hora vieja, y así lo seguían diciendo
+   * Horas, Inicio y Reportes. Solo cambian el turno y las marcas: las horas no se tocan.
+   * Ver `shared/turnos.ts`.
+   */
+  await revisarJornadasDeTurnos(locationId, version.afectados);
+  // Y todas las de la semana publicada, para que las marcas viejas no esperen a otra
+  // publicación que toque justo su turno.
+  await revisarJornadasDeLaSede({
+    locationId,
+    desde: new Date(Date.parse(`${weekStart}T00:00:00.000Z`) - MARGEN_DE_JORNADA_MS).toISOString(),
+    hasta: new Date(
+      Date.parse(`${weekStart}T00:00:00.000Z`) + 7 * 24 * 3600_000 + MARGEN_DE_JORNADA_MS,
+    ).toISOString(),
+  });
+
+  return { version: version.version, publicados: version.publicados };
+});
+
+const MARGEN_DE_JORNADA_MS = 16 * 3600_000;
+
+/** Revisa las jornadas que pueden ser de estos turnos: las que empiezan cerca de ellos. */
+async function revisarJornadasDeTurnos(
+  locationId: string,
+  turnos: readonly { employeeId: string; startsAt: string; endsAt: string }[],
+): Promise<void> {
+  for (const turno of turnos) {
+    await revisarTurnoDeLasJornadas({
+      employeeId: turno.employeeId,
+      locationId,
+      desde: new Date(Date.parse(turno.startsAt) - MARGEN_DE_JORNADA_MS).toISOString(),
+      hasta: new Date(Date.parse(turno.endsAt) + MARGEN_DE_JORNADA_MS).toISOString(),
+    });
+  }
+}
+
+/**
+ * CANCELAR UN TURNO PUBLICADO también cambia jornadas: la de quien ya fichó ese turno deja
+ * de tenerlo. La cancelación la escribe el panel directamente, así que después llama aquí.
+ */
+export const recheckSessionsForShift = onCall(async (request) => {
+  const uid = requireUid(request);
+  const shiftId = textoRequerido(request.data?.p_shift_id, 'p_shift_id');
+  const turno = (await db.collection(COLLECTIONS.shifts).doc(shiftId).get()).data();
+  if (turno === undefined) throw new HttpsError('not-found', 'Ese turno no existe.');
+  const locationId = String(turno.location_id);
+  requireManagesLocation(await membershipOf(uid, String(turno.organization_id)), locationId);
+  if (typeof turno.employee_id === 'string') {
+    await revisarJornadasDeTurnos(locationId, [
+      {
+        employeeId: turno.employee_id,
+        startsAt: String(turno.starts_at),
+        endsAt: String(turno.ends_at),
+      },
+    ]);
+  }
+  return null;
 });
 
 // ---------------------------------------------------------------------------

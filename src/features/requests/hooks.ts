@@ -9,6 +9,7 @@ import {
   type TimeEditRequest,
 } from './api';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /** Hooks de la bandeja de solicitudes (§11.5). */
 
@@ -32,13 +33,8 @@ export function useRequests(params: { organizationId: string | null; locationId:
 
 export function useRequestMutations() {
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['requests'] });
-    void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
-    void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-    // Aprobar un «olvidé marcar» cambia las horas del día: también las de Reportes.
-    void queryClient.invalidateQueries({ queryKey: ['reports'] });
-  };
+  // Aprobar un «olvidé marcar» cambia las horas del día en todas las pantallas.
+  const invalidate = () => refrescarVistasDeHoras(queryClient);
 
   const review = useMutation({
     mutationFn: (variables: {

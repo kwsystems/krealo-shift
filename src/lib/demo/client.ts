@@ -903,6 +903,10 @@ function crearRpc(almacen: Almacen) {
        * LAS CORRECCIONES DEL PERIODO, como `functions/src/correcciones.ts`: una fila por
        * corrección, en el día que corrige, de la sede pedida. Mismo criterio de tipos.
        */
+      // En la demostración las jornadas no guardan marcas contra el turno: nada que revisar.
+      case 'recheck_sessions_for_shift':
+        return sinError(null);
+
       case 'view_corrections_summary': {
         const sede = argumentos.p_location_id;
         const desde = String(argumentos.p_from ?? '');

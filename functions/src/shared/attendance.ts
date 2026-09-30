@@ -11,6 +11,7 @@ import { tipoEfectivo } from './eventos';
 import { enOrden, jornadaVigente, recorrer } from './secuencia';
 import { marcasDeLaSesion } from './marcas';
 import { politicasDe } from './politicas';
+import { turnoDeLaJornada } from './turnos';
 
 /**
  * Registro de fichajes y su proyeccion. Reemplaza a `submit_time_event`,
@@ -335,18 +336,22 @@ export async function rebuildWorkSession(
    * que no se puede calcular no puede impedir que la sesion se guarde, porque la sesion
    * es lo que sostiene las horas que se pagan y la marca solo es un aviso.
    */
-  const turnoId = (inicio.shift_id as string | null) ?? null;
-  const turnoDoc =
-    turnoId === null
-      ? undefined
-      : (await db.collection(COLLECTIONS.shifts).doc(turnoId).get()).data();
+  /*
+   * EL TURNO NO ES SOLO EL QUE SE ELIGIÓ AL FICHAR: si no eligió ninguno o se canceló, el
+   * publicado que le corresponde. Sin esto una jornada fichada antes de publicar su turno
+   * decía «Sin turno programado» para siempre. Ver `shared/turnos.ts`.
+   */
+  const turno = await turnoDeLaJornada({
+    employeeId,
+    locationId,
+    turnoElegido: (inicio.shift_id as string | null) ?? null,
+    entrada: startsAt,
+    salida: endsAt,
+  });
   const sedeDoc = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
 
   const marcas = marcasDeLaSesion({
-    turno:
-      turnoDoc === undefined
-        ? null
-        : { starts_at: String(turnoDoc.starts_at), ends_at: String(turnoDoc.ends_at) },
+    turno: turno === null ? null : { starts_at: turno.starts_at, ends_at: turno.ends_at },
     entrada: startsAt,
     salida: endsAt,
     entradaSegunElAparato: (inicio.occurred_at_device as string | null) ?? null,
@@ -365,9 +370,8 @@ export async function rebuildWorkSession(
         organization_id: organizationId,
         employee_id: employeeId,
         location_id: locationId,
-        // El turno de la sesion es el del fichaje de ENTRADA: los de pausa y salida
-        // pueden venir sin el y no por eso la jornada deja de ser de ese turno.
-        shift_id: (inicio.shift_id as string | null) ?? null,
+        // El turno de la jornada: el que eligió al entrar, o el publicado que le toca.
+        shift_id: turno?.id ?? null,
         clock_in_event_id: inicio.id,
         clock_out_event_id: salida?.id ?? null,
         starts_at: startsAt,

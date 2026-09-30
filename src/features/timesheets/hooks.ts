@@ -21,6 +21,7 @@ import {
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { splitRegularAndOvertime } from '@/utils/time';
 import { claveDelDia } from './horas-extra';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /** Hooks de horas y hojas de tiempo (§11.4). */
 
@@ -223,11 +224,7 @@ export function useTimesheetMutations(params: {
   to: string;
 }) {
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
-    void queryClient.invalidateQueries({ queryKey: ['requests'] });
-    void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-  };
+  const invalidate = () => refrescarVistasDeHoras(queryClient);
 
   const adjust = useMutation({
     mutationFn: (variables: {

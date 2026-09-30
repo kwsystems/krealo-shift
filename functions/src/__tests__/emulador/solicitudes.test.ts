@@ -188,6 +188,18 @@ describe('aprobar un «olvidé marcar la entrada»', () => {
   });
 
   it('marcó tarde, a las 11:00: la jornada pasa a empezar a las 08:00 y no queda duplicada', async () => {
+    // El turno que eligió al marcar tarde existe y está publicado: es el que hereda.
+    await db
+      .collection(COLLECTIONS.shifts)
+      .doc('turno-lunes')
+      .set({
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: PERSONA,
+        starts_at: L('08:00'),
+        ends_at: L('17:00'),
+        status: 'published',
+      });
     await fichaje('k-in', 'clock_in', L('11:00'), { shift_id: 'turno-lunes' });
     await fichaje('k-out', 'clock_out', L('17:00'));
     await proyectar(L('00:00'), M('00:00'));

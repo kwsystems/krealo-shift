@@ -196,6 +196,11 @@ export const RPC = {
    * corrige (30-sep). Ver `functions/src/correcciones.ts`.
    */
   viewCorrectionsSummary: 'view_corrections_summary',
+  /**
+   * Después de cancelar un turno publicado: que las jornadas de ese turno dejen de tenerlo
+   * (30-sep). Publicar ya lo hace solo; cancelar lo escribe el panel directamente.
+   */
+  recheckSessionsForShift: 'recheck_sessions_for_shift',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

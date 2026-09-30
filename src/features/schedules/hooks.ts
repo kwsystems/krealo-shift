@@ -26,6 +26,7 @@ import {
 import { addDaysToKey, weekRangeInstants } from './week';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { track } from '@/lib/analytics';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /**
  * Estado del editor de horarios (§11.3).
@@ -153,10 +154,8 @@ export function useScheduleMutations(params: {
   const { organizationId, locationId, timezone, weekStart } = params;
   const queryClient = useQueryClient();
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['schedule'] });
-    void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-  };
+  // Publicar o cambiar un turno cambia lo que Horas y Reportes dicen de ese día.
+  const invalidate = () => refrescarVistasDeHoras(queryClient);
 
   const create = useMutation({
     mutationFn: (input: ShiftInput) =>

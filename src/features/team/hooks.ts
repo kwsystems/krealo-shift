@@ -20,6 +20,7 @@ import {
   type EmployeeStatus,
 } from './api';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /**
  * Hooks del equipo (§11.2). Todo el dato remoto vive en TanStack Query: nada de
@@ -180,9 +181,7 @@ export function useTeamMutations(organizationId: string | null) {
     mutationFn: (params: { employeeId: string; confirmName: string }) => deleteEmployee(params),
     onSuccess: () => {
       invalidate();
-      void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
-      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+      refrescarVistasDeHoras(queryClient);
     },
   });
 
@@ -215,9 +214,7 @@ export function useTeamMutations(organizationId: string | null) {
     },
     onSettled: () => {
       invalidate();
-      void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
-      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-      void queryClient.invalidateQueries({ queryKey: ['reports'] });
+      refrescarVistasDeHoras(queryClient);
     },
   });
 
