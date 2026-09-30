@@ -5,7 +5,12 @@ import { useTranslation } from 'react-i18next';
 
 import { fetchExportRows, PeriodoBloqueado, type WorkSession } from './api';
 import { useJornadasAlDia } from './jornadas-al-dia';
-import { alertsForSession, overlappingSessionIds, type TimesheetAlert } from './alerts';
+import {
+  alertsForSession,
+  conTurnoSinPublicar,
+  overlappingSessionIds,
+  type TimesheetAlert,
+} from './alerts';
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
 import { dentroPrimero, enCursoPorSesionDe, totalEnCurso } from './en-curso';
 import {
@@ -153,15 +158,38 @@ export function TimesheetsScreen() {
   // Una salida o un descanso cambian quién está dentro: ver `useSesionesAlDiaCon`.
   useSesionesAlDiaCon(scope.locationId, workingNow.data);
 
+  const turnosDeLaSemana = useWeekShifts({
+    organizationId,
+    locationId: scope.locationId,
+    weekStart,
+    timezone: scope.timezone,
+  });
+
+  /*
+   * «SIN TURNO» CUANDO EL TURNO EXISTE PERO ES UN BORRADOR (30-sep): se dice así. Es
+   * verdad que no tiene turno programado —un borrador no lo ve la persona ni cuenta—, pero
+   * «sin turno» a secas, justo después de haberle cambiado el turno, hace pensar que la app
+   * no recogió el cambio. Lo que falta es publicarlo, y eso es lo que tiene que decir.
+   */
   const alertsBySession = useMemo(() => {
+    const borradores = new Set(
+      (turnosDeLaSemana.data ?? [])
+        .filter((turno) => turno.status === 'draft')
+        .map((turno) => claveDelDia(turno.employee_id, dateKeyOf(turno.starts_at, scope.timezone))),
+    );
     const map = new Map<string, TimesheetAlert[]>();
     for (const session of allSessions) {
-      const alerts = alertsForSession(session, nowISO);
+      const alerts = conTurnoSinPublicar(
+        alertsForSession(session, nowISO),
+        borradores.has(
+          claveDelDia(session.employee_id, dateKeyOf(session.starts_at, scope.timezone)),
+        ),
+      );
       if (overlapping.has(session.id) && !alerts.includes('overlap')) alerts.push('overlap');
       map.set(session.id, alerts);
     }
     return map;
-  }, [allSessions, overlapping, nowISO]);
+  }, [allSessions, overlapping, nowISO, turnosDeLaSemana.data, scope.timezone]);
 
   const visibleSummaries = useMemo(
     () =>
@@ -179,12 +207,6 @@ export function TimesheetsScreen() {
    */
   const horasExtra = useHorasExtra({ organizationId, locationId: scope.locationId, from, to });
   const guardarHoraExtra = useGuardarHoraExtra({ organizationId, locationId: scope.locationId });
-  const turnosDeLaSemana = useWeekShifts({
-    organizationId,
-    locationId: scope.locationId,
-    weekStart,
-    timezone: scope.timezone,
-  });
   const aprobadas = useMemo(() => aprobadasPorDia(horasExtra.data ?? []), [horasExtra.data]);
   const planificado = useMemo(
     () => planificadoPorDia(turnosDeLaSemana.data ?? [], scope.timezone),

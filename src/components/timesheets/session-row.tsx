@@ -38,6 +38,7 @@ const ALERT_ICONS: Record<TimesheetAlert, 'alert-circle' | 'time-outline' | 'war
   earlyDeparture: 'time-outline',
   clockDrift: 'warning-outline',
   unscheduled: 'alert-circle',
+  unpublishedShift: 'alert-circle',
   needsReview: 'alert-circle',
 };
 
@@ -57,6 +58,8 @@ export function alertLabelKey(alert: TimesheetAlert): string {
       return 'timesheet.flagClockDrift';
     case 'unscheduled':
       return 'timesheet.flagUnscheduled';
+    case 'unpublishedShift':
+      return 'timesheet.flagUnpublishedShift';
     default:
       return 'states.needsReviewBadge';
   }

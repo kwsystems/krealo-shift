@@ -1094,6 +1094,7 @@
     "exported_one": "{{count}} fila exportada",
     "exported_other": "{{count}} filas exportadas",
     "flagUnscheduled": "Sin turno programado",
+    "flagUnpublishedShift": "Su turno está sin publicar",
     "fromOffline": "Sin conexión",
     "manualEntryKind": "Tipo de fichaje",
     "manualEntryNoticeTitle": "Queda como solicitud con motivo",

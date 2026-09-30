@@ -17,6 +17,8 @@ export type TimesheetAlert =
   | 'earlyDeparture'
   | 'clockDrift'
   | 'unscheduled'
+  /** Sin turno publicado, pero con uno en BORRADOR ese día: lo que falta es publicarlo. */
+  | 'unpublishedShift'
   | 'needsReview';
 
 /** Una sesión abierta más allá de esta duración es un olvido, no un turno largo. */
@@ -91,4 +93,16 @@ export function overlappingSessionIds(sessions: WorkSession[]): Set<string> {
   }
 
   return overlapping;
+}
+
+/**
+ * «Sin turno» con un turno en borrador ese día se dice como lo que es: turno sin publicar.
+ * Ver `timesheets-screen.tsx`.
+ */
+export function conTurnoSinPublicar(
+  alerts: TimesheetAlert[],
+  hayBorrador: boolean,
+): TimesheetAlert[] {
+  if (!hayBorrador || !alerts.includes('unscheduled')) return alerts;
+  return alerts.map((alerta) => (alerta === 'unscheduled' ? 'unpublishedShift' : alerta));
 }

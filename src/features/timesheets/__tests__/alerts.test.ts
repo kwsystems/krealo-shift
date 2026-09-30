@@ -1,4 +1,4 @@
-import { alertsForSession, overlappingSessionIds } from '../alerts';
+import { conTurnoSinPublicar, alertsForSession, overlappingSessionIds } from '../alerts';
 import type { DailySummary, WorkSession } from '../api';
 import { computeTotals } from '../hooks';
 
@@ -186,5 +186,19 @@ describe('totales del periodo', () => {
 
     expect(totals.paidBreakMinutes).toBe(15);
     expect(totals.unpaidBreakMinutes).toBe(60);
+  });
+});
+
+describe('turno sin publicar', () => {
+  it('«sin turno» con un borrador ese día pasa a decir que falta publicarlo', () => {
+    expect(conTurnoSinPublicar(['unscheduled', 'clockDrift'], true)).toEqual([
+      'unpublishedShift',
+      'clockDrift',
+    ]);
+  });
+
+  it('sin borrador, o sin «sin turno», no cambia nada', () => {
+    expect(conTurnoSinPublicar(['unscheduled'], false)).toEqual(['unscheduled']);
+    expect(conTurnoSinPublicar(['lateArrival'], true)).toEqual(['lateArrival']);
   });
 });

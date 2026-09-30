@@ -1094,6 +1094,7 @@
     "exported_one": "{{count}} row exported",
     "exported_other": "{{count}} rows exported",
     "flagUnscheduled": "No scheduled shift",
+    "flagUnpublishedShift": "Their shift is unpublished",
     "fromOffline": "Offline",
     "manualEntryKind": "Entry type",
     "manualEntryNoticeTitle": "Recorded as a request with a reason",
