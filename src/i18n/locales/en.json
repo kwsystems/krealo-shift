@@ -1108,7 +1108,7 @@
     "nextWeek": "Next week",
     "nextWeekEmpty": "Next week’s schedule hasn’t been published yet.",
     "free": "Off",
-    "markRange": "Clocked {{from}} – {{to}}",
+    "markRange": "Clocked {{from}}\u00a0–\u2060\u00a0{{to}}",
     "markOpen": "In at {{from}}",
     "early_one": "You arrived {{count}} minute early",
     "early_other": "You arrived {{count}} minutes early",

@@ -374,7 +374,10 @@ function Hoy({
   const estilos = useEstilos();
   const turno = dia.turnos[0];
   const abierta = dia.jornadas.find((j) => j.ends_at === null);
-  const rango = turno === undefined ? null : `${hora(turno.starts_at)} – ${hora(turno.ends_at)}`;
+  const rango =
+    turno === undefined
+      ? null
+      : `${hora(turno.starts_at)}\u00a0–\u2060\u00a0${hora(turno.ends_at)}`;
 
   const { tono, titulo, detalle } = ((): {
     tono: StatusTone;
@@ -473,7 +476,12 @@ function FilaDelDia({
   const { t } = useTranslation();
   const estilos = useEstilos();
   const insignia = INSIGNIA[dia.estado];
-  const turnos = dia.turnos.map((tt) => `${hora(tt.starts_at)} – ${hora(tt.ends_at)}`).join(' · ');
+  // EL RANGO DE HORAS NO SE PARTE: espacios que no se parten (U+00A0) y un WORD JOINER
+  // (U+2060) tras el guion, porque el navegador corta DESPUÉS de un guion aunque el espacio
+  // que sigue no se parta. En 390 px se leía «03:00 –» / «12:10», dos datos sueltos.
+  const turnos = dia.turnos
+    .map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`)
+    .join(' · ');
   const marcas = dia.jornadas.map((j) =>
     j.ends_at === null
       ? t('portal.markOpen', { from: hora(j.starts_at) })

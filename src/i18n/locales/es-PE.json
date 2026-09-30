@@ -1108,7 +1108,7 @@
     "nextWeek": "Próxima semana",
     "nextWeekEmpty": "El horario de la próxima semana todavía no está publicado.",
     "free": "Libre",
-    "markRange": "Marcaste {{from}} – {{to}}",
+    "markRange": "Marcaste {{from}}\u00a0–\u2060\u00a0{{to}}",
     "markOpen": "Entraste {{from}}",
     "early_one": "Llegaste {{count}} minuto antes",
     "early_other": "Llegaste {{count}} minutos antes",
