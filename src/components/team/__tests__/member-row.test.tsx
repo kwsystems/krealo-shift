@@ -28,7 +28,7 @@ function pintar(props: Partial<Parameters<typeof MemberRow>[0]> = {}) {
   return renderWithProviders(
     <MemberRow
       member={ana}
-      recentMinutes={1650}
+      weekMinutes={1650}
       jobRoleNames={new Map()}
       onPress={() => undefined}
       {...props}

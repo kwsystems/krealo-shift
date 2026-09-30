@@ -1,6 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { HorasDeLaPersona } from './horas-de-la-persona';
 import { useUpcomingShifts, type TeamMember } from './hooks';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { AdminSheet, KeyValueRow } from '@/components/schedule/fields';
@@ -9,12 +10,11 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import type { TimeEditRequest } from '@/features/requests/api';
-import type { DailySummary } from '@/features/timesheets/api';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
-import { dateKeyOf, formatDateKeyShort } from '@/features/schedules/week';
+import { formatDateKeyShort } from '@/features/schedules/week';
 import { spacing } from '@/theme/tokens';
-import { formatShiftRange, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
+import { formatShiftRange, type TimeFormatPreference } from '@/utils/time';
 
 /**
  * Ficha del empleado (§11.2): datos básicos, ubicaciones, puestos, estado,
@@ -28,9 +28,9 @@ export function EmployeeDetailSheet({
   member,
   locationNames,
   jobRoleNames,
-  recentSummaries,
-  recentPending,
-  recentError,
+  locationId,
+  nowISO,
+  weekStartsOn,
   enCurso,
   requests,
   timezone,
@@ -53,9 +53,10 @@ export function EmployeeDetailSheet({
   member: TeamMember;
   locationNames: Map<string, string>;
   jobRoleNames: Map<string, string>;
-  recentSummaries: DailySummary[];
-  recentPending: boolean;
-  recentError: unknown;
+  /** La sede que se mira: las horas son las de esta sede, como en Horas y Reportes. */
+  locationId: string | null;
+  nowISO: string;
+  weekStartsOn: number;
   /** Su jornada abierta, si está dentro ahora: se suma al día en que entró. */
   enCurso?: DentroDeLaPersona;
   /** Solicitudes de esta persona, para no tener que buscarlas en otra pestaña. */
@@ -83,44 +84,6 @@ export function EmployeeDetailSheet({
       : member.status === 'inactive'
         ? t('team.statusInactive')
         : t('team.statusInvited');
-
-  /*
-   * EL DÍA DE HOY CUENTA LO QUE LLEVA, no 00:00. Los resúmenes solo suman jornadas
-   * cerradas, así que mientras la persona sigue dentro su día valía cero hasta que
-   * marcara la salida. Se suma al día en que ENTRÓ —el mismo que usa Horas—, y se dice
-   * que está en curso: es una cifra que todavía sube.
-   */
-  const diaEnCurso = enCurso === undefined ? null : dateKeyOf(enCurso.desde, timezone);
-  const minutosDelDia = (day: DailySummary) =>
-    day.net_minutes + (day.work_date === diaEnCurso && enCurso !== undefined ? enCurso.minutos : 0);
-  const recentMinutes =
-    recentSummaries.reduce((total, day) => total + day.net_minutes, 0) + (enCurso?.minutos ?? 0);
-  const conEnCurso = (horas: string, esHoy: boolean) =>
-    esHoy ? `${horas} · ${t('timesheet.live')}` : horas;
-  /*
-   * Y SI ESE DÍA NO TIENE FILA, SE PONE. El servidor devuelve el día de una jornada abierta
-   * con 0 horas, pero no hay por qué contar con ello —la demostración, por ejemplo, no lo
-   * hace—, y sin fila los minutos de hoy aparecerían solo en el total, sin decir de qué día
-   * son.
-   */
-  const dias: DailySummary[] =
-    diaEnCurso === null || recentSummaries.some((day) => day.work_date === diaEnCurso)
-      ? recentSummaries
-      : [
-          ...recentSummaries,
-          {
-            employee_id: member.id,
-            location_id: '',
-            work_date: diaEnCurso,
-            sessions: 1,
-            gross_minutes: 0,
-            paid_break_minutes: 0,
-            unpaid_break_minutes: 0,
-            net_minutes: 0,
-            needs_review: false,
-            flags: [],
-          },
-        ].sort((a, b) => a.work_date.localeCompare(b.work_date));
 
   return (
     <AdminSheet
@@ -242,28 +205,22 @@ export function EmployeeDetailSheet({
         </Stack>
       </AsyncSection>
 
-      <AppText variant="bodyStrong">{t('team.recentHours')}</AppText>
-      <AsyncSection
-        isPending={recentPending}
-        error={recentError}
-        isEmpty={dias.length === 0}
-        emptyTitle={t('timesheet.noEntries')}
-      >
-        <Stack gap={spacing.xs}>
-          {dias.map((day) => (
-            <KeyValueRow
-              key={day.work_date}
-              label={formatDateKeyShort(day.work_date, language)}
-              value={conEnCurso(minutesToHHmm(minutosDelDia(day)), day.work_date === diaEnCurso)}
-              tone={day.needs_review === true ? 'danger' : 'default'}
-            />
-          ))}
-          <KeyValueRow
-            label={t('timesheet.netHours')}
-            value={conEnCurso(minutesToHHmm(recentMinutes), enCurso !== undefined)}
-          />
-        </Stack>
-      </AsyncSection>
+      {/*
+        LAS HORAS, DÍA POR DÍA Y SEMANA POR SEMANA (30-sep). Antes era una lista de siete
+        fechas con un número; ahora es su tarjeta de la semana, con entrada y salida, y
+        las semanas del mes con su promedio. Ver `HorasDeLaPersona`.
+      */}
+      <HorasDeLaPersona
+        employeeId={member.id}
+        organizationId={organizationId}
+        locationId={locationId}
+        enCurso={enCurso}
+        nowISO={nowISO}
+        timezone={timezone}
+        timeFormat={timeFormat}
+        weekStartsOn={weekStartsOn}
+        language={language}
+      />
 
       <AppText variant="bodyStrong">{t('requests.title')}</AppText>
       {requests.length === 0 ? (

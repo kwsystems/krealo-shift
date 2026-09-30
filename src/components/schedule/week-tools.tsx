@@ -8,7 +8,12 @@ import { GhostButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
 import type { ShiftPublication } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
-import { formatDateKeyLong, formatMonthLong, type DateKey } from '@/features/schedules/week';
+import {
+  formatDateKeyLong,
+  formatDayLong,
+  formatMonthLong,
+  type DateKey,
+} from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { useTheme } from '@/theme/use-theme';
 import { estilosDelTema } from '@/theme/estilos';
@@ -24,6 +29,7 @@ export function WeekNavigator({
   onPrevious,
   onNext,
   onGoToCurrent,
+  testIDPrefix = 'week',
 }: {
   weekStart: DateKey;
   language: SupportedLanguage;
@@ -31,6 +37,8 @@ export function WeekNavigator({
   onPrevious: () => void;
   onNext: () => void;
   onGoToCurrent: () => void;
+  /** Para cuando hay dos en pantalla: la ficha de Equipo lleva el suyo. */
+  testIDPrefix?: string;
 }) {
   const { t } = useTranslation();
   const weekLabel = t('schedule.weekOf', { date: formatDateKeyLong(weekStart, language) });
@@ -64,7 +72,7 @@ export function WeekNavigator({
           direccion="anterior"
           etiqueta={t('schedule.previousWeek')}
           onPress={onPrevious}
-          testID="week-previous"
+          testID={`${testIDPrefix}-previous`}
         />
         {/*
         SE TIENE QUE PODER ENCOGER. Sin `flexShrink`, un texto dentro de una fila mide lo
@@ -80,7 +88,7 @@ export function WeekNavigator({
           direccion="siguiente"
           etiqueta={t('schedule.nextWeek')}
           onPress={onNext}
-          testID="week-next"
+          testID={`${testIDPrefix}-next`}
         />
       </Row>
       {isCurrentWeek ? null : (
@@ -88,7 +96,7 @@ export function WeekNavigator({
           label={t('schedule.goToThisWeek')}
           onPress={onGoToCurrent}
           fullWidth={false}
-          testID="week-current"
+          testID={`${testIDPrefix}-current`}
         />
       )}
     </Row>
@@ -107,6 +115,7 @@ export function MonthNavigator({
   onPrevious,
   onNext,
   onGoToCurrent,
+  testIDPrefix = 'month',
 }: {
   /** Cualquier día del mes; se usa el 1. */
   monthStart: DateKey;
@@ -115,6 +124,8 @@ export function MonthNavigator({
   onPrevious: () => void;
   onNext: () => void;
   onGoToCurrent: () => void;
+  /** Para cuando hay dos en pantalla: la hoja de elegir días lleva el suyo. */
+  testIDPrefix?: string;
 }) {
   const { t } = useTranslation();
   return (
@@ -124,13 +135,13 @@ export function MonthNavigator({
           direccion="anterior"
           etiqueta={t('schedule.previousMonth')}
           onPress={onPrevious}
-          testID="month-previous"
+          testID={`${testIDPrefix}-previous`}
         />
         <AppText
           variant="section"
           accessibilityRole="header"
           style={estilosFlex.creceYEncoge}
-          testID="month-title"
+          testID={`${testIDPrefix}-title`}
         >
           {formatMonthLong(monthStart, language)}
         </AppText>
@@ -138,7 +149,7 @@ export function MonthNavigator({
           direccion="siguiente"
           etiqueta={t('schedule.nextMonth')}
           onPress={onNext}
-          testID="month-next"
+          testID={`${testIDPrefix}-next`}
         />
       </Row>
       {isCurrentMonth ? null : (
@@ -146,7 +157,63 @@ export function MonthNavigator({
           label={t('schedule.goToThisMonth')}
           onPress={onGoToCurrent}
           fullWidth={false}
-          testID="month-current"
+          testID={`${testIDPrefix}-current`}
+        />
+      )}
+    </Row>
+  );
+}
+
+/**
+ * El navegador de DÍA, tercer gemelo: Reportes de un solo día (30-sep). «Ir a hoy» solo
+ * sale cuando no se está en hoy.
+ */
+export function DayNavigator({
+  day,
+  language,
+  isToday,
+  onPrevious,
+  onNext,
+  onGoToToday,
+}: {
+  day: DateKey;
+  language: SupportedLanguage;
+  isToday: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+  onGoToToday: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Row gap={spacing.sm} wrap align="center" style={estilosFlex.fila}>
+      <Row gap={spacing.sm} align="center" style={estilosFlex.fila}>
+        <FlechaDeSemana
+          direccion="anterior"
+          etiqueta={t('schedule.previousDay')}
+          onPress={onPrevious}
+          testID="day-previous"
+        />
+        <AppText
+          variant="section"
+          accessibilityRole="header"
+          style={estilosFlex.creceYEncoge}
+          testID="day-title"
+        >
+          {formatDayLong(day, language)}
+        </AppText>
+        <FlechaDeSemana
+          direccion="siguiente"
+          etiqueta={t('schedule.nextDay')}
+          onPress={onNext}
+          testID="day-next"
+        />
+      </Row>
+      {isToday ? null : (
+        <GhostButton
+          label={t('schedule.goToToday')}
+          onPress={onGoToToday}
+          fullWidth={false}
+          testID="day-current"
         />
       )}
     </Row>

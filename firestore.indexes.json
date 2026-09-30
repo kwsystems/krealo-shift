@@ -125,6 +125,21 @@
       ]
     },
     {
+      "//": "Las jornadas de una persona en una franja, en orden de entrada: revisarTurnoDeLasJornadas (functions/src/shared/turnos.ts), al publicar el horario y al cancelar un turno. El de arriba va al reves (DESC) y no sirve para este: lo cazo indices.test.ts, no el emulador, que no exige indices.",
+      "collectionGroup": "work_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "starts_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "//": "Solicitudes 'Olvide marcar' de una tienda, las nuevas primero.",
       "collectionGroup": "time_edit_requests",
       "queryScope": "COLLECTION",

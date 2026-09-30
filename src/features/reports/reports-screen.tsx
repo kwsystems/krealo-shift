@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { feriadoDe } from '@/domain/feriados-peru';
 import { aprobadasPorDia, useHorasExtra } from '@/features/timesheets/horas-extra';
@@ -24,7 +25,10 @@ import { useBreakTimeByReason } from './hooks';
 import { useCorrecciones } from './correcciones';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { CasillaDeCorrecciones } from './casilla-de-correcciones';
-import { periodoDe, semanasDelMes, type TipoDePeriodo } from './periodo';
+import { diasEntre, periodoDe, periodoDeDias, semanasDelMes, type TipoDePeriodo } from './periodo';
+import { useSesionesDeLosDias, useSoloLosDias } from './use-solo-los-dias';
+import { BotonDeDiasElegidos, ElegirDiasSheet } from './elegir-dias-sheet';
+import { etiquetaDeDias, etiquetaDelPeriodo } from './etiqueta-del-periodo';
 import { bonoDeAsistencia } from './bono';
 import { BonoCard } from './bono-card';
 import { fetchWeekShifts } from '@/features/schedules/api';
@@ -32,7 +36,7 @@ import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { ShareReportSheet } from './share-sheet';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { InlineNotice, SegmentedControl, StatTile } from '@/components/schedule/fields';
-import { MonthNavigator, WeekNavigator } from '@/components/schedule/week-tools';
+import { DayNavigator, MonthNavigator, WeekNavigator } from '@/components/schedule/week-tools';
 import { ChartCard } from '@/components/charts/chart-frame';
 import { DayColumns, type DayColumn } from '@/components/charts/day-columns';
 import { RankingBars, type RankingRow } from '@/components/charts/ranking-bars';
@@ -40,11 +44,13 @@ import { AppText } from '@/components/ui/app-text';
 import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import {
+  addDaysToKey,
   dateKeyOf,
   formatDateKeyLong,
   formatDateKeyShort,
   formatDayColumn,
   formatWeekdayShort,
+  type DateKey,
 } from '@/features/schedules/week';
 import { useEmployeeNames, useEmployees } from '@/features/team/hooks';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
@@ -99,16 +105,29 @@ export function ReportsScreen() {
   const [compartirAbierto, setCompartirAbierto] = useState(false);
   const [personaElegida, setPersonaElegida] = useState<string | null>(null);
   const [motivoAbierto, setMotivoAbierto] = useState<string | null>(null);
+  /* Los días elegidos en el calendario, y si la hoja de elegirlos está abierta. */
+  const [diasElegidos, setDiasElegidos] = useState<DateKey[]>([]);
+  const [eligiendoDias, setEligiendoDias] = useState(false);
 
   const nowISO = now.toISOString();
-  const periodo = periodoDe({
-    tipo,
-    offset,
-    nowISO,
-    weekStartsOn: scope.weekStartsOn,
-    timezone: scope.timezone,
-  });
+  // Hoy en la zona de la SEDE, no en la del navegador: un gerente que mira el tablero
+  // desde otro huso subrayaria el dia equivocado.
+  const hoyKey = dateKeyOf(nowISO, scope.timezone);
+  const periodo =
+    (tipo === 'dias' ? periodoDeDias(diasElegidos, scope.timezone) : null) ??
+    periodoDe({
+      tipo,
+      offset,
+      nowISO,
+      weekStartsOn: scope.weekStartsOn,
+      timezone: scope.timezone,
+    });
   const { from, to } = periodo;
+  /*
+   * CON DÍAS SUELTOS, las consultas traen del primero al último y aquí se quitan los que
+   * no se eligieron. Ver `soloLosDias`: es texto para poder ser dependencia de un memo.
+   */
+  const soloDias = periodo.seguidos ? null : periodo.dias.join(',');
   /*
    * Sin `useMemo`, a proposito, y aqui y en `dias` por la misma razon.
    *
@@ -165,8 +184,10 @@ export function ReportsScreen() {
    */
   const horasExtra = useHorasExtra({ organizationId, locationId: scope.locationId, from, to });
   const aprobadas = useMemo(() => aprobadasPorDia(horasExtra.data ?? []), [horasExtra.data]);
-  const filasResumen = useMemo(() => summaries.data ?? [], [summaries.data]);
-  const filasSesiones = useMemo(() => sessions.data ?? [], [sessions.data]);
+  const filasResumen = useSoloLosDias(summaries.data, soloDias);
+  const filasSesiones = useSesionesDeLosDias(sessions.data, soloDias, scope.timezone);
+  const filasPausas = useSoloLosDias(breaks.data, soloDias);
+  const filasCorrecciones = useSoloLosDias(correcciones.data, soloDias);
 
   const ranking = useMemo(
     () => hoursByEmployee(filasResumen, aprobadas),
@@ -198,12 +219,13 @@ export function ReportsScreen() {
         : filasSesiones.filter((fila) => fila.employee_id === personaElegida),
     [filasSesiones, personaElegida],
   );
-  const pausasFiltradas = useMemo(() => {
-    const filas = breaks.data ?? [];
-    return personaElegida === null
-      ? filas
-      : filas.filter((fila) => fila.employee_id === personaElegida);
-  }, [breaks.data, personaElegida]);
+  const pausasFiltradas = useMemo(
+    () =>
+      personaElegida === null
+        ? filasPausas
+        : filasPausas.filter((fila) => fila.employee_id === personaElegida),
+    [filasPausas, personaElegida],
+  );
 
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
   /* Lo trabajado en feriados, y si el periodo tiene alguno: ver `minutosEnFeriados`. */
@@ -212,14 +234,11 @@ export function ReportsScreen() {
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
   const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
   // Para el resumen que se comparte: los motivos del local entero, sin filtro.
-  const motivosSinFiltrar = useMemo(() => minutesByReason(breaks.data ?? []), [breaks.data]);
+  const motivosSinFiltrar = useMemo(() => minutesByReason(filasPausas), [filasPausas]);
 
   const totalMinutos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
   const extraMinutos = ranking.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
   const conExtra = ranking.filter((fila) => fila.overtimeMinutes > 0);
-  // Hoy en la zona de la SEDE, no en la del navegador: un gerente que mira el tablero
-  // desde otro huso subrayaria el dia equivocado.
-  const hoyKey = dateKeyOf(nowISO, scope.timezone);
 
   // Sin `useMemo`, como `dias` y `range`: ver el comentario de `range`, arriba.
   const bonoDelMes = bonoDeAsistencia({
@@ -303,33 +322,43 @@ export function ReportsScreen() {
    * vistazo, que es para lo que está el gráfico.
    */
   const minutosPorDia = new Map(dias.map((dia) => [dia.dateKey, dia.netMinutes]));
-  const columnas: DayColumn[] =
-    tipo === 'semana'
-      ? dias.map((dia) => ({
-          key: dia.dateKey,
-          short: formatDayColumn(dia.dateKey, language),
-          tiny: formatWeekdayShort(dia.dateKey, language),
-          long: formatDateKeyLong(dia.dateKey, language),
-          value: dia.netMinutes,
-          valueText: minutesToHHmm(dia.netMinutes),
-          isToday: dia.dateKey === hoyKey,
-        }))
-      : semanasDelMes(periodo.dias, scope.weekStartsOn).map((semana) => {
-          const minutos = semana.dias.reduce((suma, d) => suma + (minutosPorDia.get(d) ?? 0), 0);
-          return {
-            key: semana.inicio,
-            short: `${formatDateKeyShort(semana.inicio, language)}`,
-            tiny: semana.inicio.slice(8).replace(/^0/, ''),
-            long: t('reports.weekColumn', {
-              from: formatDateKeyShort(semana.inicio, language),
-              to: formatDateKeyShort(semana.fin, language),
-            }),
-            value: minutos,
-            valueText: minutesToHHmm(minutos),
-            isToday: semana.dias.includes(hoyKey),
-            isFuture: semana.inicio > hoyKey,
-          };
-        });
+  /*
+   * CON DÍAS ELEGIDOS, una columna por día mientras quepan —dos semanas— y por semana
+   * cuando son más, por lo mismo que el mes. Por semana se cuentan SOLO los elegidos.
+   */
+  const porDia = tipo === 'semana' || (tipo === 'dias' && periodo.dias.length <= 14);
+  const columnas: DayColumn[] = porDia
+    ? dias.map((dia) => ({
+        key: dia.dateKey,
+        short: formatDayColumn(dia.dateKey, language),
+        tiny: formatWeekdayShort(dia.dateKey, language),
+        long: formatDateKeyLong(dia.dateKey, language),
+        value: dia.netMinutes,
+        valueText: minutesToHHmm(dia.netMinutes),
+        isToday: dia.dateKey === hoyKey,
+      }))
+    : semanasDelMes(periodo.dias, scope.weekStartsOn).map((semana) => {
+        const minutos = semana.dias.reduce((suma, d) => suma + (minutosPorDia.get(d) ?? 0), 0);
+        return {
+          key: semana.inicio,
+          short: `${formatDateKeyShort(semana.inicio, language)}`,
+          tiny: semana.inicio.slice(8).replace(/^0/, ''),
+          long:
+            tipo === 'dias'
+              ? t('reports.weekColumnPicked', {
+                  from: formatDateKeyShort(semana.inicio, language),
+                  count: semana.dias.length,
+                })
+              : t('reports.weekColumn', {
+                  from: formatDateKeyShort(semana.inicio, language),
+                  to: formatDateKeyShort(semana.fin, language),
+                }),
+          value: minutos,
+          valueText: minutesToHHmm(minutos),
+          isToday: semana.dias.includes(hoyKey),
+          isFuture: semana.inicio > hoyKey,
+        };
+      });
 
   /*
    * Compartir. El contenido se arma AQUÍ, con lo que ya está en pantalla, y no con una
@@ -342,12 +371,9 @@ export function ReportsScreen() {
    * sola porque quedó un filtro puesto sería exactamente lo contrario de decir qué se
    * está mandando.
    */
-  const pausasPorPersona = useMemo(() => breakMinutesByEmployee(breaks.data ?? []), [breaks.data]);
+  const pausasPorPersona = useMemo(() => breakMinutesByEmployee(filasPausas), [filasPausas]);
 
-  const periodoLegible = t('reports.periodRange', {
-    from: formatDateKeyShort(from, language),
-    to: formatDateKeyShort(to, language),
-  });
+  const periodoLegible = etiquetaDelPeriodo(periodo, language, t);
 
   const compartir = useMutation({
     mutationFn: async (formato: 'csv' | 'resumen') => {
@@ -433,7 +459,7 @@ export function ReportsScreen() {
      * los TAMAÑOS, nunca qué se exportó ni de quién.
      */
     onSuccess: (filas) => {
-      track({ name: 'timesheet_exported', rowCount: filas, dayCount: 7 });
+      track({ name: 'timesheet_exported', rowCount: filas, dayCount: periodo.dias.length });
       setCompartirAbierto(false);
     },
   });
@@ -485,7 +511,21 @@ export function ReportsScreen() {
           */}
           <Row gap={spacing.md} wrap align="center" justify="space-between">
             <Row gap={spacing.md} wrap align="center" style={estilosDeCabecera.encoge}>
-              {tipo === 'semana' ? (
+              {tipo === 'dia' ? (
+                <DayNavigator
+                  day={from}
+                  language={language}
+                  isToday={offset === 0}
+                  onPrevious={() => setOffset((valor) => valor - 1)}
+                  onNext={() => setOffset((valor) => valor + 1)}
+                  onGoToToday={() => setOffset(0)}
+                />
+              ) : tipo === 'dias' ? (
+                <BotonDeDiasElegidos
+                  etiqueta={etiquetaDeDias(periodo, language, t)}
+                  onPress={() => setEligiendoDias(true)}
+                />
+              ) : tipo === 'semana' ? (
                 <WeekNavigator
                   weekStart={from}
                   language={language}
@@ -508,13 +548,26 @@ export function ReportsScreen() {
                 label={t('reports.periodType')}
                 value={tipo}
                 options={[
+                  { value: 'dia', label: t('reports.periodDay') },
                   { value: 'semana', label: t('reports.periodWeek') },
                   { value: 'mes', label: t('reports.periodMonth') },
+                  { value: 'dias', label: t('reports.periodDays') },
                 ]}
                 onChange={(valor) => {
                   setTipo(valor);
                   setOffset(0);
                   setSeñalado(null);
+                  /*
+                   * «Elegir días» abre el calendario con la última semana ya marcada: así
+                   * el reporte de detrás nunca está vacío, y lo normal —«estos días de
+                   * aquí»— es quitar o añadir alguno, no empezar de cero.
+                   */
+                  if (valor === 'dias') {
+                    if (diasElegidos.length === 0) {
+                      setDiasElegidos(diasEntre(addDaysToKey(hoyKey, -6), hoyKey));
+                    }
+                    setEligiendoDias(true);
+                  }
                 }}
                 testID="report-period"
               />
@@ -527,6 +580,25 @@ export function ReportsScreen() {
               testID="report-share-open"
             />
           </Row>
+
+          {eligiendoDias ? (
+            <ElegirDiasSheet
+              inicial={
+                diasElegidos.length > 0 ? diasElegidos : diasEntre(addDaysToKey(hoyKey, -6), hoyKey)
+              }
+              hoy={hoyKey}
+              weekStartsOn={scope.weekStartsOn}
+              timezone={scope.timezone}
+              language={language}
+              locationId={scope.locationId}
+              onApply={(elegidos) => {
+                setDiasElegidos(elegidos);
+                setEligiendoDias(false);
+                setSeñalado(null);
+              }}
+              onClose={() => setEligiendoDias(false)}
+            />
+          ) : null}
 
           <ShareReportSheet
             visible={compartirAbierto}
@@ -609,7 +681,14 @@ export function ReportsScreen() {
                     testID="report-holidays"
                   />
                 ) : null}
-                <CasillaDeCorrecciones consulta={correcciones} personaId={personaElegida} />
+                <CasillaDeCorrecciones
+                  consulta={{
+                    data: filasCorrecciones,
+                    isPending: correcciones.isPending,
+                    error: correcciones.error,
+                  }}
+                  personaId={personaElegida}
+                />
                 <StatTile
                   label={t('reports.onTime')}
                   value={
@@ -682,30 +761,32 @@ export function ReportsScreen() {
                 )}
               </ChartCard>
 
-              <ChartCard
-                title={
-                  tipo === 'semana' ? t('reports.howTheWeekGoes') : t('reports.howTheMonthGoes')
-                }
-                subtitle={
-                  tipo === 'semana'
-                    ? t('reports.howTheWeekGoesHint')
-                    : t('reports.howTheMonthGoesHint')
-                }
-                readout={señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null}
-                testID="chart-week"
-              >
-                <DayColumns
-                  days={columnas}
-                  onPoint={(day) =>
-                    setSeñalado(
-                      day === null
-                        ? null
-                        : { titulo: 'dias', detalle: `${day.long}: ${day.valueText}` },
-                    )
+              {/*
+                UN SOLO DÍA NO TIENE «CÓMO VA»: sería una columna sola, que no compara nada.
+                El ranking de arriba ya dice lo que hizo cada quien ese día.
+              */}
+              {tipo === 'dia' ? null : (
+                <ChartCard
+                  title={tituloDeColumnas(tipo, porDia, t)}
+                  subtitle={subtituloDeColumnas(tipo, porDia, t)}
+                  readout={
+                    señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null
                   }
-                  testID="week-columns"
-                />
-              </ChartCard>
+                  testID="chart-week"
+                >
+                  <DayColumns
+                    days={columnas}
+                    onPoint={(day) =>
+                      setSeñalado(
+                        day === null
+                          ? null
+                          : { titulo: 'dias', detalle: `${day.long}: ${day.valueText}` },
+                      )
+                    }
+                    testID="week-columns"
+                  />
+                </ChartCard>
+              )}
 
               <ChartCard
                 title={t('reports.punctuality')}
@@ -847,6 +928,18 @@ export function ReportsScreen() {
       </ResponsiveContainer>
     </AppScreen>
   );
+}
+
+function tituloDeColumnas(tipo: TipoDePeriodo, porDia: boolean, t: TFunction): string {
+  if (tipo === 'dias') return porDia ? t('reports.howTheDaysGo') : t('reports.howTheDaysGoWeeks');
+  return tipo === 'mes' ? t('reports.howTheMonthGoes') : t('reports.howTheWeekGoes');
+}
+
+function subtituloDeColumnas(tipo: TipoDePeriodo, porDia: boolean, t: TFunction): string {
+  if (tipo === 'dias') {
+    return porDia ? t('reports.howTheDaysGoHint') : t('reports.howTheDaysGoWeeksHint');
+  }
+  return tipo === 'mes' ? t('reports.howTheMonthGoesHint') : t('reports.howTheWeekGoesHint');
 }
 
 const estilosDeCabecera = StyleSheet.create({

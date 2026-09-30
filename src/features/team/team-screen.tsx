@@ -10,7 +10,8 @@ import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from 
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
 import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
-import { MemberList } from '@/components/team/member-list';
+import { MemberList, type SemanaDelMiembro } from '@/components/team/member-list';
+import type { DiaDeLaTira } from '@/components/team/tira-de-la-semana';
 import {
   InlineNotice,
   SegmentedControl,
@@ -20,7 +21,14 @@ import {
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
-import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
+import {
+  addDaysToKey,
+  currentWeekStart,
+  dateKeyOf,
+  localDateTimeToInstant,
+  weekDays,
+  weekEnd,
+} from '@/features/schedules/week';
 import { useRequests } from '@/features/requests/hooks';
 import { useJobRoles } from './hooks';
 import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
@@ -96,10 +104,17 @@ export function TeamScreen() {
   const nowISO = now.toISOString();
   const todayKey = dateKeyOf(nowISO, scope.timezone);
   const requests = useRequests({ organizationId, locationId: scope.locationId });
-  const recent = useDailySummaries({
+  /*
+   * ESTA SEMANA, y no «los últimos siete días» (30-sep). La fila enseña ahora cada día de
+   * la semana, y siete días que empiezan un jueves no son una semana de nadie: la de
+   * Horario, Horas y Reportes empieza el día que dice la sede. Misma clave de caché que la
+   * semana de Horas, así que lo que se corrige allí se ve aquí sin pedir nada.
+   */
+  const inicioDeSemana = currentWeekStart(nowISO, scope.weekStartsOn, scope.timezone);
+  const semana = useDailySummaries({
     locationId: scope.locationId,
-    from: addDaysToKey(todayKey, -6),
-    to: todayKey,
+    from: inicioDeSemana,
+    to: weekEnd(inicioDeSemana),
   });
 
   /*
@@ -254,29 +269,61 @@ export function TeamScreen() {
     [requests.data, selected],
   );
 
-  const recentForSelected = useMemo(
-    () => (recent.data ?? []).filter((day) => selected !== null && day.employee_id === selected.id),
-    [recent.data, selected],
-  );
-
   /**
-   * Minutos recientes por empleado, en un `Map` y calculado UNA vez.
+   * LA SEMANA DE CADA PERSONA, en un `Map` y calculada UNA vez: el total y los siete días
+   * de su tira. Lo que lleva hoy quien sigue dentro se suma al día en que entró, igual que
+   * en Horas.
    *
-   * Antes cada fila hacía su propio `filter` + `reduce` sobre todos los resúmenes
-   * diarios: con doscientos empleados y un mes de datos eso es doscientos recorridos del
-   * mismo array en cada render. Ahora se agrega una vez y la fila solo busca su id.
+   * Antes cada fila hacía su propio `filter` + `reduce` sobre todos los resúmenes: con
+   * doscientos empleados eso es doscientos recorridos del mismo array en cada render.
    */
-  const recentMinutesByMember = useMemo(() => {
-    const total = new Map<string, number>();
-    for (const day of recent.data ?? []) {
-      total.set(day.employee_id, (total.get(day.employee_id) ?? 0) + day.net_minutes);
-    }
-    // Lo que lleva hoy quien sigue dentro: ver `dentro`, arriba.
+  const semanaPorMiembro = useMemo(() => {
+    const porPersona = new Map<string, Map<string, number>>();
+    const sumar = (employeeId: string, dia: string, minutos: number) => {
+      const dias = porPersona.get(employeeId) ?? new Map<string, number>();
+      dias.set(dia, (dias.get(dia) ?? 0) + minutos);
+      porPersona.set(employeeId, dias);
+    };
+    for (const fila of semana.data ?? []) sumar(fila.employee_id, fila.work_date, fila.net_minutes);
     for (const [employeeId, persona] of dentro) {
-      total.set(employeeId, (total.get(employeeId) ?? 0) + persona.minutos);
+      sumar(employeeId, dateKeyOf(persona.desde, scope.timezone), persona.minutos);
     }
-    return total;
-  }, [recent.data, dentro]);
+    const dias = weekDays(inicioDeSemana);
+    const resultado = new Map<string, SemanaDelMiembro>();
+    for (const [employeeId, minutosPorDia] of porPersona) {
+      const tira: DiaDeLaTira[] = dias.map((dia) => ({
+        dia,
+        minutos: minutosPorDia.get(dia) ?? 0,
+        esHoy: dia === todayKey,
+        futuro: dia > todayKey,
+      }));
+      resultado.set(employeeId, {
+        minutos: tira.reduce((suma, dia) => suma + dia.minutos, 0),
+        dias: tira,
+      });
+    }
+    return resultado;
+  }, [semana.data, dentro, inicioDeSemana, todayKey, scope.timezone]);
+
+  const semanaVacia = useMemo(
+    () =>
+      weekDays(inicioDeSemana).map((dia) => ({
+        dia,
+        minutos: 0,
+        esHoy: dia === todayKey,
+        futuro: dia > todayKey,
+      })),
+    [inicioDeSemana, todayKey],
+  );
+  /* Una escala para todas las tiras: diez horas, o el día más largo si pasa de ahí. */
+  const escalaDeLasTiras = useMemo(
+    () =>
+      Math.max(
+        600,
+        ...[...semanaPorMiembro.values()].flatMap((persona) => persona.dias.map((d) => d.minutos)),
+      ),
+    [semanaPorMiembro],
+  );
 
   const submitForm = (draft: EmployeeDraft) => {
     if (form === null) return;
@@ -492,7 +539,9 @@ export function TeamScreen() {
               >
                 <MemberList
                   members={filtered}
-                  recentMinutesByMember={recentMinutesByMember}
+                  semanaPorMiembro={semanaPorMiembro}
+                  semanaVacia={semanaVacia}
+                  escala={escalaDeLasTiras}
                   dentroPorMiembro={dentroPorMiembro}
                   jobRoleNames={jobRoleNames}
                   onSelect={modoVarios ? alternarMarca : setSelectedId}
@@ -511,9 +560,9 @@ export function TeamScreen() {
           member={selected}
           locationNames={locationNames}
           jobRoleNames={jobRoleNames}
-          recentSummaries={recentForSelected}
-          recentPending={recent.isPending}
-          recentError={recent.error}
+          locationId={scope.locationId}
+          nowISO={nowISO}
+          weekStartsOn={scope.weekStartsOn}
           enCurso={dentro.get(selected.id)}
           requests={requestsForSelected}
           timezone={scope.timezone}

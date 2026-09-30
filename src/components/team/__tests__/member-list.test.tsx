@@ -4,6 +4,16 @@ import { MemberList } from '../member-list';
 import type { TeamMember } from '@/features/team/hooks';
 import { renderWithProviders } from '@/test-utils/render';
 
+const SEMANA_VACIA = [
+  '2026-09-28',
+  '2026-09-29',
+  '2026-09-30',
+  '2026-10-01',
+  '2026-10-02',
+  '2026-10-03',
+  '2026-10-04',
+].map((dia) => ({ dia, minutos: 0, esHoy: dia === '2026-09-30', futuro: dia > '2026-09-30' }));
+
 /**
  * La lista del equipo virtualiza de verdad (§23).
  *
@@ -41,7 +51,9 @@ describe('lista del equipo', () => {
     await renderWithProviders(
       <MemberList
         members={TRESCIENTOS}
-        recentMinutesByMember={new Map()}
+        semanaPorMiembro={new Map()}
+        semanaVacia={SEMANA_VACIA}
+        escala={600}
         jobRoleNames={new Map()}
         onSelect={() => undefined}
       />,
@@ -62,7 +74,9 @@ describe('lista del equipo', () => {
     await renderWithProviders(
       <MemberList
         members={pocos}
-        recentMinutesByMember={new Map()}
+        semanaPorMiembro={new Map()}
+        semanaVacia={SEMANA_VACIA}
+        escala={600}
         jobRoleNames={new Map()}
         onSelect={() => undefined}
       />,
@@ -71,19 +85,36 @@ describe('lista del equipo', () => {
     for (const m of pocos) expect(screen.getByTestId(`team-member-${m.id}`)).toBeTruthy();
   });
 
-  it('cada fila muestra sus horas recientes, buscadas por id', async () => {
+  it('cada fila muestra su semana, buscada por id: el total y cada día en la tira', async () => {
     // Antes cada fila hacía su propio filter+reduce sobre todos los resúmenes diarios:
     // doscientos recorridos del mismo array en cada render. Ahora se agrega una vez.
+    const dias = SEMANA_VACIA.map((dia, i) => ({
+      ...dia,
+      minutos: i === 0 ? 510 : i === 1 ? 240 : 0,
+    }));
     await renderWithProviders(
       <MemberList
         members={[miembro(7)]}
-        recentMinutesByMember={new Map([['emp-0007', 510]])}
+        semanaPorMiembro={new Map([['emp-0007', { minutos: 750, dias }]])}
+        semanaVacia={SEMANA_VACIA}
+        escala={600}
         jobRoleNames={new Map()}
         onSelect={() => undefined}
       />,
     );
 
-    expect(screen.getByText(/08:30/)).toBeTruthy();
+    expect(screen.getByTestId('team-member-emp-0007-semana-total')).toHaveTextContent('12:30');
+    // Una columna por día trabajado, ninguna por los días sin horas.
+    // La tira es `aria-hidden` —el nombre de la fila ya lo dice—, así que se busca incluyendo
+    // lo oculto al lector de pantalla.
+    const oculto = { includeHiddenElements: true };
+    expect(screen.getByTestId('team-member-emp-0007-semana-2026-09-28', oculto)).toBeTruthy();
+    expect(screen.getByTestId('team-member-emp-0007-semana-2026-09-29', oculto)).toBeTruthy();
+    expect(screen.queryByTestId('team-member-emp-0007-semana-2026-09-30', oculto)).toBeNull();
+    // Y lo que la tira enseña, dicho para quien no la ve.
+    expect(screen.getByTestId('team-member-emp-0007').props.accessibilityLabel).toMatch(
+      /Esta semana: 12:30\. lun 08:30, mar 04:00/,
+    );
   });
 
   /**
@@ -99,7 +130,9 @@ describe('lista del equipo', () => {
     await renderWithProviders(
       <MemberList
         members={[miembro(0)]}
-        recentMinutesByMember={new Map()}
+        semanaPorMiembro={new Map()}
+        semanaVacia={SEMANA_VACIA}
+        escala={600}
         jobRoleNames={new Map()}
         onSelect={() => undefined}
       />,

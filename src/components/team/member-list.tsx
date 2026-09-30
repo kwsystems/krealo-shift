@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/ui/app-text';
 import { SeparadorDeCabecera, SeparadorDeRegistro } from '@/components/ui/layout';
 import { ANCHO_DE_COLUMNA, MemberRow, type DentroEnEquipo } from './member-row';
+import type { DiaDeLaTira } from './tira-de-la-semana';
 import { useResponsive } from '@/hooks/use-responsive';
 import type { TeamMember } from '@/features/team/hooks';
 import { estilosDelTema } from '@/theme/estilos';
@@ -32,11 +33,18 @@ import { spacing } from '@/theme/tokens';
  * crecer sin fin. Va aquí y no en la pantalla para que no se pueda olvidar.
  */
 
+/** La semana de una persona: su total y sus siete días. */
+export type SemanaDelMiembro = { minutos: number; dias: readonly DiaDeLaTira[] };
+
 export type MemberListProps = {
   members: TeamMember[];
-  /** Minutos recientes por empleado. Un `Map` y no un array: se busca por id en cada fila. */
-  recentMinutesByMember: Map<string, number>;
-  /** Quién está dentro ahora. Sus minutos de hoy ya van sumados en `recentMinutesByMember`. */
+  /** La semana de cada empleado. Un `Map` y no un array: se busca por id en cada fila. */
+  semanaPorMiembro: ReadonlyMap<string, SemanaDelMiembro>;
+  /** Los siete días de la semana vacíos, para quien no fichó nada. */
+  semanaVacia: readonly DiaDeLaTira[];
+  /** La escala común de las tiras: ver `TiraDeLaSemana`. */
+  escala: number;
+  /** Quién está dentro ahora. Sus minutos de hoy ya van sumados en `semanaPorMiembro`. */
   dentroPorMiembro?: Map<string, DentroEnEquipo>;
   jobRoleNames: Map<string, string>;
   onSelect: (id: string) => void;
@@ -47,7 +55,9 @@ export type MemberListProps = {
 
 export function MemberList({
   members,
-  recentMinutesByMember,
+  semanaPorMiembro,
+  semanaVacia,
+  escala,
   dentroPorMiembro,
   jobRoleNames,
   onSelect,
@@ -58,14 +68,16 @@ export function MemberList({
     ({ item }: { item: TeamMember }) => (
       <MemberRow
         member={item}
-        recentMinutes={recentMinutesByMember.get(item.id) ?? 0}
+        weekMinutes={semanaPorMiembro.get(item.id)?.minutos ?? 0}
+        semana={semanaPorMiembro.get(item.id)?.dias ?? semanaVacia}
+        escala={escala}
         dentro={dentroPorMiembro?.get(item.id)}
         jobRoleNames={jobRoleNames}
         onPress={onSelect}
         marcado={marcados === undefined ? undefined : marcados.has(item.id)}
       />
     ),
-    [recentMinutesByMember, dentroPorMiembro, jobRoleNames, onSelect, marcados],
+    [semanaPorMiembro, semanaVacia, escala, dentroPorMiembro, jobRoleNames, onSelect, marcados],
   );
 
   return (
@@ -143,7 +155,7 @@ function CabeceraDeColumnas() {
           accessibilityRole="header"
           style={isCompact ? estilos.horasCompacta : estilos.horas}
         >
-          {t('team.recentHours')}
+          {t('team.thisWeek')}
         </AppText>
         {isCompact ? null : (
           <AppText variant="label" tone="subtle" accessibilityRole="header" style={estilos.estado}>

@@ -7,6 +7,9 @@ import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
+import { ANCHO_DE_LA_TIRA, TiraDeLaSemana, type DiaDeLaTira } from './tira-de-la-semana';
+import { formatWeekdayShort } from '@/features/schedules/week';
+import { currentLanguage } from '@/i18n';
 import type { TeamMember } from '@/features/team/hooks';
 import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO, estadoVisible } from '@/features/timesheets/en-curso';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -39,8 +42,12 @@ export type DentroEnEquipo = {
 
 export type MemberRowProps = {
   member: TeamMember;
-  /** Minutos trabajados en el periodo reciente, CON lo que lleva hoy si sigue dentro. */
-  recentMinutes: number;
+  /** Minutos trabajados ESTA SEMANA, CON lo que lleva hoy si sigue dentro. */
+  weekMinutes: number;
+  /** Los siete días de la semana con sus minutos, para la tira. Ver `TiraDeLaSemana`. */
+  semana?: readonly DiaDeLaTira[];
+  /** La escala común de todas las tiras de la lista, en minutos. */
+  escala?: number;
   dentro?: DentroEnEquipo;
   jobRoleNames: Map<string, string>;
   onPress: (id: string) => void;
@@ -53,7 +60,9 @@ export type MemberRowProps = {
 
 function MemberRowBase({
   member,
-  recentMinutes,
+  weekMinutes,
+  semana,
+  escala = 600,
   dentro,
   jobRoleNames,
   onPress,
@@ -66,6 +75,22 @@ function MemberRowBase({
   const { isWide } = useResponsive();
   const isCompact = !isWide;
   const respuesta = useRespuestaAlPuntero();
+  const language = currentLanguage();
+
+  const tira =
+    semana === undefined ? null : (
+      <TiraDeLaSemana
+        dias={semana}
+        escala={escala}
+        language={language}
+        testID={`team-member-${member.id}-semana`}
+      />
+    );
+  /* Lo que la tira enseña, dicho: «lun 8:30, mar 7:45». Solo los días con horas. */
+  const diasDichos = (semana ?? [])
+    .filter((dia) => dia.minutos > 0)
+    .map((dia) => `${formatWeekdayShort(dia.dia, language)} ${minutesToHHmm(dia.minutos)}`)
+    .join(', ');
 
   /*
    * QUIEN ESTÁ DENTRO SE DICE EN LA COLUMNA DE ESTADO, en vez de «Activo». Alguien
@@ -131,9 +156,9 @@ function MemberRowBase({
        */
       accessibilityLabel={`${member.displayName}. ${estado}${
         dentro === undefined ? '' : `, ${t('timesheet.sinceTime', { time: dentro.desde })}`
-      }. ${t('team.recentHours')}: ${minutesToHHmm(recentMinutes)}${
+      }. ${t('team.thisWeek')}: ${minutesToHHmm(weekMinutes)}${
         dentro === undefined ? '' : `, ${t('timesheet.live')}`
-      }`}
+      }${diasDichos === '' ? '' : `. ${diasDichos}`}`}
       accessibilityHint={marcable ? t('team.markHint') : t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
       {...respuesta.props}
@@ -205,6 +230,7 @@ function MemberRowBase({
                 quedaban unos 40 px y se partía por sílabas —«Bru / no / Sal / aza / r»—:
                 todo cabía, nada se recortaba, y ningún arnés lo veía, pero no se leía.
               */}
+              {isCompact ? tira : null}
               {isCompact ? (
                 <Row gap={spacing.xs} wrap align="center">
                   {insignia}
@@ -240,33 +266,37 @@ function MemberRowBase({
               mismo que si no hubiera venido. La cifra es la misma que la de su fila en
               Horas, porque sale de la misma cuenta.
             */}
-            {dentro === undefined ? (
-              <AppText
-                variant="label"
-                tone="subtle"
-                tabular
-                style={isCompact ? estilosDeColumna.horasCompacta : estilosDeColumna.horas}
-              >
-                {minutesToHHmm(recentMinutes)}
-              </AppText>
-            ) : (
-              <Stack
-                gap={0}
-                style={isCompact ? estilosDeColumna.horasCompacta : estilosDeColumna.horas}
-              >
+            {/*
+              LA SEMANA, DÍA POR DÍA Y SU TOTAL (30-sep). En pantalla ancha la tira va aquí,
+              junto al total, en la misma vertical en todas las filas; en teléfono baja
+              bajo el nombre y aquí queda solo el total.
+            */}
+            <Row
+              gap={spacing.md}
+              align="center"
+              style={isCompact ? estilosDeColumna.horasCompacta : estilosDeColumna.horas}
+            >
+              {isCompact ? null : tira}
+              <Stack gap={0} style={estilosDeColumna.total}>
                 <AppText
-                  variant="label"
+                  variant="bodyStrong"
                   tabular
                   style={estilosDeColumna.derecha}
-                  testID={`team-member-${member.id}-en-curso`}
+                  testID={
+                    dentro === undefined
+                      ? `team-member-${member.id}-semana-total`
+                      : `team-member-${member.id}-en-curso`
+                  }
                 >
-                  {minutesToHHmm(recentMinutes)}
+                  {minutesToHHmm(weekMinutes)}
                 </AppText>
-                <AppText variant="label" tone="subtle" style={estilosDeColumna.derecha}>
-                  {dentro.estado === 'trabajando' ? t('timesheet.live') : t('timesheet.paused')}
-                </AppText>
+                {dentro === undefined ? null : (
+                  <AppText variant="label" tone="subtle" style={estilosDeColumna.derecha}>
+                    {dentro.estado === 'trabajando' ? t('timesheet.live') : t('timesheet.paused')}
+                  </AppText>
+                )}
               </Stack>
-            )}
+            </Row>
             {isCompact ? null : (
               <View style={estilosDeColumna.estado}>
                 {insignia}
@@ -326,11 +356,21 @@ const useEstilos = estilosDelTema((colors) => ({
  * En teléfono no hay columna de estado (va bajo el nombre) y las horas bajan a 72, lo justo
  * para «00:00» y «en curso», que es lo que le devuelve al nombre el sitio para leerse.
  */
-export const ANCHO_DE_COLUMNA = { horas: 104, horasCompacta: 72, estado: 120 } as const;
+export const ANCHO_DE_COLUMNA = {
+  /* La tira de la semana, su hueco y el total: ver `TiraDeLaSemana`. */
+  horas: ANCHO_DE_LA_TIRA + spacing.md + 60,
+  horasCompacta: 72,
+  estado: 120,
+} as const;
 
 const estilosDeColumna = StyleSheet.create({
-  horas: { width: ANCHO_DE_COLUMNA.horas, textAlign: 'right', flexShrink: 0 },
-  horasCompacta: { width: ANCHO_DE_COLUMNA.horasCompacta, textAlign: 'right', flexShrink: 0 },
+  horas: { width: ANCHO_DE_COLUMNA.horas, flexShrink: 0, justifyContent: 'flex-end' },
+  horasCompacta: {
+    width: ANCHO_DE_COLUMNA.horasCompacta,
+    flexShrink: 0,
+    justifyContent: 'flex-end',
+  },
+  total: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   derecha: { textAlign: 'right' },
   estado: {
     width: ANCHO_DE_COLUMNA.estado,

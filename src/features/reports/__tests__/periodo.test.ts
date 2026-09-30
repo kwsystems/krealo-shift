@@ -1,4 +1,15 @@
-import { periodoDe, semanasDelMes } from '../periodo';
+import type { TFunction } from 'i18next';
+
+import { etiquetaDeDias } from '../etiqueta-del-periodo';
+import {
+  DIAS_MAXIMOS,
+  diasDeDistancia,
+  diasEntre,
+  periodoDe,
+  periodoDeDias,
+  semanasDelMes,
+  soloLosDias,
+} from '../periodo';
 
 /**
  * El periodo de Reportes. El mes es el civil —del 1 al último día— en la zona de la sede.
@@ -72,5 +83,87 @@ describe('periodo de Reportes', () => {
     expect(semanas[0]).toMatchObject({ inicio: '2026-09-01', fin: '2026-09-06' });
     expect(semanas[semanas.length - 1]).toMatchObject({ inicio: '2026-09-28', fin: '2026-09-30' });
     expect(semanas.flatMap((s) => s.dias)).toEqual(p.dias);
+  });
+});
+
+/*
+ * «Por día o varios días o ciertos días en específico» (Andree, 30-sep).
+ */
+describe('periodo de un día y de días elegidos', () => {
+  it('el día es el de la sede, y se mueve de uno en uno', () => {
+    // A las 23:30 del 29 en Lima ya es 30 en UTC: el día es el 29.
+    const hoy = periodoDe({
+      tipo: 'dia',
+      offset: 0,
+      nowISO: NOCHE,
+      weekStartsOn: 1,
+      timezone: LIMA,
+    });
+    expect([hoy.from, hoy.to, hoy.dias]).toEqual(['2026-09-29', '2026-09-29', ['2026-09-29']]);
+    expect(hoy.fromISO).toBe('2026-09-29T05:00:00.000Z');
+    expect(hoy.toISO).toBe('2026-09-30T05:00:00.000Z');
+    const ayer = periodoDe({
+      tipo: 'dia',
+      offset: -1,
+      nowISO: NOCHE,
+      weekStartsOn: 1,
+      timezone: LIMA,
+    });
+    expect(ayer.from).toBe('2026-09-28');
+  });
+
+  it('días seguidos: del primero al último, sin huecos', () => {
+    const p = periodoDeDias(['2026-09-09', '2026-09-07', '2026-09-08'], LIMA);
+    expect(p).toMatchObject({ from: '2026-09-07', to: '2026-09-09', seguidos: true });
+    expect(p?.dias).toEqual(['2026-09-07', '2026-09-08', '2026-09-09']);
+  });
+
+  it('días sueltos: las consultas piden del primero al último, pero cuentan solo los elegidos', () => {
+    const p = periodoDeDias(['2026-09-26', '2026-09-05', '2026-09-12', '2026-09-12'], LIMA)!;
+    expect(p).toMatchObject({ from: '2026-09-05', to: '2026-09-26', seguidos: false });
+    expect(p.dias).toEqual(['2026-09-05', '2026-09-12', '2026-09-26']);
+
+    const filas = ['2026-09-05', '2026-09-06', '2026-09-12', '2026-09-20', '2026-09-26'].map(
+      (work_date) => ({ work_date }),
+    );
+    const clave = p.seguidos ? null : p.dias.join(',');
+    expect(soloLosDias(filas, clave, (f) => f.work_date).map((f) => f.work_date)).toEqual([
+      '2026-09-05',
+      '2026-09-12',
+      '2026-09-26',
+    ]);
+    // Seguidos no quita nada.
+    expect(soloLosDias(filas, null, (f) => f.work_date)).toHaveLength(5);
+  });
+
+  it('nada elegido no es un periodo', () => {
+    expect(periodoDeDias([], LIMA)).toBeNull();
+    expect(periodoDeDias(['basura'], LIMA)).toBeNull();
+  });
+
+  it('un tramo va en cualquier orden y cruza de mes', () => {
+    expect(diasEntre('2026-10-02', '2026-09-29')).toEqual([
+      '2026-09-29',
+      '2026-09-30',
+      '2026-10-01',
+      '2026-10-02',
+    ]);
+    expect(diasDeDistancia('2026-07-01', '2026-09-30')).toBe(92);
+    expect(diasDeDistancia('2026-07-01', '2026-09-30')).toBeLessThanOrEqual(DIAS_MAXIMOS);
+  });
+
+  it('lo elegido se dice con palabras, igual en el botón, la hoja y lo compartido', () => {
+    const t = ((clave: string, v: Record<string, unknown>) =>
+      `${clave}|${JSON.stringify(v)}`) as unknown as TFunction;
+    const uno = periodoDeDias(['2026-09-29'], LIMA)!;
+    expect(etiquetaDeDias(uno, 'es-PE', t)).toBe('Martes 29 de septiembre');
+    const seguidos = periodoDeDias(diasEntre('2026-09-07', '2026-09-12'), LIMA)!;
+    expect(etiquetaDeDias(seguidos, 'es-PE', t)).toBe(
+      'reports.daysRange|{"from":"7 sep","to":"12 sep","total":6}',
+    );
+    const sueltos = periodoDeDias(['2026-09-05', '2026-09-12'], LIMA)!;
+    expect(etiquetaDeDias(sueltos, 'es-PE', t)).toBe(
+      'reports.daysLoose|{"count":2,"list":"5 sep, 12 sep"}',
+    );
   });
 });

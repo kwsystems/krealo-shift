@@ -244,12 +244,28 @@ export function formatWeekdayShort(key: DateKey, language: SupportedLanguage): s
   return format(local, 'EEE', { locale: dateFnsLocales[language] });
 }
 
+/** La inicial del día, para la tira de la semana de Equipo: "L", "X", "D". */
+export function formatWeekdayNarrow(key: DateKey, language: SupportedLanguage): string {
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  return format(local, 'EEEEE', { locale: dateFnsLocales[language] }).toLocaleUpperCase(language);
+}
+
 /** Fecha larga del encabezado: "27 de agosto de 2026". */
 export function formatDateKeyLong(key: DateKey, language: SupportedLanguage): string {
   const local = keyToLocal(key);
   if (local === null) return key;
   const pattern = language === 'es-PE' ? "d 'de' MMMM 'de' yyyy" : 'MMMM d, yyyy';
   return format(local, pattern, { locale: dateFnsLocales[language] });
+}
+
+/** El día con su nombre, para el navegador de día de Reportes: "Martes 30 de septiembre". */
+export function formatDayLong(key: DateKey, language: SupportedLanguage): string {
+  const local = keyToLocal(key);
+  if (local === null) return key;
+  const pattern = language === 'es-PE' ? "EEEE d 'de' MMMM" : 'EEEE, MMMM d';
+  const texto = format(local, pattern, { locale: dateFnsLocales[language] });
+  return texto.charAt(0).toLocaleUpperCase(language) + texto.slice(1);
 }
 
 /** El mes de una fecha, para el navegador de Reportes: "Septiembre de 2026". */
