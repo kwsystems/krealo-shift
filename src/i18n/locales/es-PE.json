@@ -342,6 +342,9 @@
     "unknownPerson": "Sin nombre",
     "noData": "Sin datos",
     "totalHours": "Horas del periodo",
+    "totalHoursDetail": "Descontado el refrigerio marcado",
+    "onHolidays": "Trabajado en feriados",
+    "onHolidaysDetail": "Con recargo del 100 % (D.L. 713)",
     "people": "Personas que ficharon",
     "onTime": "Llegó a tiempo",
     "whoWorkedMost": "Quién acumuló más horas",
@@ -1197,5 +1200,26 @@
     "durationHours": "{{h}} h",
     "durationHoursMinutes": "{{h}} h {{m}} min",
     "noShift": "Sin turno"
+  },
+  "holidays": {
+    "label": "Feriado",
+    "labelWithName": "Feriado · {{name}}",
+    "pe": {
+      "anioNuevo": "Año Nuevo",
+      "juevesSanto": "Jueves Santo",
+      "viernesSanto": "Viernes Santo",
+      "trabajo": "Día del Trabajo",
+      "bandera": "Día de la Bandera",
+      "sanPedro": "San Pedro y San Pablo",
+      "fuerzaAerea": "Día de la Fuerza Aérea",
+      "fiestasPatrias": "Fiestas Patrias",
+      "junin": "Batalla de Junín",
+      "santaRosa": "Santa Rosa de Lima",
+      "angamos": "Combate de Angamos",
+      "todosLosSantos": "Todos los Santos",
+      "inmaculada": "Inmaculada Concepción",
+      "ayacucho": "Batalla de Ayacucho",
+      "navidad": "Navidad"
+    }
   }
 }

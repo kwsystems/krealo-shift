@@ -8,6 +8,7 @@ import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
+import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
 import { formatDateKeyShort, formatDayColumn, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { borderWidth, radii, spacing } from '@/theme/tokens';
@@ -189,6 +190,8 @@ export function WeekGrid({
               <AppText variant="label" tone={day === todayKey ? 'primary' : 'subtle'}>
                 {formatDayColumn(day, language)}
               </AppText>
+              {/* El feriado, al armar el horario: ver `src/domain/feriados-peru.ts`. */}
+              <EtiquetaDeFeriado dateKey={day} timezone={timezone} />
             </View>
           ))}
         </Row>
@@ -315,9 +318,12 @@ export function DayList({
         return (
           <View key={day} style={styles.dayBlock}>
             <Row justify="space-between">
-              <AppText variant="bodyStrong" tone={day === todayKey ? 'primary' : 'default'}>
-                {formatDayColumn(day, language)}
-              </AppText>
+              <Stack gap={spacing.xs} style={styles.encoge}>
+                <AppText variant="bodyStrong" tone={day === todayKey ? 'primary' : 'default'}>
+                  {formatDayColumn(day, language)}
+                </AppText>
+                <EtiquetaDeFeriado dateKey={day} timezone={timezone} />
+              </Stack>
               <AppText variant="label" tone="subtle" tabular>
                 {t('schedule.shiftsCount', { count: dayShifts.length })}
               </AppText>
@@ -398,8 +404,17 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.sm,
     borderBottomWidth: borderWidth.hairline,
     borderBottomColor: colors.border,
-    justifyContent: 'center',
+    /*
+     * ARRIBA Y NO AL CENTRO: la semana de un feriado, su columna lleva dos líneas y la
+     * fila crece; centradas, las demás bajaban y los nombres de los días quedaban a
+     * alturas distintas.
+     */
+    justifyContent: 'flex-start',
+    // El día y, si lo es, «Feriado · …» debajo: sin hueco, la segunda línea se pegaba.
+    gap: spacing.xs,
   },
+  /* El nombre del día se encoge antes que el recuento de turnos: el del feriado es largo. */
+  encoge: { flexShrink: 1, minWidth: 0 },
   cell: {
     padding: spacing.sm,
     borderBottomWidth: borderWidth.hairline,

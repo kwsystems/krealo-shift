@@ -2,6 +2,7 @@ import {
   hoursByEmployee,
   minutesByDay,
   minutesByReason,
+  minutosEnFeriados,
   punctuality,
   type BreakRow,
 } from '../aggregate';
@@ -295,5 +296,17 @@ describe('las explicaciones de las pausas por «Otro»', () => {
       },
     ]);
     expect(filas.find((fila) => fila.reason === 'other')?.notes).toEqual([]);
+  });
+});
+
+describe('lo trabajado en feriados', () => {
+  it('suma solo los días que son feriado en el Perú, y solo en sedes del Perú', () => {
+    const filas = [
+      dia({ employee_id: 'ana', work_date: '2026-10-08', net_minutes: 480 }), // Combate de Angamos
+      dia({ employee_id: 'beto', work_date: '2026-10-08', net_minutes: 240 }),
+      dia({ employee_id: 'ana', work_date: '2026-10-09', net_minutes: 480 }),
+    ];
+    expect(minutosEnFeriados(filas, 'America/Lima')).toBe(720);
+    expect(minutosEnFeriados(filas, 'America/Toronto')).toBe(0);
   });
 });

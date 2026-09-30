@@ -16,6 +16,7 @@ import {
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { SegmentedControl, StatTile } from '@/components/schedule/fields';
 import { MonthNavigator } from '@/components/schedule/week-tools';
+import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
@@ -240,6 +241,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               desdeDescanso={enDescanso && ultima !== undefined ? hora(ultima.occurred_at) : null}
               hora={hora}
               nowISO={nowISO}
+              zona={tz}
             />
           )}
 
@@ -263,7 +265,13 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                 diasSemana.map((dia, i) => (
                   <View key={dia.dia}>
                     {i > 0 ? <SeparadorDeRegistro /> : null}
-                    <FilaDelDia dia={dia} esHoy={dia.dia === hoy} hora={hora} language={language} />
+                    <FilaDelDia
+                      dia={dia}
+                      esHoy={dia.dia === hoy}
+                      hora={hora}
+                      language={language}
+                      zona={tz}
+                    />
                   </View>
                 ))
               )}
@@ -342,7 +350,13 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                 {diasConAlgo.map((dia, i) => (
                   <View key={dia.dia}>
                     {i > 0 ? <SeparadorDeRegistro /> : null}
-                    <FilaDelDia dia={dia} esHoy={dia.dia === hoy} hora={hora} language={language} />
+                    <FilaDelDia
+                      dia={dia}
+                      esHoy={dia.dia === hoy}
+                      hora={hora}
+                      language={language}
+                      zona={tz}
+                    />
                   </View>
                 ))}
               </Card>
@@ -363,12 +377,15 @@ function Hoy({
   desdeDescanso,
   hora,
   nowISO,
+  zona,
 }: {
   dia: DiaDelVendedor;
   enDescanso: boolean;
   desdeDescanso: string | null;
   hora: (instante: string) => string;
   nowISO: string;
+  /** La de su sede: los feriados del Perú solo salen en sedes del Perú. */
+  zona: string;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -433,6 +450,7 @@ function Hoy({
       <AppText variant="label" tone="muted">
         {t('portal.today')}
       </AppText>
+      <EtiquetaDeFeriado dateKey={dia.dia} timezone={zona} />
       <AppText variant="section" testID={`mi-horario-hoy-${tono}`}>
         {titulo}
       </AppText>
@@ -467,11 +485,13 @@ function FilaDelDia({
   esHoy,
   hora,
   language,
+  zona,
 }: {
   dia: DiaDelVendedor;
   esHoy: boolean;
   hora: (instante: string) => string;
   language: SupportedLanguage;
+  zona: string;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -517,6 +537,8 @@ function FilaDelDia({
         </AppText>
       </View>
       <Stack gap={0} style={estilos.centro}>
+        {/* El feriado ENCIMA del turno: es lo primero que alguien quiere saber de ese día. */}
+        <EtiquetaDeFeriado dateKey={dia.dia} timezone={zona} />
         <AppText variant="bodyStrong" tabular tone={dia.turnos.length === 0 ? 'subtle' : 'default'}>
           {rotuloDelTurno}
         </AppText>

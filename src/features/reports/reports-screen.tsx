@@ -3,9 +3,16 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { feriadoDe } from '@/domain/feriados-peru';
 import { aprobadasPorDia, useHorasExtra } from '@/features/timesheets/horas-extra';
 
-import { hoursByEmployee, minutesByDay, minutesByReason, punctuality } from './aggregate';
+import {
+  hoursByEmployee,
+  minutesByDay,
+  minutesByReason,
+  minutosEnFeriados,
+  punctuality,
+} from './aggregate';
 import {
   breakMinutesByEmployee,
   buildExportRows,
@@ -193,6 +200,9 @@ export function ReportsScreen() {
   }, [breaks.data, personaElegida]);
 
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
+  /* Lo trabajado en feriados, y si el periodo tiene alguno: ver `minutosEnFeriados`. */
+  const enFeriados = minutosEnFeriados(resumenFiltrado, scope.timezone);
+  const conFeriado = periodo.dias.some((dia) => feriadoDe(dia, scope.timezone) !== null);
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
   const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
   // Para el resumen que se comparte: los motivos del local entero, sin filtro.
@@ -561,6 +571,13 @@ export function ReportsScreen() {
                 <StatTile
                   label={t('reports.totalHours')}
                   value={minutesToHHmm(totalMinutos)}
+                  /*
+                   * «¿Esto cuenta el almuerzo?» (Andree, 30-sep). No: son horas netas, con el
+                   * refrigerio descontado. Pero solo el que se MARCA —o el del turno, en lo
+                   * registrado desde el horario—: quien marca entrada y salida y nada más
+                   * tiene el almuerzo dentro. La línea lo dice para que no haya que preguntar.
+                   */
+                  detalle={t('reports.totalHoursDetail')}
                   icon="time-outline"
                   testID="report-total"
                 />
@@ -577,6 +594,15 @@ export function ReportsScreen() {
                   icon="alert-circle-outline"
                   testID="report-overtime"
                 />
+                {conFeriado || enFeriados > 0 ? (
+                  <StatTile
+                    label={t('reports.onHolidays')}
+                    value={minutesToHHmm(enFeriados)}
+                    detalle={t('reports.onHolidaysDetail')}
+                    icon="flag-outline"
+                    testID="report-holidays"
+                  />
+                ) : null}
                 <StatTile
                   label={t('reports.onTime')}
                   value={

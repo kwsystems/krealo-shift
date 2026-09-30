@@ -5,6 +5,8 @@ import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
+import { feriadoDe } from '@/domain/feriados-peru';
+import { dateKeyOf } from '@/features/schedules/week';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import {
@@ -100,6 +102,7 @@ export function SessionRow({
   const respuesta = useRespuestaAlPuntero();
 
   const estado = estadoDeFila(session, alerts, enCurso);
+  const feriado = feriadoDe(dateKeyOf(session.starts_at, timezone), timezone);
   const dentro = estado === 'trabajando' || estado === 'descanso';
 
   const start = formatClockTime(session.starts_at, timezone, timeFormat, language);
@@ -261,13 +264,25 @@ export function SessionRow({
             </AppText>
           </Row>
 
-          {alerts.length > 0 || horaExtra !== undefined ? (
+          {alerts.length > 0 || horaExtra !== undefined || feriado !== null ? (
             <Row gap={spacing.xs} wrap align="flex-start">
               {/*
                 LA HORA EXTRA, CON PALABRA Y CIFRA. «Posible» en ámbar pide que alguien lo
                 mire; «aprobada» en azul ya está decidida. El color sigue a la palabra, no
                 al revés (§21).
               */}
+              {/*
+                EN FERIADO: se paga con un 100 % más (D.L. 713), y quien revisa las horas
+                tiene que verlo en la fila, no tener que cruzarla con un calendario.
+              */}
+              {feriado !== null ? (
+                <StatusBadge
+                  label={t('holidays.labelWithName', { name: t(`holidays.pe.${feriado}`) })}
+                  tone="info"
+                  icon="flag"
+                  compact
+                />
+              ) : null}
               {horaExtra !== undefined ? (
                 <StatusBadge
                   label={

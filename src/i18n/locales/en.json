@@ -342,6 +342,9 @@
     "unknownPerson": "No name",
     "noData": "No data",
     "totalHours": "Hours this period",
+    "totalHoursDetail": "Marked meal breaks deducted",
+    "onHolidays": "Worked on holidays",
+    "onHolidaysDetail": "100% surcharge in Peru (D.L. 713)",
     "people": "People who clocked in",
     "onTime": "Arrived on time",
     "whoWorkedMost": "Who logged the most hours",
@@ -1197,5 +1200,26 @@
     "durationHours": "{{h}} h",
     "durationHoursMinutes": "{{h}} h {{m}} min",
     "noShift": "No shift"
+  },
+  "holidays": {
+    "label": "Holiday",
+    "labelWithName": "Holiday · {{name}}",
+    "pe": {
+      "anioNuevo": "New Year's Day",
+      "juevesSanto": "Holy Thursday",
+      "viernesSanto": "Good Friday",
+      "trabajo": "Labour Day",
+      "bandera": "Flag Day",
+      "sanPedro": "Saints Peter and Paul",
+      "fuerzaAerea": "Air Force Day",
+      "fiestasPatrias": "Independence Day",
+      "junin": "Battle of Junín",
+      "santaRosa": "Saint Rose of Lima",
+      "angamos": "Battle of Angamos",
+      "todosLosSantos": "All Saints' Day",
+      "inmaculada": "Immaculate Conception",
+      "ayacucho": "Battle of Ayacucho",
+      "navidad": "Christmas Day"
+    }
   }
 }

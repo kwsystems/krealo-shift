@@ -1,6 +1,7 @@
 import type { DailySummary, WorkSession } from '@/features/timesheets/api';
 import type { BreakReason } from '@/domain/break-reason';
 import { BREAK_REASONS } from '@/domain/break-reason';
+import { feriadoDe } from '@/domain/feriados-peru';
 import { claveDelDia } from '@/features/timesheets/horas-extra';
 import { splitRegularAndOvertime } from '@/utils/time';
 
@@ -218,4 +219,16 @@ export function minutesByReason(rows: BreakRow[]): ReasonTotal[] {
       sharePercent: total > 0 ? Math.round((fila.minutes / total) * 100) : 0,
     }))
     .sort((a, b) => b.minutes - a.minutes);
+}
+
+/**
+ * Minutos trabajados en FERIADOS del periodo (30-sep). En el Perú un feriado trabajado
+ * se paga con un 100 % más (D.L. 713), así que quien paga necesita esta cifra aparte y no
+ * perdida dentro del total. Sale de los mismos resúmenes que el total: no puede pasar de él.
+ */
+export function minutosEnFeriados(summaries: DailySummary[], zona: string): number {
+  return summaries.reduce(
+    (suma, dia) => (feriadoDe(dia.work_date, zona) === null ? suma : suma + dia.net_minutes),
+    0,
+  );
 }
