@@ -208,6 +208,26 @@ export function useScheduleMutations(params: {
     onSuccess: invalidate,
   });
 
+  /*
+   * DESCARTAR LOS BORRADORES DE LA SEMANA que nunca se publicaron (30-sep). Andree pegó dos
+   * veces la misma semana y se quedó con 56 turnos encima unos de otros, y la única salida
+   * era abrirlos y borrarlos de uno en uno. Solo los que NUNCA se publicaron: un borrador
+   * con versión es el cambio de un turno que el equipo ya vio, y borrarlo lo quitaría del
+   * horario sin avisar a nadie. De diez en diez, para no mandar 56 peticiones a la vez.
+   */
+  const discardDrafts = useMutation({
+    mutationFn: async (shiftIds: string[]) => {
+      for (let i = 0; i < shiftIds.length; i += 10) {
+        await Promise.all(
+          shiftIds.slice(i, i + 10).map((shiftId) => removeShift({ shiftId, status: 'draft' })),
+        );
+      }
+      return shiftIds.length;
+    },
+    // También si falla a medias: la rejilla tiene que enseñar lo que de verdad quedó.
+    onSettled: invalidate,
+  });
+
   const markRestDays = useMutation({
     mutationFn: (days: { employeeId: string; dateKey: string }[]) =>
       setRestDays({
@@ -269,6 +289,7 @@ export function useScheduleMutations(params: {
     update,
     duplicate,
     remove,
+    discardDrafts,
     markRestDays,
     unmarkRestDay,
     copyWeek,

@@ -100,6 +100,8 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const [workedOpen, setWorkedOpen] = useState(false);
   const [copyEmployeeId, setCopyEmployeeId] = useState<string | null>(null);
   const [publishAllOpen, setPublishAllOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
+  const [discardFailed, setDiscardFailed] = useState(false);
   const [publishPickerOpen, setPublishPickerOpen] = useState(false);
   const [pickedIds, setPickedIds] = useState<string[] | null>(null);
   const [removingShift, setRemovingShift] = useState<ShiftRow | null>(null);
@@ -378,6 +380,14 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   );
 
   const pendingIds = analysis.pendingShiftIds;
+  /*
+   * Los borradores que NUNCA se publicaron: los únicos que «Descartar borradores» borra. Un
+   * borrador con versión es un turno publicado que se editó; ese se queda.
+   */
+  const borradoresNuevos = rows
+    .filter((row) => row.status === 'draft' && row.publication_version === 0)
+    .map((row) => row.id);
+  const cambiosDePublicados = pendingIds.length - borradoresNuevos.length;
   const pickedForPublish = pickedIds ?? pendingIds;
 
   const openCreate = (params: { employeeId?: string; dateKey: DateKey }) => {
@@ -553,6 +563,15 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                 <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
               ) : null}
 
+              {discardFailed ? (
+                <InlineNotice
+                  tone="late"
+                  icon="alert-circle"
+                  title={t('schedule.draftsDiscardFailed')}
+                  testID="schedule-discard-failed"
+                />
+              ) : null}
+
               {/*
                 UNA BARRA, NO UNA TARJETA. Esto era una tarjeta con título, párrafo de
                 ayuda y dos botones debajo: 150 px de alto para comunicar un estado y
@@ -568,6 +587,14 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                   <AppText variant="bodyStrong" style={estilos.creceEnLaBarra}>
                     {t('schedule.pendingChanges', { count: pendingIds.length })}
                   </AppText>
+                  {borradoresNuevos.length > 0 ? (
+                    <GhostButton
+                      label={t('schedule.discardDrafts')}
+                      onPress={() => setDiscardOpen(true)}
+                      fullWidth={false}
+                      testID="schedule-discard-drafts"
+                    />
+                  ) : null}
                   <GhostButton
                     label={t('schedule.publishChangesOnly')}
                     onPress={() => {
@@ -896,6 +923,36 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
         onCancel={() => setRemovingRestDay(null)}
       />
 
+      <ConfirmSheet
+        visible={discardOpen}
+        title={t('schedule.discardDraftsTitle', { count: borradoresNuevos.length })}
+        body={
+          cambiosDePublicados > 0
+            ? `${t('schedule.discardDraftsBody', { count: borradoresNuevos.length })} ${t(
+                'schedule.discardDraftsKeepsChanged',
+                { count: cambiosDePublicados },
+              )}`
+            : t('schedule.discardDraftsBody', { count: borradoresNuevos.length })
+        }
+        confirmLabel={t('schedule.discardDraftsConfirm', { count: borradoresNuevos.length })}
+        destructive
+        onConfirm={() => {
+          if (mutations.discardDrafts.isPending) return;
+          mutations.discardDrafts.mutate(borradoresNuevos, {
+            onSuccess: (count) => {
+              setDiscardOpen(false);
+              setDiscardFailed(false);
+              setFeedback(t('schedule.draftsDiscarded', { count }));
+            },
+            onError: () => {
+              setDiscardOpen(false);
+              setDiscardFailed(true);
+            },
+          });
+        }}
+        onCancel={() => setDiscardOpen(false)}
+      />
+
       {workedOpen ? (
         <RegistrarCumplidoSheet
           dias={days}
@@ -917,6 +974,13 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
           language={language}
           saving={mutations.createMany.isPending}
           turnosExistentes={rows.filter((row) => row.status !== 'cancelled').length}
+          existentes={rows
+            .filter((row) => row.status !== 'cancelled')
+            .map((row) => ({
+              employeeId: row.employee_id,
+              startsAt: row.starts_at,
+              endsAt: row.ends_at,
+            }))}
           onClose={() => setPasteOpen(false)}
           onSubmit={({ turnos, descansos }) => {
             /*

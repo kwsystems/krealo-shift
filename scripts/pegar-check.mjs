@@ -256,6 +256,65 @@ try {
   if (!/2 días de descanso/.test(texto)) {
     problemas.push('la pantalla no confirma cuántos descansos se marcaron');
   }
+
+  /*
+   * --- 5. PEGAR DOS VECES, Y SALIR DE AHÍ (30-sep). Andree pegó dos veces la misma semana
+   * y se quedó con los turnos duplicados, uno encima de otro, sin forma de quitarlos que no
+   * fuera de uno en uno. Aquí se hace lo mismo: la segunda vez tiene que BLOQUEAR diciendo
+   * quiénes, y «Descartar borradores» tiene que dejar la semana como estaba.
+   */
+  await pagina.locator('[data-testid="schedule-paste-week"]').first().click();
+  await pagina.locator('[data-testid="paste-week-input"]').fill(tabla);
+  await pagina.waitForTimeout(500);
+  const pisado = await pagina.locator('[data-testid="paste-week-overlap"]').count();
+  const segundaVez = await pagina
+    .locator('[data-testid="paste-week-confirm"]')
+    .first()
+    .getAttribute('aria-disabled');
+  if (pisado === 0) problemas.push('pegar la misma tabla otra vez no avisó de que se duplicaría');
+  if (segundaVez !== 'true') {
+    problemas.push(`pegar la misma tabla otra vez se podía crear (aria-disabled=${segundaVez})`);
+  }
+  await pagina.keyboard.press('Escape');
+  await pagina
+    .locator('[data-testid="paste-week-sheet"]')
+    .first()
+    .getByText('Cerrar', { exact: true })
+    .click()
+    .catch(() => {});
+  await pagina.locator('[data-testid="paste-week-input"]').waitFor({ state: 'detached' });
+
+  await pagina.locator('[data-testid="schedule-discard-drafts"]').first().click();
+  const descartar = pagina.locator('[data-testid="confirm-sheet-confirm"]:visible');
+  await descartar.waitFor({ timeout: 10000 });
+  const rotuloDescartar = sinGlifos((await descartar.textContent()) ?? '');
+  if (!rotuloDescartar.includes('11 borradores')) {
+    problemas.push(`el botón de descartar dice «${rotuloDescartar}», no «11 borradores»`);
+  }
+  await pagina.waitForTimeout(400);
+  await descartar.click();
+  await pagina
+    .locator('[data-testid="schedule-publish-all"]')
+    .waitFor({ state: 'detached', timeout: 15000 })
+    .catch(() => problemas.push('después de descartar sigue habiendo cambios sin publicar'));
+  await pagina.waitForTimeout(500);
+  const trasDescartar = await pagina
+    .locator('[data-testid^="grid-name-"]')
+    .evaluateAll((nodos) =>
+      nodos
+        .map((n) => ({ testid: n.getAttribute('data-testid'), texto: n.textContent }))
+        .filter((n) => n.testid !== 'grid-name-header'),
+    );
+  for (const persona of [uno, dos]) {
+    const total = totalDeLaCelda(trasDescartar.find((f) => f.testid === persona.testid)?.texto);
+    if (total !== '00:00') {
+      problemas.push(`${persona.nombre}: tras descartar la rejilla dice ${total}, no 00:00`);
+    }
+  }
+  const alFinal = sinGlifos(await pagina.evaluate(() => document.body?.innerText ?? ''));
+  if (!/Se descartaron 11 borradores/.test(alFinal)) {
+    problemas.push('la pantalla no confirma cuántos borradores se descartaron');
+  }
 } catch (error) {
   problemas.push(`el arnés no pudo completar la medida: ${error.message}`);
 } finally {
@@ -271,5 +330,6 @@ if (problemas.length > 0) {
 }
 console.log(
   'PEGAR HORARIO — OK: 11 turnos pegados, totales 48:00 y 20:00, en borrador, ' +
-    'los 2 descansos marcados en la rejilla y la raya sin marcar.',
+    'los 2 descansos marcados en la rejilla y la raya sin marcar; pegar otra vez se ' +
+    'bloquea y «Descartar borradores» deja la semana a 00:00.',
 );

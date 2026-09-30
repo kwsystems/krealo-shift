@@ -10,7 +10,7 @@ import {
   type ProblemaPegado,
   type TurnoPegado,
 } from './pegar-horario';
-import { formatDateKeyShort, type DateKey } from './week';
+import { formatDateKeyShort, shiftInstants, type DateKey } from './week';
 import { AdminSheet, InlineNotice } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton } from '@/components/ui/buttons';
@@ -40,6 +40,7 @@ export function PegarHorarioSheet({
   language,
   saving,
   turnosExistentes,
+  existentes,
   onClose,
   onSubmit,
 }: {
@@ -50,6 +51,8 @@ export function PegarHorarioSheet({
   saving: boolean;
   /** Turnos que ya hay en la semana: pegar añade, no reemplaza, y conviene decirlo. */
   turnosExistentes: number;
+  /** Esos turnos, para no crear encima de ellos: ver «PEGAR DOS VECES», abajo. */
+  existentes: { employeeId: string; startsAt: string; endsAt: string }[];
   onClose: () => void;
   onSubmit: (datos: { turnos: TurnoPegado[]; descansos: DescansoPegado[] }) => void;
 }) {
@@ -66,7 +69,38 @@ export function PegarHorarioSheet({
   const avisos = horario?.problemas.filter((problema) => !problemaBloquea(problema)) ?? [];
   const turnos = horario?.turnos ?? [];
   const descansos = horario?.descansos ?? [];
-  const puedeCrear = turnos.length + descansos.length > 0 && bloqueantes.length === 0;
+  /*
+   * PEGAR DOS VECES LA MISMA SEMANA NO PUEDE DUPLICARLA (30-sep). Pasó: la tabla entró dos
+   * veces, 56 turnos uno encima de otro, y el único aviso era el de «ya hay turnos», que no
+   * bloquea porque pegar una segunda tabla —otra sede, otra persona— es legítimo. Lo que
+   * nunca es legítimo es crear un turno que se pisa con uno que ya tiene esa persona. Eso
+   * sí bloquea, y dice quiénes.
+   */
+  const pisados = [
+    ...new Set(
+      turnos
+        .filter((turno) => {
+          const instantes = shiftInstants({
+            dateKey: turno.dateKey,
+            startTime: turno.startTime,
+            endTime: turno.endTime,
+            timezone,
+          });
+          if (instantes === null) return false;
+          const desde = Date.parse(instantes.startsAt);
+          const hasta = Date.parse(instantes.endsAt);
+          return existentes.some(
+            (otro) =>
+              otro.employeeId === turno.employeeId &&
+              Date.parse(otro.startsAt) < hasta &&
+              Date.parse(otro.endsAt) > desde,
+          );
+        })
+        .map((turno) => turno.nombre),
+    ),
+  ];
+  const puedeCrear =
+    turnos.length + descansos.length > 0 && bloqueantes.length === 0 && pisados.length === 0;
 
   return (
     <AdminSheet
@@ -122,6 +156,15 @@ export function PegarHorarioSheet({
           icon="layers-outline"
           body={t('schedule.pasteAlreadyHasShifts', { count: turnosExistentes })}
           testID="paste-week-existing"
+        />
+      ) : null}
+
+      {pisados.length > 0 ? (
+        <InlineNotice
+          tone="late"
+          icon="copy-outline"
+          body={t('schedule.pasteOverlapsExisting', { names: pisados.join(', ') })}
+          testID="paste-week-overlap"
         />
       ) : null}
 
