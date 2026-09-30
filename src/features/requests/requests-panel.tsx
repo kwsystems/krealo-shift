@@ -1,7 +1,18 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { tabForKind, type RequestTab, type TimeEditRequest } from './api';
+import type { TFunction } from 'i18next';
+
+import {
+  propuestaDe,
+  RechazoDeLaSolicitud,
+  registraFichajes,
+  tabForKind,
+  type FichajeDeLaAprobacion,
+  type RequestTab,
+  type TimeEditRequest,
+} from './api';
+import { AprobarSolicitudSheet } from './aprobar-sheet';
 import { useRequestMutations, useRequests } from './hooks';
 import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
@@ -16,18 +27,56 @@ import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/bu
 import { Card, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { useEmployeeNames } from '@/features/team/hooks';
+import { adminErrorKind } from '@/hooks/use-admin-query';
 import { useManagerScope } from '@/hooks/use-manager-scope';
-import { currentLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
-import { formatClockTime } from '@/utils/time';
 
 /**
  * Bandeja unificada de solicitudes (§11.5).
  *
- * Aprobar aplica el ajuste cuando la solicitud señala una sesión concreta con
- * horas propuestas; cuando no, la decisión queda registrada y la pantalla dice
- * con claridad qué falta para aplicarla. Nunca se finge un cambio que no ocurrió.
+ * Aprobar un «olvidé marcar» abre la hoja donde se confirma el día y la hora, y al
+ * confirmarla el fichaje queda registrado. Una corrección sobre una sesión concreta aplica
+ * el ajuste; sin sesión, la decisión queda registrada y la pantalla dice qué falta para
+ * aplicarla. Nunca se finge un cambio que no ocurrió.
+ *
+ * Y NINGÚN FALLO SE CALLA (30-sep). Aprobar fallaba siempre —el servidor no dejaba— y la
+ * pantalla no decía nada: el botón giraba, paraba, y la solicitud seguía ahí. Ahora el
+ * error sale donde se pulsó, con lo que hay que hacer.
  */
+
+/** Lo que se le dice a quien aprueba cuando no se pudo, según el motivo del servidor. */
+export function mensajeDelFallo(t: TFunction, error: unknown): string {
+  if (error instanceof RechazoDeLaSolicitud) {
+    switch (error.motivo) {
+      case 'NO_ENCAJA':
+        if (error.tipo === 'clock_in') return t('requests.approveErrorAlreadyIn');
+        if (error.tipo === 'break_start' && error.estado === 'ON_BREAK') {
+          return t('requests.approveErrorAlreadyOnBreak');
+        }
+        if (error.tipo === 'break_end' && error.estado === 'WORKING') {
+          return t('requests.approveErrorNotOnBreak');
+        }
+        if (error.estado === 'OFF_SHIFT') return t('requests.approveErrorNotIn');
+        return t('requests.approveErrorNoFit');
+      case 'CHOCA':
+        return t('requests.approveErrorClash');
+      case 'FALTA_SALIDA':
+        return t('requests.approveErrorNeedsClockOut');
+      case 'YA_RESUELTA':
+        return t('requests.approveErrorAlreadyReviewed');
+      case 'FUTURO':
+        return t('requests.approveErrorFuture');
+      case 'ORDEN':
+        return t('requests.approveErrorOrder');
+      default:
+        return t('requests.approveErrorNoFit');
+    }
+  }
+  const kind = adminErrorKind(error);
+  if (kind === 'forbidden') return t('states.noAccessBody');
+  if (kind === 'offline') return t('states.offlineAdminBody');
+  return t('requests.reviewErrorGeneric');
+}
 
 const KIND_LABEL_KEYS: Record<TimeEditRequest['kind'], string> = {
   forgot_clock_in: 'kiosk.forgotClockIn',
@@ -40,13 +89,15 @@ const KIND_LABEL_KEYS: Record<TimeEditRequest['kind'], string> = {
 export function RequestsPanel() {
   const { t } = useTranslation();
   const scope = useManagerScope();
-  const language = currentLanguage();
 
   const [tab, setTab] = useState<RequestTab | null>(null);
   const [onlyPending, setOnlyPending] = useState(true);
   const [commenting, setCommenting] = useState<TimeEditRequest | null>(null);
   const [comment, setComment] = useState('');
   const [feedback, setFeedback] = useState<string | null>(null);
+  const [fallo, setFallo] = useState<string | null>(null);
+  const [aprobando, setAprobando] = useState<TimeEditRequest | null>(null);
+  const [falloDeLaHoja, setFalloDeLaHoja] = useState<string | null>(null);
 
   const organizationId = scope.organization?.id ?? null;
   const requests = useRequests({ organizationId, locationId: scope.locationId });
@@ -93,12 +144,31 @@ export function RequestsPanel() {
     [requests.data, tabElegida, onlyPending],
   );
 
+  const avisar = (mensaje: string) => {
+    setFallo(null);
+    setFeedback(mensaje);
+  };
+  const fallar = (error: unknown) => {
+    setFeedback(null);
+    setFallo(mensajeDelFallo(t, error));
+  };
+
   const decide = (request: TimeEditRequest, decision: 'approved' | 'rejected') => {
+    // Quien actúa se queda en su pestaña: si era la última pendiente de aquí, la
+    // pantalla no debe saltar sola a otra mientras lee lo que pasó.
+    setTab(tabElegida);
+
+    if (decision === 'approved' && registraFichajes(request.kind)) {
+      setFalloDeLaHoja(null);
+      setAprobando(request);
+      return;
+    }
+
     mutations.review.mutate(
       { request, decision, comment: null },
       {
         onSuccess: ({ applied }) => {
-          setFeedback(
+          avisar(
             decision === 'approved'
               ? applied
                 ? t('requests.approvedApplied')
@@ -106,6 +176,24 @@ export function RequestsPanel() {
               : t('requests.rejected'),
           );
         },
+        onError: fallar,
+      },
+    );
+  };
+
+  const confirmarAprobacion = (fichajes: FichajeDeLaAprobacion[], comment: string | null) => {
+    const request = aprobando;
+    if (request === null) return;
+    setFalloDeLaHoja(null);
+    mutations.review.mutate(
+      { request, decision: 'approved', comment, fichajes },
+      {
+        onSuccess: () => {
+          setAprobando(null);
+          avisar(t('requests.approvedRegistered'));
+        },
+        // El fallo sale DENTRO de la hoja, junto a las horas que hay que corregir.
+        onError: (error) => setFalloDeLaHoja(mensajeDelFallo(t, error)),
       },
     );
   };
@@ -146,7 +234,20 @@ export function RequestsPanel() {
       />
 
       {feedback !== null ? (
-        <InlineNotice tone="working" icon="checkmark-circle" title={feedback} />
+        <InlineNotice
+          tone="working"
+          icon="checkmark-circle"
+          title={feedback}
+          testID="requests-feedback"
+        />
+      ) : null}
+      {fallo !== null ? (
+        <InlineNotice
+          tone="late"
+          icon="alert-circle-outline"
+          body={fallo}
+          testID="requests-error"
+        />
       ) : null}
 
       <AsyncSection
@@ -159,12 +260,15 @@ export function RequestsPanel() {
       >
         <Stack gap={spacing.sm}>
           {visible.map((request) => {
-            const proposed =
-              request.proposed_value.startsAt ?? request.proposed_value.proposedAt ?? null;
-            const canApply = request.work_session_id !== null && proposed !== null;
+            const propuesta = propuestaDe(request, scope.timezone);
+            const registra = registraFichajes(request.kind);
+            const canApply =
+              registra || (request.work_session_id !== null && propuesta.hora !== null);
+            const decidiendo =
+              mutations.review.isPending && mutations.review.variables?.request.id === request.id;
 
             return (
-              <Card key={request.id}>
+              <Card key={request.id} testID={`solicitud-${request.kind}-${request.id}`}>
                 <Row justify="space-between" gap={spacing.md} align="flex-start">
                   <Stack gap={spacing.xs}>
                     <AppText variant="bodyStrong">
@@ -200,14 +304,11 @@ export function RequestsPanel() {
                   />
                 </Row>
 
-                {request.target_date !== null ? (
-                  <KeyValueRow label={t('schedule.date')} value={request.target_date} />
+                {propuesta.fecha !== null ? (
+                  <KeyValueRow label={t('schedule.date')} value={propuesta.fecha} />
                 ) : null}
-                {proposed !== null ? (
-                  <KeyValueRow
-                    label={t('kiosk.forgotProposedTime')}
-                    value={formatClockTime(proposed, scope.timezone, scope.timeFormat, language)}
-                  />
+                {propuesta.hora !== null ? (
+                  <KeyValueRow label={t('kiosk.forgotProposedTime')} value={propuesta.hora} />
                 ) : null}
                 <KeyValueRow label={t('timesheet.reasonLabel')} value={request.reason} />
                 {request.reviewer_comment !== null ? (
@@ -215,7 +316,11 @@ export function RequestsPanel() {
                 ) : null}
 
                 <AppText variant="label" tone="subtle">
-                  {canApply ? t('requests.impactApplies') : t('requests.impactManual')}
+                  {registra
+                    ? t('requests.impactRegisters')
+                    : canApply
+                      ? t('requests.impactApplies')
+                      : t('requests.impactManual')}
                 </AppText>
 
                 {request.status === 'pending' ? (
@@ -224,13 +329,16 @@ export function RequestsPanel() {
                       label={t('requests.approve')}
                       onPress={() => decide(request, 'approved')}
                       fullWidth={false}
-                      loading={mutations.review.isPending}
+                      loading={decidiendo && mutations.review.variables?.decision === 'approved'}
+                      disabled={mutations.review.isPending}
                       testID={`request-approve-${request.id}`}
                     />
                     <DangerButton
                       label={t('requests.reject')}
                       onPress={() => decide(request, 'rejected')}
                       fullWidth={false}
+                      loading={decidiendo && mutations.review.variables?.decision === 'rejected'}
+                      disabled={mutations.review.isPending}
                       testID={`request-reject-${request.id}`}
                     />
                     <SecondaryButton
@@ -267,7 +375,11 @@ export function RequestsPanel() {
                   {
                     onSuccess: () => {
                       setCommenting(null);
-                      setFeedback(t('requests.commentSaved'));
+                      avisar(t('requests.commentSaved'));
+                    },
+                    onError: (error) => {
+                      setCommenting(null);
+                      fallar(error);
                     },
                   },
                 );
@@ -285,6 +397,19 @@ export function RequestsPanel() {
             testID="request-comment-input"
           />
         </AdminSheet>
+      ) : null}
+
+      {aprobando !== null ? (
+        <AprobarSolicitudSheet
+          request={aprobando}
+          employeeName={names.get(aprobando.employee_id) ?? t('team.unknownEmployee')}
+          timezone={scope.timezone}
+          requiredBreakMinutes={scope.settings.requiredBreakMinutes}
+          saving={mutations.review.isPending}
+          error={falloDeLaHoja}
+          onConfirm={confirmarAprobacion}
+          onClose={() => setAprobando(null)}
+        />
       ) : null}
     </Stack>
   );

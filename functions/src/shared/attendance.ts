@@ -8,6 +8,7 @@ import {
 } from '../../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './admin';
 import { tipoEfectivo } from './eventos';
+import { enOrden, jornadaVigente } from './secuencia';
 import { marcasDeLaSesion } from './marcas';
 import { politicasDe } from './politicas';
 
@@ -228,24 +229,16 @@ export async function rebuildWorkSession(
   if (ventana !== undefined) consulta = consulta.where('occurred_at', '<=', ventana.hasta);
   const snapshot = await consulta.orderBy('occurred_at', 'asc').get();
 
-  const eventos = snapshot.docs
-    .map((doc) => doc.data())
-    .sort((a, b) => {
-      const porInstante = String(a.occurred_at).localeCompare(String(b.occurred_at));
-      return porInstante !== 0 ? porInstante : Number(a.seq ?? 0) - Number(b.seq ?? 0);
-    });
-
-  // La sesion vigente empieza en el ultimo `clock_in` sin `clock_out` posterior.
-  let inicio: Record<string, unknown> | undefined;
-  const desdeUltimaEntrada: Record<string, unknown>[] = [];
-  for (const evento of eventos) {
-    if (tipoEfectivo(evento) === 'clock_in') {
-      inicio = evento;
-      desdeUltimaEntrada.length = 0;
-    }
-    if (inicio !== undefined) desdeUltimaEntrada.push(evento);
-  }
-  if (inicio === undefined) return;
+  /*
+   * La sesion vigente empieza en la ultima entrada QUE CUENTA sin salida posterior. «Que
+   * cuenta» es lo que dice la maquina de estados: una segunda entrada sin salida entre
+   * medias —la que queda cuando se aprueba un «olvidé marcar la entrada» anterior— no
+   * abre otra jornada. Ver `shared/secuencia.ts`.
+   */
+  const vigente = jornadaVigente(enOrden(snapshot.docs.map((doc) => doc.data())));
+  if (vigente === undefined) return;
+  const inicio = vigente.entrada;
+  const desdeUltimaEntrada = vigente.desdeLaEntrada;
 
   const salida = desdeUltimaEntrada.find((evento) => tipoEfectivo(evento) === 'clock_out');
   const abierta = salida === undefined;

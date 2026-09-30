@@ -184,6 +184,13 @@ export const RPC = {
    * marcas o un borrador. Ver `functions/src/horario-cumplido.ts`.
    */
   registerScheduleAsWorked: 'register_schedule_as_worked',
+  /**
+   * Resolver una solicitud de la Bandeja (30-sep): aprobar, rechazar o comentar. Las reglas
+   * no dejan tocar una solicitud desde la app —cambia horas pagadas— y esta función no
+   * existía, así que aprobar fallaba en silencio. Aprobar un «olvidé marcar» registra los
+   * fichajes que faltaban. Ver `functions/src/solicitudes.ts`.
+   */
+  reviewTimeEditRequest: 'review_time_edit_request',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

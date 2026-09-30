@@ -2,17 +2,19 @@ import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
 
-import { adjustWorkSession } from '@/features/timesheets/api';
-import { execute, selectRows } from '@/hooks/use-admin-query';
-import { useSessionStore } from '@/stores/session-store';
-import { TABLES } from '@/lib/firebase/tables';
+import type { TimeEventType } from '@/domain/attendance-state-machine';
+import { dateKeyOf } from '@/features/schedules/week';
+import { AdminError, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
+import { RPC, TABLES } from '@/lib/firebase/tables';
+import { formatClockTime } from '@/utils/time';
 
 /**
  * Bandeja de solicitudes (§11.5).
  *
- * Aprobar una corrección no cambia el evento original: aplica un ajuste
- * auditable con `manager_adjust_time`, que conserva valor anterior, valor nuevo,
- * autor, motivo y fecha de servidor. Rechazar tampoco borra nada: deja la
+ * Resolver una solicitud pasa siempre por el servidor (`review_time_edit_request`).
+ * Aprobar un «olvidé marcar» registra fichajes nuevos; aprobar una corrección sobre una
+ * sesión aplica un ajuste auditable, que conserva valor anterior, valor nuevo, autor y
+ * motivo. Ninguna de las dos edita un evento. Rechazar tampoco borra nada: deja la
  * decisión y el comentario.
  */
 
@@ -100,67 +102,141 @@ export async function countPendingRequests(params: {
   return rows.length;
 }
 
+/**
+ * LO QUE DICE EL SERVIDOR CUANDO NO PUEDE APROBAR, con su motivo. La pantalla lo traduce a
+ * una frase que dice qué corregir: «a esa hora ya estaba dentro», «falta la salida»…
+ * Tirar el motivo y enseñar «algo salió mal» es lo que dejaba a quien aprobaba sin saber
+ * qué tocar.
+ */
+export class RechazoDeLaSolicitud extends AdminError {
+  constructor(
+    readonly motivo: string,
+    readonly tipo: string | null,
+    readonly estado: string | null,
+    message: string,
+  ) {
+    super('invalid', message, motivo);
+  }
+}
+
+const resultadoSchema = z.object({
+  status: z.string(),
+  applied: z.boolean(),
+  eventIds: z.array(z.string()).default([]),
+  workSessionId: z.string().nullable().optional(),
+});
+
+export type ResultadoDeLaRevision = z.infer<typeof resultadoSchema>;
+
+/**
+ * TODO PASA POR `reviewTimeEditRequest`, y antes no pasaba nada: el panel escribía la
+ * solicitud directamente, las reglas lo prohíben —cambia horas pagadas, así que se
+ * resuelve en el servidor y queda auditado— y la pantalla no enseñaba el rechazo. Aprobar
+ * parecía no hacer nada y la solicitud seguía pendiente. Ver `functions/src/solicitudes.ts`.
+ */
+async function resolver(args: Record<string, unknown>): Promise<ResultadoDeLaRevision> {
+  const db = requireClient();
+  try {
+    const { data, error } = await db.rpc(RPC.reviewTimeEditRequest, args);
+    if (error !== null) {
+      const detalles = ((error as { details?: unknown }).details ?? {}) as Record<string, unknown>;
+      if (typeof detalles.motivo === 'string') {
+        throw new RechazoDeLaSolicitud(
+          detalles.motivo,
+          typeof detalles.tipo === 'string' ? detalles.tipo : null,
+          typeof detalles.estado === 'string' ? detalles.estado : null,
+          error.message,
+        );
+      }
+      throw toAdminError(error);
+    }
+    const leido = resultadoSchema.safeParse(data);
+    // El servidor respondió con otra forma: no se inventa un resultado (§20).
+    if (!leido.success) throw toAdminError({ code: 'shape', message: 'UNEXPECTED_SHAPE' });
+    return leido.data;
+  } catch (error) {
+    if (error instanceof RechazoDeLaSolicitud) throw error;
+    throw toAdminError(error);
+  }
+}
+
 /** Solo comenta: no decide. Sirve para pedir contexto antes de resolver. */
 export async function commentRequest(params: {
   requestId: string;
   comment: string;
 }): Promise<void> {
-  await execute((db) =>
-    db
-      .from(TABLES.timeEditRequests)
-      .update({ reviewer_comment: params.comment.trim() })
-      .eq('id', params.requestId),
-  );
+  await resolver({
+    p_request_id: params.requestId,
+    p_decision: 'comment',
+    p_comment: params.comment.trim(),
+  });
 }
 
 export type ReviewDecision = 'approved' | 'rejected';
 
+/** Un fichaje que se registra al aprobar un «olvidé marcar». */
+export type FichajeDeLaAprobacion = { type: TimeEventType; occurred_at: string };
+
 /**
- * Aprueba o rechaza. Si al aprobar la solicitud propone horas concretas sobre una
- * sesión existente, se aplica el ajuste en el servidor antes de marcar la
- * solicitud: si el ajuste falla, la solicitud sigue pendiente y no queda una
- * aprobación que nadie aplicó.
+ * Aprueba o rechaza. Aprobar un «olvidé marcar» REGISTRA los fichajes que faltaban —los
+ * que confirma quien aprueba, con fecha y hora— en la misma operación que marca la
+ * solicitud: si no caben, no se aprueba nada y el servidor dice por qué.
  */
 export async function reviewRequest(params: {
   request: TimeEditRequest;
   decision: ReviewDecision;
   comment: string | null;
+  fichajes?: FichajeDeLaAprobacion[];
 }): Promise<{ applied: boolean }> {
-  const { request, decision, comment } = params;
-  let applied = false;
+  const resultado = await resolver({
+    p_request_id: params.request.id,
+    p_decision: params.decision,
+    p_comment: params.comment?.trim() ?? null,
+    p_events: params.fichajes ?? null,
+  });
+  return { applied: resultado.applied };
+}
 
-  const proposedStart =
-    request.proposed_value.startsAt ?? request.proposed_value.proposedAt ?? null;
-  const proposedEnd = request.proposed_value.endsAt ?? null;
+/** Las solicitudes que al aprobarse registran fichajes: las de «olvidé marcar». */
+export function registraFichajes(kind: RequestKind): boolean {
+  return kind === 'forgot_clock_in' || kind === 'forgot_clock_out' || kind === 'forgot_break';
+}
 
-  if (
-    decision === 'approved' &&
-    request.work_session_id !== null &&
-    (proposedStart !== null || proposedEnd !== null)
-  ) {
-    await adjustWorkSession({
-      workSessionId: request.work_session_id,
-      // Sin comprobación de concurrencia: la solicitud puede llevar días abierta
-      // y su `updated_at` de referencia ya no dice nada útil.
-      expectedUpdatedAt: null,
-      newStartsAt: proposedStart,
-      newEndsAt: proposedEnd,
-      reason: `${request.reason}${comment === null || comment.trim() === '' ? '' : ` — ${comment.trim()}`}`,
-    });
-    applied = true;
+const HORA_TECLEADA = /^(\d{1,2})[:.h]?(\d{2})$/;
+
+/**
+ * La fecha y la hora que propone la solicitud, en la zona de la sede.
+ *
+ * DOS FORMAS, porque las dos existen en la base: un instante completo —lo que guarda el
+ * servidor desde el 30-sep, y lo que siempre guardó el panel— y la hora tal como se tecleó
+ * en el reloj, «14:30», sin fecha. Las segundas enseñaban «--:--» y ninguna fecha; ahora se
+ * lee la hora tal cual y la fecha es el día en que se pidió.
+ */
+export function propuestaDe(
+  request: Pick<TimeEditRequest, 'proposed_value' | 'target_date' | 'created_at'>,
+  timezone: string,
+): { fecha: string | null; hora: string | null } {
+  const crudo =
+    request.proposed_value.startsAt ??
+    request.proposed_value.proposedAt ??
+    request.proposed_value.endsAt ??
+    null;
+  const diaDePedido = dateKeyOf(request.created_at, timezone) || null;
+
+  if (crudo === null) return { fecha: request.target_date ?? diaDePedido, hora: null };
+
+  const tecleada = HORA_TECLEADA.exec(crudo.trim());
+  if (tecleada !== null) {
+    const horas = Number(tecleada[1]);
+    const minutos = Number(tecleada[2]);
+    const valida = horas <= 23 && minutos <= 59;
+    return {
+      fecha: request.target_date ?? diaDePedido,
+      hora: valida ? `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}` : null,
+    };
   }
 
-  await execute((db) =>
-    db
-      .from(TABLES.timeEditRequests)
-      .update({
-        status: decision,
-        reviewed_by: useSessionStore.getState().user?.userId ?? null,
-        reviewed_at: new Date().toISOString(),
-        reviewer_comment: comment === null || comment.trim() === '' ? null : comment.trim(),
-      })
-      .eq('id', request.id),
-  );
-
-  return { applied };
+  const fecha = dateKeyOf(crudo, timezone);
+  if (fecha === '') return { fecha: request.target_date ?? diaDePedido, hora: null };
+  return { fecha: request.target_date ?? fecha, hora: formatClockTime(crudo, timezone, '24h') };
 }

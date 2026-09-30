@@ -15,7 +15,7 @@ import { membershipOf, requireManagesLocation, requireUid } from './shared/calle
 import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/attendance';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
-import { zonaSegura } from './shared/zonas';
+import { instanteLocal, zonaSegura } from './shared/zonas';
 import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
@@ -871,6 +871,50 @@ function fechaLocal(iso: string | null, zona: string): string | null {
   return new Intl.DateTimeFormat('en-CA', { timeZone: zonaSegura(zona, 'fechaLocal') }).format(d);
 }
 
+/**
+ * LA HORA QUE ESCRIBE LA PERSONA, COMO INSTANTE (30-sep).
+ *
+ * El reloj manda lo que se teclea en «Hora propuesta» —«14:30»— y se guardaba tal cual.
+ * Ni la Bandeja ni nadie podía leerlo como hora: la solicitud salía con «--:--», sin fecha
+ * y sin forma de aplicarla. Ahora se convierte aquí, en la zona de la tienda: hoy a esa
+ * hora, o AYER si hoy a esa hora todavía no ha llegado, porque lo que se olvida marcar
+ * siempre ya pasó —quien olvidó la salida de las 19:00 lo cuenta a la mañana siguiente—.
+ *
+ * Acepta también un instante completo, que es lo que manda el reloj desde el 30-sep, y
+ * `null` si no vino nada. Lo que no se entiende se rechaza: una solicitud con una hora que
+ * nadie sabe leer es una que nadie puede aprobar.
+ */
+export function propuestaDelReloj(
+  valor: unknown,
+  zona: string,
+  ahora: number = Date.now(),
+): string | null {
+  if (valor === undefined || valor === null || String(valor).trim() === '') return null;
+  const texto = String(valor).trim();
+
+  const reloj = /^(\d{1,2})[:.h]?(\d{2})$/.exec(texto);
+  if (reloj !== null) {
+    const horas = Number(reloj[1]);
+    const minutos = Number(reloj[2]);
+    if (horas > 23 || minutos > 59) {
+      throw new HttpsError('invalid-argument', 'Escribe la hora como 14:30.', { motivo: 'HORA' });
+    }
+    const hora = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
+    const zonaBuena = zonaSegura(zona, 'propuestaDelReloj');
+    const hoy = fechaLocal(new Date(ahora).toISOString(), zonaBuena) as string;
+    const deHoy = instanteLocal(hoy, hora, zonaBuena);
+    if (deHoy !== null && Date.parse(deHoy) <= ahora + 5 * 60 * 1000) return deHoy;
+    const ayer = fechaLocal(new Date(ahora - 24 * 60 * 60 * 1000).toISOString(), zonaBuena);
+    return ayer === null ? deHoy : instanteLocal(ayer, hora, zonaBuena);
+  }
+
+  const instante = new Date(texto);
+  if (Number.isNaN(instante.getTime())) {
+    throw new HttpsError('invalid-argument', 'Escribe la hora como 14:30.', { motivo: 'HORA' });
+  }
+  return instante.toISOString();
+}
+
 export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request) => {
   const kiosk = await authenticateKiosk(request.data);
   const employeeId = exigirTokenDeAccion(request.data, kiosk);
@@ -880,10 +924,10 @@ export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request
     throw new HttpsError('invalid-argument', 'Hay que explicar qué pasó.');
   }
 
-  const propuesta = (request.data?.proposedAt as string | undefined) ?? null;
   const zonaDeLaSede =
     ((await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data()?.timezone as
       string | undefined) ?? 'America/Lima';
+  const propuesta = propuestaDelReloj(request.data?.proposedAt, zonaDeLaSede);
 
   const doc = await db.collection(COLLECTIONS.timeEditRequests).add({
     organization_id: kiosk.organizationId,

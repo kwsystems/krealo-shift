@@ -8,7 +8,9 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { submitTimeEditRequest } from '@/features/kiosk/api';
+import { horaPropuestaComoInstante } from '@/features/kiosk/hora-propuesta';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
+import { useKioskStore } from '@/stores/kiosk-store';
 import { spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
@@ -28,6 +30,7 @@ export default function KioskForgotScreen() {
   const styles = useEstilos();
   const { t } = useTranslation();
   const verification = useKioskVerificationStore((s) => s.verification);
+  const timezone = useKioskStore((s) => s.binding?.timezone ?? 'America/Lima');
   const clearVerification = useKioskVerificationStore((s) => s.clear);
 
   const [kind, setKind] = useState<RequestKind | null>(null);
@@ -73,13 +76,19 @@ export default function KioskForgotScreen() {
       return;
     }
 
+    const proposedAt = horaPropuestaComoInstante(time, timezone);
+    if (proposedAt === null) {
+      setError(t('schedule.invalidTime'));
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
 
     const result = await submitTimeEditRequest({
       actionToken: verification.actionToken,
       kind,
-      proposedAt: time,
+      proposedAt,
       reason: reason.trim(),
     });
 
@@ -100,7 +109,7 @@ export default function KioskForgotScreen() {
         <ResponsiveContainer width="form">
           <Stack gap={spacing.lg} style={styles.centered}>
             <Ionicons name="checkmark-circle" size={64} color={colors.success600} />
-            <AppText variant="section" style={styles.centerText}>
+            <AppText variant="section" style={styles.centerText} testID="forgot-sent">
               {t('kiosk.forgotSubmitted')}
             </AppText>
             <PrimaryButton label={t('common.done')} onPress={returnToIdle} />
@@ -121,16 +130,19 @@ export default function KioskForgotScreen() {
               label={t('kiosk.forgotClockIn')}
               onPress={() => setKind('forgot_clock_in')}
               style={kind === 'forgot_clock_in' ? styles.selected : undefined}
+              testID="forgot-kind-forgot_clock_in"
             />
             <SecondaryButton
               label={t('kiosk.forgotBreak')}
               onPress={() => setKind('forgot_break')}
               style={kind === 'forgot_break' ? styles.selected : undefined}
+              testID="forgot-kind-forgot_break"
             />
             <SecondaryButton
               label={t('kiosk.forgotClockOut')}
               onPress={() => setKind('forgot_clock_out')}
               style={kind === 'forgot_clock_out' ? styles.selected : undefined}
+              testID="forgot-kind-forgot_clock_out"
             />
           </Card>
 
@@ -153,7 +165,12 @@ export default function KioskForgotScreen() {
               />
 
               {error !== null ? (
-                <AppText variant="help" tone="danger" accessibilityRole="alert">
+                <AppText
+                  variant="help"
+                  tone="danger"
+                  accessibilityRole="alert"
+                  testID="forgot-error"
+                >
                   {error}
                 </AppText>
               ) : null}

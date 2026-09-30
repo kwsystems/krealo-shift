@@ -4,6 +4,7 @@ import {
   commentRequest,
   fetchRequests,
   reviewRequest,
+  type FichajeDeLaAprobacion,
   type ReviewDecision,
   type TimeEditRequest,
 } from './api';
@@ -35,6 +36,8 @@ export function useRequestMutations() {
     void queryClient.invalidateQueries({ queryKey: ['requests'] });
     void queryClient.invalidateQueries({ queryKey: ['timesheet'] });
     void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    // Aprobar un «olvidé marcar» cambia las horas del día: también las de Reportes.
+    void queryClient.invalidateQueries({ queryKey: ['reports'] });
   };
 
   const review = useMutation({
@@ -42,6 +45,7 @@ export function useRequestMutations() {
       request: TimeEditRequest;
       decision: ReviewDecision;
       comment: string | null;
+      fichajes?: FichajeDeLaAprobacion[];
     }) => reviewRequest(variables),
     onSuccess: invalidate,
   });

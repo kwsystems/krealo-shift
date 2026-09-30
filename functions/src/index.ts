@@ -58,6 +58,12 @@ export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './me
  */
 export { deleteEmployee } from './eliminar-empleado';
 
+/*
+ * Resolver una solicitud de la Bandeja (30-sep). Aprobar un «olvidé marcar» registra el
+ * fichaje que faltaba; antes la aprobación ni siquiera se guardaba.
+ */
+export { reviewTimeEditRequest } from './solicitudes';
+
 export {
   activateKiosk,
   refreshKioskRoster,

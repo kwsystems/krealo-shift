@@ -313,10 +313,10 @@ export const setOrganizationLogo = onCall(async (request) => {
     await getStorage().bucket().file(sobrante).delete({ ignoreNotFound: true });
   }
 
-  await db.collection(COLLECTIONS.organizations).doc(organizationId).set(
-    { logo_path: rutaGuardada, updated_at: nowISO() },
-    { merge: true },
-  );
+  await db
+    .collection(COLLECTIONS.organizations)
+    .doc(organizationId)
+    .set({ logo_path: rutaGuardada, updated_at: nowISO() }, { merge: true });
 
   await audit({
     organizationId,
@@ -474,12 +474,37 @@ export const revokeKioskDevice = onCall(async (request) => {
  */
 export const managerAdjustTime = onCall(async (request) => {
   const uid = requireUid(request);
-  const workSessionId = textoRequerido(request.data?.p_work_session_id, 'p_work_session_id');
-  const reason = textoRequerido(request.data?.p_reason, 'p_reason');
-  const expectedUpdatedAt = request.data?.p_expected_updated_at as string | undefined;
-  const newStartsAt = request.data?.p_new_starts_at as string | null | undefined;
-  const newEndsAt = request.data?.p_new_ends_at as string | null | undefined;
+  await ajustarSesion(uid, {
+    workSessionId: textoRequerido(request.data?.p_work_session_id, 'p_work_session_id'),
+    reason: textoRequerido(request.data?.p_reason, 'p_reason'),
+    expectedUpdatedAt: request.data?.p_expected_updated_at as string | undefined,
+    newStartsAt: request.data?.p_new_starts_at as string | null | undefined,
+    newEndsAt: request.data?.p_new_ends_at as string | null | undefined,
+  });
+  return null;
+});
 
+/**
+ * El ajuste en sí, fuera de la función invocable para que lo use también la Bandeja al
+ * aprobar una corrección (`solicitudes.ts`): con dos copias, una acabaría sin la
+ * comprobación de permisos o sin la fila de `time_adjustments`.
+ */
+export async function ajustarSesion(
+  uid: string,
+  {
+    workSessionId,
+    reason,
+    expectedUpdatedAt,
+    newStartsAt,
+    newEndsAt,
+  }: {
+    workSessionId: string;
+    reason: string;
+    expectedUpdatedAt?: string;
+    newStartsAt?: string | null;
+    newEndsAt?: string | null;
+  },
+): Promise<void> {
   const sessionRef = db.collection(COLLECTIONS.workSessions).doc(workSessionId);
 
   await db.runTransaction(async (tx) => {
@@ -551,9 +576,7 @@ export const managerAdjustTime = onCall(async (request) => {
     entityType: 'work_session',
     entityId: workSessionId,
   });
-
-  return null;
-});
+}
 
 /**
  * Fichaje que el gerente anade porque faltó (§11.4).

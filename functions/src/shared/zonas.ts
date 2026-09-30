@@ -35,3 +35,43 @@ export function zonaSegura(zona: unknown, dondeSaltó: string): string {
   logger.error('Zona horaria vacia en la base: se agrupa en UTC', { donde: dondeSaltó });
   return 'UTC';
 }
+
+/** Cuánto va la hora de pared de `zona` por delante de UTC en ese instante, en ms. */
+function desfaseMs(instante: number, zona: string): number {
+  const partes = new Intl.DateTimeFormat('en-US', {
+    timeZone: zona,
+    hourCycle: 'h23',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).formatToParts(new Date(instante));
+  const valor = (tipo: string) => Number(partes.find((parte) => parte.type === tipo)?.value);
+  const comoSiFueraUtc = Date.UTC(
+    valor('year'),
+    valor('month') - 1,
+    valor('day'),
+    valor('hour'),
+    valor('minute'),
+    valor('second'),
+  );
+  return comoSiFueraUtc - Math.floor(instante / 1000) * 1000;
+}
+
+/** «2026-09-29» a las «08:00» en Lima → el instante UTC. Dos pasadas por si hay cambio de hora. */
+export function instanteLocal(fecha: string, hora: string, zona: string): string | null {
+  const dia = /^(\d{4})-(\d{2})-(\d{2})$/.exec(fecha);
+  const reloj = /^(\d{1,2}):(\d{2})$/.exec(hora);
+  if (dia === null || reloj === null) return null;
+  const supuesto = Date.UTC(
+    Number(dia[1]),
+    Number(dia[2]) - 1,
+    Number(dia[3]),
+    Number(reloj[1]),
+    Number(reloj[2]),
+  );
+  const primera = supuesto - desfaseMs(supuesto, zona);
+  return new Date(supuesto - desfaseMs(primera, zona)).toISOString();
+}

@@ -775,6 +775,7 @@ export default function KioskActionsScreen() {
               <GhostButton
                 label={t('kiosk.forgotToClock')}
                 onPress={() => router.push('/kiosk/forgot')}
+                testID="kiosk-forgot"
               />
               <GhostButton label={t('common.cancel')} onPress={returnToIdle} />
             </Stack>

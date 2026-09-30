@@ -642,6 +642,222 @@ function crearRpc(almacen: Almacen) {
         return sinError({ relojDesde, registrados: nuevas.length, minutos, saltados });
       }
 
+      /*
+       * RESOLVER UNA SOLICITUD, como `functions/src/solicitudes.ts`.
+       *
+       * AQUÍ ESTABA EL AGUJERO QUE ESCONDIÓ EL FALLO: la bandeja escribía la solicitud a
+       * pelo, la demostración lo aceptaba —es una tabla en memoria, sin reglas— y en
+       * producción Firestore lo rechazaba. El arnés aprobaba sin problema lo que en la
+       * tienda no se podía aprobar. Ahora las dos pasan por la misma función, y la
+       * demostración hace su parte: registra el fichaje y arregla la jornada y el
+       * resumen del día, que aquí son tablas y no proyecciones.
+       */
+      case 'review_time_edit_request': {
+        const id = argumentos.p_request_id;
+        const decision = String(argumentos.p_decision ?? '');
+        const comentario =
+          typeof argumentos.p_comment === 'string' && argumentos.p_comment.trim() !== ''
+            ? argumentos.p_comment.trim()
+            : null;
+        const solicitud = filas('time_edit_requests').find((fila) => fila.id === id);
+        if (solicitud === undefined) return conError('Esa solicitud no existe.');
+        const guardar = (cambios: Fila) =>
+          almacen.set(
+            'time_edit_requests',
+            filas('time_edit_requests').map((fila) =>
+              fila.id === id ? { ...fila, ...cambios, updated_at: new Date().toISOString() } : fila,
+            ),
+          );
+
+        if (decision === 'comment') {
+          guardar({ reviewer_comment: comentario });
+          return sinError({ status: solicitud.status, applied: false, eventIds: [] });
+        }
+        if (solicitud.status !== 'pending') {
+          return {
+            data: null,
+            error: {
+              code: 'failed-precondition',
+              message: 'Esa solicitud ya se resolvió.',
+              details: { motivo: 'YA_RESUELTA' },
+            },
+          };
+        }
+        const resolucion = {
+          status: decision,
+          reviewed_at: new Date().toISOString(),
+          reviewer_comment: comentario ?? solicitud.reviewer_comment ?? null,
+        };
+        const fichajes = Array.isArray(argumentos.p_events)
+          ? (argumentos.p_events as { type: string; occurred_at: string }[])
+          : [];
+        const registra = ['forgot_clock_in', 'forgot_clock_out', 'forgot_break'].includes(
+          String(solicitud.kind),
+        );
+        if (decision !== 'approved' || !registra) {
+          guardar(resolucion);
+          return sinError({ status: decision, applied: false, eventIds: [] });
+        }
+        if (fichajes.length === 0) {
+          return {
+            data: null,
+            error: {
+              code: 'invalid-argument',
+              message: 'Faltan los fichajes.',
+              details: { motivo: 'FICHAJES' },
+            },
+          };
+        }
+
+        const empleado = solicitud.employee_id;
+        const sede = solicitud.location_id;
+        const zona = String(
+          filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+        );
+        const diaDe = (instante: unknown) =>
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(String(instante)));
+        const cuando = (tipo: string) =>
+          fichajes.find((fichaje) => fichaje.type === tipo)?.occurred_at;
+        const eventIds = fichajes.map((_, i) => `solicitud-${String(id)}-${i}`);
+
+        almacen.set('time_events', [
+          ...filas('time_events'),
+          ...fichajes.map((fichaje, i) => ({
+            id: eventIds[i],
+            organization_id: DEMO_ORG_ID,
+            employee_id: empleado,
+            location_id: sede,
+            event_type: fichaje.type,
+            break_type: fichaje.type === 'break_start' ? 'unpaid' : null,
+            occurred_at: fichaje.occurred_at,
+            source: 'manager',
+            is_offline: false,
+          })),
+        ]);
+
+        const recalcular = (sesion: Fila, cambios: Fila): Fila => {
+          const junta = { ...sesion, ...cambios };
+          const fin = junta.ends_at as string | null;
+          const brutos = fin === null ? null : minutosEntre(String(junta.starts_at), fin);
+          const pausa = Number(junta.unpaid_break_minutes ?? 0);
+          return {
+            ...junta,
+            gross_minutes: brutos,
+            net_minutes: brutos === null ? null : brutos - pausa,
+            status: fin === null ? 'open' : 'complete',
+            updated_at: new Date().toISOString(),
+          };
+        };
+        const suyas = filas('work_sessions').filter((fila) => fila.employee_id === empleado);
+        const entrada = cuando('clock_in');
+        const salida = cuando('clock_out');
+        const inicioPausa = cuando('break_start');
+        const finPausa = cuando('break_end');
+        let tocada: Fila | undefined;
+
+        if (entrada !== undefined) {
+          // La entrada tardía del mismo día se sustituye; si no hay, es una jornada nueva.
+          const tardia = suyas.find(
+            (fila) => diaDe(fila.starts_at) === diaDe(entrada) && String(fila.starts_at) >= entrada,
+          );
+          tocada = recalcular(
+            tardia ?? {
+              id: `solicitud-sesion-${String(id)}`,
+              organization_id: DEMO_ORG_ID,
+              employee_id: empleado,
+              location_id: sede,
+              shift_id: null,
+              ends_at: null,
+              paid_break_minutes: 0,
+              unpaid_break_minutes: 0,
+              flags: [],
+              departure_reason: null,
+              departure_note: null,
+              source: 'manager',
+            },
+            { starts_at: entrada, ...(salida === undefined ? {} : { ends_at: salida }) },
+          );
+        } else {
+          const instante = salida ?? finPausa ?? inicioPausa ?? '';
+          // La jornada de ESE día, o una que siga abierta: no la de la semana pasada.
+          const suya = suyas
+            .filter(
+              (fila) =>
+                String(fila.starts_at) <= instante &&
+                (diaDe(fila.starts_at) === diaDe(instante) || fila.ends_at === null),
+            )
+            .sort((a, b) => String(b.starts_at).localeCompare(String(a.starts_at)))[0];
+          if (suya === undefined) {
+            return {
+              data: null,
+              error: {
+                code: 'failed-precondition',
+                message: 'A esa hora no figuraba dentro.',
+                details: { motivo: 'NO_ENCAJA', tipo: fichajes[0]?.type, estado: 'OFF_SHIFT' },
+              },
+            };
+          }
+          const pausa =
+            inicioPausa !== undefined && finPausa !== undefined
+              ? minutosEntre(inicioPausa, finPausa)
+              : 0;
+          tocada = recalcular(suya, {
+            ...(salida === undefined ? {} : { ends_at: salida }),
+            unpaid_break_minutes: Number(suya.unpaid_break_minutes ?? 0) + pausa,
+          });
+        }
+
+        const final = tocada;
+        almacen.set('work_sessions', [
+          ...filas('work_sessions').filter((fila) => fila.id !== final.id),
+          final,
+        ]);
+        const dia = diaDe(final.starts_at);
+        const delDia = filas('work_sessions').filter(
+          (fila) =>
+            fila.employee_id === empleado &&
+            fila.location_id === sede &&
+            diaDe(fila.starts_at) === dia,
+        );
+        const suma = (campo: string) =>
+          delDia.reduce((total, fila) => total + Number(fila[campo] ?? 0), 0);
+        almacen.set('daily_time_summary', [
+          ...filas('daily_time_summary').filter(
+            (fila) =>
+              !(
+                fila.employee_id === empleado &&
+                fila.location_id === sede &&
+                fila.work_date === dia
+              ),
+          ),
+          {
+            employee_id: empleado,
+            location_id: sede,
+            work_date: dia,
+            sessions: delDia.length,
+            gross_minutes: suma('gross_minutes'),
+            paid_break_minutes: suma('paid_break_minutes'),
+            unpaid_break_minutes: suma('unpaid_break_minutes'),
+            net_minutes: suma('net_minutes'),
+            needs_review: false,
+            flags: [],
+          },
+        ]);
+
+        guardar({ ...resolucion, work_session_id: final.id, applied_event_ids: eventIds });
+        return sinError({
+          status: 'approved',
+          applied: true,
+          eventIds,
+          workSessionId: final.id,
+        });
+      }
+
       case 'attendance_state_at':
       case 'current_attendance_state': {
         const empleado = argumentos.p_employee_id;
