@@ -661,6 +661,7 @@ function crearRpc(almacen: Almacen) {
           .map((fila) => {
             const netos = Number(fila.net_minutes ?? 0);
             return {
+              employee_id: fila.employee_id,
               employee_name: nombres.get(fila.employee_id) ?? 'Empleado',
               work_date: String(fila.starts_at).slice(0, 10),
               clock_in: fila.starts_at,

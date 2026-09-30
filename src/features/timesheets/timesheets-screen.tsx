@@ -17,6 +17,15 @@ import {
   useTimesheetTotals,
   useWorkSessions,
 } from './hooks';
+import {
+  aprobadasPorDia,
+  claveDelDia,
+  esPosibleHoraExtra,
+  minutosDeMas,
+  planificadoPorDia,
+  useGuardarHoraExtra,
+  useHorasExtra,
+} from './horas-extra';
 import { shareCsv } from './share-csv';
 import { track } from '@/lib/analytics';
 import { AsyncSection } from '@/components/schedule/data-states';
@@ -29,7 +38,10 @@ import {
 } from '@/components/schedule/fields';
 import { WeekNavigator } from '@/components/schedule/week-tools';
 import { ManualEntrySheet, SessionDetailSheet } from '@/components/timesheets/session-detail';
+import { HoraExtraDelDia } from '@/components/timesheets/hora-extra-del-dia';
 import { SessionList } from '@/components/timesheets/session-list';
+import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
+import { useWeekShifts } from '@/features/schedules/hooks';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
@@ -156,7 +168,66 @@ export function TimesheetsScreen() {
     [summaries.data, employeeFilter],
   );
 
-  const totals = useTimesheetTotals(visibleSummaries, scope.settings.dailyOvertimeThresholdMinutes);
+  /*
+   * LAS HORAS EXTRA: las aprobadas, y el aviso de las que podrían serlo (30-sep, ver
+   * `horas-extra.ts`). «De más» se mide contra lo PLANIFICADO de esa persona ese día —sus
+   * turnos publicados—, así que un turno largo que se cumple no avisa por largo que sea,
+   * y unos minutos antes o después tampoco: no llegan al umbral de la sede.
+   */
+  const horasExtra = useHorasExtra({ organizationId, locationId: scope.locationId, from, to });
+  const guardarHoraExtra = useGuardarHoraExtra({ organizationId, locationId: scope.locationId });
+  const turnosDeLaSemana = useWeekShifts({
+    organizationId,
+    locationId: scope.locationId,
+    weekStart,
+    timezone: scope.timezone,
+  });
+  const aprobadas = useMemo(() => aprobadasPorDia(horasExtra.data ?? []), [horasExtra.data]);
+  const planificado = useMemo(
+    () => planificadoPorDia(turnosDeLaSemana.data ?? [], scope.timezone),
+    [turnosDeLaSemana.data, scope.timezone],
+  );
+  const netosPorDia = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const dia of summaries.data ?? []) {
+      const clave = claveDelDia(dia.employee_id, dia.work_date);
+      mapa.set(clave, (mapa.get(clave) ?? 0) + dia.net_minutes);
+    }
+    return mapa;
+  }, [summaries.data]);
+  const umbralDeAviso = scope.settings.overtimeNoticeMinutes;
+  /** La hora extra va en la ÚLTIMA fila del día de cada persona: la aprobación es por día. */
+  const horaExtraPorSesion = useMemo(() => {
+    const ultima = new Map<string, WorkSession>();
+    for (const sesion of allSessions) {
+      const clave = claveDelDia(sesion.employee_id, dateKeyOf(sesion.starts_at, scope.timezone));
+      const antes = ultima.get(clave);
+      if (antes === undefined || sesion.starts_at > antes.starts_at) ultima.set(clave, sesion);
+    }
+    const mapa = new Map<string, HoraExtraDeLaFila>();
+    for (const [clave, sesion] of ultima) {
+      if (sesion.ends_at === null) continue; // quien sigue dentro todavía no ha trabajado «de más»
+      const aprobado = aprobadas.get(clave) ?? 0;
+      if (aprobado > 0) {
+        mapa.set(sesion.id, { tipo: 'aprobada', minutos: aprobado });
+        continue;
+      }
+      const deMas = minutosDeMas(netosPorDia.get(clave) ?? 0, planificado.get(clave));
+      if (esPosibleHoraExtra(deMas, umbralDeAviso)) {
+        mapa.set(sesion.id, { tipo: 'posible', minutos: deMas });
+      }
+    }
+    return mapa;
+  }, [allSessions, aprobadas, netosPorDia, planificado, umbralDeAviso, scope.timezone]);
+  const diasPorRevisar = [...horaExtraPorSesion.values()].filter(
+    (fila) => fila.tipo === 'posible',
+  ).length;
+
+  const totals = useTimesheetTotals(visibleSummaries, aprobadas);
+  const claveSeleccionada =
+    selected === null
+      ? ''
+      : claveDelDia(selected.employee_id, dateKeyOf(selected.starts_at, scope.timezone));
 
   const visibleSessions = useMemo(() => {
     const filtradas = allSessions.filter((session) => {
@@ -224,9 +295,8 @@ export function TimesheetsScreen() {
         timezone: scope.timezone,
         timeFormat: scope.timeFormat,
         language,
-        // El umbral es de la UBICACIÓN, no una constante: exportar dos ubicaciones con
-        // el mismo umbral fijo daría horas extra equivocadas en una de las dos.
-        dailyOvertimeThresholdMinutes: scope.settings.dailyOvertimeThresholdMinutes,
+        // Las mismas aprobadas que la pantalla: el archivo y los totales cuadran.
+        horasExtraAprobadas: aprobadas,
       });
       await shareCsv({ fileName: timesheetFileName({ from, to }), content });
       return rows.length;
@@ -285,6 +355,7 @@ export function TimesheetsScreen() {
               alertsBySession={alertsBySession}
               enCursoPorSesion={enCursoPorSesion}
               nowISO={nowISO}
+              horaExtraPorSesion={horaExtraPorSesion}
               unknownEmployeeLabel={t('team.unknownEmployee')}
               timezone={scope.timezone}
               timeFormat={scope.timeFormat}
@@ -398,6 +469,11 @@ export function TimesheetsScreen() {
                     <StatTile
                       label={t('timesheet.overtimeInformative')}
                       value={minutesToHHmm(totals.overtimeMinutes)}
+                      detalle={
+                        diasPorRevisar > 0
+                          ? t('timesheet.overtimePendingDays', { count: diasPorRevisar })
+                          : undefined
+                      }
                       icon="trending-up-outline"
                       /*
                        * El `testID` lo pide `scripts/reportes-check.mjs`: abre esta
@@ -605,6 +681,37 @@ export function TimesheetsScreen() {
                   setFeedback(t('timesheet.corrected'));
                 },
               },
+            )
+          }
+          seccionHoraExtra={
+            selected.ends_at === null ? undefined : (
+              <HoraExtraDelDia
+                key={`${selected.id}-${aprobadas.get(claveSeleccionada) ?? 0}`}
+                netosDelDia={netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0}
+                planificados={planificado.get(claveSeleccionada)}
+                aprobados={aprobadas.get(claveSeleccionada) ?? 0}
+                saving={guardarHoraExtra.isPending}
+                failed={guardarHoraExtra.isError}
+                onGuardar={(minutos) =>
+                  guardarHoraExtra.mutate(
+                    {
+                      employeeId: selected.employee_id,
+                      workDate: dateKeyOf(selected.starts_at, scope.timezone),
+                      minutes: minutos,
+                    },
+                    {
+                      onSuccess: () => {
+                        setSelected(null);
+                        setFeedback(
+                          minutos > 0
+                            ? t('timesheet.overtimeSaved')
+                            : t('timesheet.overtimeRemoved'),
+                        );
+                      },
+                    },
+                  )
+                }
+              />
             )
           }
           onClose={() => setSelected(null)}

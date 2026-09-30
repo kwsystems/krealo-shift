@@ -22,7 +22,15 @@ import type { DailySummary, WorkSession } from '@/features/timesheets/api';
  * el error fácil—. Que salga lo mismo es información, no una tautología.
  */
 
-const UMBRAL = 8 * 60;
+/**
+ * Las horas extra APROBADAS de la semana (30-sep: extra es lo que quien gestiona aprueba,
+ * no lo que pasa de 8 h). Son las mismas cifras que daba el umbral en esos dos días, para
+ * que las cuentas de abajo sigan midiendo lo mismo: que Reportes y Horas cuadren.
+ */
+const APROBADAS = new Map([
+  ['ana_2026-09-15', 50],
+  ['beto_2026-09-16', 130],
+]);
 
 function dia(
   parcial: Partial<DailySummary> & { employee_id: string; work_date: string },
@@ -74,15 +82,15 @@ const SEMANA: DailySummary[] = [
 
 describe('las cuentas de Reportes cuadran con las de Horas', () => {
   it('la suma del ranking es exactamente el total neto del periodo', () => {
-    const totales = computeTotals(SEMANA, UMBRAL);
-    const ranking = hoursByEmployee(SEMANA, UMBRAL);
+    const totales = computeTotals(SEMANA, APROBADAS);
+    const ranking = hoursByEmployee(SEMANA, APROBADAS);
     const suma = ranking.reduce((acumulado, fila) => acumulado + fila.netMinutes, 0);
     expect(suma).toBe(totales.netMinutes);
   });
 
   it('y las horas extra también, partidas por día en los dos sitios', () => {
-    const totales = computeTotals(SEMANA, UMBRAL);
-    const ranking = hoursByEmployee(SEMANA, UMBRAL);
+    const totales = computeTotals(SEMANA, APROBADAS);
+    const ranking = hoursByEmployee(SEMANA, APROBADAS);
     expect(ranking.reduce((a, f) => a + f.overtimeMinutes, 0)).toBe(totales.overtimeMinutes);
     expect(ranking.reduce((a, f) => a + f.regularMinutes, 0)).toBe(totales.regularMinutes);
   });
@@ -97,32 +105,31 @@ describe('las cuentas de Reportes cuadran con las de Horas', () => {
       '2026-09-19',
       '2026-09-20',
     ]);
-    const totales = computeTotals(SEMANA, UMBRAL);
+    const totales = computeTotals(SEMANA, APROBADAS);
     expect(dias.reduce((a, d) => a + d.netMinutes, 0)).toBe(totales.netMinutes);
   });
 });
 
 describe('horas por persona', () => {
   it('ordena de más a menos y parte las extra por día, no por semana', () => {
-    const ranking = hoursByEmployee(SEMANA, UMBRAL);
+    const ranking = hoursByEmployee(SEMANA, APROBADAS);
     expect(ranking.map((fila) => fila.employeeId)).toEqual(['ana', 'beto', 'caro']);
 
     const ana = ranking[0];
     expect(ana?.netMinutes).toBe(1310);
-    // 480 (justo el umbral, cero extra) + 530 (50 extra) + 300 (cero extra).
-    // Por semana serían 1310 - 2400 = negativo, o sobre 40 h daría otra cifra: la
-    // prueba falla si alguien cambia a sumar primero y partir después.
+    // 50 aprobados el día 15 y nada los otros dos: la extra es por día y por persona.
     expect(ana?.overtimeMinutes).toBe(50);
     expect(ana?.regularMinutes).toBe(1260);
     expect(ana?.days).toBe(3);
   });
 
-  it('un día exactamente en el umbral no genera ni un minuto extra', () => {
+  it('un día largo sin nada aprobado no tiene ni un minuto extra', () => {
     const ranking = hoursByEmployee(
-      [dia({ employee_id: 'ana', work_date: '2026-09-14', net_minutes: UMBRAL })],
-      UMBRAL,
+      [dia({ employee_id: 'ana', work_date: '2026-09-14', net_minutes: 660 })],
+      APROBADAS,
     );
     expect(ranking[0]?.overtimeMinutes).toBe(0);
+    expect(ranking[0]?.regularMinutes).toBe(660);
   });
 });
 

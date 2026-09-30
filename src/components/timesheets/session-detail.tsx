@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -57,6 +57,7 @@ export function SessionDetailSheet({
   conflict,
   onSubmitCorrection,
   onReclassifyDeparture,
+  seccionHoraExtra,
   onClose,
 }: {
   session: WorkSession;
@@ -81,6 +82,11 @@ export function SessionDetailSheet({
    * corregir —o donde quien mira no manda en esa sede— y ahí el botón no debe salir.
    */
   onReclassifyDeparture?: (params: { eventId: string; breakReason: BreakReason }) => void;
+  /**
+   * «¿Cuenta como hora extra?» para el día de esta jornada (30-sep). Llega hecha desde la
+   * pantalla, que es la que tiene los turnos y lo aprobado; aquí solo se coloca.
+   */
+  seccionHoraExtra?: ReactNode;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -157,6 +163,8 @@ export function SessionDetailSheet({
           ))}
         </Row>
       ) : null}
+
+      {seccionHoraExtra}
 
       {/*
         LO QUE LA PERSONA YA CONTESTÓ AL IRSE, justo debajo de la marca que lo señala.

@@ -842,7 +842,37 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       settings: { photoEnabled: true, pinLength: 6, lateGraceMinutes: 10 },
     },
   ]);
+  /*
+   * HORAS EXTRA APROBADAS (30-sep). Desde que la extra es lo que alguien aprueba y no lo
+   * que pasa de 8 h, la demostración necesita alguna aprobada —si no, el gráfico de horas
+   * extra de Reportes sale vacío y no se puede ver cómo es— y alguna sin aprobar, para que
+   * Horas enseñe el aviso. Se aprueban los días más largos de la semana PASADA en la sede
+   * principal, lo que pasó de 8 h en cuartos de hora; los de esta semana quedan «por
+   * revisar».
+   */
+  const horasExtraAprobadas: Fila[] = resumenDiario
+    .filter(
+      (dia) =>
+        dia.location_id === DEMO_LOCATION_1 &&
+        String(dia.work_date) < fechaClave(lunes) &&
+        Number(dia.net_minutes) > 8 * 60,
+    )
+    .sort((a, b) => Number(b.net_minutes) - Number(a.net_minutes))
+    .slice(0, 4)
+    .map((dia) => ({
+      id: `${DEMO_LOCATION_1}_${String(dia.employee_id)}_${String(dia.work_date)}`,
+      organization_id: DEMO_ORG_ID,
+      location_id: DEMO_LOCATION_1,
+      employee_id: dia.employee_id,
+      work_date: dia.work_date,
+      minutes: Math.max(15, Math.floor((Number(dia.net_minutes) - 8 * 60) / 15) * 15),
+      approved_by: DEMO_USER_ID,
+      approved_at: aISO(sumarDias(lunes, -1)),
+      updated_at: aISO(sumarDias(lunes, -1)),
+    }));
+
   almacen.set('employees', empleados);
+  almacen.set('overtime_approvals', horasExtraAprobadas);
   almacen.set('job_roles', puestos);
   almacen.set('employee_location_assignments', asignaciones);
   almacen.set('employee_job_roles', puestosDeEmpleado);

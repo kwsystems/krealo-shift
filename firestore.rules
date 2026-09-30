@@ -269,6 +269,33 @@ service cloud.firestore {
       );
     }
 
+    /*
+     * HORAS EXTRA APROBADAS (30-sep). Una fila por persona y día, con su id sacado de sede,
+     * persona y día: aprobar otra vez cambia la misma fila. Las decide quien gestiona la
+     * sede, firmadas con su propia cuenta —no se puede aprobar a nombre de otro— y entre
+     * 1 minuto y un día entero: cero no se guarda, se borra la fila. Lo que no esté
+     * aprobado aquí no es extra, por mucho que alguien se haya quedado.
+     */
+    function aprobacionValida(id) {
+      let d = request.resource.data;
+      return managesLocation(d.organization_id, d.location_id)
+        && d.approved_by == request.auth.uid
+        && d.minutes is int
+        && d.minutes > 0
+        && d.minutes <= 1440
+        && d.work_date is string
+        && id == d.location_id + '_' + d.employee_id + '_' + d.work_date;
+    }
+
+    match /overtime_approvals/{id} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow create: if aprobacionValida(id);
+      allow update: if aprobacionValida(id)
+        && request.resource.data.organization_id == resource.data.organization_id
+        && request.resource.data.location_id == resource.data.location_id;
+      allow delete: if managesLocation(resource.data.organization_id, resource.data.location_id);
+    }
+
     match /shift_publications/{id} {
       allow read: if managesLocation(resource.data.organization_id, resource.data.location_id);
       allow create: if managesLocation(

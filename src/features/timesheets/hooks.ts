@@ -20,6 +20,7 @@ import {
 } from './api';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { splitRegularAndOvertime } from '@/utils/time';
+import { claveDelDia } from './horas-extra';
 
 /** Hooks de horas y hojas de tiempo (§11.4). */
 
@@ -174,12 +175,12 @@ export type TimesheetTotals = {
 };
 
 /**
- * Totales del periodo. Las horas extra se separan por día contra el umbral
- * configurado y son informativas: la app resume tiempo, no calcula nómina (§13).
+ * Totales del periodo. Las horas extra son las APROBADAS de cada persona y día (ver
+ * `horas-extra.ts`) y son informativas: la app resume tiempo, no calcula nómina (§13).
  */
 export function computeTotals(
   summaries: DailySummary[],
-  dailyThresholdMinutes: number,
+  aprobadas: ReadonlyMap<string, number>,
 ): TimesheetTotals {
   const totals: TimesheetTotals = {
     netMinutes: 0,
@@ -192,7 +193,10 @@ export function computeTotals(
   };
 
   for (const day of summaries) {
-    const split = splitRegularAndOvertime(day.net_minutes, dailyThresholdMinutes);
+    const split = splitRegularAndOvertime(
+      day.net_minutes,
+      aprobadas.get(claveDelDia(day.employee_id, day.work_date)) ?? 0,
+    );
     totals.netMinutes += day.net_minutes;
     totals.grossMinutes += day.gross_minutes;
     totals.paidBreakMinutes += day.paid_break_minutes;
@@ -207,12 +211,9 @@ export function computeTotals(
 
 export function useTimesheetTotals(
   summaries: DailySummary[],
-  dailyThresholdMinutes: number,
+  aprobadas: ReadonlyMap<string, number>,
 ): TimesheetTotals {
-  return useMemo(
-    () => computeTotals(summaries, dailyThresholdMinutes),
-    [summaries, dailyThresholdMinutes],
-  );
+  return useMemo(() => computeTotals(summaries, aprobadas), [summaries, aprobadas]);
 }
 
 export function useTimesheetMutations(params: {

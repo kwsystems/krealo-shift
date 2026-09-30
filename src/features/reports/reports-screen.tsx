@@ -3,6 +3,8 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
+import { aprobadasPorDia, useHorasExtra } from '@/features/timesheets/horas-extra';
+
 import { hoursByEmployee, minutesByDay, minutesByReason, punctuality } from './aggregate';
 import {
   breakMinutesByEmployee,
@@ -144,11 +146,19 @@ export function ReportsScreen() {
   const nombre = (employeeId: string) => names.get(employeeId) ?? t('reports.unknownPerson');
   const etiquetaMotivo = breakReasonLabels(t);
 
-  const umbral = scope.settings.dailyOvertimeThresholdMinutes;
+  /*
+   * Las horas extra APROBADAS del periodo, las mismas que suma Horas: extra es lo que
+   * quien gestiona aprobó, no lo que pasa de un umbral (30-sep, ver `horas-extra.ts`).
+   */
+  const horasExtra = useHorasExtra({ organizationId, locationId: scope.locationId, from, to });
+  const aprobadas = useMemo(() => aprobadasPorDia(horasExtra.data ?? []), [horasExtra.data]);
   const filasResumen = useMemo(() => summaries.data ?? [], [summaries.data]);
   const filasSesiones = useMemo(() => sessions.data ?? [], [sessions.data]);
 
-  const ranking = useMemo(() => hoursByEmployee(filasResumen, umbral), [filasResumen, umbral]);
+  const ranking = useMemo(
+    () => hoursByEmployee(filasResumen, aprobadas),
+    [filasResumen, aprobadas],
+  );
   /*
    * Tocar a alguien en el ranking FILTRA el resto del tablero a esa persona.
    *
@@ -326,7 +336,7 @@ export function ReportsScreen() {
   const compartir = useMutation({
     mutationFn: async (formato: 'csv' | 'resumen') => {
       const filas = buildExportRows({
-        ranking: hoursByEmployee(filasResumen, umbral),
+        ranking: hoursByEmployee(filasResumen, aprobadas),
         nameOf: nombre,
         punctuality: punctuality(filasSesiones),
         breakMinutesByEmployee: pausasPorPersona,

@@ -31,6 +31,7 @@ const labels: CsvLabels = {
 
 function row(overrides: Partial<TimesheetExportRow> = {}): TimesheetExportRow {
   return {
+    employee_id: 'e-ana',
     employee_name: 'Ana Torres',
     work_date: '2026-08-27',
     clock_in: '2026-08-27T14:00:00.000Z',
@@ -62,12 +63,47 @@ describe('escapado CSV', () => {
   });
 });
 
+describe('las horas extra del archivo son las aprobadas (30-sep)', () => {
+  const opciones = (aprobadas: [string, number][]) => ({
+    labels,
+    timezone: 'America/Lima',
+    horasExtraAprobadas: new Map(aprobadas),
+  });
+  const extraDe = (linea: string | undefined) => linea?.split(',')[10];
+  const regularDe = (linea: string | undefined) => linea?.split(',')[9];
+
+  it('sin nada aprobado, 8:30 trabajadas son 8:30 regulares', () => {
+    const csv = buildTimesheetCsv([row()], opciones([]));
+    expect(regularDe(csv.split('\r\n')[1])).toBe('08:30');
+    expect(extraDe(csv.split('\r\n')[1])).toBe('00:00');
+  });
+
+  it('con dos jornadas el mismo día, lo aprobado se reparte sin pasar de cada una', () => {
+    const csv = buildTimesheetCsv(
+      [row({ net_minutes: 60 }), row({ net_minutes: 120 })],
+      opciones([['e-ana_2026-08-27', 90]]),
+    );
+    const [, primera, segunda] = csv.split('\r\n');
+    expect([regularDe(primera), extraDe(primera)]).toEqual(['00:00', '01:00']);
+    expect([regularDe(segunda), extraDe(segunda)]).toEqual(['01:30', '00:30']);
+  });
+
+  it('una fila sin persona no se lleva la extra de nadie', () => {
+    const csv = buildTimesheetCsv(
+      [row({ employee_id: null })],
+      opciones([['e-ana_2026-08-27', 30]]),
+    );
+    expect(extraDe(csv.split('\r\n')[1])).toBe('00:00');
+  });
+});
+
 describe('exportación de la hoja de tiempo', () => {
   it('escribe el encabezado traducido y una fila por sesión', () => {
     const csv = buildTimesheetCsv([row()], {
       labels,
       timezone: 'America/Lima',
-      dailyOvertimeThresholdMinutes: 480,
+      // Media hora aprobada ese día: el resto de las 8:30 son regulares.
+      horasExtraAprobadas: new Map([['e-ana_2026-08-27', 30]]),
     });
     const lines = csv.split('\r\n');
 
@@ -84,7 +120,7 @@ describe('exportación de la hoja de tiempo', () => {
     const csv = buildTimesheetCsv([row({ net_minutes: 90, net_hours_decimal: 1.5 })], {
       labels,
       timezone: 'America/Lima',
-      dailyOvertimeThresholdMinutes: 480,
+      horasExtraAprobadas: new Map(),
     });
 
     expect(csv.split('\r\n')[1]).toContain(',01:30,1.50,');
@@ -94,7 +130,7 @@ describe('exportación de la hoja de tiempo', () => {
     const csv = buildTimesheetCsv([row()], {
       labels,
       timezone: 'America/Lima',
-      dailyOvertimeThresholdMinutes: 480,
+      horasExtraAprobadas: new Map(),
       timeFormat: '12h',
       language: 'en',
     });
@@ -105,7 +141,7 @@ describe('exportación de la hoja de tiempo', () => {
   it('deja vacías las horas de una sesión sin salida', () => {
     const csv = buildTimesheetCsv(
       [row({ clock_out: null, net_minutes: null, net_hours_decimal: 0, status: 'open' })],
-      { labels, timezone: 'America/Lima', dailyOvertimeThresholdMinutes: 480 },
+      { labels, timezone: 'America/Lima', horasExtraAprobadas: new Map() },
     );
 
     expect(csv.split('\r\n')[1]).toBe(
@@ -116,7 +152,7 @@ describe('exportación de la hoja de tiempo', () => {
   it('no rompe columnas con un nombre con coma ni con varias alertas', () => {
     const csv = buildTimesheetCsv(
       [row({ employee_name: 'Torres, Ana', flags: ['late_arrival', 'clock_drift'] })],
-      { labels, timezone: 'America/Lima', dailyOvertimeThresholdMinutes: 480 },
+      { labels, timezone: 'America/Lima', horasExtraAprobadas: new Map() },
     );
 
     const line = csv.split('\r\n')[1] ?? '';
@@ -130,7 +166,7 @@ describe('exportación de la hoja de tiempo', () => {
     );
   });
 
-  it('separa horas regulares y extra con el umbral de la ubicación (§13)', () => {
+  it('separa horas regulares y extra (§13): extra es lo aprobado ese día', () => {
     /*
      * §13 manda separar SEIS cubos de minutos, y el CSV llevaba cuatro: faltaban
      * regulares y extra. Es el peor sitio donde podían faltar, porque el CSV es lo que
@@ -140,27 +176,29 @@ describe('exportación de la hoja de tiempo', () => {
     const csv = buildTimesheetCsv([row({ net_minutes: 600 })], {
       labels,
       timezone: 'America/Lima',
-      dailyOvertimeThresholdMinutes: 480,
+      horasExtraAprobadas: new Map([['e-ana_2026-08-27', 120]]),
     });
 
-    // Diez horas con umbral de ocho: ocho regulares y dos extra.
+    // Diez horas con dos aprobadas: ocho regulares y dos extra.
     expect(csv.split('\r\n')[1]).toContain(',10:00,10.00,08:00,02:00,');
   });
 
-  it('el umbral es el de la UBICACIÓN, no una constante', () => {
-    // Dos ubicaciones con umbrales distintos tienen que dar números distintos para las
-    // mismas horas. Con un umbral fijo, una de las dos exportaciones estaría mal.
-    const seisHoras = { labels, timezone: 'America/Lima', dailyOvertimeThresholdMinutes: 360 };
-    const csv = buildTimesheetCsv([row({ net_minutes: 600 })], seisHoras);
+  it('las mismas horas sin aprobar son todas regulares', () => {
+    // Con el umbral de antes, estas diez horas daban dos de extra aunque nadie las pidiera.
+    const csv = buildTimesheetCsv([row({ net_minutes: 600 })], {
+      labels,
+      timezone: 'America/Lima',
+      horasExtraAprobadas: new Map(),
+    });
 
-    expect(csv.split('\r\n')[1]).toContain(',06:00,04:00,');
+    expect(csv.split('\r\n')[1]).toContain(',10:00,10.00,10:00,00:00,');
   });
 
   it('sin horas netas no inventa ni regulares ni extra', () => {
     const csv = buildTimesheetCsv([row({ net_minutes: null })], {
       labels,
       timezone: 'America/Lima',
-      dailyOvertimeThresholdMinutes: 480,
+      horasExtraAprobadas: new Map(),
     });
 
     expect(csv.split('\r\n')[1]).toContain(',00:00,00:00,');

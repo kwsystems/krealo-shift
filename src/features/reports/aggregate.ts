@@ -1,6 +1,7 @@
 import type { DailySummary, WorkSession } from '@/features/timesheets/api';
 import type { BreakReason } from '@/domain/break-reason';
 import { BREAK_REASONS } from '@/domain/break-reason';
+import { claveDelDia } from '@/features/timesheets/horas-extra';
 import { splitRegularAndOvertime } from '@/utils/time';
 
 /**
@@ -32,14 +33,13 @@ export type EmployeeHours = {
 /**
  * Horas por persona en el periodo, de más a menos.
  *
- * Las horas extra se parten POR DÍA y no sobre el total de la semana, igual que en
- * Horas: el umbral configurado es diario. Sumar la semana y restar 40 daría otro
- * número —uno que ningún día de la semana justifica— y sería justo el tipo de
- * desacuerdo entre dos pantallas que este módulo tiene prohibido producir.
+ * Las horas extra son las APROBADAS de cada persona y día, igual que en Horas y con la
+ * misma función: dos pantallas que las contaran distinto discreparían sobre las horas
+ * de alguien, que es lo que este módulo tiene prohibido producir.
  */
 export function hoursByEmployee(
   summaries: DailySummary[],
-  dailyThresholdMinutes: number,
+  aprobadas: ReadonlyMap<string, number>,
 ): EmployeeHours[] {
   const porPersona = new Map<string, EmployeeHours>();
 
@@ -51,7 +51,10 @@ export function hoursByEmployee(
       overtimeMinutes: 0,
       days: 0,
     };
-    const parte = splitRegularAndOvertime(day.net_minutes, dailyThresholdMinutes);
+    const parte = splitRegularAndOvertime(
+      day.net_minutes,
+      aprobadas.get(claveDelDia(day.employee_id, day.work_date)) ?? 0,
+    );
     fila.netMinutes += day.net_minutes;
     fila.regularMinutes += parte.regularMinutes;
     fila.overtimeMinutes += parte.overtimeMinutes;

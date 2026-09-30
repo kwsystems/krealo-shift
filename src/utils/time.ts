@@ -132,19 +132,22 @@ export function computeDuration(params: {
 }
 
 /**
- * Separa minutos regulares de extra informativos según el umbral diario
- * configurado. La app resume tiempo: no calcula remuneración (§13).
+ * Separa los minutos de un día en regulares y extra.
+ *
+ * EXTRA ES LO APROBADO, NO LO QUE PASA DE UN UMBRAL (30-sep). Antes el segundo argumento
+ * era el umbral diario —8 h— y todo lo que lo pasaba salía como extra: diez minutos de
+ * antes al entrar, o el turno programado de 12 h de alguien que solo cumplió su horario.
+ * Ahora son los minutos que quien gestiona aprobó para esa persona ese día (ver
+ * `horas-extra.ts`), y nunca más que lo trabajado. La app resume tiempo: no calcula
+ * remuneración (§13).
  */
 export function splitRegularAndOvertime(
   netMinutes: number,
-  dailyThresholdMinutes: number,
+  approvedOvertimeMinutes: number,
 ): { regularMinutes: number; overtimeMinutes: number } {
   const safe = Math.max(0, netMinutes);
-  const threshold = Math.max(0, dailyThresholdMinutes);
-  return {
-    regularMinutes: Math.min(safe, threshold),
-    overtimeMinutes: Math.max(0, safe - threshold),
-  };
+  const extra = Math.min(safe, Math.max(0, approvedOvertimeMinutes));
+  return { regularMinutes: safe - extra, overtimeMinutes: extra };
 }
 
 /** Un turno cruza medianoche cuando su fin cae en otro día local que su inicio. */

@@ -402,6 +402,81 @@ describe('reglas de Firestore', () => {
     });
   });
 
+  /*
+   * Horas extra APROBADAS (30-sep): lo que quien gestiona decide que es extra. Estas
+   * reglas son la única pared —se escriben desde la app, no por una función—, así que
+   * cada caso es una forma de colarse: aprobar a nombre de otro, con un id que no es el
+   * suyo, cero minutos, o un vendedor aprobándose las suyas.
+   */
+  describe('horas extra aprobadas', () => {
+    const ID = `${SEDE}_emp-yo_2026-09-21`;
+    const aprobacion = (extra: Record<string, unknown> = {}) => ({
+      id: ID,
+      organization_id: ORG,
+      location_id: SEDE,
+      employee_id: 'emp-yo',
+      work_date: '2026-09-21',
+      minutes: 90,
+      approved_by: UID,
+      ...extra,
+    });
+
+    it('quien gestiona la sede aprueba, lo lee y lo quita', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertSucceeds(setDoc(doc(db, 'overtime_approvals', ID), aprobacion()));
+      await assertSucceeds(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: 60 })));
+      const filas = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'overtime_approvals'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+            where('work_date', '>=', '2026-09-21'),
+            where('work_date', '<=', '2026-09-27'),
+            orderBy('work_date', 'asc'),
+          ),
+        ),
+      );
+      expect(filas.docs.map((d) => d.data().minutes)).toEqual([60]);
+      await assertSucceeds(deleteDoc(doc(db, 'overtime_approvals', ID)));
+    });
+
+    it('no se aprueba a nombre de otro, con otro id ni con cero minutos', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertFails(
+        setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ approved_by: 'otra-cuenta' })),
+      );
+      await assertFails(setDoc(doc(db, 'overtime_approvals', 'id-inventado'), aprobacion()));
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: 0 })));
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: '90' })));
+    });
+
+    it('un vendedor ni se las aprueba ni las lee', async () => {
+      await escribir(`organization_memberships/${ORG}_vendedor-extra`, {
+        id: `${ORG}_vendedor-extra`,
+        organization_id: ORG,
+        user_id: 'vendedor-extra',
+        role: 'employee',
+        status: 'active',
+        employee_id: 'emp-yo',
+        managed_location_ids: [],
+      });
+      const db = entorno.authenticatedContext('vendedor-extra').firestore();
+      await assertFails(
+        setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ approved_by: 'vendedor-extra' })),
+      );
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'overtime_approvals'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+          ),
+        ),
+      );
+    });
+  });
+
   describe('un vendedor ve lo suyo y nada más', () => {
     const VENDEDOR = 'cuenta-del-vendedor';
     const turno = (id: string, empleado: string) =>

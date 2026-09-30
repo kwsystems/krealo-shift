@@ -117,19 +117,18 @@ describe('conversión de duración a texto y decimal', () => {
   });
 });
 
-describe('separación de horas extra informativas', () => {
-  it('no reporta extra por debajo del umbral', () => {
-    expect(splitRegularAndOvertime(420, 480)).toEqual({
-      regularMinutes: 420,
-      overtimeMinutes: 0,
-    });
+describe('separación de horas extra: extra es lo aprobado (30-sep)', () => {
+  it('sin nada aprobado todo es regular, por largo que sea el día', () => {
+    // Antes, con el umbral de 8 h, esto eran 60 min de extra: un turno de 10:00 a 20:00.
+    expect(splitRegularAndOvertime(540, 0)).toEqual({ regularMinutes: 540, overtimeMinutes: 0 });
   });
 
-  it('separa el excedente cuando se pasa del umbral diario', () => {
-    expect(splitRegularAndOvertime(540, 480)).toEqual({
-      regularMinutes: 480,
-      overtimeMinutes: 60,
-    });
+  it('lo aprobado es extra y el resto regular', () => {
+    expect(splitRegularAndOvertime(540, 60)).toEqual({ regularMinutes: 480, overtimeMinutes: 60 });
+  });
+
+  it('nunca más extra que lo trabajado', () => {
+    expect(splitRegularAndOvertime(30, 90)).toEqual({ regularMinutes: 0, overtimeMinutes: 30 });
   });
 });
 

@@ -95,7 +95,14 @@ export const DEFAULT_LOCATION_SETTINGS = {
    * La regla está en `src/domain/early-departure-reason.ts`.
    */
   earlyDepartureReasonMinutes: 30,
-  dailyOvertimeThresholdMinutes: 480,
+  /**
+   * Desde cuántos minutos DE MÁS sobre su turno se avisa de una «posible hora extra»
+   * (30-sep). Sustituye al umbral diario de 8 h, que convertía en extra cualquier minuto
+   * pasado de las 8 —diez minutos de antes al entrar, o un turno programado de 12 h—.
+   * Ahora la extra la aprueba quien gestiona; esto solo decide cuándo se le avisa. Una
+   * hora es lo que Andree propuso: «unos minutos antes o después es normal».
+   */
+  overtimeNoticeMinutes: 60,
   weeklyOvertimeThresholdMinutes: 2880,
   /** Descanso mínimo entre dos turnos antes de advertir (§11.3). */
   minimumRestMinutes: 660,
@@ -160,11 +167,11 @@ const locationSettingsSchema = z
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.earlyDepartureReasonMinutes),
     weekStartsOn: z.number().int().min(0).max(6).nullable().default(null),
-    dailyOvertimeThresholdMinutes: z
+    overtimeNoticeMinutes: z
       .number()
       .int()
       .min(0)
-      .default(DEFAULT_LOCATION_SETTINGS.dailyOvertimeThresholdMinutes),
+      .default(DEFAULT_LOCATION_SETTINGS.overtimeNoticeMinutes),
     weeklyOvertimeThresholdMinutes: z
       .number()
       .int()

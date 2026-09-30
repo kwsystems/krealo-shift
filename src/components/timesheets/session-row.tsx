@@ -60,11 +60,18 @@ export function alertLabelKey(alert: TimesheetAlert): string {
   }
 }
 
+/**
+ * La hora extra del día de una fila: APROBADA por quien gestiona, o POSIBLE —trabajó
+ * bastante más que su turno y nadie lo ha mirado todavía—. Ver `horas-extra.ts`.
+ */
+export type HoraExtraDeLaFila = { tipo: 'aprobada' | 'posible'; minutos: number };
+
 export function SessionRow({
   session,
   employeeName,
   alerts,
   enCurso,
+  horaExtra,
   nowISO,
   timezone,
   timeFormat,
@@ -77,6 +84,8 @@ export function SessionRow({
   alerts: TimesheetAlert[];
   /** Si está dentro ahora mismo: trabajando o en descanso. Sale de la misma consulta que Inicio. */
   enCurso?: EnCurso;
+  /** Solo en la última fila del día de esa persona: la aprobación es por día. */
+  horaExtra?: HoraExtraDeLaFila;
   /** Para contar en vivo las horas de una jornada abierta. */
   nowISO: string;
   timezone: string;
@@ -252,8 +261,27 @@ export function SessionRow({
             </AppText>
           </Row>
 
-          {alerts.length > 0 ? (
+          {alerts.length > 0 || horaExtra !== undefined ? (
             <Row gap={spacing.xs} wrap align="flex-start">
+              {/*
+                LA HORA EXTRA, CON PALABRA Y CIFRA. «Posible» en ámbar pide que alguien lo
+                mire; «aprobada» en azul ya está decidida. El color sigue a la palabra, no
+                al revés (§21).
+              */}
+              {horaExtra !== undefined ? (
+                <StatusBadge
+                  label={
+                    horaExtra.tipo === 'aprobada'
+                      ? t('timesheet.overtimeApprovedBadge', {
+                          hours: minutesToHHmm(horaExtra.minutos),
+                        })
+                      : t('timesheet.overtimePossible', { hours: minutesToHHmm(horaExtra.minutos) })
+                  }
+                  tone={horaExtra.tipo === 'aprobada' ? 'info' : 'warning'}
+                  icon={horaExtra.tipo === 'aprobada' ? 'checkmark-circle' : 'hourglass-outline'}
+                  compact
+                />
+              ) : null}
               {alerts.map((alert) => (
                 <StatusBadge
                   key={alert}

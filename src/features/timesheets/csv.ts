@@ -1,5 +1,6 @@
 import type { TimesheetExportRow } from './api';
 import type { SupportedLanguage } from '@/i18n';
+import { claveDelDia } from './horas-extra';
 import {
   formatClockTime,
   minutesToDecimalHours,
@@ -68,13 +69,10 @@ export type CsvOptions = {
   timeFormat?: TimeFormatPreference;
   language?: SupportedLanguage;
   /**
-   * Umbral diario de la ubicación, en minutos, para separar regulares de extra.
-   *
-   * Se pasa y no se lee de ninguna parte porque esta función es pura, y porque el
-   * umbral es de la UBICACIÓN: exportar dos ubicaciones con el mismo umbral fijo daría
-   * números equivocados en una de las dos.
+   * Horas extra APROBADAS por persona y día (`claveDelDia`), para separar regulares de
+   * extra. Se pasan y no se leen de ninguna parte porque esta función es pura.
    */
-  dailyOvertimeThresholdMinutes: number;
+  horasExtraAprobadas: ReadonlyMap<string, number>;
 };
 
 function minutesCell(value: number | null): string {
@@ -82,13 +80,14 @@ function minutesCell(value: number | null): string {
 }
 
 export function buildTimesheetCsv(rows: TimesheetExportRow[], options: CsvOptions): string {
-  const {
-    labels,
-    timezone,
-    timeFormat = '24h',
-    language = 'es-PE',
-    dailyOvertimeThresholdMinutes,
-  } = options;
+  const { labels, timezone, timeFormat = '24h', language = 'es-PE', horasExtraAprobadas } = options;
+
+  /*
+   * LO APROBADO ES POR DÍA Y EL ARCHIVO VA POR JORNADA: si alguien tuvo dos jornadas ese
+   * día, lo aprobado se reparte en orden, sin pasar de lo trabajado en cada una. Así la
+   * suma de la columna de extra del archivo es la misma que la de la pantalla.
+   */
+  const quedaPorDia = new Map(horasExtraAprobadas);
 
   const header = buildCsvLine(CSV_COLUMNS.map((column) => labels[column]));
 
@@ -100,14 +99,15 @@ export function buildTimesheetCsv(rows: TimesheetExportRow[], options: CsvOption
      * la app hacia quien hace la nómina, así que obligaba a recalcular fuera lo que la
      * app ya calculaba bien dentro — y ahí es donde se cometen los errores.
      *
-     * Se derivan del umbral y no se guardan en la base a propósito: el umbral de una
-     * ubicación se puede cambiar, y unas horas extra congeladas con el umbral viejo
-     * dejarían de cuadrar con lo que muestra la pantalla.
+     * Extra es lo que quien gestiona aprobó ese día (ver `horas-extra.ts`).
      */
+    const clave = row.employee_id === null ? null : claveDelDia(row.employee_id, row.work_date);
+    const queda = clave === null ? 0 : (quedaPorDia.get(clave) ?? 0);
     const { regularMinutes, overtimeMinutes } = splitRegularAndOvertime(
       row.net_minutes ?? 0,
-      dailyOvertimeThresholdMinutes,
+      queda,
     );
+    if (clave !== null) quedaPorDia.set(clave, queda - overtimeMinutes);
 
     return buildCsvLine([
       row.employee_name,

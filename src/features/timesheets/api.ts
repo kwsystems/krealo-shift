@@ -301,6 +301,9 @@ export async function reopenPeriod(periodId: string): Promise<void> {
 }
 
 const exportRowSchema = z.object({
+  /* Para cruzar con las horas extra aprobadas, que son por persona y día. El servidor ya
+     lo mandaba; la demostración no, y por eso puede faltar. */
+  employee_id: z.string().nullable().default(null),
   employee_name: z.string(),
   work_date: z.string(),
   clock_in: z.string().nullable(),

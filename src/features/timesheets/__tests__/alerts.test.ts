@@ -154,27 +154,35 @@ describe('totales del periodo', () => {
     };
   }
 
-  it('separa regulares y extra informativas contra el umbral diario', () => {
+  it('extra es lo aprobado para esa persona ese día, no lo que pasa de 8 h', () => {
     const totals = computeTotals(
-      [day(), day({ work_date: '2026-08-28', net_minutes: 600, gross_minutes: 600 })],
-      480,
+      [
+        day(),
+        day({ work_date: '2026-08-28', net_minutes: 600, gross_minutes: 600 }),
+        day({ work_date: '2026-08-29', net_minutes: 660, gross_minutes: 660 }),
+      ],
+      // El 28 alguien aprobó dos horas; el 29, un turno largo que se cumplió, nada.
+      new Map([['e1_2026-08-28', 120]]),
     );
 
-    expect(totals.netMinutes).toBe(1080);
-    expect(totals.regularMinutes).toBe(960);
+    expect(totals.netMinutes).toBe(1740);
     expect(totals.overtimeMinutes).toBe(120);
+    expect(totals.regularMinutes).toBe(1620);
   });
 
   it('cuenta los días que necesitan revisión', () => {
     const totals = computeTotals(
       [day({ needs_review: true }), day({ work_date: '2026-08-28' })],
-      480,
+      new Map(),
     );
     expect(totals.needsReviewDays).toBe(1);
   });
 
   it('suma descansos pagados y no pagados por separado', () => {
-    const totals = computeTotals([day({ paid_break_minutes: 15, unpaid_break_minutes: 60 })], 480);
+    const totals = computeTotals(
+      [day({ paid_break_minutes: 15, unpaid_break_minutes: 60 })],
+      new Map(),
+    );
 
     expect(totals.paidBreakMinutes).toBe(15);
     expect(totals.unpaidBreakMinutes).toBe(60);

@@ -46,6 +46,12 @@ export const TABLES = {
   shifts: 'shifts',
   shiftPublications: 'shift_publications',
   restDays: 'rest_days',
+  /**
+   * Horas extra APROBADAS por quien gestiona, una fila por persona y día (30-sep). Ver
+   * `src/features/timesheets/horas-extra.ts`: extra es lo que se aprueba, no lo que pasa
+   * de un umbral.
+   */
+  overtimeApprovals: 'overtime_approvals',
   timeEvents: 'time_events',
   workSessions: 'work_sessions',
   breakIntervals: 'break_intervals',

@@ -2,7 +2,7 @@ import { useCallback, type ReactElement } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { SessionRow } from './session-row';
+import { SessionRow, type HoraExtraDeLaFila } from './session-row';
 import { AppText } from '@/components/ui/app-text';
 import type { EnCurso } from '@/features/timesheets/en-curso';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
@@ -33,6 +33,8 @@ export type SessionListProps = {
   enCursoPorSesion?: Map<string, EnCurso>;
   /** El minuto actual, para contar en vivo las jornadas abiertas. */
   nowISO: string;
+  /** La hora extra del día de esa sesión, aprobada o posible: ver `horas-extra.ts`. */
+  horaExtraPorSesion?: Map<string, HoraExtraDeLaFila>;
   unknownEmployeeLabel: string;
   timezone: string;
   timeFormat: TimeFormatPreference;
@@ -58,6 +60,7 @@ export function SessionList({
   alertsBySession,
   enCursoPorSesion,
   nowISO,
+  horaExtraPorSesion,
   unknownEmployeeLabel,
   timezone,
   timeFormat,
@@ -74,6 +77,7 @@ export function SessionList({
         employeeName={employeeNames.get(item.employee_id) ?? unknownEmployeeLabel}
         alerts={alertsBySession.get(item.id) ?? []}
         enCurso={enCursoPorSesion?.get(item.id)}
+        horaExtra={horaExtraPorSesion?.get(item.id)}
         nowISO={nowISO}
         timezone={timezone}
         timeFormat={timeFormat}
@@ -86,6 +90,7 @@ export function SessionList({
       employeeNames,
       alertsBySession,
       enCursoPorSesion,
+      horaExtraPorSesion,
       nowISO,
       unknownEmployeeLabel,
       timezone,
