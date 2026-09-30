@@ -50,6 +50,13 @@ function id(prefijo: string, n: number): string {
 }
 
 const empleadoId = (n: number) => id('33333333', n);
+/**
+ * Quien está SIEMPRE dentro hoy en la demostración, UNA POR SEDE: `enCurso` ficha a la
+ * primera en la sede principal y a la tercera en la otra, sea el día y la hora que sea.
+ * Por eso son a quienes `?nombres=largos` les pone el nombre largo: en cualquier otra
+ * persona dependería de si le toca turno, y en una sola, de qué sede abre la app.
+ */
+export const DEMO_EMPLEADOS_DENTRO = [empleadoId(1), empleadoId(3)] as const;
 const puestoId = (n: number) => id('44444444', n);
 const turnoId = (n: number) => id('55555555', n);
 const sesionId = (n: number) => id('66666666', n);

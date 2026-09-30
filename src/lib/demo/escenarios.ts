@@ -1,5 +1,5 @@
 import type { Almacen, Fila } from './postgrest';
-import { DEMO_LOCATION_1, TZ } from './seed';
+import { DEMO_EMPLEADOS_DENTRO, DEMO_LOCATION_1, TZ } from './seed';
 import { dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 
 /**
@@ -334,6 +334,19 @@ export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almace
  */
 export const EMPRESA_LARGA = 'Universo Tutu Perú y Canadá Sociedad Anónima Cerrada';
 export const SEDE_LARGA = 'Sucursal Miraflores Centro Comercial Larcomar';
+/**
+ * NOMBRES DE PERSONA LARGOS, en quien está siempre en la franja de hoy (29-sep).
+ *
+ * Inicio recortaba 3 px el nombre de la columna fija de la franja, y `responsive:check`
+ * solo lo veía los días en que a la persona del nombre largo le tocaba turno: de miércoles
+ * a sábado. Un verde de lunes no probaba nada. Uno por sede, porque alargar el nombre de
+ * la sede principal la manda detrás de la otra en el orden, y la app abre la otra. Unos
+ * treinta y cinco caracteres, inventados: lo que mide un nombre completo con dos apellidos.
+ */
+export const PERSONAS_LARGAS = [
+  'María de los Ángeles Villanueva Quispe',
+  'José Antonio Huamán de la Cruz Salazar',
+] as const;
 
 export function nombresLargosDeLaUrl(): boolean {
   if (typeof window === 'undefined') return false;
@@ -344,7 +357,7 @@ export function nombresLargosDeLaUrl(): boolean {
   }
 }
 
-/** Alarga el nombre de TODAS las empresas y el de la primera sede. */
+/** Alarga el nombre de TODAS las empresas, el de la primera sede y el de quien está siempre dentro. */
 export function aplicarNombresLargos(almacen: Almacen): Almacen {
   for (const fila of almacen.get('organizations') ?? []) fila.name = EMPRESA_LARGA;
   const sedes = almacen.get('locations') ?? [];
@@ -354,5 +367,19 @@ export function aplicarNombresLargos(almacen: Almacen): Almacen {
    * empuja a cuál. Con una larga entre cortas, el desborde tiene dueño.
    */
   if (sedes[0] !== undefined) sedes[0].name = SEDE_LARGA;
+
+  // El nombre va en las dos tablas que lo llevan: la de personas y la de quién está dentro.
+  for (const tabla of ['employees', 'employees_working_now']) {
+    for (const fila of almacen.get(tabla) ?? []) {
+      const cual = DEMO_EMPLEADOS_DENTRO.indexOf(
+        String(
+          tabla === 'employees' ? fila.id : fila.employee_id,
+        ) as (typeof DEMO_EMPLEADOS_DENTRO)[number],
+      );
+      if (cual === -1) continue;
+      fila.full_name = PERSONAS_LARGAS[cual];
+      if ('preferred_name' in fila) fila.preferred_name = null;
+    }
+  }
   return almacen;
 }

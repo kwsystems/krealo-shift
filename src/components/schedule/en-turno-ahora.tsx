@@ -86,7 +86,9 @@ export function EnTurnoAhora({ personas }: { personas: PersonaEnTurno[] }) {
                   size={16}
                   color={trabaja ? colors.success600 : colors.warning600}
                 />
-                <AppText variant="label">{persona.nombre}</AppText>
+                <AppText variant="label" style={estilos.encoge}>
+                  {persona.nombre}
+                </AppText>
                 <AppText variant="label" tone="muted" tabular>
                   {detalle}
                 </AppText>
@@ -108,6 +110,14 @@ const useEstilos = estilosDelTema((colors) => ({
     padding: spacing.base,
   },
   pildora: {
+    /*
+     * NUNCA MÁS ANCHA QUE SU CAJA. Una píldora mide lo que su texto, y con un nombre largo
+     * —«José Antonio Huamán de la Cruz Salazar · Trabajando · desde 10:21»— medía 431 px en
+     * una caja de 328: se salía por la derecha y arrastraba de lado el Horario entero en un
+     * teléfono. Con el tope, lo que no cabe baja a la línea de abajo DENTRO de la píldora,
+     * que para eso ya envolvía.
+     */
+    maxWidth: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
@@ -117,6 +127,7 @@ const useEstilos = estilosDelTema((colors) => ({
     borderRadius: radii.pill,
     borderWidth: borderWidth.hairline,
   },
+  encoge: { flexShrink: 1 },
   /* Los mismos dos tonos que las tarjetas de la rejilla, Horas y Equipo. */
   trabaja: { backgroundColor: colors.success50, borderColor: colors.success600 },
   pausa: { backgroundColor: colors.warning50, borderColor: colors.warning600 },

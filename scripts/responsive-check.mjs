@@ -252,6 +252,20 @@ const EXENCIONES = new Map([
     'la rejilla de la semana se arrastra a propósito (comprimir más deja los turnos ' +
       'ilegibles) y la columna de nombres se queda fija: lo mide la cuarta pasada',
   ],
+  /*
+   * LA BARRA DE ALCANCE —«empresa · sede» arriba— RECORTA A PROPÓSITO en un teléfono. Es
+   * una línea que se pulsa: dice dónde estás y al tocarla abre la hoja con los nombres
+   * enteros, y el lector de pantalla los lee enteros por su etiqueta. Dejarla envolver
+   * gastaría dos o tres líneas de cabecera en todas las pantallas por un dato que ya se
+   * sabe. Lo que NO se perdona aquí es que la barra ensanche la página: eso lo mide la
+   * clase `fuera`, que no tiene exención, y ya lo cazó una vez con este mismo nombre.
+   * Solo para lo que está DENTRO de `scope-open`, igual que las de la rejilla.
+   */
+  [
+    '*/recorte/testid:scope-open',
+    'la barra «empresa · sede» se corta con «…» a propósito: al pulsarla abre la hoja con ' +
+      'los nombres enteros, y la etiqueta accesible los dice completos',
+  ],
 ]);
 
 /**
@@ -349,7 +363,13 @@ const MEDIR = (minimoTactil) => {
     // 2. Texto recortado. Solo en hojas: un contenedor con scroll no es un texto cortado.
     if (el.children.length === 0 && texto.length > 0) {
       if (el.scrollWidth > el.clientWidth + 1 && el.clientWidth > 0) {
-        recortes.push({ texto, visible: el.clientWidth, necesario: anchoDeVerdad(el) });
+        recortes.push({
+          texto,
+          visible: el.clientWidth,
+          necesario: anchoDeVerdad(el),
+          // La barra de alcance recorta a propósito; ver su exención.
+          zona: el.closest('[data-testid="scope-open"]') === null ? null : 'scope-open',
+        });
       }
     }
 
@@ -488,10 +508,12 @@ const buscar = (mapa, pantalla, clase, detalle, testid) => {
   // Un grupo entero, por prefijo de testid. Las siete columnas de día son el mismo fallo,
   // y seis no tienen texto con el que nombrarlas; la séptima sí, y se escapaba.
   if (typeof testid === 'string') {
+    // `*` también aquí: la barra de alcance está en todas las pantallas.
     for (const [clave, motivo] of mapa) {
-      const prefijo = `${pantalla}/${clase}/testid:`;
-      if (clave.startsWith(prefijo) && testid.startsWith(clave.slice(prefijo.length))) {
-        return motivo;
+      for (const prefijo of [`${pantalla}/${clase}/testid:`, `*/${clase}/testid:`]) {
+        if (clave.startsWith(prefijo) && testid.startsWith(clave.slice(prefijo.length))) {
+          return motivo;
+        }
       }
     }
   }
@@ -589,6 +611,7 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
         'recorte',
         c.texto,
         `«${c.texto}» está recortado: ${c.visible}px visibles de ${c.necesario} que necesita`,
+        c.zona ?? undefined,
       );
     }
     for (const p of m.partidas) {
@@ -791,7 +814,10 @@ for (const [nombreAncho, ancho, alto] of ANCHOS.filter(
       problemas.push(`${nombreAncho}, ${pantalla} con nombres largos: no se cargó esa pantalla`);
       continue;
     }
-    if (!texto.includes('Universo Tutu Perú y Canadá')) {
+    if (
+      !texto.includes('Universo Tutu Perú y Canadá') ||
+      !/Villanueva Quispe|Huamán de la Cruz/.test(texto)
+    ) {
       problemas.push(
         `${nombreAncho}, ${pantalla}: «?nombres=largos» no llegó a la pantalla, así que el ` +
           'caso del nombre largo NO se midió',
@@ -827,6 +853,19 @@ for (const [nombreAncho, ancho, alto] of ANCHOS.filter(
         f.texto,
         `«${f.texto}» se sale ${f.derecha - m.vw}px por la derecha`,
         f.zona ?? undefined,
+      );
+    }
+    /*
+     * LOS RECORTES TAMBIÉN, y esta pasada no los miraba: justo el fallo del nombre de la
+     * franja de Inicio, que se recorta sin salirse de nada. Ahora hay un nombre largo que
+     * está en la franja todos los días, así que si vuelve se ve cualquier día.
+     */
+    for (const c of m.recortes) {
+      anotarLargo(
+        'recorte',
+        c.texto,
+        `«${c.texto}» está recortado: ${c.visible}px visibles de ${c.necesario} que necesita`,
+        c.zona ?? undefined,
       );
     }
     for (const sc of m.scrollers) {

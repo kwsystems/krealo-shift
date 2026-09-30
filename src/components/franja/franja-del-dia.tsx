@@ -229,12 +229,29 @@ export function FilaDeFranja({
         <View style={estilos.quienApilado}>
           <View style={estilos.nombreApilado}>
             <AnclaDePersona semilla={semilla} nombre={nombre} tamano="sm" />
-            <AppText variant="bodyStrong" numberOfLines={1} style={estilos.creceYEncoge}>
+            {/*
+              DOS LÍNEAS, igual que en pantalla ancha. Con una, un nombre con dos apellidos
+              —«José Antonio Huamán de la Cruz Salazar»— salía cortado a 360 px. Lo cazó el
+              30-sep `responsive:check` en cuanto la demostración tuvo un nombre largo que
+              está en la franja todos los días.
+            */}
+            <AppText variant="bodyStrong" numberOfLines={2} style={estilos.creceYEncoge}>
               {nombre}
             </AppText>
           </View>
           {detalle === undefined ? null : (
-            <AppText variant="help" tone="subtle" tabular numberOfLines={1}>
+            /*
+             * LA HORA NO ENCOGE. Era lo primero que cedía al lado de un nombre largo y salía
+             * «10:2…»: una hora a medias es peor que un nombre a medias, porque la hora es
+             * lo que se viene a leer.
+             */
+            <AppText
+              variant="help"
+              tone="subtle"
+              tabular
+              numberOfLines={1}
+              style={estilos.noEncoge}
+            >
               {detalle}
             </AppText>
           )}
@@ -445,6 +462,7 @@ const useEstilosDeFila = estilosDelTema((colors) => ({
    */
   nombreApilado: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, flexShrink: 1 },
   creceYEncoge: { flexShrink: 1, minWidth: 0 },
+  noEncoge: { flexShrink: 0 },
   /*
    * EL NOMBRE NO CRECE Y LA FRANJA SÍ. Al revés, cada fila tendría su franja empezando en
    * una columna distinta según lo largo que fuera el nombre, y comparar dos días —que es
