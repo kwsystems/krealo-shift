@@ -126,7 +126,8 @@ function sesionGuardada(): QuienDemo | null {
 
 function recordarSesion(quien: QuienDemo | null): void {
   try {
-    if (quien !== null) globalThis.localStorage?.setItem(CLAVE_SESION, quien === 'vendedor' ? 'vendedor' : '1');
+    if (quien !== null)
+      globalThis.localStorage?.setItem(CLAVE_SESION, quien === 'vendedor' ? 'vendedor' : '1');
     else globalThis.localStorage?.removeItem(CLAVE_SESION);
   } catch {
     // Si no se puede recordar, la demostración sigue siendo usable en esta pestaña.
@@ -464,6 +465,181 @@ function crearRpc(almacen: Almacen) {
           },
         ]);
         return sinError([{ event_id: idEvento, work_session_id: null }]);
+      }
+
+      /*
+       * PUBLICAR, que en la demostración NO FUNCIONABA: no estaba simulada, así que el
+       * botón «Publicar horario» devolvía un error y los turnos se quedaban en borrador
+       * sin que la pantalla lo dijera. Lo cazó el 30-sep `cumplido-check`, el primer arnés
+       * que publica. Hace lo mismo que `publishShiftsForWeek`: solo los borradores de esa
+       * sede, con la versión siguiente de la semana, y deja su publicación en el historial.
+       */
+      case 'publish_shifts_for_week': {
+        const sede = argumentos.p_location_id;
+        const semana = argumentos.p_week_start;
+        const ids = new Set(Array.isArray(argumentos.p_shift_ids) ? argumentos.p_shift_ids : []);
+        const version =
+          Math.max(
+            0,
+            ...filas('shift_publications')
+              .filter((fila) => fila.location_id === sede && fila.week_starts_on === semana)
+              .map((fila) => Number(fila.publication_version ?? 0)),
+          ) + 1;
+        const ahora = new Date().toISOString();
+        const publicados: unknown[] = [];
+        almacen.set(
+          'shifts',
+          filas('shifts').map((fila) => {
+            if (!ids.has(fila.id) || fila.location_id !== sede || fila.status !== 'draft') {
+              return fila;
+            }
+            publicados.push(fila.id);
+            return {
+              ...fila,
+              status: 'published',
+              publication_version: version,
+              published_at: ahora,
+              updated_at: ahora,
+            };
+          }),
+        );
+        if (publicados.length > 0) {
+          almacen.set('shift_publications', [
+            ...filas('shift_publications'),
+            {
+              id: `publicacion-${String(semana)}-${version}`,
+              organization_id: DEMO_ORG_ID,
+              location_id: sede,
+              week_starts_on: semana,
+              publication_version: version,
+              published_by: null,
+              published_at: ahora,
+              changed_shift_ids: publicados,
+              created_at: ahora,
+            },
+          ]);
+        }
+        return sinError({ version, publicados: publicados.length });
+      }
+
+      /*
+       * «Registrar como cumplido», con las mismas reglas que el servidor
+       * (`functions/src/horario-cumplido.ts`): solo turnos publicados y terminados, de
+       * días anteriores al primer fichaje del reloj en la sede, y sin jornada ya. Aquí se
+       * escriben directamente la jornada y su resumen del día, que en la demostración son
+       * tablas y no proyecciones.
+       */
+      case 'register_schedule_as_worked': {
+        const sede = argumentos.p_location_id;
+        const dias = new Set(Array.isArray(argumentos.p_dias) ? argumentos.p_dias : []);
+        const zona = String(
+          filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+        );
+        const diaDe = (instante: unknown) =>
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(String(instante)));
+        const primero = filas('time_events')
+          .filter((fila) => fila.location_id === sede && fila.source === 'kiosk')
+          .map((fila) => String(fila.occurred_at))
+          .sort()[0];
+        const relojDesde = primero === undefined ? null : diaDe(primero);
+
+        const saltados = {
+          sinPublicar: 0,
+          noTermino: 0,
+          conReloj: 0,
+          yaTieneMarcas: 0,
+          jornadaAbierta: 0,
+        };
+        const porDia: Record<string, { turnos: number; minutos: number }> = {};
+        const sesiones = filas('work_sessions');
+        const netos = (turno: Fila) =>
+          minutosEntre(String(turno.starts_at), String(turno.ends_at)) -
+          Number(turno.planned_unpaid_break_minutes ?? 0);
+        const aptos = filas('shifts')
+          .filter(
+            (fila) =>
+              fila.location_id === sede &&
+              fila.status !== 'cancelled' &&
+              dias.has(diaDe(fila.starts_at)),
+          )
+          .filter((turno) => {
+            const dia = diaDe(turno.starts_at);
+            const pisa = sesiones.some(
+              (sesion) =>
+                sesion.employee_id === turno.employee_id &&
+                String(sesion.starts_at) < String(turno.ends_at) &&
+                String(sesion.ends_at ?? '9999') > String(turno.starts_at),
+            );
+            const salto =
+              turno.status !== 'published'
+                ? 'sinPublicar'
+                : Date.parse(String(turno.ends_at)) > Date.now()
+                  ? 'noTermino'
+                  : relojDesde !== null && dia >= relojDesde
+                    ? 'conReloj'
+                    : pisa
+                      ? 'yaTieneMarcas'
+                      : null;
+            if (salto !== null) {
+              saltados[salto] += 1;
+              return false;
+            }
+            const cuenta = porDia[dia] ?? { turnos: 0, minutos: 0 };
+            cuenta.turnos += 1;
+            cuenta.minutos += netos(turno);
+            porDia[dia] = cuenta;
+            return true;
+          });
+        const minutos = aptos.reduce((suma, turno) => suma + netos(turno), 0);
+        if (argumentos.p_simular === true) {
+          return sinError({ relojDesde, porDia, saltados, turnos: aptos.length, minutos });
+        }
+
+        const nuevas = aptos.map((turno) => {
+          const brutos = minutosEntre(String(turno.starts_at), String(turno.ends_at));
+          const pausa = Number(turno.planned_unpaid_break_minutes ?? 0);
+          return {
+            id: `horario-${String(turno.id)}`,
+            organization_id: DEMO_ORG_ID,
+            employee_id: turno.employee_id,
+            location_id: sede,
+            shift_id: turno.id,
+            starts_at: turno.starts_at,
+            ends_at: turno.ends_at,
+            gross_minutes: brutos,
+            paid_break_minutes: 0,
+            unpaid_break_minutes: pausa,
+            net_minutes: brutos - pausa,
+            status: 'complete',
+            flags: [],
+            departure_reason: null,
+            departure_note: null,
+            source: 'import',
+            updated_at: new Date().toISOString(),
+          };
+        });
+        almacen.set('work_sessions', [...sesiones, ...nuevas]);
+        almacen.set('daily_time_summary', [
+          ...filas('daily_time_summary'),
+          ...nuevas.map((sesion) => ({
+            employee_id: sesion.employee_id,
+            location_id: sede,
+            work_date: diaDe(sesion.starts_at),
+            sessions: 1,
+            gross_minutes: sesion.gross_minutes,
+            paid_break_minutes: 0,
+            unpaid_break_minutes: sesion.unpaid_break_minutes,
+            net_minutes: sesion.net_minutes,
+            needs_review: false,
+            flags: [],
+          })),
+        ]);
+        return sinError({ relojDesde, registrados: nuevas.length, minutos, saltados });
       }
 
       case 'attendance_state_at':

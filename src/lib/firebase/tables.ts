@@ -171,6 +171,13 @@ export const RPC = {
    * primera sede en una sola transaccion.
    */
   createOrganization: 'create_organization',
+  /**
+   * Registrar como cumplido el horario publicado de los días de ANTES del reloj (30-sep):
+   * escribe entrada, refrigerio y salida de cada turno, como si se hubieran fichado. El
+   * servidor se niega a tocar un día desde que la sede ficha con el reloj, un turno con
+   * marcas o un borrador. Ver `functions/src/horario-cumplido.ts`.
+   */
+  registerScheduleAsWorked: 'register_schedule_as_worked',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   exportTimesheetRows: 'export_timesheet_rows',

@@ -23,6 +23,7 @@ function session(overrides: Partial<WorkSession> & { id: string }): WorkSession 
     flags: [],
     departure_reason: null,
     departure_note: null,
+    source: null,
     updated_at: '2026-08-27T22:00:01.000Z',
     ...overrides,
   };

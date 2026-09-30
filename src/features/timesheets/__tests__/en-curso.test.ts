@@ -32,6 +32,7 @@ function abierta(overrides: Partial<WorkSession> = {}): WorkSession {
     flags: [],
     departure_reason: null,
     departure_note: null,
+    source: null,
     updated_at: '2026-09-29T14:55:01.000Z',
     ...overrides,
   };

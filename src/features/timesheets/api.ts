@@ -60,6 +60,13 @@ export const workSessionSchema = z.object({
    */
   departure_reason: z.string().nullable().default(null),
   departure_note: z.string().nullable().default(null),
+  /*
+   * DE DÓNDE SALIÓ LA ENTRADA: `kiosk`, `manager` o `import` —registrada desde el horario,
+   * para las semanas de antes del reloj—. Texto y no enumerado, y con `null` por defecto:
+   * las sesiones de antes del 30-sep no lo traen, y un valor nuevo del servidor no puede
+   * tumbar la consulta de la semana entera.
+   */
+  source: z.string().nullable().default(null),
   updated_at: z.string(),
 });
 
@@ -153,7 +160,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)

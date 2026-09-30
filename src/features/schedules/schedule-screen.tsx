@@ -14,7 +14,10 @@ import { warningsForShift } from './conflicts';
 import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
 import { estadoVisible } from '@/features/timesheets/en-curso';
+import { useWorkSessions } from '@/features/timesheets/hooks';
+import { useInicioDelReloj } from './horario-cumplido';
 import { PegarHorarioSheet } from './pegar-horario-sheet';
+import { RegistrarCumplidoSheet } from './registrar-cumplido-sheet';
 import type { EmpleadoConocido } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
 import {
@@ -23,7 +26,9 @@ import {
   dateKeyOf,
   localTimeOf,
   weekDays,
+  weekEnd,
   weekPosition,
+  weekRangeInstants,
   type DateKey,
 } from './week';
 import { AsyncSection } from '@/components/schedule/data-states';
@@ -92,6 +97,7 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  const [workedOpen, setWorkedOpen] = useState(false);
   const [copyEmployeeId, setCopyEmployeeId] = useState<string | null>(null);
   const [publishAllOpen, setPublishAllOpen] = useState(false);
   const [publishPickerOpen, setPublishPickerOpen] = useState(false);
@@ -186,6 +192,48 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   });
 
   const rows = useMemo(() => shiftsQuery.data ?? [], [shiftsQuery.data]);
+
+  /*
+   * LAS SEMANAS DE ANTES DEL RELOJ. Hasta el día en que la sede empezó a fichar, un turno
+   * publicado sin marcas no es una falta: es que la app no existía. Para esas semanas —y
+   * solo esas— se ofrece registrarlas como cumplidas (ver `horario-cumplido.ts`). Pasado
+   * ese día, un turno sin marcas se corrige en Horas, persona por persona y con motivo,
+   * así que el aviso no sale: aquí sería una invitación a marcar una falta como trabajada.
+   */
+  const inicioDelReloj = useInicioDelReloj({
+    organizationId: scope.organization?.id ?? null,
+    locationId: scope.locationId,
+    timezone: scope.timezone,
+    enabled: scope.isAdmin && position !== 'future',
+  });
+  const relojDesde = inicioDelReloj.data;
+  const antesDelReloj =
+    scope.isAdmin &&
+    position !== 'future' &&
+    relojDesde !== undefined &&
+    (relojDesde === null || weekStart < relojDesde);
+  const rangoDeLaSemana = weekRangeInstants(weekStart, scope.timezone);
+  const jornadasDeLaSemana = useWorkSessions({
+    organizationId: scope.organization?.id ?? null,
+    // Sin sede no se pide: fuera de esas semanas no hace falta leer las jornadas aquí.
+    locationId: antesDelReloj ? scope.locationId : null,
+    fromISO: rangoDeLaSemana.fromISO,
+    toISO: rangoDeLaSemana.toISO,
+    cacheKey: { from: weekStart, to: weekEnd(weekStart) },
+  });
+  const conJornada = new Set((jornadasDeLaSemana.data ?? []).map((jornada) => jornada.shift_id));
+  const turnosSinMarcas =
+    !antesDelReloj || jornadasDeLaSemana.data === undefined
+      ? 0
+      : rows.filter(
+          (row) =>
+            row.status === 'published' &&
+            row.ends_at <= nowISO &&
+            !conJornada.has(row.id) &&
+            (relojDesde === null ||
+              relojDesde === undefined ||
+              dateKeyOf(row.starts_at, scope.timezone) < relojDesde),
+        ).length;
 
   const datedShifts = useMemo<DatedShift[]>(
     () => rows.map((row) => ({ ...row, dateKey: dateKeyOf(row.starts_at, scope.timezone) })),
@@ -539,6 +587,24 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
                 </Row>
               ) : null}
 
+              {turnosSinMarcas > 0 ? (
+                <InlineNotice
+                  tone="info"
+                  icon="time-outline"
+                  title={t('schedule.worked.noticeTitle')}
+                  body={t('schedule.worked.noticeBody', { count: turnosSinMarcas })}
+                  action={
+                    <GhostButton
+                      label={t('schedule.worked.open')}
+                      onPress={() => setWorkedOpen(true)}
+                      fullWidth={false}
+                      testID="schedule-worked-open"
+                    />
+                  }
+                  testID="schedule-worked-notice"
+                />
+              ) : null}
+
               <ScheduleWarnings warnings={analysis.warnings} />
 
               {/* Quién está en la tienda ahora mismo: solo tiene sentido en esta semana. */}
@@ -829,6 +895,19 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
         }}
         onCancel={() => setRemovingRestDay(null)}
       />
+
+      {workedOpen ? (
+        <RegistrarCumplidoSheet
+          dias={days}
+          locationId={scope.locationId}
+          language={language}
+          onClose={() => setWorkedOpen(false)}
+          onDone={(resultado) => {
+            setWorkedOpen(false);
+            setFeedback(t('schedule.worked.done', { count: resultado.registrados }));
+          }}
+        />
+      ) : null}
 
       {pasteOpen ? (
         <PegarHorarioSheet

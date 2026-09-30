@@ -89,13 +89,66 @@ export async function attendanceStateAt(
 
 /** Numero de secuencia global creciente. Es el `seq` de Postgres. */
 async function nextSequence(): Promise<number> {
+  return reservarSecuencias(1);
+}
+
+/**
+ * Reserva `cuantas` secuencias seguidas y devuelve la primera. Para quien escribe varios
+ * fichajes de una vez —los cuatro de un turno registrado desde el horario— sin pagar una
+ * transaccion por cada uno.
+ */
+export async function reservarSecuencias(cuantas: number): Promise<number> {
   const counter = db.collection('_counters').doc('time_events_seq');
   return db.runTransaction(async (tx) => {
     const snapshot = await tx.get(counter);
-    const next = ((snapshot.data()?.value as number | undefined) ?? 0) + 1;
-    tx.set(counter, { value: next }, { merge: true });
-    return next;
+    const primera = ((snapshot.data()?.value as number | undefined) ?? 0) + 1;
+    tx.set(counter, { value: primera + cuantas - 1 }, { merge: true });
+    return primera;
   });
+}
+
+/**
+ * La fila de `time_events` de un fichaje. UNA SOLA FORMA para el reloj, el gerente y lo
+ * registrado desde el horario: con dos copias, un campo nuevo acabaria en una y no en la
+ * otra, y el cálculo de horas leería filas distintas según quién las escribió.
+ */
+export function filaDelEvento(
+  input: TimeEventInput,
+  idempotencyId: string,
+  seq: number,
+  metadata: Record<string, unknown> = {},
+): Record<string, unknown> {
+  return {
+    id: idempotencyId,
+    organization_id: input.organizationId,
+    employee_id: input.employeeId,
+    location_id: input.locationId,
+    shift_id: input.shiftId ?? null,
+    event_type: input.eventType,
+    break_type: input.breakType ?? null,
+    break_reason: input.breakReason ?? null,
+    break_note: input.breakNote ?? null,
+    /*
+     * SOLO EN LA SALIDA. Guardarlos en cualquier evento invitaria a que una entrada
+     * llevara motivo de salida, y entonces un reporte que agrupe por motivo contaria
+     * cosas que no pasaron. La forma de la fila dice lo que puede haber pasado.
+     */
+    departure_reason: input.eventType === 'clock_out' ? (input.departureReason ?? null) : null,
+    departure_note: input.eventType === 'clock_out' ? (input.departureNote ?? null) : null,
+    source: input.source ?? 'kiosk',
+    occurred_at: input.occurredAt,
+    occurred_at_device: input.occurredAtDevice ?? null,
+    received_at: nowISO(),
+    seq,
+    timezone: input.timezone ?? 'America/Lima',
+    idempotency_key: input.idempotencyKey,
+    device_id: input.deviceId ?? null,
+    device_sequence: input.deviceSequence ?? null,
+    is_offline: input.isOffline ?? false,
+    photo_path: null,
+    metadata,
+    created_by: input.createdBy ?? null,
+  };
 }
 
 /**
@@ -139,37 +192,7 @@ export async function recordTimeEvent(input: TimeEventInput): Promise<{
 
   const seq = await nextSequence();
 
-  await eventsRef.doc(idempotencyId).create({
-    id: idempotencyId,
-    organization_id: input.organizationId,
-    employee_id: input.employeeId,
-    location_id: input.locationId,
-    shift_id: input.shiftId ?? null,
-    event_type: input.eventType,
-    break_type: input.breakType ?? null,
-    break_reason: input.breakReason ?? null,
-    break_note: input.breakNote ?? null,
-    /*
-     * SOLO EN LA SALIDA. Guardarlos en cualquier evento invitaria a que una entrada
-     * llevara motivo de salida, y entonces un reporte que agrupe por motivo contaria
-     * cosas que no pasaron. La forma de la fila dice lo que puede haber pasado.
-     */
-    departure_reason: input.eventType === 'clock_out' ? (input.departureReason ?? null) : null,
-    departure_note: input.eventType === 'clock_out' ? (input.departureNote ?? null) : null,
-    source: input.source ?? 'kiosk',
-    occurred_at: input.occurredAt,
-    occurred_at_device: input.occurredAtDevice ?? null,
-    received_at: nowISO(),
-    seq,
-    timezone: input.timezone ?? 'America/Lima',
-    idempotency_key: input.idempotencyKey,
-    device_id: input.deviceId ?? null,
-    device_sequence: input.deviceSequence ?? null,
-    is_offline: input.isOffline ?? false,
-    photo_path: null,
-    metadata: {},
-    created_by: input.createdBy ?? null,
-  });
+  await eventsRef.doc(idempotencyId).create(filaDelEvento(input, idempotencyId, seq));
 
   await rebuildWorkSession(input.organizationId, input.employeeId, input.locationId);
 
@@ -188,15 +211,22 @@ export async function rebuildWorkSession(
   organizationId: string,
   employeeId: string,
   locationId: string,
+  /**
+   * La franja de fichajes que forman la sesion. Sin ella, las ultimas 36 h: es lo que
+   * pasa al fichar, que siempre es ahora. Con ella, una jornada de hace semanas —la que
+   * se registra desde el horario—: con la franja de siempre, sus fichajes quedaban
+   * guardados y ninguna sesion los recogia, asi que no salian en Horas.
+   */
+  ventana?: { desde: string; hasta: string },
 ): Promise<void> {
-  const desde = new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
+  const desde = ventana?.desde ?? new Date(Date.now() - 36 * 60 * 60 * 1000).toISOString();
 
-  const snapshot = await db
+  let consulta = db
     .collection(COLLECTIONS.timeEvents)
     .where('employee_id', '==', employeeId)
-    .where('occurred_at', '>=', desde)
-    .orderBy('occurred_at', 'asc')
-    .get();
+    .where('occurred_at', '>=', desde);
+  if (ventana !== undefined) consulta = consulta.where('occurred_at', '<=', ventana.hasta);
+  const snapshot = await consulta.orderBy('occurred_at', 'asc').get();
 
   const eventos = snapshot.docs
     .map((doc) => doc.data())
@@ -320,6 +350,11 @@ export async function rebuildWorkSession(
          */
         departure_reason: (salida?.departure_reason as string | null) ?? null,
         departure_note: (salida?.departure_note as string | null) ?? null,
+        /*
+         * DE DÓNDE SALIÓ LA ENTRADA: el reloj, el gerente o el horario (`import`). Lo
+         * lee Horas para decir «Según horario» en vez de dejar creer que alguien fichó.
+         */
+        source: (inicio.source as string | undefined) ?? null,
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       },

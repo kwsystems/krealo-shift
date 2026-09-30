@@ -68,3 +68,9 @@ export {
   attachPhoto,
   attendancePhotoUrl,
 } from './kiosk-api';
+
+/*
+ * Registrar como cumplido el horario de las semanas de ANTES del reloj (30-sep). Solo
+ * esos días: después, un turno sin marcas se corrige persona por persona, con motivo.
+ */
+export { registerScheduleAsWorked } from './horario-cumplido';

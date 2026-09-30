@@ -51,6 +51,7 @@ function sesion(t: ShiftRow, extra: Partial<WorkSession> = {}): WorkSession {
     flags: [],
     departure_reason: null,
     departure_note: null,
+    source: null,
     updated_at: '',
     ...extra,
   };

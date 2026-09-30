@@ -482,10 +482,17 @@ function FilaDelDia({
   const turnos = dia.turnos
     .map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`)
     .join(' · ');
+  /*
+   * «MARCASTE» SOLO SI MARCÓ. Una jornada registrada desde el horario —las semanas de
+   * antes del reloj— no la fichó nadie, y decirle «Marcaste 10:00 – 19:00» a quien nunca
+   * tocó el reloj ese día sería contarle algo que no pasó.
+   */
   const marcas = dia.jornadas.map((j) =>
-    j.ends_at === null
-      ? t('portal.markOpen', { from: hora(j.starts_at) })
-      : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
+    j.source === 'import'
+      ? t('portal.markFromSchedule')
+      : j.ends_at === null
+        ? t('portal.markOpen', { from: hora(j.starts_at) })
+        : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
   );
   const rotuloDelTurno =
     dia.turnos.length > 0

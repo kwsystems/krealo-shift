@@ -354,6 +354,54 @@ describe('reglas de Firestore', () => {
    * pantalla solo enseñara el suyo. Se prueba con las consultas tal cual las hace la app
    * (`src/features/portal/api.ts`) y con las que un curioso haría a mano.
    */
+  /*
+   * «¿Desde cuándo se ficha con el reloj en esta sede?» (30-sep). Es lo que decide si
+   * Horario ofrece registrar una semana como cumplida. La consulta es de TODA la sede, así
+   * que la puede hacer quien la administra y no un vendedor: le enseñaría fichajes ajenos.
+   */
+  describe('el primer fichaje del reloj en la sede', () => {
+    type Db = ReturnType<ReturnType<RulesTestEnvironment['authenticatedContext']>['firestore']>;
+    const consulta = (db: Db) =>
+      getDocs(
+        query(
+          collection(db, 'time_events'),
+          where('organization_id', '==', ORG),
+          where('location_id', '==', SEDE),
+          where('source', '==', 'kiosk'),
+          orderBy('occurred_at', 'asc'),
+          limit(1),
+        ),
+      );
+
+    beforeEach(async () => {
+      await escribir('time_events/primero', {
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-otra',
+        source: 'kiosk',
+        occurred_at: '2026-09-29T14:00:00.000Z',
+      });
+    });
+
+    it('quien administra la sede lo puede leer', async () => {
+      const filas = await assertSucceeds(consulta(entorno.authenticatedContext(UID).firestore()));
+      expect(filas.docs.map((d) => d.id)).toEqual(['primero']);
+    });
+
+    it('un vendedor no: serían los fichajes de todo el equipo', async () => {
+      await escribir(`organization_memberships/${ORG}_vendedor-curioso`, {
+        id: `${ORG}_vendedor-curioso`,
+        organization_id: ORG,
+        user_id: 'vendedor-curioso',
+        role: 'employee',
+        status: 'active',
+        employee_id: 'emp-yo',
+        managed_location_ids: [],
+      });
+      await assertFails(consulta(entorno.authenticatedContext('vendedor-curioso').firestore()));
+    });
+  });
+
   describe('un vendedor ve lo suyo y nada más', () => {
     const VENDEDOR = 'cuenta-del-vendedor';
     const turno = (id: string, empleado: string) =>

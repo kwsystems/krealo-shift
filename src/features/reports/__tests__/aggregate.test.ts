@@ -56,6 +56,7 @@ function sesion(
     status: 'complete',
     departure_reason: null,
     departure_note: null,
+    source: null,
     updated_at: '2026-09-14T21:00:00.000Z',
     ...parcial,
   };

@@ -129,7 +129,15 @@ export function SessionRow({
       ? t('timesheet.sinceTime', { time: start })
       : estado === 'descanso'
         ? t('timesheet.sinceTime', { time: descansoDesde ?? start })
-        : `${start} – ${end}`;
+        : session.source === 'import'
+          ? /*
+             * REGISTRADA DESDE EL HORARIO, no fichada: la semana es de antes del reloj y
+             * alguien la registró como cumplida. Se dice en la fila porque las horas son
+             * las mismas que las de un día fichado, y sin esto no habría forma de saber
+             * que nadie marcó esas horas.
+             */
+            `${start} – ${end} · ${t('timesheet.fromSchedule')}`
+          : `${start} – ${end}`;
 
   // «Almorzando» si su pausa es la comida: ver `estadoVisible`.
   const visible =

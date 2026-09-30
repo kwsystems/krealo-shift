@@ -29,6 +29,7 @@ function sesion(overrides: Partial<WorkSession> = {}): WorkSession {
     flags: [],
     departure_reason: null,
     departure_note: null,
+    source: null,
     updated_at: '2026-09-29T14:55:01.000Z',
     ...overrides,
   };
@@ -145,5 +146,27 @@ describe('SessionRow con la jornada abierta', () => {
 
     await fireEvent.press(screen.getByTestId('fila'));
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SessionRow de una jornada registrada desde el horario', () => {
+  const cerrada = {
+    ends_at: '2026-09-29T23:55:00.000Z', // 18:55 en Lima
+    gross_minutes: 540,
+    unpaid_break_minutes: 60,
+    net_minutes: 480,
+    status: 'complete' as const,
+  };
+
+  it('dice «Según horario»: nadie la fichó y tiene que notarse', async () => {
+    await pintar({ session: sesion({ ...cerrada, source: 'import' }) }).render();
+    expect(screen.getByText('09:55 – 18:55 · Según horario')).toBeTruthy();
+    expect(screen.getByText('08:00')).toBeTruthy();
+  });
+
+  it('una fichada en el reloj no lo dice', async () => {
+    await pintar({ session: sesion({ ...cerrada, source: 'kiosk' }) }).render();
+    expect(screen.getByText('09:55 – 18:55')).toBeTruthy();
+    expect(screen.queryByText(/Según horario/)).toBeNull();
   });
 });
