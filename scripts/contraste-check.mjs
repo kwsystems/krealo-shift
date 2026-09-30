@@ -226,13 +226,21 @@ for (const tema of TEMAS) {
      * recorrido la sesión ya existe, así que esperar el rótulo de acceso se queda colgado
      * treinta segundos. Pasó a la primera ejecución.
      */
-    await pagina.goto(`${base}/?marca=${encodeURIComponent(MARCA_DIFICIL)}`, {
-      waitUntil: 'networkidle',
-    });
-    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 600 });
-    await revisar(`inicio con marca ${MARCA_DIFICIL}`);
-    await irA(pagina, base, '/team', { asentar: 500 });
-    await revisar(`equipo con marca ${MARCA_DIFICIL}`);
+    /*
+     * Y el azul de la primera tienda de verdad, que es el caso CONTRARIO: sobre blanco
+     * pasa sin derivar, pero un azul casi negro es lo que se pierde en el tema oscuro. Ver
+     * `kiosco-check.mjs`, que lo mide en el reloj.
+     */
+    const MARCA_DE_LA_TIENDA = '#003090';
+    for (const marca of [MARCA_DIFICIL, MARCA_DE_LA_TIENDA]) {
+      await pagina.goto(`${base}/?marca=${encodeURIComponent(marca)}`, {
+        waitUntil: 'networkidle',
+      });
+      await esperarPantalla(pagina, MARCADORES['/'], { asentar: 600 });
+      await revisar(`inicio con marca ${marca}`);
+      await irA(pagina, base, '/team', { asentar: 500 });
+      await revisar(`equipo con marca ${marca}`);
+    }
 
     /*
      * EL RELOJ DE FICHAJE, que nunca se habia medido.

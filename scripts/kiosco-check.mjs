@@ -459,10 +459,19 @@ const deudaVista = new Set();
  * caso que la rampa derivada tiene que salvar. Con un azul oscuro no se probaria nada.
  */
 const MARCA_DIFICIL = '#FFE500';
+/*
+ * Y EL AZUL DE LA PRIMERA TIENDA DE VERDAD (30-sep), que es el caso CONTRARIO. Sacado del
+ * logo de la clienta y elegido porque es el único de sus colores fuertes que no se acerca a
+ * ninguna señal del reloj. Sobre blanco pasa sin derivar —por eso no servía de caso
+ * difícil—, pero un azul casi negro es justo lo que se pierde en el TEMA OSCURO. Y es la
+ * pantalla que va a colgar en su pared: se mide con su color, no con uno parecido.
+ */
+const MARCA_DE_LA_TIENDA = '#003090';
 const VUELTAS = [];
 for (const tema of TEMAS) {
   VUELTAS.push({ tema, marca: null });
   VUELTAS.push({ tema, marca: MARCA_DIFICIL });
+  VUELTAS.push({ tema, marca: MARCA_DE_LA_TIENDA });
 }
 
 for (const { tema, marca } of VUELTAS) {
@@ -498,7 +507,7 @@ for (const { tema, marca } of VUELTAS) {
     }
     const nuevos = fallos.length - conocidos;
     console.log(
-      `  ${tema.padEnd(5)} ${(marca === null ? nombre : `${nombre} · marca`).padEnd(28)} ${String(medidos).padStart(3)} textos, ` +
+      `  ${tema.padEnd(5)} ${(marca === null ? nombre : `${nombre} · ${marca}`).padEnd(30)} ${String(medidos).padStart(3)} textos, ` +
         `${nuevos === 0 ? 'todos legibles' : `${nuevos} ILEGIBLES`}` +
         `${conocidos > 0 ? ` (${conocidos} de deuda conocida)` : ''}` +
         `${saltados > 0 ? ` (${saltados} apagados, exentos)` : ''}`,
