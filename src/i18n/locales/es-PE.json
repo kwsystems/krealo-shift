@@ -101,6 +101,13 @@
   },
   "boot": {
     "resolvingSession": "Preparando tu sesión",
+    "noAccessTitle": "Tu cuenta todavía no tiene acceso",
+    "noAccessBody": "Entraste como {{email}}, y ninguna empresa tiene una invitación o una ficha con ese correo que se haya podido activar.",
+    "noAccessBodyNoEmail": "Entraste bien, pero tu cuenta no tiene acceso a ninguna empresa.",
+    "noAccessInvitedTitle": "Si te invitaron",
+    "noAccessInvitedBody": "Tiene que ser con el mismo correo al que llegó la invitación. Si es otro, entra con ese.",
+    "noAccessAskAdmin": "Si el correo es el correcto, pide a quien te invitó que lo revise en Ajustes → «Quién tiene acceso», y vuelve a intentarlo.",
+    "noAccessOtherAccount": "Entrar con otro correo",
     "noAdminTitle": "Tu cuenta no abre el panel",
     "noAdminBody": "Iniciaste sesión bien, pero tu cuenta figura como empleado. El panel de administración es para propietarios, administradores y gerentes.",
     "noAdminClockInTitle": "Para marcar tu entrada",

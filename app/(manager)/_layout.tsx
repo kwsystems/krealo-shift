@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
 import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
-import { AdminErrorState } from '@/components/schedule/data-states';
+import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
@@ -73,11 +73,7 @@ export default function ManagerLayout() {
     // La membresía no se pudo leer: se explica y se ofrece reintentar, en vez de
     // dejar el panel cargando para siempre (§20).
     case 'membershipError':
-      return (
-        <AppScreen tone="canvas">
-          <AdminErrorState error={destination.error} onRetry={retry} />
-        </AppScreen>
-      );
+      return <ErrorDeMembresia error={destination.error} onRetry={retry} />;
     // Sesión válida sin rol administrativo: no es el sitio de esa persona. La
     // explicación la pinta la ruta raíz, en un solo sitio.
     case 'noAdminRole':

@@ -101,6 +101,13 @@
   },
   "boot": {
     "resolvingSession": "Getting your session ready",
+    "noAccessTitle": "Your account has no access yet",
+    "noAccessBody": "You signed in as {{email}}, and no company has an invitation or staff record for that email that could be activated.",
+    "noAccessBodyNoEmail": "You signed in, but your account has no access to any company.",
+    "noAccessInvitedTitle": "If you were invited",
+    "noAccessInvitedBody": "You need to use the same email the invitation was sent to. If it is a different one, sign in with that.",
+    "noAccessAskAdmin": "If the email is right, ask whoever invited you to check it in Settings → “Who has access”, then try again.",
+    "noAccessOtherAccount": "Sign in with another email",
     "noAdminTitle": "Your account can't open the panel",
     "noAdminBody": "You signed in correctly, but your account is set up as an employee. The admin panel is for owners, admins and managers.",
     "noAdminClockInTitle": "To clock in",

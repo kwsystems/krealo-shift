@@ -1,7 +1,7 @@
 import { Redirect, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
-import { AdminErrorState } from '@/components/schedule/data-states';
+import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
@@ -26,11 +26,7 @@ export default function EmployeeLayout() {
     );
   }
   if (destination.kind === 'membershipError') {
-    return (
-      <AppScreen tone="canvas">
-        <AdminErrorState error={destination.error} onRetry={retry} />
-      </AppScreen>
-    );
+    return <ErrorDeMembresia error={destination.error} onRetry={retry} />;
   }
   if (destination.kind !== 'employeePortal') return <Redirect href="/" />;
 

@@ -15,9 +15,12 @@ import type { Auth } from 'firebase-admin/auth';
  * cualquiera con la clave pública del proyecto puede darse de alta con un correo que no es
  * suyo y una contraseña. Eso abre dos caminos que hay que cerrar:
  *
- *   1. CANJEAR UNA INVITACIÓN CON ESA CUENTA. Ya estaba cerrado —`claimInvitation` exige
- *      `email_verified`, y una alta con contraseña no lo tiene— y ahora además rechaza
- *      cualquier sesión abierta con contraseña.
+ *   1. CANJEAR UNA INVITACIÓN CON ESA CUENTA. Lo cierra `email_verified`, que
+ *      `claimInvitation` exige: una alta con contraseña lo tiene en false y abrir el enlace
+ *      lo pone en true. NO se puede cerrar mirando el proveedor: el token del enlace dice
+ *      `sign_in_provider: 'password'`, igual que el de una contraseña (medido contra el
+ *      emulador de Auth el 30-sep). Rechazar `password` dejó fuera a quien entraba por
+ *      enlace, que era justo para quien se hizo esto.
  *   2. EL SECUESTRO PREVIO. Alguien se da de alta con contraseña y con el correo de la
  *      persona invitada ANTES de que ella entre. Cuando ella entra por el enlace, Firebase
  *      la mete en ESA cuenta —un correo, una cuenta—, ella canjea la invitación, y quien
@@ -43,7 +46,10 @@ export async function cerrarContrasenaAjena(uid: string, auth: AuthParaCerrar): 
   return true;
 }
 
-/** Cómo se abrió la sesión de quien llama: `google.com`, `emailLink`, `password`… */
+/**
+ * Cómo se abrió la sesión de quien llama: `google.com`, o `password` para la familia del
+ * correo —con contraseña y TAMBIÉN por enlace, que Firebase no distingue en el token—.
+ */
 export function proveedorDeLaSesion(token: unknown): string | null {
   const firebase = (token as { firebase?: { sign_in_provider?: unknown } } | undefined)?.firebase;
   return typeof firebase?.sign_in_provider === 'string' ? firebase.sign_in_provider : null;

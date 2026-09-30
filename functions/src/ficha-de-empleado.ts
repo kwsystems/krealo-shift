@@ -74,7 +74,7 @@ export async function ligarFichaDeEmpleado(params: {
 
   // El secuestro previo, igual que al canjear una invitación: ver `acceso-por-correo.ts`.
   const contrasenaAnulada =
-    proveedor === 'emailLink' ? await cerrarContrasenaAjena(uid, auth) : false;
+    proveedor === 'password' ? await cerrarContrasenaAjena(uid, auth) : false;
 
   let primera: string | null = null;
   for (const { org, employeeId } of ligables) {

@@ -2,7 +2,7 @@ import { Redirect } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { NoAdminAccessScreen } from '@/components/boot/no-admin-access';
-import { AdminErrorState } from '@/components/schedule/data-states';
+import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
@@ -37,11 +37,9 @@ export default function BootRoute() {
       // Mismo trato que en el panel: se explica y se puede reintentar. Antes esto
       // redirigía al acceso, que no arregla una consulta que falla y además deja
       // a quien ya tiene sesión iniciándola otra vez para nada.
-      return (
-        <AppScreen tone="canvas">
-          <AdminErrorState error={destination.error} onRetry={retry} />
-        </AppScreen>
-      );
+      // Y si lo que pasa es que la cuenta no tiene acceso a ninguna empresa, lo dice así
+      // —con qué correo entró y cómo salir—: ver `sin-acceso.tsx`.
+      return <ErrorDeMembresia error={destination.error} onRetry={retry} />;
     case 'noAdminRole':
       return <NoAdminAccessScreen />;
     case 'adminPanel':

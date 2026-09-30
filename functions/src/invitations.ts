@@ -60,17 +60,19 @@ export const claimInvitation = onCall(async (request) => {
   }
 
   /*
-   * UNA SESIÓN ABIERTA CON CONTRASEÑA NO CANJEA NADA. La app no ofrece contraseña en ningún
-   * sitio; solo existe porque encender el acceso por enlace la enciende también en la API.
-   * Quien llegue por ahí no se ganó ninguna invitación. Ver `acceso-por-correo.ts`.
+   * AQUÍ SE RECHAZABA TODA SESIÓN `password`, Y ESO DEJABA FUERA A QUIEN ENTRA POR ENLACE
+   * (30-sep). Firebase marca las dos igual: el enlace al correo es de la familia «correo»,
+   * y su token dice `sign_in_provider: 'password'` como el de una alta con contraseña —se
+   * midió contra el emulador de Auth—. Las pruebas usaban un 'emailLink' inventado que
+   * Firebase no manda nunca, así que pasaban, y en producción una administradora invitada
+   * entraba por su enlace, su invitación no se canjeaba y el panel le decía «tu rol no
+   * permite ver esto».
+   *
+   * LO QUE SÍ LAS DISTINGUE ES `email_verified`, que ya se exige arriba: el enlace lo pone
+   * en true —abrirlo demuestra el correo— y una alta con contraseña lo deja en false. Esa es
+   * la puerta. Ver `acceso-por-correo.ts`.
    */
   const proveedor = proveedorDeLaSesion(token);
-  if (proveedor === 'password') {
-    throw new HttpsError(
-      'failed-precondition',
-      'Entra con Google o con el enlace que te llega al correo.',
-    );
-  }
 
   const pendientes = await db
     .collection(COLLECTIONS.invitations)
@@ -89,11 +91,13 @@ export const claimInvitation = onCall(async (request) => {
   }
 
   /*
-   * ANTES DE CANJEAR POR ENLACE, SE CIERRA CUALQUIER CONTRASEÑA QUE LA CUENTA TUVIERA: es el
-   * secuestro previo de `acceso-por-correo.ts`. En el caso normal no hay ninguna.
+   * ANTES DE CANJEAR CON UNA SESIÓN DE CORREO —el enlace, que Firebase llama `password`—,
+   * se cierra cualquier contraseña que la cuenta tuviera: es el secuestro previo de
+   * `acceso-por-correo.ts`. La app no pone contraseñas, así que una que exista es ajena. En
+   * el caso normal no hay ninguna y no se toca nada.
    */
   const contrasenaAnulada =
-    proveedor === 'emailLink' ? await cerrarContrasenaAjena(uid, auth) : false;
+    proveedor === 'password' ? await cerrarContrasenaAjena(uid, auth) : false;
 
   const datos = invitacion.data();
   const organizationId = datos.organization_id as string;

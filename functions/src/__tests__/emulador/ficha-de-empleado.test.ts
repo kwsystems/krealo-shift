@@ -1,5 +1,6 @@
 import { claimInvitation } from '../../invitations';
 import { COLLECTIONS, db } from '../../shared/admin';
+import { sesionPorEnlace } from './sesiones-de-auth';
 
 /**
  * El correo de la ficha es la invitación del vendedor (30-sep). Al entrar con él, queda
@@ -51,6 +52,20 @@ describe('entrar con el correo de la ficha', () => {
       employee_id: 'emp-1',
       managed_location_ids: [],
     });
+  });
+
+  it('también entrando por el enlace al correo, con el token que manda Firebase de verdad', async () => {
+    // Un vendedor sin Google entra por el enlace. Su token dice 'password' (30-sep): ver
+    // `invitations.ts`. Con un token inventado esto pasaba y en producción no.
+    await ficha('emp-1');
+    const { uid, token } = await sesionPorEnlace(CORREO);
+    const r = await (claimInvitation as unknown as { run: (r: unknown) => Promise<unknown> }).run({
+      data: {},
+      auth: { uid, token },
+      rawRequest: {},
+    });
+    expect(r).toMatchObject({ claimed: true, role: 'employee' });
+    expect(await membresia(uid)).toMatchObject({ employee_id: 'emp-1' });
   });
 
   it('una ficha inactiva no da acceso', async () => {
