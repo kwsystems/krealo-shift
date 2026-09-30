@@ -258,6 +258,36 @@ try {
   }
 
   /*
+   * --- 4b. «PUBLICAR SOLO LOS CAMBIOS» DICE EL DÍA Y LAS HORAS DE CADA TURNO (30-sep).
+   * Salía «09-30 · 01:00», y el «01:00» era el refrigerio escrito como hora: Andree no
+   * reconocía el turno que acababa de cambiar. Cada opción tiene que decir «mié 30 ·
+   * 10:00 – 19:00», y los turnos pegados tienen que estar entre ellas con sus horas.
+   */
+  await pagina.locator('[data-testid="schedule-publish-some"]').first().click();
+  await pagina.locator('[data-testid="publish-picker"]:visible').waitFor({ timeout: 10000 });
+  await pagina.waitForTimeout(400);
+  const opciones = (
+    await pagina.locator('[data-testid^="publish-pick-"]:visible').allTextContents()
+  ).map(sinGlifos);
+  await pagina.screenshot({ path: 'capturas/pegar-publicar.png', fullPage: false });
+  const malas = opciones.filter(
+    (o) => !/· \S+ \d{1,2} · \d{2}:\d{2} – \d{2}:\d{2}$/.test(o.trim()),
+  );
+  if (opciones.length < 11) {
+    problemas.push(`«Publicar solo los cambios» ofrece ${opciones.length} turnos, y se pegaron 11`);
+  } else if (malas.length > 0) {
+    problemas.push(`«Publicar solo los cambios» no dice día y horas: «${malas[0]}»`);
+  } else if (!opciones.some((o) => o.includes(uno.nombre) && o.endsWith('13:00 – 22:00'))) {
+    problemas.push('en «Publicar solo los cambios» no está el turno de 13:00 a 22:00 que se pegó');
+  }
+  await pagina
+    .locator('[data-testid="publish-picker"]')
+    .first()
+    .getByText('Cerrar', { exact: true })
+    .click();
+  await pagina.locator('[data-testid="publish-picker"]').waitFor({ state: 'detached' });
+
+  /*
    * --- 5. PEGAR DOS VECES, Y SALIR DE AHÍ (30-sep). Andree pegó dos veces la misma semana
    * y se quedó con los turnos duplicados, uno encima de otro, sin forma de quitarlos que no
    * fuera de uno en uno. Aquí se hace lo mismo: la segunda vez tiene que BLOQUEAR diciendo

@@ -24,6 +24,7 @@ import {
   addWeeks,
   currentWeekStart,
   dateKeyOf,
+  formatDayColumn,
   localTimeOf,
   weekDays,
   weekEnd,
@@ -65,7 +66,7 @@ import { useResponsive } from '@/hooks/use-responsive';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing } from '@/theme/tokens';
-import { formatClockTime, minutesToHHmm } from '@/utils/time';
+import { formatClockTime, formatShiftRange } from '@/utils/time';
 
 /**
  * Editor de horarios semanales (§11.3): la función principal del panel.
@@ -894,8 +895,21 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               .map((shift) => (
                 <Chip
                   key={shift.id}
-                  label={`${names.get(shift.employee_id) ?? ''} · ${shift.dateKey.slice(5)} · ${minutesToHHmm(
-                    shift.planned_unpaid_break_minutes,
+                  /*
+                   * EL DÍA Y LAS HORAS DEL TURNO. Aquí salía «09-30 · 01:00»: el «01:00» era
+                   * el REFRIGERIO planificado —60 minutos— escrito como una hora, así que
+                   * parecía que el turno empezaba a la una. Lo vio Andree el 30-sep al
+                   * publicar un cambio de horario: no se parecía en nada a lo que había puesto.
+                   */
+                  label={`${names.get(shift.employee_id) ?? ''} · ${formatDayColumn(
+                    shift.dateKey,
+                    language,
+                  )} · ${formatShiftRange(
+                    shift.starts_at,
+                    shift.ends_at,
+                    scope.timezone,
+                    scope.timeFormat,
+                    language,
                   )}`}
                   selected={pickedForPublish.includes(shift.id)}
                   onPress={() =>
