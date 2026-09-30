@@ -20,7 +20,9 @@ import { useTheme } from '@/theme/use-theme';
  * escala por fila, dos horas y diez horas se verían igual de altas.
  *
  * Un día trabajado es una columna; uno sin horas, la línea base sola; uno que todavía no
- * ha llegado, ni eso. La inicial de hoy va en color, porque su columna aún crece.
+ * ha llegado, ni eso. La inicial de hoy va en negrita y en tinta, porque su columna aún
+ * crece. En tinta y NO en el color de marca: sobre el verde de quien trabaja, en oscuro,
+ * el morado se quedaba a 4,35:1 y hace falta 4,5 (lo midió `contraste:check`).
  * Las cifras exactas están en la ficha: esto es para ver la forma de la semana.
  */
 
@@ -67,7 +69,7 @@ export function TiraDeLaSemana({
             </View>
             <AppText
               variant="label"
-              tone={dia.esHoy ? 'primary' : 'subtle'}
+              tone={dia.esHoy ? 'default' : 'subtle'}
               style={dia.esHoy ? estilos.inicialDeHoy : null}
             >
               {formatWeekdayNarrow(dia.dia, language)}

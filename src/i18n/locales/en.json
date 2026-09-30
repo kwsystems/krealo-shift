@@ -1247,7 +1247,7 @@
     "adminPublishTitle": "Publishing is what makes it real",
     "adminPublishBody": "A draft shift does NOT exist for the clock: whoever clocks will see “You have no scheduled shift”. Press “Publish schedule” once the week is ready.",
     "adminTeamTitle": "Team",
-    "adminTeamBody": "This is where each person is added and PINs are reset. The app generates the PIN: nobody picks it, and whoever runs the store sees it once to hand it over.",
+    "adminTeamBody": "This is where each person is added and PINs are reset. The app generates the PIN: nobody picks it, and whoever runs the store sees it once to hand it over. Each row shows their week day by day, with the total; open their card to see when they clocked in and out each day and how much they worked each week of the month.",
     "adminHoursTitle": "Hours",
     "adminHoursBody": "What was clocked, day by day, with totals. “Add manual entry” records what is missing, with a required reason, audited under your name and not as if the person had clocked it.",
     "adminInboxTitle": "Inbox",

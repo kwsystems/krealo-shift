@@ -1247,7 +1247,7 @@
     "adminPublishTitle": "Publicar es lo que lo hace real",
     "adminPublishBody": "Un turno en borrador NO existe para el reloj: quien marque verá «No tienes un turno programado». Pulsa «Publicar horario» cuando la semana esté lista.",
     "adminTeamTitle": "Equipo",
-    "adminTeamBody": "Aquí se da de alta a cada persona y se reinician los PIN. El PIN lo genera la app: nadie lo elige, y quien administra lo ve una sola vez para entregarlo.",
+    "adminTeamBody": "Aquí se da de alta a cada persona y se reinician los PIN. El PIN lo genera la app: nadie lo elige, y quien administra lo ve una sola vez para entregarlo. Cada fila enseña su semana día por día, con el total; al abrir la ficha ves a qué hora entró y salió cada día y cuánto hizo cada semana del mes.",
     "adminHoursTitle": "Horas",
     "adminHoursBody": "Lo que marcaron, día por día, con sus totales. «Agregar fichaje manual» registra lo que faltó, con motivo obligatorio, y queda auditado con tu nombre y no como si lo hubiera marcado la persona.",
     "adminInboxTitle": "Bandeja",
