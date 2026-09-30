@@ -1,0 +1,592 @@
+import { useState } from 'react';
+import { View } from 'react-native';
+import { router } from 'expo-router';
+import { useQuery } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
+import { useTranslation } from 'react-i18next';
+
+import { fetchMiFicha, fetchMisJornadas, fetchMisTurnos, type MiFicha } from './api';
+import {
+  diasDelVendedor,
+  minutosDeLaJornada,
+  resumenDelMes,
+  type DiaDelVendedor,
+  type EstadoDelDia,
+} from './resumen';
+import { AdminErrorState } from '@/components/schedule/data-states';
+import { SegmentedControl, StatTile } from '@/components/schedule/fields';
+import { MonthNavigator } from '@/components/schedule/week-tools';
+import { AppText } from '@/components/ui/app-text';
+import { GhostButton } from '@/components/ui/buttons';
+import { LanguageSwitch } from '@/components/ui/language-switch';
+import {
+  AppScreen,
+  Card,
+  ResponsiveContainer,
+  Row,
+  SeparadorDeRegistro,
+  Stack,
+} from '@/components/ui/layout';
+import { EmptyState, LoadingState, StatusBadge } from '@/components/ui/states';
+import { periodoDe } from '@/features/reports/periodo';
+import {
+  addWeeks,
+  currentWeekStart,
+  dateKeyOf,
+  formatDateKeyShort,
+  formatWeekdayShort,
+  weekDays,
+  weekRangeInstants,
+} from '@/features/schedules/week';
+import { fetchTimeEvents } from '@/features/timesheets/api';
+import { useLiveClock } from '@/hooks/use-live-clock';
+import { currentLanguage, type SupportedLanguage } from '@/i18n';
+import { useSessionStore } from '@/stores/session-store';
+import { estilosDelTema } from '@/theme/estilos';
+import { radii, spacing, type StatusTone } from '@/theme/tokens';
+import { formatClockTime } from '@/utils/time';
+
+/**
+ * LA VISTA DEL VENDEDOR, en su celular (30-sep).
+ *
+ * Lo pidió Andree: que cada persona del equipo entre con su correo y vea SOLO lo suyo —qué
+ * horario le toca esta semana y la siguiente, cuánto lleva trabajado en el mes, si llegó
+ * tarde o temprano—. Nada que editar y nada de los demás: las reglas de Firestore ya no le
+ * dejan leer otra cosa (`isSelfEmployee`), así que esta pantalla no podría enseñarlo aunque
+ * quisiera.
+ *
+ * SE LEE DE ARRIBA ABAJO EN EL ORDEN EN QUE SE PREGUNTA:
+ *   1. Hoy: ¿estoy dentro?, ¿a qué hora entro?, ¿hoy libro?
+ *   2. La semana —esta o la siguiente—, día por día, con lo que marcó al lado del turno.
+ *   3. El mes: horas, días, a tiempo, tarde; y abajo, cada día con marca.
+ *
+ * UNA COLUMNA, del ancho de un teléfono también en el ordenador: es una vista personal, no
+ * un tablero, y en pantalla ancha una tira centrada se lee mejor que cuatro columnas vacías.
+ */
+
+/**
+ * UNA DURACIÓN COMO LA DIRÍA UNA PERSONA: «8 h 25 min», no «08:25». En el panel las horas
+ * van en reloj porque se suman en columnas; aquí las lee quien las trabajó, y «12:15 h» se
+ * confunde con la hora del día.
+ */
+export function duracion(minutos: number, t: TFunction): string {
+  const h = Math.floor(minutos / 60);
+  const m = minutos % 60;
+  if (h === 0) return t('portal.durationMinutes', { m });
+  if (m === 0) return t('portal.durationHours', { h });
+  return t('portal.durationHoursMinutes', { h, m });
+}
+
+export function MiHorarioScreen() {
+  const { t } = useTranslation();
+  const ficha = useQuery({ queryKey: ['portal', 'ficha'], queryFn: fetchMiFicha });
+
+  if (ficha.isPending) {
+    return (
+      <AppScreen tone="canvas">
+        <LoadingState label={t('portal.loading')} />
+      </AppScreen>
+    );
+  }
+  if (ficha.error !== null) {
+    return (
+      <AppScreen tone="canvas">
+        <AdminErrorState error={ficha.error} onRetry={() => void ficha.refetch()} />
+      </AppScreen>
+    );
+  }
+  if (ficha.data === null || !ficha.data.activo) {
+    return (
+      <AppScreen tone="canvas" scroll testID="mi-horario">
+        <ResponsiveContainer width="form">
+          <Stack gap={spacing.lg}>
+            <EmptyState
+              icon="person-outline"
+              title={ficha.data === null ? t('portal.noFileTitle') : t('portal.inactiveTitle')}
+              body={ficha.data === null ? t('portal.noFileBody') : t('portal.inactiveBody')}
+              testID="mi-horario-sin-ficha"
+            />
+            <Pie />
+          </Stack>
+        </ResponsiveContainer>
+      </AppScreen>
+    );
+  }
+  return <Contenido ficha={ficha.data} />;
+}
+
+function Contenido({ ficha }: { ficha: MiFicha }) {
+  const { t } = useTranslation();
+  const language = currentLanguage();
+  const estilos = useEstilos();
+  const now = useLiveClock('minute');
+  const nowISO = now.toISOString();
+  const tz = ficha.timezone;
+  const formato = ficha.sede?.settings.timeFormat;
+  const hora = (instante: string) => formatClockTime(instante, tz, formato, language);
+
+  const [semana, setSemana] = useState<'esta' | 'proxima'>('esta');
+  const [mesOffset, setMesOffset] = useState(0);
+
+  // Las dos semanas en una sola consulta: cambiar de una a otra no espera a la red.
+  const inicio = currentWeekStart(nowISO, ficha.weekStartsOn, tz);
+  const desdeSemanas = weekRangeInstants(inicio, tz).fromISO;
+  const hastaSemanas = weekRangeInstants(addWeeks(inicio, 1), tz).toISO;
+  const periodo = periodoDe({
+    tipo: 'mes',
+    offset: mesOffset,
+    nowISO,
+    weekStartsOn: ficha.weekStartsOn,
+    timezone: tz,
+  });
+
+  const base = { organizationId: ficha.organizationId, employeeId: ficha.employeeId };
+  const turnosSemanas = useQuery({
+    queryKey: ['portal', 'turnos', ficha.employeeId, desdeSemanas, hastaSemanas],
+    queryFn: () => fetchMisTurnos({ ...base, fromISO: desdeSemanas, toISO: hastaSemanas }),
+  });
+  const jornadasSemanas = useQuery({
+    queryKey: ['portal', 'jornadas', ficha.employeeId, desdeSemanas, hastaSemanas],
+    queryFn: () => fetchMisJornadas({ ...base, fromISO: desdeSemanas, toISO: hastaSemanas }),
+    // Lo de hoy cambia mientras trabaja: se refresca solo cada minuto.
+    refetchInterval: 60_000,
+  });
+  const turnosMes = useQuery({
+    queryKey: ['portal', 'turnos', ficha.employeeId, periodo.fromISO, periodo.toISO],
+    queryFn: () => fetchMisTurnos({ ...base, fromISO: periodo.fromISO, toISO: periodo.toISO }),
+  });
+  const jornadasMes = useQuery({
+    queryKey: ['portal', 'jornadas', ficha.employeeId, periodo.fromISO, periodo.toISO],
+    queryFn: () => fetchMisJornadas({ ...base, fromISO: periodo.fromISO, toISO: periodo.toISO }),
+  });
+
+  const hoy = dateKeyOf(nowISO, tz);
+  const diasSemana = diasDelVendedor({
+    dias: weekDays(semana === 'esta' ? inicio : addWeeks(inicio, 1)),
+    turnos: turnosSemanas.data ?? [],
+    jornadas: jornadasSemanas.data ?? [],
+    timezone: tz,
+    nowISO,
+  });
+  const diaDeHoy = diasDelVendedor({
+    dias: [hoy],
+    turnos: turnosSemanas.data ?? [],
+    jornadas: jornadasSemanas.data ?? [],
+    timezone: tz,
+    nowISO,
+  })[0];
+  const diasMes = diasDelVendedor({
+    dias: periodo.dias,
+    turnos: turnosMes.data ?? [],
+    jornadas: jornadasMes.data ?? [],
+    timezone: tz,
+    nowISO,
+  });
+  const mes = resumenDelMes(diasMes);
+  const diasConAlgo = diasMes.filter((d) => d.jornadas.length > 0 || d.estado === 'sinMarca');
+
+  // Solo si está dentro: ¿trabajando o en su descanso? Lo dice la última marca de hoy.
+  const abierta = diaDeHoy?.jornadas.find((j) => j.ends_at === null);
+  const marcasDeHoy = useQuery({
+    queryKey: ['portal', 'marcas', ficha.employeeId, abierta?.id ?? 'ninguna'],
+    queryFn: () =>
+      fetchTimeEvents({
+        ...base,
+        fromISO: abierta?.starts_at ?? nowISO,
+        toISO: new Date(Date.parse(nowISO) + 60_000).toISOString(),
+      }),
+    enabled: abierta !== undefined,
+    refetchInterval: 60_000,
+  });
+  const ultima = marcasDeHoy.data?.at(-1);
+  const enDescanso = abierta !== undefined && ultima?.event_type === 'break_start';
+
+  const cargandoSemana = turnosSemanas.isPending || jornadasSemanas.isPending;
+  const fallo =
+    turnosSemanas.error ?? jornadasSemanas.error ?? turnosMes.error ?? jornadasMes.error;
+
+  return (
+    <AppScreen tone="canvas" scroll testID="mi-horario">
+      <ResponsiveContainer width="form">
+        <Stack gap={spacing.lg}>
+          <Stack gap={spacing.xs}>
+            <AppText variant="label" tone="primary">
+              {ficha.sede === null
+                ? ficha.organizacion
+                : `${ficha.organizacion} · ${ficha.sede.name}`}
+            </AppText>
+            <AppText variant="title" testID="mi-horario-hola">
+              {t('portal.hello', { name: ficha.nombre })}
+            </AppText>
+          </Stack>
+
+          {fallo !== null ? (
+            <AdminErrorState
+              error={fallo}
+              onRetry={() => {
+                void turnosSemanas.refetch();
+                void jornadasSemanas.refetch();
+                void turnosMes.refetch();
+                void jornadasMes.refetch();
+              }}
+            />
+          ) : null}
+
+          {/* 1. HOY */}
+          {diaDeHoy === undefined || cargandoSemana ? null : (
+            <Hoy
+              dia={diaDeHoy}
+              enDescanso={enDescanso}
+              desdeDescanso={enDescanso && ultima !== undefined ? hora(ultima.occurred_at) : null}
+              hora={hora}
+              nowISO={nowISO}
+            />
+          )}
+
+          {/* 2. LA SEMANA */}
+          <Stack gap={spacing.sm}>
+            <AppText variant="section">{t('portal.weekTitle')}</AppText>
+            <SegmentedControl
+              label={t('portal.weekTitle')}
+              value={semana}
+              options={[
+                { value: 'esta', label: t('portal.thisWeek') },
+                { value: 'proxima', label: t('portal.nextWeek') },
+              ]}
+              onChange={setSemana}
+              testID="mi-horario-semana"
+            />
+            <Card style={estilos.lista} testID="mi-horario-dias">
+              {cargandoSemana ? (
+                <LoadingState />
+              ) : (
+                diasSemana.map((dia, i) => (
+                  <View key={dia.dia}>
+                    {i > 0 ? <SeparadorDeRegistro /> : null}
+                    <FilaDelDia dia={dia} esHoy={dia.dia === hoy} hora={hora} language={language} />
+                  </View>
+                ))
+              )}
+            </Card>
+            {semana === 'proxima' &&
+            !cargandoSemana &&
+            diasSemana.every((d) => d.turnos.length === 0) ? (
+              <AppText variant="help" tone="subtle">
+                {t('portal.nextWeekEmpty')}
+              </AppText>
+            ) : null}
+          </Stack>
+
+          {/* 3. EL MES */}
+          <Stack gap={spacing.sm}>
+            <AppText variant="section">{t('portal.monthTitle')}</AppText>
+            <MonthNavigator
+              monthStart={periodo.from}
+              language={language}
+              isCurrentMonth={mesOffset === 0}
+              onPrevious={() => setMesOffset((m) => m - 1)}
+              onNext={() => setMesOffset((m) => Math.min(0, m + 1))}
+              onGoToCurrent={() => setMesOffset(0)}
+            />
+            <View style={estilos.fichas} testID="mi-horario-mes">
+              <View style={estilos.ficha}>
+                <StatTile
+                  label={t('portal.statHours')}
+                  value={duracion(mes.minutosNetos, t)}
+                  icon="time-outline"
+                  testID="mi-horario-horas"
+                />
+              </View>
+              <View style={estilos.ficha}>
+                <StatTile
+                  label={t('portal.statDays')}
+                  value={String(mes.diasTrabajados)}
+                  icon="calendar-outline"
+                />
+              </View>
+              <View style={estilos.ficha}>
+                <StatTile
+                  label={t('portal.statOnTime')}
+                  value={String(mes.aTiempo)}
+                  detalle={
+                    mes.antesDeHora > 0
+                      ? t('portal.statEarly', { count: mes.antesDeHora })
+                      : undefined
+                  }
+                  icon="checkmark-circle-outline"
+                  testID="mi-horario-a-tiempo"
+                />
+              </View>
+              <View style={estilos.ficha}>
+                <StatTile
+                  label={t('portal.statLate')}
+                  value={String(mes.tarde)}
+                  tone={mes.tarde > 0 ? 'late' : undefined}
+                  icon="alert-circle-outline"
+                  testID="mi-horario-tarde"
+                />
+              </View>
+            </View>
+            {mes.sinMarca > 0 ? (
+              <AppText variant="help" tone="muted" testID="mi-horario-sin-marca">
+                {t('portal.noMarkNotice', { count: mes.sinMarca })}
+              </AppText>
+            ) : null}
+
+            {diasConAlgo.length === 0 ? (
+              <AppText variant="help" tone="subtle">
+                {t('portal.monthEmpty')}
+              </AppText>
+            ) : (
+              <Card style={estilos.lista} testID="mi-horario-dias-mes">
+                {diasConAlgo.map((dia, i) => (
+                  <View key={dia.dia}>
+                    {i > 0 ? <SeparadorDeRegistro /> : null}
+                    <FilaDelDia dia={dia} esHoy={dia.dia === hoy} hora={hora} language={language} />
+                  </View>
+                ))}
+              </Card>
+            )}
+          </Stack>
+
+          <Pie />
+        </Stack>
+      </ResponsiveContainer>
+    </AppScreen>
+  );
+}
+
+/** Lo de hoy, en una frase y con su color: es lo primero que se mira. */
+function Hoy({
+  dia,
+  enDescanso,
+  desdeDescanso,
+  hora,
+  nowISO,
+}: {
+  dia: DiaDelVendedor;
+  enDescanso: boolean;
+  desdeDescanso: string | null;
+  hora: (instante: string) => string;
+  nowISO: string;
+}) {
+  const { t } = useTranslation();
+  const estilos = useEstilos();
+  const turno = dia.turnos[0];
+  const abierta = dia.jornadas.find((j) => j.ends_at === null);
+  const rango = turno === undefined ? null : `${hora(turno.starts_at)} – ${hora(turno.ends_at)}`;
+
+  const { tono, titulo, detalle } = ((): {
+    tono: StatusTone;
+    titulo: string;
+    detalle: string | null;
+  } => {
+    if (abierta !== undefined && enDescanso) {
+      return {
+        tono: 'onBreak',
+        titulo: t('portal.nowOnBreak', { time: desdeDescanso ?? '' }),
+        detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
+      };
+    }
+    if (abierta !== undefined) {
+      return {
+        tono: 'working',
+        titulo: t('portal.nowWorking', { time: hora(abierta.starts_at) }),
+        detalle:
+          dia.jornadas.length > 1
+            ? t('portal.nowSoFarDay', {
+                hours: duracion(minutosDeLaJornada(abierta, nowISO), t),
+                day: duracion(dia.minutosNetos, t),
+              })
+            : t('portal.nowSoFar', { hours: duracion(minutosDeLaJornada(abierta, nowISO), t) }),
+      };
+    }
+    if (dia.jornadas.length > 0) {
+      return {
+        tono: 'offShift',
+        titulo: t('portal.todayDone', { hours: duracion(dia.minutosNetos, t) }),
+        detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
+      };
+    }
+    if (turno === undefined) {
+      return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
+    }
+    if (Date.parse(turno.ends_at) <= Date.parse(nowISO)) {
+      return {
+        tono: 'warning',
+        titulo: t('portal.todayNoMark', { range: rango ?? '' }),
+        detalle: null,
+      };
+    }
+    return {
+      tono: 'info',
+      titulo: t('portal.todayUpcoming', { range: rango ?? '' }),
+      detalle: null,
+    };
+  })();
+
+  return (
+    <Card style={{ ...estilos.hoy, ...estilos[`hoy_${tono}`] }} testID="mi-horario-hoy">
+      <AppText variant="label" tone="muted">
+        {t('portal.today')}
+      </AppText>
+      <AppText variant="section" testID={`mi-horario-hoy-${tono}`}>
+        {titulo}
+      </AppText>
+      {detalle === null ? null : (
+        <AppText variant="body" tone="muted" tabular>
+          {detalle}
+        </AppText>
+      )}
+    </Card>
+  );
+}
+
+const INSIGNIA: Partial<
+  Record<
+    EstadoDelDia,
+    {
+      tono: StatusTone;
+      icono: 'checkmark-circle' | 'alert-circle' | 'radio-button-on' | 'help-circle-outline';
+      clave: string;
+    }
+  >
+> = {
+  aTiempo: { tono: 'working', icono: 'checkmark-circle', clave: 'portal.badgeOnTime' },
+  tarde: { tono: 'late', icono: 'alert-circle', clave: 'portal.badgeLate' },
+  enCurso: { tono: 'working', icono: 'radio-button-on', clave: 'portal.badgeWorking' },
+  sinMarca: { tono: 'warning', icono: 'help-circle-outline', clave: 'portal.badgeNoMark' },
+};
+
+/** Un día: a la izquierda cuándo, en medio el turno y lo que marcó, a la derecha cómo fue. */
+function FilaDelDia({
+  dia,
+  esHoy,
+  hora,
+  language,
+}: {
+  dia: DiaDelVendedor;
+  esHoy: boolean;
+  hora: (instante: string) => string;
+  language: SupportedLanguage;
+}) {
+  const { t } = useTranslation();
+  const estilos = useEstilos();
+  const insignia = INSIGNIA[dia.estado];
+  const turnos = dia.turnos.map((tt) => `${hora(tt.starts_at)} – ${hora(tt.ends_at)}`).join(' · ');
+  const marcas = dia.jornadas.map((j) =>
+    j.ends_at === null
+      ? t('portal.markOpen', { from: hora(j.starts_at) })
+      : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
+  );
+  const rotuloDelTurno =
+    dia.turnos.length > 0
+      ? turnos
+      : dia.jornadas.length > 0
+        ? t('portal.noShift')
+        : t('portal.free');
+
+  return (
+    <Row
+      gap={spacing.md}
+      align="center"
+      style={esHoy ? { ...estilos.fila, ...estilos.filaHoy } : estilos.fila}
+      testID={`mi-horario-dia-${dia.dia}`}
+    >
+      <View style={estilos.fecha}>
+        <AppText variant="label" tone={esHoy ? 'primary' : 'muted'}>
+          {esHoy ? t('portal.todayShort') : formatWeekdayShort(dia.dia, language)}
+        </AppText>
+        <AppText variant="bodyStrong" tone={esHoy ? 'primary' : 'default'} tabular>
+          {formatDateKeyShort(dia.dia, language)}
+        </AppText>
+      </View>
+      <Stack gap={0} style={estilos.centro}>
+        <AppText variant="bodyStrong" tabular tone={dia.turnos.length === 0 ? 'subtle' : 'default'}>
+          {rotuloDelTurno}
+        </AppText>
+        {marcas.map((marca, i) => (
+          <AppText key={i} variant="help" tone="muted" tabular>
+            {marca}
+          </AppText>
+        ))}
+        {dia.estado === 'aTiempo' && dia.minutosAntes !== null ? (
+          <AppText variant="help" tone="success">
+            {t('portal.early', { count: dia.minutosAntes })}
+          </AppText>
+        ) : null}
+      </Stack>
+      {insignia === undefined && dia.minutosNetos === 0 ? null : (
+        <View style={estilos.derecha}>
+          {insignia === undefined ? null : (
+            <StatusBadge
+              label={t(insignia.clave)}
+              tone={insignia.tono}
+              icon={insignia.icono}
+              compact
+            />
+          )}
+          {dia.minutosNetos > 0 ? (
+            <AppText variant="label" tone="muted" tabular>
+              {duracion(dia.minutosNetos, t)}
+            </AppText>
+          ) : null}
+        </View>
+      )}
+    </Row>
+  );
+}
+
+/** Idioma, el manual y salir. Sin sesión que cerrar, un celular prestado se queda dentro. */
+function Pie() {
+  const { t } = useTranslation();
+  const salir = useSessionStore((s) => s.signOut);
+  return (
+    <Stack gap={spacing.sm}>
+      <AppText variant="help" tone="subtle">
+        {t('portal.footer')}
+      </AppText>
+      <Row justify="space-between" align="center" gap={spacing.sm} wrap>
+        <Row gap={spacing.sm} wrap>
+          <GhostButton
+            label={t('portal.manual')}
+            onPress={() => router.push('/manual')}
+            fullWidth={false}
+            testID="mi-horario-manual"
+          />
+          <GhostButton
+            label={t('portal.signOut')}
+            onPress={() => void salir()}
+            fullWidth={false}
+            testID="mi-horario-salir"
+          />
+        </Row>
+        <LanguageSwitch />
+      </Row>
+    </Stack>
+  );
+}
+
+const useEstilos = estilosDelTema((colors) => ({
+  lista: { paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' as const },
+  fila: { paddingVertical: spacing.md, paddingHorizontal: spacing.base, minHeight: 64 },
+  /* Hoy se distingue con una franja y el color del texto: dos señales, no solo color. */
+  filaHoy: {
+    backgroundColor: colors.primary50,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.primary500,
+  },
+  fecha: { width: 64, flexShrink: 0 },
+  centro: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  derecha: { alignItems: 'flex-end' as const, gap: spacing.xs, flexShrink: 0 },
+  fichas: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: spacing.sm },
+  /* Dos por fila en el teléfono, cuatro caben en pantalla ancha: la base es media fila. */
+  ficha: { flexBasis: '46%' as const, flexGrow: 1, minWidth: 140 },
+  hoy: { gap: spacing.xs, borderWidth: 1, borderRadius: radii.card },
+  hoy_working: { backgroundColor: colors.success50, borderColor: colors.success600 },
+  hoy_onBreak: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
+  hoy_warning: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
+  hoy_info: { backgroundColor: colors.info50, borderColor: colors.info600 },
+  hoy_offShift: { borderColor: colors.border },
+  hoy_late: { backgroundColor: colors.danger50, borderColor: colors.danger600 },
+}));

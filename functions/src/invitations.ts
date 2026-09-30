@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { cerrarContrasenaAjena, proveedorDeLaSesion } from './acceso-por-correo';
+import { ligarFichaDeEmpleado } from './ficha-de-empleado';
 import { COLLECTIONS, auth, db, nowISO } from './shared/admin';
 import { audit, membershipOf, requireRole, requireUid, type AppRole } from './shared/caller';
 
@@ -78,8 +79,13 @@ export const claimInvitation = onCall(async (request) => {
     .get();
 
   const invitacion = pendientes.docs[0];
+  /*
+   * SIN INVITACIÓN, SE MIRA SI ESE CORREO ES EL DE UNA FICHA DE EMPLEADO: así entra un
+   * vendedor a ver su horario desde el celular. La invitación manda cuando hay las dos:
+   * quien fue invitado a administrar entra a administrar. Ver `ficha-de-empleado.ts`.
+   */
   if (invitacion === undefined) {
-    return { claimed: false, reason: 'sin-invitacion' as const };
+    return ligarFichaDeEmpleado({ uid, correo, proveedor, token });
   }
 
   /*

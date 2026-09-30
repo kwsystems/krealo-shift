@@ -59,7 +59,10 @@ export type EmpleadoDelBono = {
 /** Margen para asociar una jornada sin turno a un turno: quien entra un rato antes. */
 const MARGEN_ANTES_MS = 2 * 60 * 60 * 1000;
 
-function sesionDelTurno(turno: ShiftRow, sesiones: readonly WorkSession[]): WorkSession | null {
+export function sesionDelTurno(
+  turno: ShiftRow,
+  sesiones: readonly WorkSession[],
+): WorkSession | null {
   const porTurno = sesiones.find((s) => s.shift_id === turno.id);
   if (porTurno !== undefined) return porTurno;
   /*

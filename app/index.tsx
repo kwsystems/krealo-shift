@@ -46,5 +46,7 @@ export default function BootRoute() {
       return <NoAdminAccessScreen />;
     case 'adminPanel':
       return <Redirect href="/(manager)" />;
+    case 'employeePortal':
+      return <Redirect href="/me" />;
   }
 }

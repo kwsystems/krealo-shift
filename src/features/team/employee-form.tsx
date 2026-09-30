@@ -51,6 +51,7 @@ export function EmployeeFormSheet({
   jobRoles,
   saving,
   saveError,
+  correosOcupados,
   onSubmit,
   onClose,
 }: {
@@ -72,6 +73,13 @@ export function EmployeeFormSheet({
    * volver a pulsar, y cada pulsacion deja otro huerfano.
    */
   saveError?: unknown;
+  /**
+   * Correos que ya tiene OTRA ficha, en minúsculas, con el nombre de quién. Desde el 30-sep
+   * el correo de la ficha es con lo que cada vendedor entra a ver su horario, y un correo
+   * en dos fichas no dice cuál de las dos es quien entra: el servidor no liga ninguna. Se
+   * avisa aquí, al escribirlo, y no el día que la persona no pueda entrar.
+   */
+  correosOcupados?: ReadonlyMap<string, string>;
   onSubmit: (draft: EmployeeDraft) => void;
   onClose: () => void;
 }) {
@@ -81,8 +89,9 @@ export function EmployeeFormSheet({
 
   const nameValid = values.fullName.trim().length > 1;
   const emailValid = values.email.trim() === '' || EMAIL_PATTERN.test(values.email.trim());
+  const duenoDelCorreo = correosOcupados?.get(values.email.trim().toLowerCase()) ?? null;
   const locationsValid = values.locationIds.length > 0;
-  const canSubmit = nameValid && emailValid && locationsValid;
+  const canSubmit = nameValid && emailValid && duenoDelCorreo === null && locationsValid;
 
   const handleSubmit = () => {
     setSubmitted(true);
@@ -92,7 +101,8 @@ export function EmployeeFormSheet({
       fullName: values.fullName.trim(),
       preferredName: values.preferredName.trim() === '' ? null : values.preferredName.trim(),
       employeeNumber: values.employeeNumber.trim() === '' ? null : values.employeeNumber.trim(),
-      email: values.email.trim() === '' ? null : values.email.trim(),
+      // En minúsculas: es con lo que la persona entra, y la búsqueda del servidor es exacta.
+      email: values.email.trim() === '' ? null : values.email.trim().toLowerCase(),
       locationIds: values.locationIds,
       jobRoleIds: values.jobRoleIds,
     });
@@ -164,9 +174,20 @@ export function EmployeeFormSheet({
           onChangeText={(email) => setValues((current) => ({ ...current, email }))}
           keyboardType="email-address"
           autoCapitalize="none"
-          error={submitted && !emailValid ? t('auth.emailInvalid') : undefined}
+          error={
+            submitted && !emailValid
+              ? t('auth.emailInvalid')
+              : duenoDelCorreo !== null
+                ? t('team.emailTaken', { name: duenoDelCorreo })
+                : undefined
+          }
           testID="employee-email"
         />
+        {duenoDelCorreo === null ? null : (
+          <AppText variant="help" tone="danger" testID="employee-email-taken">
+            {t('team.emailTaken', { name: duenoDelCorreo })}
+          </AppText>
+        )}
         <AppText variant="help" tone="subtle">
           {t('team.emailOptionalHint')}
         </AppText>

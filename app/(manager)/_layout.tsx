@@ -82,6 +82,9 @@ export default function ManagerLayout() {
     // explicación la pinta la ruta raíz, en un solo sitio.
     case 'noAdminRole':
       return <Redirect href="/" />;
+    // Un vendedor no entra al panel: tiene su vista, con lo suyo y nada más.
+    case 'employeePortal':
+      return <Redirect href="/me" />;
     case 'adminPanel':
       break;
   }

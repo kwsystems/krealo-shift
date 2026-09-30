@@ -35,6 +35,7 @@ jest.mock('@/lib/firebase/session', () => ({
     subscribe: (...args: unknown[]) => mockSubscribe(...args),
     signOut: jest.fn(),
     signInDemo: null,
+    signInDemoVendedor: null,
   }),
 }));
 

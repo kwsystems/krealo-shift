@@ -193,7 +193,7 @@ const locationSettingsSchema = z
   // usan los valores por defecto de la especificación (§11.6).
   .catch(DEFAULT_LOCATION_SETTINGS);
 
-const locationSchema = z.object({
+export const locationSchema = z.object({
   id: docId(),
   name: z.string(),
   address: z.string().default(''),

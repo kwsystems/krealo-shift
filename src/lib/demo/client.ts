@@ -7,7 +7,15 @@ import {
   marcaDeLaUrl,
   nombresLargosDeLaUrl,
 } from './escenarios';
-import { DEMO_EMAIL, DEMO_LOCATION_1, DEMO_ORG_ID, DEMO_USER_ID, crearAlmacen } from './seed';
+import {
+  DEMO_EMAIL,
+  DEMO_LOCATION_1,
+  DEMO_ORG_ID,
+  DEMO_USER_ID,
+  DEMO_VENDEDOR_EMAIL,
+  DEMO_VENDEDOR_USER_ID,
+  crearAlmacen,
+} from './seed';
 import { registrarFichajeDemo } from './reconstruir';
 import type { DataClient } from '@/lib/firebase/query';
 
@@ -32,25 +40,30 @@ import type { DataClient } from '@/lib/firebase/query';
 
 type Suscriptor = (evento: string, sesion: unknown) => void;
 
-function usuarioDemo() {
+/** Quién entra en la demostración: quien administra, o el vendedor (ver la semilla). */
+type QuienDemo = 'admin' | 'vendedor';
+
+function usuarioDemo(quien: QuienDemo) {
   return {
-    id: DEMO_USER_ID,
-    email: DEMO_EMAIL,
+    id: quien === 'vendedor' ? DEMO_VENDEDOR_USER_ID : DEMO_USER_ID,
+    email: quien === 'vendedor' ? DEMO_VENDEDOR_EMAIL : DEMO_EMAIL,
     app_metadata: {},
-    user_metadata: { full_name: 'Andree (demostración)' },
+    user_metadata: {
+      full_name: quien === 'vendedor' ? 'Vendedor (demostración)' : 'Andree (demostración)',
+    },
     aud: 'authenticated',
     created_at: new Date().toISOString(),
   };
 }
 
-function sesionDemo() {
+function sesionDemo(quien: QuienDemo) {
   return {
     access_token: 'demo-access-token',
     refresh_token: 'demo-refresh-token',
     token_type: 'bearer',
     expires_in: 3600,
     expires_at: Math.floor(Date.now() / 1000) + 3600,
-    user: usuarioDemo(),
+    user: usuarioDemo(quien),
   };
 }
 
@@ -99,18 +112,21 @@ function minutosEntre(desde: string, hasta: string): number {
  */
 const CLAVE_SESION = 'krealo-shift.demo.sesion';
 
-function haySesionGuardada(): boolean {
+/** Quién había entrado, o `null`. `'1'` es quien administra, por las sesiones de antes. */
+function sesionGuardada(): QuienDemo | null {
   try {
-    return globalThis.localStorage?.getItem(CLAVE_SESION) === '1';
+    const valor = globalThis.localStorage?.getItem(CLAVE_SESION);
+    if (valor === 'vendedor') return 'vendedor';
+    return valor === '1' ? 'admin' : null;
   } catch {
     // Ventana privada o almacenamiento bloqueado: se empieza fuera, que es lo correcto.
-    return false;
+    return null;
   }
 }
 
-function recordarSesion(entrada: boolean): void {
+function recordarSesion(quien: QuienDemo | null): void {
   try {
-    if (entrada) globalThis.localStorage?.setItem(CLAVE_SESION, '1');
+    if (quien !== null) globalThis.localStorage?.setItem(CLAVE_SESION, quien === 'vendedor' ? 'vendedor' : '1');
     else globalThis.localStorage?.removeItem(CLAVE_SESION);
   } catch {
     // Si no se puede recordar, la demostración sigue siendo usable en esta pestaña.
@@ -130,7 +146,9 @@ function crearAuth(alCambiar: () => void) {
    * Ahora se ve la pantalla real y se entra con un boton. Sigue siendo un solo clic, y
    * ademas se ejercita el formulario de verdad: validacion, errores y navegacion.
    */
-  let sesion: ReturnType<typeof sesionDemo> | null = haySesionGuardada() ? sesionDemo() : null;
+  const guardada = sesionGuardada();
+  let sesion: ReturnType<typeof sesionDemo> | null =
+    guardada === null ? null : sesionDemo(guardada);
   const suscriptores = new Set<Suscriptor>();
 
   const avisar = (evento: string) => {
@@ -156,15 +174,16 @@ function crearAuth(alCambiar: () => void) {
         },
       };
     },
-    signInWithPassword: async (_credenciales: { email: string; password: string }) => {
-      sesion = sesionDemo();
-      recordarSesion(true);
+    signInWithPassword: async (credenciales: { email: string; password: string }) => {
+      const quien: QuienDemo = credenciales.email === DEMO_VENDEDOR_EMAIL ? 'vendedor' : 'admin';
+      sesion = sesionDemo(quien);
+      recordarSesion(quien);
       avisar('SIGNED_IN');
       return sinError({ session: sesion, user: sesion.user });
     },
     signOut: async (_opciones?: { scope?: string }) => {
       sesion = null;
-      recordarSesion(false);
+      recordarSesion(null);
       // El almacén vuelve a su estado inicial: un experimento a medias no debe quedar
       // pegado al volver a entrar.
       alCambiar();

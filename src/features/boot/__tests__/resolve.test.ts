@@ -66,10 +66,12 @@ describe('resolveBootDestination', () => {
    * Una cuenta con membresía `employee` tiene sesión válida y ningún panel al que
    * entrar (§6.2). La ruta raíz la mandaba al acceso; el acceso funcionaba —la
    * sesión ya era válida— y la raíz la devolvía al acceso. Encerrada y sin mensaje.
+   *
+   * Desde el 30-sep tiene su propia vista: su horario y sus horas, en el celular.
    */
-  it('una cuenta de empleado recibe una explicación, no la pantalla de acceso', () => {
+  it('una cuenta de empleado va a su vista, no al panel ni a la pantalla de acceso', () => {
     const destino = resolveBootDestination({ ...base, membershipRole: 'employee' });
-    expect(destino).toEqual({ kind: 'noAdminRole', role: 'employee' });
+    expect(destino).toEqual({ kind: 'employeePortal' });
     expect(destino.kind).not.toBe('signIn');
   });
 

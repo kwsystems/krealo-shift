@@ -25,6 +25,14 @@ import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 export const DEMO_ORG_ID = '11111111-1111-4111-8111-111111111111';
 export const DEMO_USER_ID = '99999999-9999-4999-8999-999999999991';
 export const DEMO_EMAIL = 'demo@krealoshift.app';
+/**
+ * LA CUENTA DE VENDEDOR DE LA DEMOSTRACIÓN (30-sep): para ver la app como la ve un
+ * vendedor desde su celular —solo su horario, sus horas y su puntualidad— sin crear a
+ * nadie de verdad. Está ligada a la ficha de `empleadoId(1)`, la misma persona que ficha
+ * en el reloj de la demostración, así que lo que se marca allí se ve aquí.
+ */
+export const DEMO_VENDEDOR_USER_ID = '99999999-9999-4999-8999-999999999992';
+export const DEMO_VENDEDOR_EMAIL = 'vendedor@krealoshift.app';
 export const DEMO_LOCATION_1 = '22222222-2222-4222-8222-222222222221';
 export const DEMO_LOCATION_2 = '22222222-2222-4222-8222-222222222222';
 
@@ -803,6 +811,14 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       // permiso». Pasó tal cual la primera vez que se probó esto.
       status: 'active',
       created_at: aISO(sumarDias(hoy, -400)),
+    },
+    {
+      organization_id: DEMO_ORG_ID,
+      user_id: DEMO_VENDEDOR_USER_ID,
+      role: 'employee',
+      employee_id: empleadoId(1),
+      status: 'active',
+      created_at: aISO(sumarDias(hoy, -90)),
     },
   ]);
   almacen.set('profiles', [{ id: DEMO_USER_ID, full_name: 'Andree (demostración)', locale: 'es' }]);

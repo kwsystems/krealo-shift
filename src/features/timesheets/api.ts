@@ -38,7 +38,7 @@ export type DailySummary = z.infer<typeof dailySummarySchema>;
 export const workSessionStatusValues = ['open', 'complete', 'needs_review', 'approved'] as const;
 export type WorkSessionStatus = (typeof workSessionStatusValues)[number];
 
-const workSessionSchema = z.object({
+export const workSessionSchema = z.object({
   id: docId(),
   employee_id: docId(),
   location_id: docId(),

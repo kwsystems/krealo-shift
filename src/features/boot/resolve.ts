@@ -35,7 +35,13 @@ export type BootDestination =
   /** Sesión válida sin panel al que entrar: se dice, no se rebota (§6.2). */
   | { kind: 'noAdminRole'; role: AppRole }
   /** Sesión válida con rol administrativo: el panel es el destino (§6.3). */
-  | { kind: 'adminPanel'; role: AppRole };
+  | { kind: 'adminPanel'; role: AppRole }
+  /**
+   * Sesión de un vendedor ligado a su ficha: su vista del celular —su horario, sus horas,
+   * su puntualidad—, no el panel. Antes caía en `noAdminRole`, una explicación sin nada
+   * que hacer; desde el 30-sep tiene a dónde ir. Ver `functions/src/ficha-de-empleado.ts`.
+   */
+  | { kind: 'employeePortal' };
 
 export type BootState = {
   /** ¿Ya se leyó del almacenamiento seguro si este dispositivo es kiosco? */
@@ -83,7 +89,8 @@ export function resolveBootDestination(state: BootState): BootDestination {
   const role = denied ? null : (state.membershipRole ?? state.storedRole);
 
   if (role !== null) {
-    return canUseAdminPanel(role) ? { kind: 'adminPanel', role } : { kind: 'noAdminRole', role };
+    if (canUseAdminPanel(role)) return { kind: 'adminPanel', role };
+    return role === 'employee' ? { kind: 'employeePortal' } : { kind: 'noAdminRole', role };
   }
 
   if (state.membershipError !== null) {

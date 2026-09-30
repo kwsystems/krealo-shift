@@ -346,6 +346,150 @@ describe('reglas de Firestore', () => {
     });
   });
 
+  /**
+   * LA VISTA DEL VENDEDOR (30-sep): un `employee` ligado a su ficha lee lo suyo y NADA MÁS.
+   *
+   * Antes los turnos, los descansos y las asignaciones se leían con `isMember`: cualquier
+   * cuenta de la empresa podía pedir por la API el horario de todo el equipo aunque su
+   * pantalla solo enseñara el suyo. Se prueba con las consultas tal cual las hace la app
+   * (`src/features/portal/api.ts`) y con las que un curioso haría a mano.
+   */
+  describe('un vendedor ve lo suyo y nada más', () => {
+    const VENDEDOR = 'cuenta-del-vendedor';
+    const turno = (id: string, empleado: string) =>
+      escribir(`shifts/${id}`, {
+        id,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: empleado,
+        status: 'published',
+        starts_at: '2026-10-05T15:00:00.000Z',
+        ends_at: '2026-10-05T23:00:00.000Z',
+      });
+    const jornada = (id: string, empleado: string) =>
+      escribir(`work_sessions/${id}`, {
+        id,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: empleado,
+        starts_at: '2026-10-05T15:02:00.000Z',
+      });
+
+    beforeEach(async () => {
+      await escribir(`organization_memberships/${ORG}_${VENDEDOR}`, {
+        id: `${ORG}_${VENDEDOR}`,
+        organization_id: ORG,
+        user_id: VENDEDOR,
+        role: 'employee',
+        status: 'active',
+        employee_id: 'emp-yo',
+        managed_location_ids: [],
+        created_at: '2026-09-30T12:00:00.000Z',
+      });
+      await escribir('employees/emp-yo', { id: 'emp-yo', organization_id: ORG, full_name: 'Yo' });
+      await escribir('employees/emp-otra', {
+        id: 'emp-otra',
+        organization_id: ORG,
+        full_name: 'Otra',
+      });
+      await turno('turno-mio', 'emp-yo');
+      await turno('turno-ajeno', 'emp-otra');
+      await jornada('jornada-mia', 'emp-yo');
+      await jornada('jornada-ajena', 'emp-otra');
+      await escribir('employee_location_assignments/asig-mia', {
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-yo',
+      });
+    });
+
+    it('lee sus turnos y sus jornadas con las consultas de su pantalla', async () => {
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      const turnos = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+            where('status', '==', 'published'),
+            where('starts_at', '>=', '2026-10-01T05:00:00.000Z'),
+            where('starts_at', '<', '2026-11-01T05:00:00.000Z'),
+            orderBy('starts_at', 'asc'),
+          ),
+        ),
+      );
+      expect(turnos.docs.map((d) => d.id)).toEqual(['turno-mio']);
+
+      const jornadas = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'work_sessions'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+            where('starts_at', '>=', '2026-10-01T05:00:00.000Z'),
+            where('starts_at', '<', '2026-11-01T05:00:00.000Z'),
+            orderBy('starts_at', 'asc'),
+          ),
+        ),
+      );
+      expect(jornadas.docs.map((d) => d.id)).toEqual(['jornada-mia']);
+
+      await assertSucceeds(getDoc(doc(db, 'employees', 'emp-yo')));
+      await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'employee_location_assignments'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+          ),
+        ),
+      );
+    });
+
+    it('no lee el turno, la jornada ni la ficha de otra persona', async () => {
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      await assertFails(getDoc(doc(db, 'shifts', 'turno-ajeno')));
+      await assertFails(getDoc(doc(db, 'work_sessions', 'jornada-ajena')));
+      await assertFails(getDoc(doc(db, 'employees', 'emp-otra')));
+    });
+
+    it('no puede pedir el horario de toda la sede, que es lo que hace el panel', async () => {
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+          ),
+        ),
+      );
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'employee_location_assignments'),
+            where('organization_id', '==', ORG),
+          ),
+        ),
+      );
+    });
+
+    it('quien administra sigue viéndolo todo', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertSucceeds(getDoc(doc(db, 'shifts', 'turno-ajeno')));
+      const sede = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+          ),
+        ),
+      );
+      expect(sede.size).toBe(2);
+    });
+  });
+
   describe('lo que NO puede pasar', () => {
     it('sin sesión no se lee nada', async () => {
       const db = entorno.unauthenticatedContext().firestore();

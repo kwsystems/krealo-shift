@@ -95,6 +95,7 @@ export default function SignInScreen() {
   };
 
   const signInDemo = authSource()?.signInDemo ?? null;
+  const signInDemoVendedor = authSource()?.signInDemoVendedor ?? null;
 
   return (
     <AppScreen tone="kiosk" scroll>
@@ -174,6 +175,17 @@ export default function SignInScreen() {
                   onPress={() => void entrar(signInDemo)}
                   testID="sign-in-demo"
                 />
+                {/*
+                  Y COMO VENDEDOR: la vista que tiene cada persona del equipo en su celular,
+                  para poder enseñarla antes de dársela. Ver `DEMO_VENDEDOR_USER_ID`.
+                */}
+                {signInDemoVendedor === null ? null : (
+                  <SecondaryButton
+                    label={t('auth.signInAsSeller')}
+                    onPress={() => void entrar(signInDemoVendedor)}
+                    testID="sign-in-demo-vendedor"
+                  />
+                )}
                 <AppText variant="help" tone="subtle">
                   {t('auth.demoHint')}
                 </AppText>

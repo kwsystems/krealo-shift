@@ -176,7 +176,11 @@ service cloud.firestore {
     // La autorizacion no se afloja: para borrar se exige lo mismo, leido del documento
     // que YA existe, que es el unico sitio donde hay datos en un borrado.
     match /employee_location_assignments/{assignmentId} {
-      allow read: if isMember(resource.data.organization_id);
+      // Quien gestiona lo ve todo; un vendedor, solo lo suyo (30-sep: la vista del vendedor en
+      // el celular). Con `isMember` a secas, cualquier cuenta de empleado podía leer por la API
+      // los turnos de todo el equipo aunque su pantalla solo enseñara los suyos.
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow create, update: if managesLocation(
         request.resource.data.organization_id,
         request.resource.data.location_id
@@ -188,7 +192,8 @@ service cloud.firestore {
     }
 
     match /employee_job_roles/{id} {
-      allow read: if isMember(resource.data.organization_id);
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow create, update: if isStaff(request.resource.data.organization_id);
       allow delete: if isStaff(resource.data.organization_id);
     }
@@ -229,7 +234,11 @@ service cloud.firestore {
     // -----------------------------------------------------------------------
 
     match /shifts/{shiftId} {
-      allow read: if isMember(resource.data.organization_id);
+      // Quien gestiona lo ve todo; un vendedor, solo lo suyo (30-sep: la vista del vendedor en
+      // el celular). Con `isMember` a secas, cualquier cuenta de empleado podía leer por la API
+      // los turnos de todo el equipo aunque su pantalla solo enseñara los suyos.
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow create: if managesLocation(
         request.resource.data.organization_id,
         request.resource.data.location_id
@@ -248,7 +257,8 @@ service cloud.firestore {
      * del mismo documento, que es justo lo que evita duplicados.
      */
     match /rest_days/{id} {
-      allow read: if isMember(resource.data.organization_id);
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow create: if managesLocation(
         request.resource.data.organization_id,
         request.resource.data.location_id
@@ -290,7 +300,8 @@ service cloud.firestore {
     }
 
     match /break_intervals/{intervalId} {
-      allow read: if isMember(resource.data.organization_id);
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow write: if false;
     }
 

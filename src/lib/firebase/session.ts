@@ -2,6 +2,7 @@ import { onAuthStateChanged } from 'firebase/auth';
 
 import { getDemoClient } from '@/lib/demo/client';
 import { isDemoMode } from '@/lib/demo/config';
+import { DEMO_VENDEDOR_EMAIL } from '@/lib/demo/seed';
 
 import { getFirebaseAuth } from './client';
 
@@ -26,6 +27,8 @@ export type AuthSource = {
   signOut: () => Promise<void>;
   /** Solo en demostracion: entrar sin pasar por Google. */
   signInDemo: (() => Promise<void>) | null;
+  /** Solo en demostracion: entrar como el vendedor, para ver su vista del celular. */
+  signInDemoVendedor: (() => Promise<void>) | null;
 };
 
 type DemoAuth = {
@@ -63,6 +66,9 @@ function demoSource(): AuthSource {
     signInDemo: async () => {
       await auth.signInWithPassword({ email: 'demo@krealomedia.com', password: 'demostracion' });
     },
+    signInDemoVendedor: async () => {
+      await auth.signInWithPassword({ email: DEMO_VENDEDOR_EMAIL, password: 'demostracion' });
+    },
   };
 }
 
@@ -84,5 +90,6 @@ export function authSource(): AuthSource | null {
       ),
     signOut: () => auth.signOut(),
     signInDemo: null,
+    signInDemoVendedor: null,
   };
 }

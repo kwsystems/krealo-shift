@@ -574,6 +574,13 @@ export function TeamScreen() {
           jobRoles={jobRoleOptions}
           saving={mutations.create.isPending || mutations.update.isPending}
           saveError={mutations.create.error ?? mutations.update.error}
+          correosOcupados={
+            new Map(
+              team.members
+                .filter((m) => m.id !== form.employeeId && m.email !== null && m.email !== '')
+                .map((m) => [(m.email ?? '').trim().toLowerCase(), m.full_name] as const),
+            )
+          }
           onSubmit={submitForm}
           onClose={() => setForm(null)}
         />
