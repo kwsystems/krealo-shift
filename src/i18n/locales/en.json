@@ -114,6 +114,7 @@
     "noAdminClockInBody": "Use the clock at your location: enter your 6-digit PIN and pick an action. You don't need an account or a password to clock in."
   },
   "common": {
+    "yesterday": "Yesterday",
     "unknown": "Unnamed",
     "appName": "Krealo Shift",
     "ok": "OK",
@@ -858,6 +859,11 @@
     "kioskPendingEvents": "Pending events",
     "kioskPhoto": "Photo when clocking",
     "kioskPhotoOffByDefault": "Off. The app works fully without photos.",
+    "kioskRemove": "Remove from list",
+    "kioskRemoveTitle": "Remove “{{name}}”",
+    "kioskRemoveConfirmActive": "This clock stops working right away and disappears from the list. Everything clocked on it stays in Hours. To use that tablet again, activate it with a new code.",
+    "kioskRemoveConfirmRevoked": "It disappears from the list. Everything clocked on it stays in Hours.",
+    "kioskRemoveFailed": "Couldn’t remove the clock. Try again.",
     "kioskRevoke": "Revoke device",
     "kioskRevokeConfirm": "That clock will not be able to clock anyone in until you activate it again.",
     "kioskRevokeHint": "It can be activated again",
@@ -1128,6 +1134,9 @@
     "noLocationWarning": "No location: cannot clock in"
   },
   "timesheet": {
+    "futureTimeShort": "Not yet",
+    "futureTime": "That time hasn’t happened yet. Check the day: after midnight, “today” is already the next day.",
+    "closeOpenHint": "Setting the end records it as their clock-out: they stop showing as in on Home, Schedule and the clock.",
     "title": "Hours",
     "period": "Period",
     "regular": "Regular",
@@ -1188,6 +1197,11 @@
     "statusFilter": "Status",
     "stillOpen": "Still open",
     "cases": {
+      "oddExitFuture": "Their clock-out was set for {{day}} at {{time}}, which hasn’t happened yet",
+      "oddExitLong": "Their clock-out was set for {{day}} at {{time}}: a {{hours}} shift",
+      "oddExitDetail": "Clocked in at {{in}}. It’s almost always the wrong day: until it’s fixed, they show as in on Home and Schedule.",
+      "fixExitAt": "Clock out {{day}} at {{time}}",
+      "fixExitReason": "The clock-out was on the wrong day: set to the day they clocked in.",
       "title_one": "1 case to resolve",
       "title_other": "{{count}} cases to resolve",
       "body": "What happened this week that needs your decision. Each case is fixed right here.",

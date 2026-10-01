@@ -283,6 +283,17 @@ export async function revokeKioskDevice(deviceId: string): Promise<void> {
   }
 }
 
+/** Quitar un reloj de la lista: lo revoca si seguía activo. Ver `removeKioskDevice`. */
+export async function removeKioskDevice(deviceId: string): Promise<void> {
+  const db = requireClient();
+  try {
+    const { error } = await db.rpc(RPC.removeKioskDevice, { p_device_id: deviceId });
+    if (error !== null) throw toAdminError(error);
+  } catch (error) {
+    throw toAdminError(error);
+  }
+}
+
 /**
  * Los interruptores de notificación (§11.6 y §19).
  *

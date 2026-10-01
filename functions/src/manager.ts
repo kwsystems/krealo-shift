@@ -24,6 +24,7 @@ import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/tur
 import { instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
+import { corregirSalidaConFichaje, noEnElFuturo } from './shared/salida-a-mano';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
 const DESCANSO_MINIMO_POR_DEFECTO = 660;
@@ -462,6 +463,47 @@ export const revokeKioskDevice = onCall(async (request) => {
   return null;
 });
 
+/**
+ * QUITAR UN RELOJ DE LA LISTA (1-oct). Andree: «¿podemos ya borrar los test de reloj…?
+ * No tiene sentido dejarlo si la app ya está funcionando».
+ *
+ * Se revoca —si seguía activo, deja de funcionar al momento, igual que «Revocar»— y se
+ * marca como quitado, y Ajustes deja de enseñarlo. El documento NO se borra: los fichajes
+ * que se hicieron en él lo nombran, y Horas tiene que poder seguir diciendo desde qué reloj
+ * se marcó.
+ */
+export const removeKioskDevice = onCall(async (request) => {
+  const uid = requireUid(request);
+  const deviceId = textoRequerido(request.data?.p_device_id, 'p_device_id');
+
+  const deviceRef = db.collection(COLLECTIONS.kioskDevices).doc(deviceId);
+  const device = (await deviceRef.get()).data();
+  if (device === undefined) throw new HttpsError('not-found', 'Ese reloj no existe.');
+
+  const membership = await membershipOf(uid, device.organization_id as string);
+  requireManagesLocation(membership, device.location_id as string);
+
+  const ahora = nowISO();
+  await deviceRef.update({
+    status: 'revoked',
+    revoked_at: device.revoked_at ?? ahora,
+    removed_at: ahora,
+    removed_by: uid,
+  });
+  // Lo mismo que al revocar: un secreto que sigue ahí sigue pudiendo compararse.
+  await db.collection(COLLECTIONS.kioskDeviceSecrets).doc(deviceId).delete();
+
+  await audit({
+    organizationId: device.organization_id as string,
+    actorUserId: uid,
+    action: 'kiosk_removed',
+    entityType: 'kiosk_device',
+    entityId: deviceId,
+  });
+
+  return null;
+});
+
 // ---------------------------------------------------------------------------
 // Correcciones de horas
 // ---------------------------------------------------------------------------
@@ -512,6 +554,41 @@ export async function ajustarSesion(
   },
 ): Promise<void> {
   const sessionRef = db.collection(COLLECTIONS.workSessions).doc(workSessionId);
+
+  noEnElFuturo(newStartsAt, 'entrada');
+  noEnElFuturo(newEndsAt, 'salida');
+
+  /*
+   * UNA SALIDA QUE FALTABA, O QUE PUSO QUIEN GESTIONA, SE CORRIGE CON SU FICHAJE (1-oct):
+   * si no, la jornada se quedaba «abierta» con hora de salida y el reloj seguía creyendo
+   * que la persona estaba dentro. Ver `shared/salida-a-mano.ts`.
+   */
+  if (newEndsAt !== null && newEndsAt !== undefined) {
+    const previa = (await sessionRef.get()).data();
+    if (previa === undefined) throw new HttpsError('not-found', 'Esa sesión no existe.');
+    const membership = await membershipOf(uid, previa.organization_id as string);
+    requireManagesLocation(membership, previa.location_id as string);
+    if (expectedUpdatedAt !== undefined && previa.updated_at !== expectedUpdatedAt) {
+      throw new HttpsError('aborted', 'Alguien más cambió esta sesión mientras la editabas.');
+    }
+    const hecho = await corregirSalidaConFichaje(workSessionId, previa, {
+      uid,
+      reason,
+      newEndsAt,
+      newStartsAt: newStartsAt ?? null,
+      requestId,
+    });
+    if (hecho) {
+      await audit({
+        organizationId: previa.organization_id as string,
+        actorUserId: uid,
+        action: 'work_session_adjusted',
+        entityType: 'work_session',
+        entityId: workSessionId,
+      });
+      return;
+    }
+  }
 
   await db.runTransaction(async (tx) => {
     const snapshot = await tx.get(sessionRef);
@@ -604,6 +681,10 @@ export const managerAddTimeEvent = onCall(async (request) => {
   const occurredAt = textoRequerido(request.data?.p_occurred_at, 'p_occurred_at');
   const reason = textoRequerido(request.data?.p_reason, 'p_reason');
   const idempotencyKey = (request.data?.p_idempotency_key as string | undefined) ?? randomUUID();
+  noEnElFuturo(
+    occurredAt,
+    eventType === 'clock_in' ? 'entrada' : eventType === 'clock_out' ? 'salida' : 'fichaje',
+  );
 
   const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
   if (location === undefined) throw new HttpsError('not-found', 'Esa ubicación no existe.');

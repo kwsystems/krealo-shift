@@ -9,7 +9,13 @@ import {
   type FilaPorResolver,
 } from '@/components/timesheets/por-resolver';
 import type { ShiftRow } from '@/features/schedules/api';
-import { formatDayColumn, localDateTimeToInstant, localTimeOf } from '@/features/schedules/week';
+import {
+  addDaysToKey,
+  dateKeyOf,
+  formatDayColumn,
+  localDateTimeToInstant,
+  localTimeOf,
+} from '@/features/schedules/week';
 import { adminErrorKind } from '@/hooks/use-admin-query';
 import type { SupportedLanguage } from '@/i18n';
 import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
@@ -53,9 +59,10 @@ export function PorResolverDeLaSemana({
     caso: Extract<CasoPorResolver, { tipo: 'faltan_horas' }>;
     decision: 'debe' | 'justificado';
   } | null>(null);
-  const [salida, setSalida] = useState<Extract<CasoPorResolver, { tipo: 'sin_salida' }> | null>(
-    null,
-  );
+  const [salida, setSalida] = useState<Extract<
+    CasoPorResolver,
+    { tipo: 'sin_salida' | 'salida_dudosa' }
+  > | null>(null);
   const [enCurso, setEnCurso] = useState<string | null>(null);
 
   const casos = casosPorResolver({ sesiones, turnos, ahoraISO: nowISO, timezone }).filter(
@@ -141,6 +148,55 @@ export function PorResolverDeLaSemana({
         },
       };
     }
+    if (caso.tipo === 'salida_dudosa') {
+      const fin = caso.sesion.ends_at ?? caso.sesion.starts_at;
+      const propuesta = caso.salidaPropuesta;
+      const diaDeLaSalida = formatDayColumn(dateKeyOf(fin, timezone), language);
+      return {
+        ...base,
+        que: caso.futura
+          ? t('timesheet.cases.oddExitFuture', { day: diaDeLaSalida, time: hora(fin) })
+          : t('timesheet.cases.oddExitLong', {
+              day: diaDeLaSalida,
+              time: hora(fin),
+              hours: duracion(
+                t,
+                Math.round((Date.parse(fin) - Date.parse(caso.sesion.starts_at)) / 60_000),
+              ),
+            }),
+        detalle: t('timesheet.cases.oddExitDetail', { in: hora(caso.sesion.starts_at) }),
+        principal:
+          propuesta === null
+            ? {
+                etiqueta: t('timesheet.cases.otherTime'),
+                onPress: () => setSalida(caso),
+                testID: `caso-${caso.id}-salida`,
+              }
+            : {
+                etiqueta: t('timesheet.cases.fixExitAt', {
+                  day: formatDayColumn(dateKeyOf(propuesta, timezone), language),
+                  time: hora(propuesta),
+                }),
+                onPress: () =>
+                  lanzar(caso.id, {
+                    tipo: 'corregir_salida',
+                    sessionId: caso.sesion.id,
+                    expectedUpdatedAt: caso.sesion.updated_at,
+                    instante: propuesta,
+                    motivo: t('timesheet.cases.fixExitReason'),
+                  }),
+                testID: `caso-${caso.id}-salida`,
+              },
+        alternativa:
+          propuesta === null
+            ? null
+            : {
+                etiqueta: t('timesheet.cases.otherTime'),
+                onPress: () => setSalida(caso),
+                testID: `caso-${caso.id}-otra-hora`,
+              },
+      };
+    }
     const propuesta = caso.salidaPropuesta;
     return {
       ...base,
@@ -222,17 +278,31 @@ export function PorResolverDeLaSemana({
           guardando={arreglar.isPending}
           error={arreglar.error === null ? null : mensajeDelError(t, arreglar.error)}
           onGuardar={(horaElegida) => {
-            const instante = localDateTimeToInstant(salida.dia, horaElegida, timezone);
+            const elDia = localDateTimeToInstant(salida.dia, horaElegida, timezone);
+            if (elDia === null) return;
+            // Una hora antes de la entrada es de la madrugada siguiente: turno de noche.
+            const instante =
+              Date.parse(elDia) > Date.parse(salida.sesion.starts_at)
+                ? elDia
+                : localDateTimeToInstant(addDaysToKey(salida.dia, 1), horaElegida, timezone);
             if (instante === null) return;
             lanzar(
               salida.id,
-              {
-                tipo: 'marcar_salida',
-                employeeId: salida.sesion.employee_id,
-                locationId,
-                instante,
-                motivo: t('timesheet.cases.clockOutReasonOther'),
-              },
+              salida.tipo === 'salida_dudosa'
+                ? {
+                    tipo: 'corregir_salida',
+                    sessionId: salida.sesion.id,
+                    expectedUpdatedAt: salida.sesion.updated_at,
+                    instante,
+                    motivo: t('timesheet.cases.fixExitReason'),
+                  }
+                : {
+                    tipo: 'marcar_salida',
+                    employeeId: salida.sesion.employee_id,
+                    locationId,
+                    instante,
+                    motivo: t('timesheet.cases.clockOutReasonOther'),
+                  },
               () => setSalida(null),
             );
           }}
@@ -259,6 +329,7 @@ function mensajeDelError(t: TFunction, error: unknown): string {
   const motivo = error instanceof CasoRechazado ? error.motivo : null;
   if (motivo === 'AJUSTADA') return t('timesheet.cases.errorAdjusted');
   if (motivo === 'YA_TIENE_PAUSA') return t('timesheet.cases.errorHasBreak');
+  if (adminErrorKind(error) === 'conflict') return t('errors.concurrentEdit');
   if (adminErrorKind(error) === 'forbidden') return t('states.noAccessBody');
   return t('timesheet.cases.errorGeneric');
 }

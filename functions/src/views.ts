@@ -3,6 +3,7 @@ import { HttpsError, onCall, type CallableRequest } from 'firebase-functions/v2/
 import { COLLECTIONS, db } from './shared/admin';
 import { tipoEfectivo } from './shared/eventos';
 import { zonaSegura } from './shared/zonas';
+import { cerradaDeHecho, repararSalidasPuestasAMano } from './shared/salida-a-mano';
 import { membershipOf, requireManagesLocation, requireRole, requireUid } from './shared/caller';
 
 /**
@@ -76,8 +77,22 @@ export const viewEmployeesWorkingNow = onCall(async (request) => {
     .where('status', '==', 'open')
     .get();
 
+  /*
+   * UNA JORNADA «ABIERTA» CON SU SALIDA YA PUESTA Y PASADA NO ES ALGUIEN DENTRO (1-oct): es
+   * una salida corregida a mano antes de que eso escribiera su fichaje. Se le registra el
+   * fichaje que faltaba y no se lista. Ver `shared/salida-a-mano.ts`.
+   */
+  const reparadas = await repararSalidasPuestasAMano(
+    abiertas.docs
+      .filter((doc) => cerradaDeHecho(doc.data()))
+      .map((doc) => ({ id: doc.id, data: doc.data() })),
+  );
+  const dentro = abiertas.docs.filter(
+    (doc) => !reparadas.has(doc.id) && !cerradaDeHecho(doc.data()),
+  );
+
   const filas = await Promise.all(
-    abiertas.docs.map(async (doc) => {
+    dentro.map(async (doc) => {
       const sesion = doc.data();
       const empleado = (
         await db
@@ -391,6 +406,8 @@ export const viewKioskDevicesAdmin = onCall(async (request) => {
 
   const filas = await Promise.all(
     dispositivos.docs
+      // Los quitados de la lista no se enseñan: ver `removeKioskDevice`.
+      .filter((doc) => (doc.data().removed_at ?? null) === null)
       .filter(
         (doc) =>
           membership.role === 'owner' ||

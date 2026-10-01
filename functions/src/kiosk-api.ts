@@ -12,6 +12,7 @@ import {
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { membershipOf, requireManagesLocation, requireUid } from './shared/caller';
 import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/attendance';
+import { cerradaDeHecho, repararSalidasPuestasAMano } from './shared/salida-a-mano';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
 import { instanteLocal, zonaSegura } from './shared/zonas';
@@ -511,6 +512,21 @@ async function buildEmployeeContext(
 
   const politicas = politicasDe(location);
   const ahora = new Date();
+  /*
+   * ANTES DE DECIR QUÉ BOTONES ENSEÑA, las jornadas suyas que quedaron «abiertas» con una
+   * salida puesta a mano: sin su fichaje, el reloj la creería dentro y le ofrecería
+   * «Marcar salida» al llegar. Ver `shared/salida-a-mano.ts`.
+   */
+  const susAbiertas = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('employee_id', '==', employeeId)
+    .where('status', '==', 'open')
+    .get();
+  await repararSalidasPuestasAMano(
+    susAbiertas.docs
+      .filter((doc) => cerradaDeHecho(doc.data()))
+      .map((doc) => ({ id: doc.id, data: doc.data() })),
+  );
   const estado: AttendanceState = await attendanceStateAt(employeeId, ahora.toISOString());
 
   const turnos = await db
@@ -546,7 +562,6 @@ async function buildEmployeeContext(
       plannedUnpaidBreakMinutes: (doc.data().planned_unpaid_break_minutes as number) ?? 0,
       changedSinceLastPublication: false,
     }));
-
 
   const abierta = await db
     .collection(COLLECTIONS.workSessions)

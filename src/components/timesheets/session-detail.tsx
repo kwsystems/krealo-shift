@@ -98,6 +98,12 @@ export function SessionDetailSheet({
   );
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  /*
+   * UNA HORA QUE TODAVÍA NO LLEGÓ (1-oct). Pasada la medianoche, una salida «a las 21:00»
+   * puede caer en la noche de mañana: la jornada seguía viva hasta entonces en Inicio y en
+   * Horario. Se para aquí, con el porqué, y el servidor la rechaza también.
+   */
+  const [futura, setFutura] = useState(false);
   /** El fichaje que se está reclasificando, o `null` si la hoja está cerrada. */
   const [reclasificando, setReclasificando] = useState<string | null>(null);
 
@@ -114,6 +120,12 @@ export function SessionDetailSheet({
       timezone,
     });
     if (instants === null) return;
+    const limite = Date.now() + MARGEN_FUTURO_MS;
+    const fin = endTime.trim() === '' ? null : instants.endsAt;
+    const esFutura =
+      Date.parse(instants.startsAt) > limite || (fin !== null && Date.parse(fin) > limite);
+    setFutura(esFutura);
+    if (esFutura) return;
 
     onSubmitCorrection({
       newStartsAt: instants.startsAt,
@@ -332,12 +344,27 @@ export function SessionDetailSheet({
         <FormField
           label={t('timesheet.newEnd')}
           value={endTime}
-          onChangeText={setEndTime}
+          onChangeText={(texto) => {
+            setFutura(false);
+            setEndTime(texto);
+          }}
           keyboardType="numbers-and-punctuation"
           placeholder="17:00"
+          error={futura ? t('timesheet.futureTimeShort') : undefined}
           testID="session-correct-end"
         />
       </Row>
+      {/* El porqué, a todo el ancho: bajo un campo de media hoja no cabe. */}
+      {futura ? (
+        <AppText variant="help" tone="danger" testID="session-correct-future">
+          {t('timesheet.futureTime')}
+        </AppText>
+      ) : null}
+      {session.ends_at === null ? (
+        <AppText variant="help" tone="subtle" testID="session-correct-open-hint">
+          {t('timesheet.closeOpenHint')}
+        </AppText>
+      ) : null}
       <FormField
         label={t('timesheet.reasonLabel')}
         value={reason}
@@ -358,17 +385,28 @@ export function SessionDetailSheet({
  */
 export function ManualEntrySheet({
   employees,
-  dateKey,
+  days,
+  openDayByEmployee,
+  isFuture,
   saving,
   onSubmit,
   onClose,
 }: {
   employees: Option<string>[];
-  dateKey: string;
+  /**
+   * LOS DÍAS QUE SE PUEDEN ELEGIR, de hoy hacia atrás (1-oct). Antes la fecha era siempre
+   * la de hoy y no se podía cambiar: pasada la medianoche, la salida que faltaba de anoche
+   * se registraba en la noche de mañana.
+   */
+  days: Option<string>[];
+  /** El día de la jornada que cada persona tiene abierta: ahí va su salida. */
+  openDayByEmployee: ReadonlyMap<string, string>;
+  isFuture: (dateKey: string, time: string) => boolean;
   saving: boolean;
   onSubmit: (params: {
     employeeId: string;
     kind: 'forgot_clock_in' | 'forgot_clock_out' | 'correction';
+    dateKey: string;
     time: string;
     reason: string;
   }) => void;
@@ -379,12 +417,27 @@ export function ManualEntrySheet({
   const [kind, setKind] = useState<'forgot_clock_in' | 'forgot_clock_out' | 'correction'>(
     'forgot_clock_in',
   );
+  const [day, setDay] = useState(days[0]?.value ?? '');
   const [time, setTime] = useState('09:00');
+  const [horaTocada, setHoraTocada] = useState(false);
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
 
+  /** La salida que falta es del día en que entró, no de hoy. */
+  const sugerirDia = (
+    persona: string | null,
+    tipo: 'forgot_clock_in' | 'forgot_clock_out' | 'correction',
+  ) => {
+    const abierta = persona === null ? undefined : openDayByEmployee.get(persona);
+    if (tipo === 'forgot_clock_out' && abierta !== undefined) setDay(abierta);
+  };
+
   const reasonValid = reason.trim().length >= 3;
-  const canSubmit = employeeId !== null && reasonValid;
+  const futura = kind !== 'correction' && isFuture(day, time);
+  const canSubmit = employeeId !== null && reasonValid && !futura;
+  const opcionesDeDia = days.some((d) => d.value === day)
+    ? days
+    : [...days, { value: day, label: day }];
 
   return (
     <AdminSheet
@@ -398,7 +451,7 @@ export function ManualEntrySheet({
           onPress={() => {
             setSubmitted(true);
             if (!canSubmit || employeeId === null) return;
-            onSubmit({ employeeId, kind, time, reason: reason.trim() });
+            onSubmit({ employeeId, kind, dateKey: day, time, reason: reason.trim() });
           }}
           loading={saving}
           disabled={submitted && !canSubmit}
@@ -421,7 +474,10 @@ export function ManualEntrySheet({
           { value: 'forgot_clock_out', label: t('kiosk.forgotClockOut') },
           { value: 'correction', label: t('requests.tabTimeCorrections') },
         ]}
-        onChange={setKind}
+        onChange={(tipo) => {
+          setKind(tipo);
+          sugerirDia(employeeId, tipo);
+        }}
         testID="manual-entry-kind"
       />
 
@@ -429,19 +485,33 @@ export function ManualEntrySheet({
         label={t('schedule.employee')}
         value={employeeId}
         options={employees}
-        onChange={setEmployeeId}
+        onChange={(persona) => {
+          setEmployeeId(persona);
+          sugerirDia(persona, kind);
+        }}
         emptyLabel={t('team.noEmployeesForLocation')}
         testID="manual-entry-employee"
       />
 
-      <KeyValueRow label={t('schedule.date')} value={dateKey} />
+      <SegmentedControl
+        label={t('schedule.date')}
+        value={day}
+        options={opcionesDeDia}
+        onChange={setDay}
+        testID="manual-entry-day"
+      />
 
       <FormField
         label={t('kiosk.forgotProposedTime')}
         value={time}
-        onChangeText={setTime}
+        onChangeText={(texto) => {
+          setHoraTocada(true);
+          setTime(texto);
+        }}
         keyboardType="numbers-and-punctuation"
         placeholder="09:00"
+        // Solo después de tocarla o de enviar: las 09:00 que trae de partida no son un error.
+        error={futura && (horaTocada || submitted) ? t('timesheet.futureTime') : undefined}
         testID="manual-entry-time"
       />
 
@@ -456,6 +526,9 @@ export function ManualEntrySheet({
     </AdminSheet>
   );
 }
+
+/** Lo que se tolera de reloj adelantado: lo mismo que el servidor (`shared/salida-a-mano.ts`). */
+const MARGEN_FUTURO_MS = 5 * 60_000;
 
 /**
  * Un lado de la corrección, en una línea legible.

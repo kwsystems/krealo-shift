@@ -117,6 +117,41 @@ describe('por resolver', () => {
     });
   });
 
+  it('una salida a mañana es una salida dudosa, y se propone la misma hora el día de entrada', () => {
+    // «Hoy a las 21:00» escrito pasada la medianoche: quedó para la noche siguiente.
+    const manana21 = new Date(Date.UTC(2026, 8, 30, 21 + 5)).toISOString();
+    const [caso, ...resto] = casos(
+      [
+        jornada({
+          starts_at: H(16, 50),
+          ends_at: manana21,
+          gross_minutes: 1690,
+          net_minutes: 1690,
+        }),
+      ],
+      new Date(Date.UTC(2026, 8, 30, 2 + 5)).toISOString(),
+    );
+    // Y no se le buscan otros casos con una salida que está mal.
+    expect(resto).toEqual([]);
+    expect(caso).toMatchObject({ tipo: 'salida_dudosa', futura: true, salidaPropuesta: H(21) });
+  });
+
+  it('una jornada de más de 16 h también, aunque la salida ya pasó', () => {
+    const [caso] = casos(
+      [
+        jornada({
+          starts_at: H(10),
+          ends_at: new Date(Date.UTC(2026, 8, 30, 9 + 5)).toISOString(),
+          gross_minutes: 1380,
+          net_minutes: 1380,
+        }),
+      ],
+      new Date(Date.UTC(2026, 8, 30, 12 + 5)).toISOString(),
+    );
+    // A las 9:00 del día de entrada todavía no había entrado: se propone el fin de su turno.
+    expect(caso).toMatchObject({ tipo: 'salida_dudosa', futura: false, salidaPropuesta: H(19) });
+  });
+
   it('lo abierto va primero', () => {
     const lista = casos([
       jornada({

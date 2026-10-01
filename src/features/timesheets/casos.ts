@@ -1,5 +1,10 @@
 import type { ShiftRow } from '@/features/schedules/api';
-import { dateKeyOf, type DateKey } from '@/features/schedules/week';
+import {
+  dateKeyOf,
+  localDateTimeToInstant,
+  localTimeOf,
+  type DateKey,
+} from '@/features/schedules/week';
 
 import type { WorkSession } from './api';
 
@@ -20,6 +25,10 @@ import type { WorkSession } from './api';
  *     bastante para haberlo tomado. «Descontar el del turno» o «trabajó sin refrigerio».
  *   - SIN SALIDA: sigue dentro y su turno acabó hace media hora o más —el caso de quien se
  *     fue sin marcar con la tienda ya cerrada—. «Marcar salida a la hora de fin de turno».
+ *   - SALIDA DUDOSA: la salida quedó en una hora que todavía no llegó, o la jornada pasa de
+ *     dieciséis horas. Casi siempre es el día equivocado —una salida «de hoy a las 21:00»
+ *     escrita pasada la medianoche—, y mientras siga así la jornada está viva en todas las
+ *     pantallas. «Salida el día de su entrada, a esa hora».
  *
  * Quince minutos y no la tolerancia de la sede: cinco minutos antes no son horas que
  * cobrar, y un caso por cada uno llenaría la lista de ruido hasta que nadie la mirara.
@@ -32,6 +41,10 @@ export const MINUTOS_MINIMOS_DE_UN_CASO = 15;
 const MINUTOS_SIN_SALIDA = 30;
 /** Sin turno, una jornada abierta más de esto es una salida olvidada. */
 const HORAS_ABIERTA_SIN_TURNO = 12;
+/** Ninguna jornada de tienda dura más que esto: una que sí, tiene mal la salida. */
+const HORAS_DE_UNA_JORNADA_DUDOSA = 16;
+/** Lo que se tolera de reloj adelantado, como el servidor. */
+const MARGEN_FUTURO_MS = 5 * 60_000;
 
 export type CasoPorResolver =
   | {
@@ -61,6 +74,17 @@ export type CasoPorResolver =
       turno: ShiftRow | null;
       dia: DateKey;
       /** La hora que se propone: el fin de su turno. `null` sin turno. */
+      salidaPropuesta: string | null;
+    }
+  | {
+      tipo: 'salida_dudosa';
+      id: string;
+      sesion: WorkSession;
+      turno: ShiftRow | null;
+      dia: DateKey;
+      /** La salida está en una hora que todavía no llegó. */
+      futura: boolean;
+      /** La misma hora el día en que entró —el error de siempre—, o el fin de su turno. */
       salidaPropuesta: string | null;
     };
 
@@ -96,6 +120,23 @@ export function casosPorResolver(params: {
           salidaPropuesta: turno?.ends_at ?? null,
         });
       }
+      continue;
+    }
+    const futura = Date.parse(sesion.ends_at) > Date.parse(params.ahoraISO) + MARGEN_FUTURO_MS;
+    if (
+      (futura || minutos(sesion.starts_at, sesion.ends_at) > HORAS_DE_UNA_JORNADA_DUDOSA * 60) &&
+      !resuelto('salida_dudosa')
+    ) {
+      casos.push({
+        tipo: 'salida_dudosa',
+        id: `${sesion.id}:salida_dudosa`,
+        sesion,
+        turno,
+        dia,
+        futura,
+        salidaPropuesta: salidaDelDiaDeEntrada(sesion, turno, dia, params.timezone),
+      });
+      // Lo demás se mide con la salida buena: con esta, cualquier otro caso mentiría.
       continue;
     }
     if (turno === null) continue;
@@ -144,8 +185,28 @@ export function casosPorResolver(params: {
   }
 
   // Primero lo que sigue abierto —se está pagando ahora mismo—, y luego por día.
-  const orden = { sin_salida: 0, sin_refrigerio: 1, faltan_horas: 2 } as const;
+  const orden = { sin_salida: 0, salida_dudosa: 1, sin_refrigerio: 2, faltan_horas: 3 } as const;
   return casos.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),
   );
+}
+
+/**
+ * La salida que se propone para una salida dudosa: la misma hora el día en que entró, si
+ * cae después de la entrada —«21:00 de mañana» era «21:00 de anoche»—; si no, el fin de su
+ * turno; y si tampoco, ninguna.
+ */
+function salidaDelDiaDeEntrada(
+  sesion: WorkSession,
+  turno: ShiftRow | null,
+  dia: DateKey,
+  timezone: string,
+): string | null {
+  if (sesion.ends_at === null) return null;
+  const mismaHora = localDateTimeToInstant(dia, localTimeOf(sesion.ends_at, timezone), timezone);
+  if (mismaHora !== null && Date.parse(mismaHora) > Date.parse(sesion.starts_at)) return mismaHora;
+  if (turno !== null && Date.parse(turno.ends_at) > Date.parse(sesion.starts_at)) {
+    return turno.ends_at;
+  }
+  return null;
 }

@@ -223,6 +223,15 @@ function crearRpc(almacen: Almacen) {
         return sinError(null);
       }
 
+      case 'remove_kiosk_device': {
+        const id = argumentos.p_device_id;
+        almacen.set(
+          'kiosk_devices_admin',
+          filas('kiosk_devices_admin').filter((fila) => fila.id !== id),
+        );
+        return sinError(null);
+      }
+
       /*
        * DEVUELVE EL PIN, como la funcion de verdad. Devolvia `null`, y desde que el
        * servidor es quien lo sortea, el panel lee `data.pin`: en la demostracion salia
@@ -389,10 +398,20 @@ function crearRpc(almacen: Almacen) {
               ends_at: nuevoFin,
               gross_minutes: brutos,
               net_minutes: brutos === null ? null : brutos - descanso,
+              // Una salida puesta cierra la jornada, como en el servidor (1-oct): ver
+              // `functions/src/shared/salida-a-mano.ts`.
+              status:
+                nuevoFin === null ? fila.status : fila.status === 'open' ? 'complete' : fila.status,
               updated_at: new Date().toISOString(),
             };
           }),
         );
+        if (typeof fin === 'string') {
+          almacen.set(
+            'employees_working_now',
+            filas('employees_working_now').filter((fila) => fila.work_session_id !== id),
+          );
+        }
         return sinError(null);
       }
 

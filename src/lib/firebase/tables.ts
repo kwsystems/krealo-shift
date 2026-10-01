@@ -128,6 +128,8 @@ export const VIEWS = {
 export const RPC = {
   createKioskActivationCode: 'create_kiosk_activation_code',
   revokeKioskDevice: 'revoke_kiosk_device',
+  /** Revoca y quita de la lista de Ajustes; el reloj sigue existiendo para el historial. */
+  removeKioskDevice: 'remove_kiosk_device',
   setEmployeePin: 'set_employee_pin',
   /**
    * El logo NO se sube directo a Storage, y la razon esta en la propia funcion:

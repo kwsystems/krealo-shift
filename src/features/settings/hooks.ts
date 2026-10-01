@@ -6,6 +6,7 @@ import {
   createOrganizationWithFirstLocation,
   fetchKioskDevices,
   fetchNotificationPreferences,
+  removeKioskDevice,
   revokeKioskDevice,
   saveNotificationPreferences,
   setLocationActive,
@@ -144,6 +145,13 @@ export function useSettingsMutations(organizationId: string | null) {
     },
   });
 
+  const removeKiosk = useMutation({
+    mutationFn: (variables: { deviceId: string }) => removeKioskDevice(variables.deviceId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['settings', 'kiosks'] });
+    },
+  });
+
   const saveNotifications = useMutation({
     mutationFn: (preferences: NotificationPreferences) =>
       saveNotificationPreferences({
@@ -165,6 +173,7 @@ export function useSettingsMutations(organizationId: string | null) {
     toggleLocation,
     generateCode,
     revokeKiosk,
+    removeKiosk,
     saveNotifications,
   };
 }

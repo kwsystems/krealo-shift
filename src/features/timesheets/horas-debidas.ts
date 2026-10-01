@@ -10,7 +10,7 @@ import {
 import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
-import { addManualTimeEvent } from './api';
+import { addManualTimeEvent, adjustWorkSession } from './api';
 
 /**
  * LAS HORAS QUE ALGUIEN DEBE, y lo que las resuelve (Andree, 1-oct).
@@ -146,6 +146,14 @@ export type ArregloDeCaso =
       locationId: string;
       instante: string;
       motivo: string;
+    }
+  | {
+      /** Una salida que quedó mal —el día equivocado—: se corrige en su jornada. */
+      tipo: 'corregir_salida';
+      sessionId: string;
+      expectedUpdatedAt: string;
+      instante: string;
+      motivo: string;
     };
 
 export async function arreglarCaso(arreglo: ArregloDeCaso): Promise<void> {
@@ -184,6 +192,17 @@ export async function arreglarCaso(arreglo: ArregloDeCaso): Promise<void> {
         locationId: arreglo.locationId,
         eventType: 'clock_out',
         occurredAt: arreglo.instante,
+        reason: arreglo.motivo,
+      });
+      return;
+    case 'corregir_salida':
+      // El servidor mueve la salida si la puso quien gestiona, o corrige la jornada si la
+      // marcó la persona: ver `functions/src/shared/salida-a-mano.ts`.
+      await adjustWorkSession({
+        workSessionId: arreglo.sessionId,
+        expectedUpdatedAt: arreglo.expectedUpdatedAt,
+        newStartsAt: null,
+        newEndsAt: arreglo.instante,
         reason: arreglo.motivo,
       });
       return;

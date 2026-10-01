@@ -30,6 +30,7 @@ export {
   clearOrganizationLogo,
   createKioskActivationCode,
   revokeKioskDevice,
+  removeKioskDevice,
   managerAdjustTime,
   managerAddTimeEvent,
   managerReclassifyDeparture,

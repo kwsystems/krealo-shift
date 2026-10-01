@@ -48,6 +48,7 @@ import { HoraExtraDelDia } from '@/components/timesheets/hora-extra-del-dia';
 import { SessionList } from '@/components/timesheets/session-list';
 import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
 import { useWeekShifts } from '@/features/schedules/hooks';
+import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
@@ -177,6 +178,14 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   const adjustments = useAdjustments(selected === null ? [] : [selected.id]);
 
   const allSessions = useMemo(() => sessions.data ?? [], [sessions.data]);
+
+  // El fichaje manual elige día: ver `dias-del-fichaje-manual.ts`.
+  const { diasDelFichajeManual, diaDeLaJornadaAbierta } = useDiasDelFichajeManual({
+    sesiones: allSessions,
+    nowISO,
+    timezone: scope.timezone,
+    language,
+  });
   const overlapping = useMemo(() => overlappingSessionIds(allSessions), [allSessions]);
 
   const workingNow = useWorkingNow(scope.locationId);
@@ -820,10 +829,14 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
       {manualOpen ? (
         <ManualEntrySheet
           employees={employeeOptions}
-          dateKey={dateKeyOf(nowISO, scope.timezone)}
+          days={diasDelFichajeManual}
+          openDayByEmployee={diaDeLaJornadaAbierta}
+          isFuture={(dia, hora) => {
+            const instante = localDateTimeToInstant(dia, hora, scope.timezone);
+            return instante !== null && Date.parse(instante) > Date.parse(nowISO) + 5 * 60_000;
+          }}
           saving={mutations.manualEntry.isPending || mutations.addEvent.isPending}
-          onSubmit={({ employeeId, kind, time, reason }) => {
-            const targetDate = dateKeyOf(nowISO, scope.timezone);
+          onSubmit={({ employeeId, kind, dateKey: targetDate, time, reason }) => {
             const occurredAt = localDateTimeToInstant(targetDate, time, scope.timezone);
 
             const closeWith = (message: string) => () => {

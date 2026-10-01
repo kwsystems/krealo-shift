@@ -14,6 +14,7 @@ import { audit, membershipOf, requireManagesLocation, requireUid } from './share
 import { politicasDe } from './shared/politicas';
 import { enOrden, recorrer } from './shared/secuencia';
 import { zonaSegura } from './shared/zonas';
+import { noEnElFuturo } from './shared/salida-a-mano';
 
 /**
  * RESOLVER UNA SOLICITUD DE LA BANDEJA (30-sep).
@@ -334,6 +335,8 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
 
   // ------------------------------------ aprobar un «olvidé marcar»: registrarlo
   const nuevos = fichajesPedidos(kind, request.data?.p_events, requestId, organizationId);
+  // Un fichaje que falta es de antes, nunca de una hora que no llegó (1-oct).
+  for (const nuevo of nuevos) noEnElFuturo(nuevo.occurred_at, 'fichaje');
 
   const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data() ?? {};
   const zona = zonaSegura(location.timezone ?? 'America/Lima', 'reviewTimeEditRequest');

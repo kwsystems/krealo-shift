@@ -114,6 +114,7 @@
     "noAdminClockInBody": "Usa el reloj del local: escribe tu PIN de 6 dígitos y elige la acción. No necesitas cuenta ni contraseña para fichar."
   },
   "common": {
+    "yesterday": "Ayer",
     "unknown": "Sin nombre",
     "appName": "Krealo Shift",
     "ok": "Aceptar",
@@ -858,6 +859,11 @@
     "kioskPendingEvents": "Eventos pendientes",
     "kioskPhoto": "Foto al fichar",
     "kioskPhotoOffByDefault": "Desactivada. La app funciona completamente sin fotos.",
+    "kioskRemove": "Quitar de la lista",
+    "kioskRemoveTitle": "Quitar «{{name}}»",
+    "kioskRemoveConfirmActive": "Este reloj deja de funcionar al momento y desaparece de la lista. Lo que se marcó en él se queda en Horas. Para volver a usar esa tablet, actívala con un código nuevo.",
+    "kioskRemoveConfirmRevoked": "Desaparece de la lista. Lo que se marcó en él se queda en Horas.",
+    "kioskRemoveFailed": "No se pudo quitar el reloj. Vuelve a intentarlo.",
     "kioskRevoke": "Revocar dispositivo",
     "kioskRevokeConfirm": "Ese reloj dejará de poder fichar hasta que lo actives otra vez.",
     "kioskRevokeHint": "Se puede volver a activar",
@@ -1128,6 +1134,9 @@
     "noLocationWarning": "Sin sede: no puede fichar"
   },
   "timesheet": {
+    "futureTimeShort": "Todavía no llegó",
+    "futureTime": "Esa hora todavía no llegó. Revisa el día: pasada la medianoche, «hoy» ya es el día siguiente.",
+    "closeOpenHint": "Al poner la salida se registra como su fichaje de salida: deja de salir como dentro en Inicio, Horario y el reloj.",
     "title": "Horas",
     "period": "Periodo",
     "regular": "Regulares",
@@ -1188,6 +1197,11 @@
     "statusFilter": "Estado",
     "stillOpen": "Sin salida",
     "cases": {
+      "oddExitFuture": "Su salida quedó para el {{day}} a las {{time}}, que todavía no llega",
+      "oddExitLong": "Su salida quedó el {{day}} a las {{time}}: una jornada de {{hours}}",
+      "oddExitDetail": "Entró a las {{in}}. Casi siempre es el día equivocado: mientras siga así, sale como dentro en Inicio y Horario.",
+      "fixExitAt": "Salida el {{day}} a las {{time}}",
+      "fixExitReason": "La salida estaba en el día equivocado: se pone el día en que entró.",
       "title_one": "1 caso por resolver",
       "title_other": "{{count}} casos por resolver",
       "body": "Lo que pasó esta semana y necesita que decidas. Cada caso se arregla aquí mismo.",

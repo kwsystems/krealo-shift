@@ -1167,6 +1167,7 @@ function KiosksCard() {
 
   const [code, setCode] = useState<string | null>(null);
   const [revoking, setRevoking] = useState<KioskDevice | null>(null);
+  const [removing, setRemoving] = useState<KioskDevice | null>(null);
 
   // El umbral es el MISMO que usa el trabajo de notificaciones (§19): si el panel
   // dijera "sin sincronizar" con otro número, el aviso del teléfono y la pantalla
@@ -1226,15 +1227,27 @@ function KiosksCard() {
                   testID={`kiosk-sync-stale-${device.id}`}
                 />
               ) : null}
-              {device.status === 'active' ? (
-                <DangerButton
-                  label={t('settings.kioskRevoke')}
-                  hint={t('settings.kioskRevokeHint')}
-                  onPress={() => setRevoking(device)}
+              <Row gap={spacing.sm} wrap align="center">
+                {device.status === 'active' ? (
+                  <DangerButton
+                    label={t('settings.kioskRevoke')}
+                    hint={t('settings.kioskRevokeHint')}
+                    onPress={() => setRevoking(device)}
+                    fullWidth={false}
+                    testID={`kiosk-revoke-${device.id}`}
+                  />
+                ) : null}
+                {/*
+                  QUITAR DE LA LISTA (1-oct): los relojes de prueba y los que ya no se usan.
+                  Revoca si seguía activo; lo que se marcó en él se queda en Horas.
+                */}
+                <GhostButton
+                  label={t('settings.kioskRemove')}
+                  onPress={() => setRemoving(device)}
                   fullWidth={false}
-                  testID={`kiosk-revoke-${device.id}`}
+                  testID={`kiosk-remove-${device.id}`}
                 />
-              ) : null}
+              </Row>
             </Stack>
           ))}
         </Stack>
@@ -1302,6 +1315,36 @@ function KiosksCard() {
         }}
         onCancel={() => setRevoking(null)}
       />
+
+      <ConfirmSheet
+        visible={removing !== null}
+        title={t('settings.kioskRemoveTitle', { name: removing?.display_name ?? '' })}
+        body={
+          removing?.status === 'active'
+            ? t('settings.kioskRemoveConfirmActive')
+            : t('settings.kioskRemoveConfirmRevoked')
+        }
+        confirmLabel={t('settings.kioskRemove')}
+        destructive
+        onConfirm={() => {
+          const device = removing;
+          if (device === null) return;
+          mutations.removeKiosk.mutate(
+            { deviceId: device.id },
+            { onSuccess: () => setRemoving(null) },
+          );
+        }}
+        onCancel={() => setRemoving(null)}
+      />
+      {mutations.removeKiosk.error !== null ? (
+        <InlineNotice
+          tone="late"
+          icon="warning-outline"
+          title={t('states.errorTitle')}
+          body={t('settings.kioskRemoveFailed')}
+          testID="kiosk-remove-error"
+        />
+      ) : null}
     </FormCard>
   );
 }
