@@ -1,3 +1,5 @@
+import { MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO } from '../../../src/domain/fuera-del-turno';
+
 /**
  * Las politicas de una ubicacion, en UN solo sitio.
  *
@@ -20,6 +22,11 @@ export const POLITICAS_POR_DEFECTO = {
   timeFormat: '24h' as const,
   requiredBreakMinutes: 0,
   earlyDepartureReasonMinutes: 30,
+  /**
+   * Desde cuántos minutos fuera del turno —entrar antes o salir después— se avisa en
+   * Horario (1-oct). Ver `src/domain/fuera-del-turno.ts`.
+   */
+  unusualClockMinutes: MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
 };
 
 /**
@@ -115,6 +122,10 @@ export function politicasDe(location: Record<string, unknown>) {
     earlyDepartureReasonMinutes: numeroDeAjuste(
       settings.earlyDepartureReasonMinutes,
       POLITICAS_POR_DEFECTO.earlyDepartureReasonMinutes,
+    ),
+    unusualClockMinutes: numeroDeAjuste(
+      settings.unusualClockMinutes,
+      POLITICAS_POR_DEFECTO.unusualClockMinutes,
     ),
     paidBreakReasons: motivosPagadosDe(settings),
   };

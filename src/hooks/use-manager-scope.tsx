@@ -14,6 +14,7 @@ import { usePreferencesStore } from '@/stores/preferences-store';
 import { useSessionStore, type AppRole } from '@/stores/session-store';
 import type { TimeFormatPreference } from '@/utils/time';
 import { TABLES } from '@/lib/firebase/tables';
+import { MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO } from '@/domain/fuera-del-turno';
 
 /**
  * Contexto del panel administrativo: organización, rol, ubicaciones y la
@@ -96,6 +97,12 @@ export const DEFAULT_LOCATION_SETTINGS = {
    */
   earlyDepartureReasonMinutes: 30,
   /**
+   * Desde cuántos minutos fuera del turno —entrar antes o salir después— Horario avisa de
+   * una marca rara (1-oct). Una hora: quince minutos antes es llegar con tiempo. Ver
+   * `src/domain/fuera-del-turno.ts`.
+   */
+  unusualClockMinutes: MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+  /**
    * Desde cuántos minutos DE MÁS sobre su turno se avisa de una «posible hora extra»
    * (30-sep). Sustituye al umbral diario de 8 h, que convertía en extra cualquier minuto
    * pasado de las 8 —diez minutos de antes al entrar, o un turno programado de 12 h—.
@@ -166,6 +173,11 @@ const locationSettingsSchema = z
       .int()
       .min(0)
       .default(DEFAULT_LOCATION_SETTINGS.earlyDepartureReasonMinutes),
+    unusualClockMinutes: z
+      .number()
+      .int()
+      .min(1)
+      .default(DEFAULT_LOCATION_SETTINGS.unusualClockMinutes),
     weekStartsOn: z.number().int().min(0).max(6).nullable().default(null),
     overtimeNoticeMinutes: z
       .number()

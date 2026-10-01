@@ -1,5 +1,6 @@
 import type { Almacen, Fila } from './postgrest';
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
+import { marcasFueraDelTurno, MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO } from '@/domain/fuera-del-turno';
 
 /**
  * Los datos de la demostración.
@@ -352,7 +353,15 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
     const plantilla = dia < 0 ? ([6, 5, 6, 4, 6, 5][((dia % 7) + 7) % 7] ?? 6) : 6;
     for (let persona = 0; persona < plantilla; persona += 1) {
       contadorSesion += 1;
-      const entrada = conHora(fecha, 8, persona % 2 === 0 ? 0 : 9);
+      /*
+       * LOS MIÉRCOLES, LA QUINTA PERSONA LLEGA A LAS 6:40 a un turno de 8:00: una marca
+       * rara de entrada (1-oct), para que el aviso de Horario tenga las dos clases. La de
+       * salida ya existía —quien cierra se queda hasta las 19:30 en un turno de 8 a 14—.
+       */
+      const madruga = persona === 4 && ((dia % 7) + 7) % 7 === 2;
+      const entrada = madruga
+        ? conHora(fecha, 6, 40)
+        : conHora(fecha, 8, persona % 2 === 0 ? 0 : 9);
       /*
        * UNA PERSONA CIERRA LA TIENDA y se pasa del umbral diario; el resto sale a las
        * dos. Sin esto, la demostración no tenía ni un minuto de horas extra, así que el
@@ -406,13 +415,34 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       const netos = brutos - descansoNoPagado;
       const tarde = persona % 2 !== 0;
       const ubicacion = persona % 3 === 2 ? DEMO_LOCATION_2 : DEMO_LOCATION_1;
+      /*
+       * LAS MARCAS RARAS, medidas con la MISMA regla que el servidor (1-oct): contra su
+       * turno de mañana, si lo tiene ese día. Solo esas jornadas llevan su turno: atar todas
+       * cambiaría la puntualidad que Reportes ya enseña de la demostración.
+       */
+      const suTurno = turnos.find(
+        (turno) =>
+          turno.employee_id === empleadoId(persona + 1) &&
+          turno.location_id === ubicacion &&
+          turno.status === 'published' &&
+          turno.starts_at === aISO(conHora(fecha, 8)),
+      );
+      const raras =
+        suTurno === undefined
+          ? []
+          : marcasFueraDelTurno({
+              entrada: aISO(entrada),
+              salida: aISO(salida),
+              turno: { starts_at: String(suTurno.starts_at), ends_at: String(suTurno.ends_at) },
+              umbralMinutos: MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+            });
 
       sesiones.push({
         id: sesionId(contadorSesion),
         organization_id: DEMO_ORG_ID,
         employee_id: empleadoId(persona + 1),
         location_id: ubicacion,
-        shift_id: null,
+        shift_id: raras.length > 0 && suTurno !== undefined ? suTurno.id : null,
         starts_at: aISO(entrada),
         ends_at: aISO(salida),
         gross_minutes: brutos,
@@ -420,7 +450,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
         status: tarde ? 'needs_review' : 'complete',
-        flags: tarde ? ['late_arrival'] : [],
+        flags: [...(tarde ? ['late_arrival'] : []), ...raras],
         updated_at: aISO(salida),
       });
 

@@ -14,7 +14,10 @@ export default function ManagerScheduleRoute() {
   const router = useRouter();
   return (
     <View style={{ flex: 1 }} testID="manager-schedule">
-      <ScheduleScreen onGoToTeam={() => router.push('/(manager)/team')} />
+      <ScheduleScreen
+        onGoToTeam={() => router.push('/(manager)/team')}
+        onGoToHours={(destino) => router.push({ pathname: '/(manager)/hours', params: destino })}
+      />
     </View>
   );
 }

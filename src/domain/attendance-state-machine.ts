@@ -125,35 +125,27 @@ export function reduceEvents(
 
 export type ClockInEligibility =
   | { eligible: true }
-  | { eligible: false; reason: 'too_early'; earliestAt: string }
   | { eligible: false; reason: 'no_shift_and_not_allowed' };
 
 /**
- * Reglas de entrada temprana (§13).
+ * ¿Puede marcar entrada ahora? (§13)
  *
- * Si es demasiado temprano no se bloquea en silencio: se explica a qué hora podrá
- * marcar, y un gerente puede autorizar la excepción con su PIN si la política lo
- * permite. `earlyClockInMinutes` es 10 por defecto.
+ * YA NO HAY «DEMASIADO TEMPRANO» (1-oct). Hasta entonces el reloj no dejaba entrar más de
+ * `earlyClockInMinutes` antes del turno —diez por defecto— sin el PIN de un gerente, y
+ * quien llegaba antes tenía que inventarse un «olvidé marcar» para que su hora constara.
+ * Andree: «deberías dejar marcar aunque lleguen muy temprano… luego avisarme que esa
+ * marcada es rara, y yo verlo». Así que se marca siempre, y lo que pasa de la raya lo
+ * marca el servidor en la jornada y lo avisa Horario: ver `src/domain/fuera-del-turno.ts`.
+ *
+ * Lo único que sigue cerrando la puerta es una sede que no admite fichar sin turno.
  */
 export function evaluateClockInEligibility(params: {
-  now: Date;
   shiftStartsAt: Date | null;
-  earlyClockInMinutes: number;
   allowUnscheduledShifts: boolean;
 }): ClockInEligibility {
-  const { now, shiftStartsAt, earlyClockInMinutes, allowUnscheduledShifts } = params;
-
-  if (shiftStartsAt === null) {
-    return allowUnscheduledShifts
-      ? { eligible: true }
-      : { eligible: false, reason: 'no_shift_and_not_allowed' };
+  if (params.shiftStartsAt === null && !params.allowUnscheduledShifts) {
+    return { eligible: false, reason: 'no_shift_and_not_allowed' };
   }
-
-  const earliest = new Date(shiftStartsAt.getTime() - earlyClockInMinutes * 60_000);
-  if (now < earliest) {
-    return { eligible: false, reason: 'too_early', earliestAt: earliest.toISOString() };
-  }
-
   return { eligible: true };
 }
 

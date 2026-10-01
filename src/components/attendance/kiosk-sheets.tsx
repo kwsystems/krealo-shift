@@ -3,7 +3,6 @@ import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { NumericKeypad, PinDots } from './pin-pad';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
@@ -22,9 +21,11 @@ import { useTheme } from '@/theme/use-theme';
  *   - `BreakTypeSheet`: elegir mal el tipo de descanso cambia si esos minutos se
  *     pagan o no, así que se pregunta en vez de asumir;
  *   - `RequiredBreakSheet`: al salir sin el descanso obligatorio, la app NUNCA
- *     inventa el descanso. Pregunta y crea una solicitud auditable (§12);
- *   - `ManagerOverrideSheet`: la excepción de entrada temprana necesita el PIN de
- *     un gerente y queda en auditoría, no es un botón que cualquiera pulsa.
+ *     inventa el descanso. Pregunta y crea una solicitud auditable (§12).
+ *
+ * Aquí estaba `ManagerOverrideSheet`, el PIN de gerente para entrar antes del turno. Se
+ * fue el 1-oct con el bloqueo que lo pedía: ahora se marca a cualquier hora y lo raro lo
+ * avisa Horario.
  */
 
 /**
@@ -332,78 +333,6 @@ export function RequiredBreakSheet({
           testID="required-break-did-not-take"
         />
         <GhostButton label={t('common.cancel')} onPress={() => onChoose('cancel')} />
-      </Stack>
-    </Sheet>
-  );
-}
-
-export function ManagerOverrideSheet({
-  visible,
-  pinLength,
-  checking,
-  error,
-  onSubmit,
-  onCancel,
-}: {
-  visible: boolean;
-  pinLength: number;
-  checking: boolean;
-  error: string | null;
-  onSubmit: (pin: string) => void;
-  onCancel: () => void;
-}) {
-  const styles = useEstilos();
-  const { t } = useTranslation();
-  const [pin, setPin] = useState('');
-
-  const append = (digit: string) => {
-    if (checking) return;
-    const next = pin.length >= pinLength ? pin : pin + digit;
-    setPin(next);
-    if (next.length === pinLength) {
-      onSubmit(next);
-      setPin('');
-    }
-  };
-
-  return (
-    <Sheet
-      visible={visible}
-      onClose={() => {
-        setPin('');
-        onCancel();
-      }}
-      testID="manager-override-sheet"
-    >
-      <Stack gap={spacing.base} style={styles.centered}>
-        <AppText variant="section">{t('kiosk.managerOverride')}</AppText>
-        <AppText variant="help" tone="subtle" style={styles.centerText}>
-          {t('kiosk.exitEnterManagerPin')}
-        </AppText>
-
-        <PinDots length={pinLength} entered={pin.length} error={error !== null} />
-
-        {error !== null ? (
-          <AppText variant="help" tone="danger" accessibilityRole="alert">
-            {error}
-          </AppText>
-        ) : null}
-
-        <NumericKeypad
-          onDigit={append}
-          onBackspace={() => setPin((c) => c.slice(0, -1))}
-          onClear={() => setPin('')}
-          size="mobile"
-          disabled={checking}
-        />
-
-        <GhostButton
-          label={t('common.cancel')}
-          onPress={() => {
-            setPin('');
-            onCancel();
-          }}
-        />
       </Stack>
     </Sheet>
   );

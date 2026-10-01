@@ -24,7 +24,6 @@ import {
   BreakNoteSheet,
   BreakReasonSheet,
   EarlyDepartureReasonSheet,
-  ManagerOverrideSheet,
   PhotoNotice,
   RequiredBreakSheet,
   type RequiredBreakChoice,
@@ -35,7 +34,7 @@ import { ActionCountdown } from '@/components/ui/action-countdown';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
-import { submitTimeEvent, verifyPin, type TimeEventType } from '@/features/kiosk/api';
+import { submitTimeEvent, type TimeEventType } from '@/features/kiosk/api';
 import { fotoDeVerificacionObligatoria, permiteFicharSinRed } from '@/lib/kiosk/disponibilidad';
 import { track } from '@/lib/analytics';
 import { enqueueEvent, enqueuePhotoForEvent } from '@/lib/offline/outbox';
@@ -44,7 +43,6 @@ import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import {
   closesOpenBreak,
-  evaluateClockInEligibility,
   primaryEvent,
   secondaryEvent,
   transition,
@@ -91,8 +89,7 @@ type Sheet =
   /** Se va antes de su hora y la sede quiere saber por qué. */
   | { name: 'departureReason' }
   /** Solo para «Otro»: el motivo de salida ya está elegido y falta la explicación. */
-  | { name: 'departureNote'; reason: EarlyDepartureReason }
-  | { name: 'managerOverride' };
+  | { name: 'departureNote'; reason: EarlyDepartureReason };
 
 type Step =
   | { name: 'identify' }
@@ -157,9 +154,6 @@ export default function KioskActionsScreen() {
     'OFF_SHIFT' | 'WORKING' | 'ON_BREAK' | null
   >(null);
   const [error, setError] = useState<string | null>(null);
-  const [overrideError, setOverrideError] = useState<string | null>(null);
-  const [overrideChecking, setOverrideChecking] = useState(false);
-  const [earlyAuthorized, setEarlyAuthorized] = useState(false);
   /*
    * `null` significa que todavia no hay resultado, y 'skipped' que no se pudo tomar.
    *
@@ -249,13 +243,13 @@ export default function KioskActionsScreen() {
   const primary = primaryEvent(state);
   const secondary = secondaryEvent(state);
 
-  const eligibility = evaluateClockInEligibility({
-    now,
-    shiftStartsAt: selectedShift === null ? null : new Date(selectedShift.startsAt),
-    earlyClockInMinutes: policies.earlyClockInMinutes,
-    allowUnscheduledShifts: policies.allowUnscheduledShifts,
-  });
-
+  /*
+   * NI «TODAVÍA ES TEMPRANO» NI PIN DE GERENTE (1-oct). Antes no se podía entrar más de
+   * diez minutos antes del turno sin que un gerente lo autorizara, y quien llegaba antes
+   * acababa pidiendo «olvidé marcar» para que su hora constara. Ahora se marca a la hora
+   * que sea; si es una hora o más fuera del turno, el servidor apunta la jornada como
+   * rara y Horario se lo dice a quien gestiona. Ver `src/domain/fuera-del-turno.ts`.
+   */
   const openSession = verification.openSession;
   const requiredBreakMinutes = openSession?.requiredBreakMinutes ?? 0;
   const takenBreakMinutes = openSession?.takenBreakMinutes ?? 0;
@@ -323,39 +317,6 @@ export default function KioskActionsScreen() {
     }
 
     setStep({ name: 'confirm', event });
-  };
-
-  /** Autorizacion del gerente para la entrada temprana (§9.3, §13). */
-  const submitManagerOverride = async (pin: string) => {
-    if (binding === null) return;
-    setOverrideChecking(true);
-    setOverrideError(null);
-
-    const result = await verifyPin({ pin, locationId: binding.locationId });
-
-    setOverrideChecking(false);
-
-    if (!result.ok) {
-      setOverrideError(
-        result.error.kind === 'offline' ? t('errors.network') : t('kiosk.pinIncorrect'),
-      );
-      return;
-    }
-
-    // El PIN de un companero cualquiera no autoriza nada: hace falta alguien que
-    // el SERVIDOR reconozca como gerente de esta tienda, y que no sea la misma
-    // persona que esta fichando. Si no, la autorizacion no valdria nada.
-    const isManager = result.data.employee.canManageLocation;
-    const isSomeoneElse = result.data.employee.opaqueId !== verification.employee.opaqueId;
-
-    if (!isManager || !isSomeoneElse) {
-      setOverrideError(t('kiosk.pinIncorrect'));
-      return;
-    }
-
-    setEarlyAuthorized(true);
-    setSheet({ name: 'none' });
-    setStep({ name: 'confirm', event: 'clock_in' });
   };
 
   const handleRequiredBreakChoice = (choice: RequiredBreakChoice) => {
@@ -732,34 +693,13 @@ export default function KioskActionsScreen() {
           {/* §9.3 Acciones según estado, §9.4 confirmación, §9.5 resultado */}
           {step.name === 'identify' ? (
             <Stack gap={spacing.md}>
-              {!eligibility.eligible && eligibility.reason === 'too_early' && !earlyAuthorized ? (
-                <Card>
-                  <AppText variant="bodyStrong">{t('kiosk.tooEarlyTitle')}</AppText>
-                  <AppText variant="body" tone="muted">
-                    {t('kiosk.tooEarlyBody', {
-                      time: formatClockTime(
-                        eligibility.earliestAt,
-                        timezone,
-                        policies.timeFormat,
-                        language,
-                      ),
-                    })}
-                  </AppText>
-                  <SecondaryButton
-                    label={t('kiosk.managerOverride')}
-                    onPress={() => setSheet({ name: 'managerOverride' })}
-                    testID="kiosk-manager-override"
-                  />
-                </Card>
-              ) : (
-                <PrimaryButton
-                  label={t(`kiosk.${eventLabelKey(primary)}`)}
-                  onPress={() => startAction(primary)}
-                  size="kiosk"
-                  loading={submitting}
-                  testID={`kiosk-action-${primary}`}
-                />
-              )}
+              <PrimaryButton
+                label={t(`kiosk.${eventLabelKey(primary)}`)}
+                onPress={() => startAction(primary)}
+                size="kiosk"
+                loading={submitting}
+                testID={`kiosk-action-${primary}`}
+              />
 
               {secondary !== null ? (
                 <DangerButton
@@ -1014,18 +954,6 @@ export default function KioskActionsScreen() {
         visible={sheet.name === 'requiredBreak'}
         requiredMinutes={requiredBreakMinutes}
         onChoose={handleRequiredBreakChoice}
-      />
-
-      <ManagerOverrideSheet
-        visible={sheet.name === 'managerOverride'}
-        pinLength={policies.pinLength}
-        checking={overrideChecking}
-        error={overrideError}
-        onSubmit={(pin) => void submitManagerOverride(pin)}
-        onCancel={() => {
-          setOverrideError(null);
-          setSheet({ name: 'none' });
-        }}
       />
     </AppScreen>
   );

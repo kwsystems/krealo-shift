@@ -201,6 +201,12 @@ export const RPC = {
    * (30-sep). Publicar ya lo hace solo; cancelar lo escribe el panel directamente.
    */
   recheckSessionsForShift: 'recheck_sessions_for_shift',
+  /**
+   * «Visto, está bien así» sobre una marca rara —entró una hora o más antes de su turno o
+   * salió una hora o más después— (1-oct). La jornada no se escribe desde la app: sostiene
+   * las horas que se pagan. Ver `acknowledgeUnusualClock` en `functions/src/manager.ts`.
+   */
+  acknowledgeUnusualClock: 'acknowledge_unusual_clock',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */

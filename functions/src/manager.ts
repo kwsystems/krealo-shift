@@ -23,6 +23,7 @@ import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
 import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/turnos';
 import { instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
+import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
 const DESCANSO_MINIMO_POR_DEFECTO = 660;
@@ -1463,6 +1464,50 @@ export const recheckSessionsForShift = onCall(async (request) => {
     ]);
   }
   return null;
+});
+
+/**
+ * «VISTO, ESTÁ BIEN ASÍ»: quien gestiona da por revisada una marca rara (1-oct).
+ *
+ * Horario avisa de quien entró una hora o más antes de su turno o salió una hora o más
+ * después (ver `src/domain/fuera-del-turno.ts`). A veces la respuesta es cambiar el
+ * horario o aprobar horas extra, y entonces el aviso se va solo; otras es «lo sé, está
+ * bien», y sin esto el aviso se quedaba ahí para siempre.
+ *
+ * Se apunta EN LA JORNADA y por marca: `avisos_vistos` guarda cuáles se vieron. Si luego
+ * aparece otra —entró pronto, se vio, y al salir se quedó dos horas de más—, esa sí se
+ * avisa. Reconstruir la jornada no lo borra: se escribe con `merge`.
+ *
+ * LA JORNADA SE ESCRIBE AQUÍ porque las reglas no dejan tocarla desde la app: es lo que
+ * sostiene las horas que se pagan.
+ */
+export const acknowledgeUnusualClock = onCall(async (request) => {
+  const uid = requireUid(request);
+  const sessionId = textoRequerido(request.data?.p_work_session_id, 'p_work_session_id');
+  const ref = db.collection(COLLECTIONS.workSessions).doc(sessionId);
+  const sesion = (await ref.get()).data();
+  if (sesion === undefined) throw new HttpsError('not-found', 'Esa jornada no existe.');
+  const organizationId = String(sesion.organization_id);
+  requireManagesLocation(await membershipOf(uid, organizationId), String(sesion.location_id));
+
+  const marcas = Array.isArray(sesion.flags) ? (sesion.flags as unknown[]).map(String) : [];
+  const raras = marcas.filter(esMarcaFueraDelTurno);
+  const antes = Array.isArray(sesion.avisos_vistos)
+    ? (sesion.avisos_vistos as unknown[]).map(String)
+    : [];
+  if (raras.length === 0) return { vistos: antes };
+
+  const vistos = [...new Set([...antes, ...raras])];
+  await ref.update({ avisos_vistos: vistos, aviso_visto_por: uid, aviso_visto_at: nowISO() });
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'unusual_clock_acknowledged',
+    entityType: 'work_session',
+    entityId: sessionId,
+    after: { marcas: raras },
+  });
+  return { vistos };
 });
 
 // ---------------------------------------------------------------------------

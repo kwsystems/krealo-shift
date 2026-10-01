@@ -48,6 +48,7 @@ function jornada(t: ShiftRow, extra: Partial<WorkSession> = {}): WorkSession {
     departure_reason: null,
     departure_note: null,
     source: null,
+    avisos_vistos: [],
     updated_at: '',
     ...extra,
   };

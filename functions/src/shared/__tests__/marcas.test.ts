@@ -132,3 +132,40 @@ describe('varias a la vez', () => {
     expect(sesion()).toEqual([]);
   });
 });
+
+/*
+ * LAS MARCAS RARAS (Andree, 1-oct): «no porque lleguen 15 min antes… pero si marcan
+ * 1 hora antes, eso sí debes avisarme». El reloj ya no frena a nadie; esto es el aviso.
+ */
+describe('fuera del turno: entrar mucho antes o salir mucho después', () => {
+  it('marca a quien entra una hora o más antes de su turno', () => {
+    expect(sesion({ entrada: '2026-09-22T13:00:00.000Z' })).toContain('early_arrival');
+    expect(sesion({ entrada: '2026-09-22T12:40:00.000Z' })).toContain('early_arrival');
+  });
+
+  it('NO marca a quien llega quince minutos antes, ni cincuenta y nueve', () => {
+    expect(sesion({ entrada: '2026-09-22T13:45:00.000Z' })).not.toContain('early_arrival');
+    expect(sesion({ entrada: '2026-09-22T13:01:00.000Z' })).not.toContain('early_arrival');
+  });
+
+  it('marca a quien sale una hora o más después, y no a quien se queda un rato', () => {
+    expect(sesion({ salida: '2026-09-22T23:00:00.000Z' })).toContain('late_departure');
+    expect(sesion({ salida: '2026-09-22T22:30:00.000Z' })).not.toContain('late_departure');
+  });
+
+  it('una jornada abierta todavía no ha salido tarde', () => {
+    expect(sesion({ salida: null })).not.toContain('late_departure');
+  });
+
+  it('el umbral es el de la sede', () => {
+    const estricta = { lateGraceMinutes: 5, unusualClockMinutes: 30 };
+    expect(sesion({ entrada: '2026-09-22T13:30:00.000Z', politicas: estricta })).toContain(
+      'early_arrival',
+    );
+    expect(sesion({ entrada: '2026-09-22T13:30:00.000Z' })).not.toContain('early_arrival');
+  });
+
+  it('sin turno no hay «antes de su turno»: es «sin turno programado»', () => {
+    expect(sesion({ turno: null, entrada: '2026-09-22T05:00:00.000Z' })).toEqual(['unscheduled']);
+  });
+});

@@ -30,6 +30,7 @@ function sesion(overrides: Partial<WorkSession> = {}): WorkSession {
     departure_reason: null,
     departure_note: null,
     source: null,
+    avisos_vistos: [],
     updated_at: '2026-09-29T14:55:01.000Z',
     ...overrides,
   };

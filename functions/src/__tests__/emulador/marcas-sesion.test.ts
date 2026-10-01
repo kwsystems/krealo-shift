@@ -156,6 +156,30 @@ describe('las marcas llegan a la sesión de trabajo', () => {
   });
 });
 
+/*
+ * ENTRAR MUY TEMPRANO YA NO SE IMPIDE (Andree, 1-oct): se marca, y la jornada queda
+ * apuntada como rara para que Horario lo avise.
+ */
+describe('entrar mucho antes del turno', () => {
+  it('el reloj no dice «todavía es temprano» y la entrada queda marcada como rara', async () => {
+    await ponerTurno(90 * 60 * 1000, 9 * HORA);
+
+    const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as {
+      earliestClockInAt: string | null;
+    };
+    expect(contexto.earliestClockInAt).toBeNull();
+
+    await fichar('clock_in', 'entrada-muy-temprano', TURNO);
+    expect(await marcasDeLaSesion()).toEqual(['early_arrival']);
+  });
+
+  it('quince minutos antes es llegar con tiempo: sin marca', async () => {
+    await ponerTurno(15 * 60 * 1000, 9 * HORA);
+    await fichar('clock_in', 'entrada-con-tiempo', TURNO);
+    expect(await marcasDeLaSesion()).toEqual([]);
+  });
+});
+
 describe('el reloj sabe a qué hora termina la jornada', () => {
   /**
    * `verifyPin` devolvía `shiftEndsAt: null` fijo, así que el reloj conocía la hora de

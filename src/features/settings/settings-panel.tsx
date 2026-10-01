@@ -568,7 +568,14 @@ type ClaveNumerica = {
  * La exclusión de aquí sigue siendo explícita y no un olvido: la lista de abajo es un
  * `Record` exhaustivo, así que sin esta línea el panel no compilaría.
  */
-type ClaveNumericaNoEditable = 'pinLength';
+/*
+ * `earlyClockInMinutes` TAMPOCO, desde el 1-oct: era «cuántos minutos antes del turno se
+ * puede marcar», y el reloj ya no frena a nadie. Un número que no hace nada no puede
+ * seguir en el panel —quien lo cambiara esperaría un efecto—; lo sustituye
+ * `unusualClockMinutes`, desde cuándo se avisa en Horario. El valor guardado se queda en
+ * los datos porque los relojes instalados lo siguen leyendo.
+ */
+type ClaveNumericaNoEditable = 'pinLength' | 'earlyClockInMinutes';
 
 type NumericSettingKey = Exclude<ClaveNumerica, ClaveNumericaNoEditable>;
 
@@ -578,8 +585,8 @@ type NumericSettingKey = Exclude<ClaveNumerica, ClaveNumericaNoEditable>;
  * numérico nuevo NO puede quedarse sin campo en el panel por descuido.
  */
 const ETIQUETAS_NUMERICAS: Record<NumericSettingKey, string> = {
-  earlyClockInMinutes: 'settings.earlyClockInMinutes',
   lateGraceMinutes: 'settings.lateGraceMinutes',
+  unusualClockMinutes: 'settings.unusualClockMinutes',
   requiredBreakMinutes: 'settings.requiredBreakMinutes',
   earlyDepartureReasonMinutes: 'settings.earlyDepartureReasonMinutes',
   overtimeNoticeMinutes: 'settings.overtimeNoticeMinutes',
@@ -647,7 +654,7 @@ function LocationCard({
   const zonaValida = esZonaValida(timezone);
   const [numbers, setNumbers] = useState<Record<NumericSettingKey, string>>({
     photoRetentionDays: String(location.settings.photoRetentionDays),
-    earlyClockInMinutes: String(location.settings.earlyClockInMinutes),
+    unusualClockMinutes: String(location.settings.unusualClockMinutes),
     lateGraceMinutes: String(location.settings.lateGraceMinutes),
     requiredBreakMinutes: String(location.settings.requiredBreakMinutes),
     earlyDepartureReasonMinutes: String(location.settings.earlyDepartureReasonMinutes),
@@ -667,7 +674,7 @@ function LocationCard({
   const buildSettings = (): LocationSettings => ({
     ...settings,
     photoRetentionDays: parseNumber('photoRetentionDays'),
-    earlyClockInMinutes: parseNumber('earlyClockInMinutes'),
+    unusualClockMinutes: parseNumber('unusualClockMinutes'),
     lateGraceMinutes: parseNumber('lateGraceMinutes'),
     requiredBreakMinutes: parseNumber('requiredBreakMinutes'),
     earlyDepartureReasonMinutes: parseNumber('earlyDepartureReasonMinutes'),

@@ -124,45 +124,26 @@ describe('reconstrucción del estado desde los eventos crudos', () => {
   });
 });
 
-describe('política de entrada temprana', () => {
-  const base = { earlyClockInMinutes: 10, allowUnscheduledShifts: true };
-
-  it('bloquea la entrada antes de la tolerancia y dice desde cuándo se puede', () => {
-    const result = evaluateClockInEligibility({
-      ...base,
-      now: new Date('2026-08-26T13:30:00Z'),
-      shiftStartsAt: new Date('2026-08-26T14:00:00Z'),
-    });
-    expect(result).toEqual({
-      eligible: false,
-      reason: 'too_early',
-      earliestAt: '2026-08-26T13:50:00.000Z',
-    });
-  });
-
-  it('permite la entrada dentro de la tolerancia', () => {
+/*
+ * YA NO HAY «DEMASIADO TEMPRANO» (Andree, 1-oct): se marca a la hora que sea y lo raro lo
+ * avisa Horario. Ver `src/domain/fuera-del-turno.ts`.
+ */
+describe('entrada', () => {
+  it('se puede marcar aunque falten horas para el turno', () => {
     expect(
       evaluateClockInEligibility({
-        ...base,
-        now: new Date('2026-08-26T13:52:00Z'),
-        shiftStartsAt: new Date('2026-08-26T14:00:00Z'),
+        allowUnscheduledShifts: true,
+        shiftStartsAt: new Date('2026-08-26T18:00:00Z'),
       }),
     ).toEqual({ eligible: true });
   });
 
   it('permite trabajar sin turno solo si la ubicación lo autoriza', () => {
-    const now = new Date('2026-08-26T14:00:00Z');
-    expect(evaluateClockInEligibility({ ...base, now, shiftStartsAt: null })).toEqual({
-      eligible: true,
-    });
-
     expect(
-      evaluateClockInEligibility({
-        ...base,
-        allowUnscheduledShifts: false,
-        now,
-        shiftStartsAt: null,
-      }),
+      evaluateClockInEligibility({ allowUnscheduledShifts: true, shiftStartsAt: null }),
+    ).toEqual({ eligible: true });
+    expect(
+      evaluateClockInEligibility({ allowUnscheduledShifts: false, shiftStartsAt: null }),
     ).toEqual({ eligible: false, reason: 'no_shift_and_not_allowed' });
   });
 });

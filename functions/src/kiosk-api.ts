@@ -6,7 +6,6 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import {
   allowedEvents,
-  evaluateClockInEligibility,
   type AttendanceState,
   type TimeEventType,
 } from '../../src/domain/attendance-state-machine';
@@ -548,12 +547,6 @@ async function buildEmployeeContext(
       changedSinceLastPublication: false,
     }));
 
-  const elegibilidad = evaluateClockInEligibility({
-    now: ahora,
-    shiftStartsAt: proximos[0] === undefined ? null : new Date(proximos[0].startsAt),
-    earlyClockInMinutes: politicas.earlyClockInMinutes,
-    allowUnscheduledShifts: politicas.allowUnscheduledShifts,
-  });
 
   const abierta = await db
     .collection(COLLECTIONS.workSessions)
@@ -622,8 +615,12 @@ async function buildEmployeeContext(
             requiredBreakMinutes: politicas.requiredBreakMinutes,
             openBreak: pausaAbierta,
           },
-    earliestClockInAt:
-      elegibilidad.eligible || elegibilidad.reason !== 'too_early' ? null : elegibilidad.earliestAt,
+    /*
+     * SIEMPRE `null` desde el 1-oct: el reloj ya no impide entrar antes del turno (ver
+     * `evaluateClockInEligibility`). El campo se queda porque los relojes ya instalados
+     * lo esperan en la respuesta.
+     */
+    earliestClockInAt: null,
     requestUpdates: resueltas.docs.map((doc) => ({
       id: doc.id,
       kind: doc.data().kind,

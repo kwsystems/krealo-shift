@@ -22,11 +22,15 @@ describe('ajustes numéricos de la ubicación', () => {
     .filter(([, valor]) => typeof valor === 'number')
     .map(([clave]) => clave);
 
-  it('cada ajuste numérico tiene campo en el panel, salvo el excluido a propósito', () => {
+  it('cada ajuste numérico tiene campo en el panel, salvo los excluidos a propósito', () => {
+    // `earlyClockInMinutes` salió el 1-oct: el reloj ya no frena a nadie, así que el
+    // número no hace nada. Lo sustituye `unusualClockMinutes` (ver el panel).
+    const excluidos = ['pinLength', 'earlyClockInMinutes'];
     const sinCampo = numericas.filter(
-      (clave) => clave !== 'pinLength' && !PANEL.includes(`${clave}:`),
+      (clave) => !excluidos.includes(clave) && !PANEL.includes(`${clave}:`),
     );
     expect(sinCampo).toEqual([]);
+    expect(PANEL).not.toContain("earlyClockInMinutes: 'settings.");
   });
 
   it('`pinLength` sigue excluido, y con su motivo escrito al lado', () => {

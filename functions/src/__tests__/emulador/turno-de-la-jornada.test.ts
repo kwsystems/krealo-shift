@@ -1,4 +1,5 @@
 import {
+  acknowledgeUnusualClock,
   managerAdjustTime,
   publishShiftsForWeek,
   recheckSessionsForPeriod,
@@ -262,6 +263,61 @@ describe('el turno de la jornada', () => {
     await turno('t-otra', H(10), H(19), { location_id: OTRA });
     await fichar('clock_in', H(10));
     expect((await jornada()).flags).toEqual(['unscheduled']);
+  });
+});
+
+/*
+ * LAS MARCAS RARAS SE MANTIENEN AL DÍA (1-oct): Horario avisa de quien entró una hora o
+ * más antes, y las dos salidas del aviso son cambiar el horario o decir «visto».
+ */
+describe('las marcas raras', () => {
+  it('entrar hora y media antes queda marcado; si se cambia su turno y se publica, deja de serlo', async () => {
+    await turno('t-raro', H(10), H(19));
+    await fichar('clock_in', H(8, 30), 't-raro');
+    expect((await jornada()).flags).toEqual(['early_arrival']);
+
+    // Era su horario de verdad: se adelanta el turno y se publica.
+    await db
+      .collection(COLLECTIONS.shifts)
+      .doc('t-raro')
+      .update({ starts_at: H(8, 30), status: 'draft' });
+    await correr(publishShiftsForWeek, {
+      p_location_id: SEDE,
+      p_week_start: SEMANA,
+      p_shift_ids: ['t-raro'],
+    });
+    expect((await jornada()).flags).toEqual([]);
+  });
+
+  it('«visto, está bien» se apunta por marca y fichar la salida no lo borra', async () => {
+    await turno('t-visto', H(10), H(19));
+    await fichar('clock_in', H(8, 30), 't-visto');
+    const { id } = await jornada();
+
+    const r = (await correr(acknowledgeUnusualClock, { p_work_session_id: id })) as {
+      vistos: string[];
+    };
+    expect(r.vistos).toEqual(['early_arrival']);
+
+    // Sale dos horas tarde: la salida reconstruye la jornada y añade otra marca rara.
+    await fichar('clock_out', H(21), 't-visto');
+    const sesion = await jornada();
+    expect(sesion.flags).toEqual(expect.arrayContaining(['early_arrival', 'late_departure']));
+    // Lo visto sigue visto; lo nuevo, no.
+    expect(sesion.avisos_vistos).toEqual(['early_arrival']);
+  });
+
+  it('solo quien gestiona la sede puede darla por vista', async () => {
+    await turno('t-ajeno', H(10), H(19));
+    await fichar('clock_in', H(8, 30), 't-ajeno');
+    const { id } = await jornada();
+    await expect(
+      (acknowledgeUnusualClock as unknown as { run: (r: unknown) => Promise<unknown> }).run({
+        data: { p_work_session_id: id },
+        auth: { uid: 'uid-de-otra-tienda', token: {} },
+        rawRequest: {},
+      }),
+    ).rejects.toThrow();
   });
 });
 

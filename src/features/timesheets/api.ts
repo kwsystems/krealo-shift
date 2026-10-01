@@ -73,6 +73,11 @@ export const workSessionSchema = z.object({
    * tumbar la consulta de la semana entera.
    */
   source: z.string().nullable().default(null),
+  /*
+   * LAS MARCAS RARAS QUE QUIEN GESTIONA YA DIO POR VISTAS (1-oct), una por marca: ver
+   * `acknowledgeUnusualClock`. Las jornadas de antes no lo traen.
+   */
+  avisos_vistos: z.array(z.string()).default([]),
   updated_at: z.string(),
 });
 
@@ -166,7 +171,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, avisos_vistos, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
@@ -493,6 +498,22 @@ export async function reclassifyDeparture(params: {
     });
     if (error !== null) throw toAdminError(error);
     return (data ?? { minutes: 0, breakType: 'unpaid' }) as { minutes: number; breakType: string };
+  } catch (error) {
+    throw toAdminError(error);
+  }
+}
+
+/**
+ * «Visto, está bien así» sobre las marcas raras de una jornada (1-oct): entró una hora o
+ * más antes de su turno o salió una hora o más después. Por el servidor, porque la jornada
+ * sostiene horas pagadas y las reglas no dejan tocarla desde aquí.
+ */
+export async function acknowledgeUnusualClock(sessionId: string): Promise<void> {
+  try {
+    const { error } = await requireClient().rpc(RPC.acknowledgeUnusualClock, {
+      p_work_session_id: sessionId,
+    });
+    if (error !== null) throw toAdminError(error);
   } catch (error) {
     throw toAdminError(error);
   }

@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import type { ShiftInput, ShiftRow } from './api';
@@ -15,6 +16,14 @@ import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
 import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useWorkSessions } from '@/features/timesheets/hooks';
+import { acknowledgeUnusualClock } from '@/features/timesheets/api';
+import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
+import {
+  MarcasFueraDelTurno,
+  type FilaFueraDelTurno,
+} from '@/components/schedule/marcas-fuera-del-turno';
+import { duracionLegible, marcasRarasDeLaSemana, type MarcaRara } from './marcas-raras';
 import { useInicioDelReloj } from './horario-cumplido';
 import { PegarHorarioSheet } from './pegar-horario-sheet';
 import { RegistrarCumplidoSheet } from './registrar-cumplido-sheet';
@@ -84,7 +93,16 @@ type EditingState =
   | { mode: 'create'; values: ShiftFormValues }
   | { mode: 'edit'; shift: ShiftRow; values: ShiftFormValues };
 
-export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
+/** A qué jornada de Horas llevar desde un aviso de Horario. */
+export type IrAHoras = { semana: DateKey; persona: string; jornada: string };
+
+export function ScheduleScreen({
+  onGoToTeam,
+  onGoToHours,
+}: {
+  onGoToTeam?: () => void;
+  onGoToHours?: (destino: IrAHoras) => void;
+}) {
   const { t } = useTranslation();
   const estilos = useEstilosDeHorario();
   const scope = useManagerScope();
@@ -230,8 +248,12 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
   const rangoDeLaSemana = weekRangeInstants(weekStart, scope.timezone);
   const jornadasDeLaSemana = useWorkSessions({
     organizationId: scope.organization?.id ?? null,
-    // Sin sede no se pide: fuera de esas semanas no hace falta leer las jornadas aquí.
-    locationId: antesDelReloj ? scope.locationId : null,
+    /*
+     * Las jornadas de la semana: para las semanas de antes del reloj y, desde el 1-oct,
+     * para avisar de las marcas raras. Una semana que no ha llegado no tiene ninguna.
+     * Misma consulta y clave que la semana de Horas, así que no se pide dos veces.
+     */
+    locationId: antesDelReloj || position !== 'future' ? scope.locationId : null,
     fromISO: rangoDeLaSemana.fromISO,
     toISO: rangoDeLaSemana.toISO,
     cacheKey: { from: weekStart, to: weekEnd(weekStart) },
@@ -249,6 +271,44 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               relojDesde === undefined ||
               dateKeyOf(row.starts_at, scope.timezone) < relojDesde),
         ).length;
+
+  /*
+   * LAS MARCAS RARAS DE LA SEMANA (1-oct): quien entró una hora o más antes de su turno o
+   * salió una hora o más después. El reloj ya no lo impide; esto lo avisa, y solo aquí.
+   * Se van al cambiar el turno y publicar, al aprobar la extra de ese día en Horas o al
+   * decir «visto». Ver `marcas-raras.ts`.
+   */
+  const queryClient = useQueryClient();
+  const horasExtra = useHorasExtra({
+    organizationId: scope.organization?.id ?? null,
+    locationId: position === 'future' ? null : scope.locationId,
+    from: weekStart,
+    to: weekEnd(weekStart),
+  });
+  const marcasRaras = marcasRarasDeLaSemana({
+    sesiones: jornadasDeLaSemana.data ?? [],
+    turnos: rows,
+    conExtraDecidida: new Set(
+      (horasExtra.data ?? []).map((fila) => claveDelDia(fila.employee_id, fila.work_date)),
+    ),
+    timezone: scope.timezone,
+  });
+  const marcarVisto = useMutation({
+    mutationFn: (sessionId: string) => acknowledgeUnusualClock(sessionId),
+    onSuccess: () => refrescarVistasDeHoras(queryClient),
+  });
+  const filasFueraDelTurno: FilaFueraDelTurno[] = marcasRaras.map((rara) =>
+    filaDeLaMarcaRara(rara, {
+      nombre: names.get(rara.sesion.employee_id) ?? t('team.unknownEmployee'),
+      language,
+      timezone: scope.timezone,
+      timeFormat: scope.timeFormat,
+      t,
+      puedeCambiarTurno: rara.turno !== null && !readOnly,
+      viendo: marcarVisto.isPending && marcarVisto.variables === rara.sesion.id,
+    }),
+  );
+  const marcaRaraPorId = new Map(marcasRaras.map((rara) => [rara.id, rara]));
 
   const datedShifts = useMemo<DatedShift[]>(
     () => rows.map((row) => ({ ...row, dateKey: dateKeyOf(row.starts_at, scope.timezone) })),
@@ -646,6 +706,34 @@ export function ScheduleScreen({ onGoToTeam }: { onGoToTeam?: () => void }) {
               ) : null}
 
               <ScheduleWarnings warnings={analysis.warnings} />
+
+              <MarcasFueraDelTurno
+                filas={filasFueraDelTurno}
+                onCambiarTurno={(id) => {
+                  const turno = marcaRaraPorId.get(id)?.turno;
+                  if (turno !== null && turno !== undefined) openEdit(turno);
+                }}
+                onVerEnHoras={(id) => {
+                  const rara = marcaRaraPorId.get(id);
+                  if (rara === undefined || onGoToHours === undefined) return;
+                  onGoToHours({
+                    semana: weekStart,
+                    persona: rara.sesion.employee_id,
+                    jornada: rara.sesion.id,
+                  });
+                }}
+                onVisto={(id) => {
+                  const rara = marcaRaraPorId.get(id);
+                  if (rara !== undefined) marcarVisto.mutate(rara.sesion.id);
+                }}
+              />
+              {marcarVisto.isError ? (
+                <InlineNotice
+                  tone="late"
+                  body={t('schedule.unusual.seenFailed')}
+                  testID="marcas-raras-error"
+                />
+              ) : null}
 
               {/* Quién está en la tienda ahora mismo: solo tiene sentido en esta semana. */}
               {position === 'current' ? <EnTurnoAhora personas={enTurnoAhora} /> : null}
@@ -1138,3 +1226,71 @@ const useEstilosDeHorario = estilosDelTema((colors) => ({
   creceEnLaBarra: { flexGrow: 1, flexShrink: 1 },
   encoge: { flexShrink: 1, minWidth: 0 },
 }));
+
+/** Una marca rara, escrita para la fila del aviso: quién, qué día, qué hizo y contra qué turno. */
+function filaDeLaMarcaRara(
+  rara: MarcaRara,
+  contexto: {
+    nombre: string;
+    language: ReturnType<typeof currentLanguage>;
+    timezone: string;
+    timeFormat: Parameters<typeof formatClockTime>[2];
+    t: ReturnType<typeof useTranslation>['t'];
+    puedeCambiarTurno: boolean;
+    viendo: boolean;
+  },
+): FilaFueraDelTurno {
+  const { t, timezone, timeFormat, language } = contexto;
+  const hora = (iso: string) => formatClockTime(iso, timezone, timeFormat, language);
+  const { horas, minutos } = duracionLegible(rara.minutos);
+  const cuanto =
+    rara.minutos === 0
+      ? null
+      : horas === 0
+        ? t('schedule.unusual.minutes', { m: minutos })
+        : minutos === 0
+          ? t('schedule.unusual.hours', { h: horas })
+          : t('schedule.unusual.hoursMinutes', { h: horas, m: minutos });
+  const temprano = rara.marca === 'early_arrival';
+  const que =
+    cuanto === null
+      ? temprano
+        ? t('schedule.unusual.earlyNoAmount')
+        : t('schedule.unusual.lateNoAmount')
+      : temprano
+        ? t('schedule.unusual.early', { amount: cuanto })
+        : t('schedule.unusual.late', { amount: cuanto });
+  const detalle =
+    rara.turno === null
+      ? null
+      : temprano
+        ? t('schedule.unusual.detailEarly', {
+            shift: formatShiftRange(
+              rara.turno.starts_at,
+              rara.turno.ends_at,
+              timezone,
+              timeFormat,
+              language,
+            ),
+            time: hora(rara.sesion.starts_at),
+          })
+        : t('schedule.unusual.detailLate', {
+            shift: formatShiftRange(
+              rara.turno.starts_at,
+              rara.turno.ends_at,
+              timezone,
+              timeFormat,
+              language,
+            ),
+            time: rara.sesion.ends_at === null ? '' : hora(rara.sesion.ends_at),
+          });
+  return {
+    id: rara.id,
+    nombre: contexto.nombre,
+    dia: formatDayColumn(rara.dia, language),
+    que,
+    detalle,
+    puedeCambiarTurno: contexto.puedeCambiarTurno,
+    viendo: contexto.viendo,
+  };
+}

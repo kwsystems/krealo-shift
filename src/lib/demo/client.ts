@@ -18,6 +18,11 @@ import {
 } from './seed';
 import { registrarFichajeDemo } from './reconstruir';
 import type { DataClient } from '@/lib/firebase/query';
+import {
+  esMarcaFueraDelTurno,
+  marcasFueraDelTurno,
+  MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+} from '@/domain/fuera-del-turno';
 
 /**
  * El cliente de mentira del modo demostración.
@@ -592,6 +597,38 @@ function crearRpc(almacen: Almacen) {
             };
           }),
         );
+        /*
+         * Y LAS JORNADAS DE ESOS TURNOS SE VUELVEN A MEDIR, como en el servidor
+         * (`revisarSesiones`): si el turno nuevo cubre la hora a la que entró, la marca rara
+         * se va. Solo las dos marcas fuera del turno: el resto la demostración no las mide.
+         */
+        if (publicados.length > 0) {
+          const turnos = new Map(filas('shifts').map((fila) => [fila.id, fila]));
+          almacen.set(
+            'work_sessions',
+            filas('work_sessions').map((fila) => {
+              const turno = typeof fila.shift_id === 'string' ? turnos.get(fila.shift_id) : null;
+              if (turno === undefined || turno === null || !publicados.includes(fila.shift_id)) {
+                return fila;
+              }
+              const otras = (Array.isArray(fila.flags) ? (fila.flags as string[]) : []).filter(
+                (marca) => !esMarcaFueraDelTurno(marca),
+              );
+              return {
+                ...fila,
+                flags: [
+                  ...otras,
+                  ...marcasFueraDelTurno({
+                    entrada: String(fila.starts_at),
+                    salida: (fila.ends_at as string | null) ?? null,
+                    turno: { starts_at: String(turno.starts_at), ends_at: String(turno.ends_at) },
+                    umbralMinutos: MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+                  }),
+                ],
+              };
+            }),
+          );
+        }
         if (publicados.length > 0) {
           almacen.set('shift_publications', [
             ...filas('shift_publications'),
@@ -973,6 +1010,25 @@ function crearRpc(almacen: Almacen) {
       // En la demostración las jornadas no guardan marcas contra el turno: nada que revisar.
       case 'recheck_sessions_for_shift':
         return sinError(null);
+
+      /* «Visto, está bien así», como `acknowledgeUnusualClock`: por marca, en la jornada. */
+      case 'acknowledge_unusual_clock': {
+        const id = argumentos.p_work_session_id;
+        let vistos: string[] = [];
+        almacen.set(
+          'work_sessions',
+          filas('work_sessions').map((fila) => {
+            if (fila.id !== id) return fila;
+            const raras = (Array.isArray(fila.flags) ? (fila.flags as string[]) : []).filter(
+              esMarcaFueraDelTurno,
+            );
+            const antes = Array.isArray(fila.avisos_vistos) ? (fila.avisos_vistos as string[]) : [];
+            vistos = [...new Set([...antes, ...raras])];
+            return { ...fila, avisos_vistos: vistos, updated_at: new Date().toISOString() };
+          }),
+        );
+        return sinError({ vistos });
+      }
 
       case 'view_corrections_summary': {
         const sede = argumentos.p_location_id;

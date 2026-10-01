@@ -35,6 +35,7 @@ export {
   managerReclassifyDeparture,
   publishShiftsForWeek,
   recheckSessionsForShift,
+  acknowledgeUnusualClock,
   recheckSessionsForPeriod,
   createOrganization,
   approveTimesheetPeriod,

@@ -1,3 +1,8 @@
+import {
+  MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+  marcasFueraDelTurno,
+} from '../../../src/domain/fuera-del-turno';
+
 /**
  * Las marcas de una sesión de trabajo: lo que el gerente ve en la hoja de horas cuando
  * algo no cuadra (§11.4).
@@ -20,7 +25,15 @@
  * Calcularlas también aquí sería tener dos verdades que pueden discrepar.
  */
 
-export type MarcaDeSesion = 'late_arrival' | 'early_departure' | 'unscheduled' | 'clock_drift';
+export type MarcaDeSesion =
+  | 'late_arrival'
+  | 'early_departure'
+  | 'unscheduled'
+  | 'clock_drift'
+  /** Entró una hora o más antes de su turno: ver `src/domain/fuera-del-turno.ts`. */
+  | 'early_arrival'
+  /** Salió una hora o más después de su turno. */
+  | 'late_departure';
 
 /**
  * Cuánto puede separarse el reloj del aparato del reloj del servidor antes de avisar.
@@ -55,8 +68,8 @@ export type DatosDeLaSesion = {
    * en cada sincronización, y una alerta que salta siempre deja de leerse.
    */
   sinConexion?: boolean;
-  /** Tolerancias de la sede. */
-  politicas: { lateGraceMinutes: number };
+  /** Tolerancias de la sede. Sin `unusualClockMinutes`, una hora. */
+  politicas: { lateGraceMinutes: number; unusualClockMinutes?: number };
 };
 
 const MINUTO = 60_000;
@@ -108,6 +121,20 @@ export function marcasDeLaSesion(datos: DatosDeLaSesion): MarcaDeSesion[] {
      */
     if (salida !== null && finTurno !== null && salida < finTurno - tolerancia) {
       marcas.add('early_departure');
+    }
+
+    /*
+     * LAS MARCAS RARAS (1-oct): una hora o más fuera del turno. El reloj ya no impide
+     * marcar a esa hora; lo que hace es esto, y Horario lo avisa. La regla vive en
+     * `src/domain` porque la demostración la aplica igual.
+     */
+    for (const marca of marcasFueraDelTurno({
+      entrada: datos.entrada,
+      salida: datos.salida,
+      turno: datos.turno,
+      umbralMinutos: datos.politicas.unusualClockMinutes ?? MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
+    })) {
+      marcas.add(marca);
     }
   }
 

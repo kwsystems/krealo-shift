@@ -59,6 +59,7 @@ import {
   localDateTimeToInstant,
   weekEnd,
   weekRangeInstants,
+  weekStartOfKey,
 } from '@/features/schedules/week';
 import { useEmployeeNames, useTeam } from '@/features/team/hooks';
 import { adminErrorKind } from '@/hooks/use-admin-query';
@@ -80,17 +81,33 @@ import { minutesToHHmm } from '@/utils/time';
 
 type StatusFilter = 'all' | 'needsReview' | 'approved';
 
-export function TimesheetsScreen() {
+/**
+ * A dónde abrir Horas al llegar desde un aviso (1-oct): la semana, la persona y la jornada
+ * de una marca rara de Horario. «Ver en Horas» lleva a SU jornada, ya abierta, para
+ * corregir la hora o aprobar la extra sin buscarla.
+ */
+export type DestinoEnHoras = { semana?: string; persona?: string; jornada?: string };
+
+export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {}) {
   const { t } = useTranslation();
   const estilosDelPeriodo = useEstilosDeHoras();
   const scope = useManagerScope();
   const language = currentLanguage();
   const now = useLiveClock('minute');
 
-  const [weekOffset, setWeekOffset] = useState(0);
-  const [employeeFilter, setEmployeeFilter] = useState<string | null>(null);
+  const [weekOffset, setWeekOffset] = useState(() =>
+    destino?.semana === undefined
+      ? 0
+      : semanasHasta(
+          currentWeekStart(new Date().toISOString(), scope.weekStartsOn, scope.timezone),
+          weekStartOfKey(destino.semana, scope.weekStartsOn),
+        ),
+  );
+  const [employeeFilter, setEmployeeFilter] = useState<string | null>(destino?.persona ?? null);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [selected, setSelected] = useState<WorkSession | null>(null);
+  const [elegida, setSelected] = useState<WorkSession | null>(null);
+  /* La jornada que pidió el aviso, hasta que se cierre: se abre en cuanto llegan los datos. */
+  const [pedida, setPedida] = useState<string | null>(destino?.jornada ?? null);
   const [manualOpen, setManualOpen] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -113,6 +130,14 @@ export function TimesheetsScreen() {
     toISO: range.toISO,
     cacheKey: { from, to },
   });
+  const selected =
+    elegida ??
+    (pedida === null ? null : ((sessions.data ?? []).find((fila) => fila.id === pedida) ?? null));
+  /* Cerrar el detalle cierra también la jornada pedida: si no, se volvería a abrir sola. */
+  const cerrarDetalle = () => {
+    setSelected(null);
+    setPedida(null);
+  };
   const period = usePeriod({ organizationId, locationId: scope.locationId, from, to });
   // Las jornadas de la semana que se mira, al día con el horario publicado de ahora.
   useJornadasAlDia({ locationId: scope.locationId, from, to });
@@ -713,7 +738,7 @@ export function TimesheetsScreen() {
               { eventId, breakReason, reason: t('timesheet.reclassifyDefaultReason') },
               {
                 onSuccess: () => {
-                  setSelected(null);
+                  cerrarDetalle();
                   setFeedback(t('timesheet.reclassified'));
                 },
               },
@@ -730,7 +755,7 @@ export function TimesheetsScreen() {
               },
               {
                 onSuccess: () => {
-                  setSelected(null);
+                  cerrarDetalle();
                   setFeedback(t('timesheet.corrected'));
                 },
               },
@@ -754,7 +779,7 @@ export function TimesheetsScreen() {
                     },
                     {
                       onSuccess: () => {
-                        setSelected(null);
+                        cerrarDetalle();
                         setFeedback(
                           minutos > 0
                             ? t('timesheet.overtimeSaved')
@@ -767,7 +792,7 @@ export function TimesheetsScreen() {
               />
             )
           }
-          onClose={() => setSelected(null)}
+          onClose={() => cerrarDetalle()}
         />
       ) : null}
 
@@ -867,3 +892,10 @@ const useEstilosDeHoras = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.base,
   },
 }));
+
+/** Cuántas semanas hay de una a otra, para abrir Horas en la semana del aviso. */
+function semanasHasta(desde: string, hasta: string): number {
+  return Math.round(
+    (Date.parse(`${hasta}T00:00:00Z`) - Date.parse(`${desde}T00:00:00Z`)) / (7 * 86_400_000),
+  );
+}
