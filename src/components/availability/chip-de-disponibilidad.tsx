@@ -105,7 +105,7 @@ export function ChipDeDisponibilidad({
 
   if (onPress === undefined) {
     return (
-      <View accessible accessibilityLabel={etiqueta} testID={testID}>
+      <View accessible accessibilityLabel={etiqueta} testID={testID} style={estilos.envoltorio}>
         {cuerpo}
       </View>
     );
@@ -116,7 +116,7 @@ export function ChipDeDisponibilidad({
       accessibilityRole="button"
       accessibilityLabel={etiqueta}
       testID={testID}
-      style={({ pressed }) => (pressed ? estilos.pulsado : null)}
+      style={({ pressed }) => [estilos.envoltorio, pressed ? estilos.pulsado : null]}
     >
       {cuerpo}
     </Pressable>
@@ -134,7 +134,9 @@ const useEstilos = estilosDelTema(() => ({
     borderWidth: borderWidth.hairline,
   },
   pulsable: { minHeight: sizes.touchTargetMin, justifyContent: 'center' },
-  texto: { flexShrink: 1 },
+  texto: { flexShrink: 1, minWidth: 0 },
+  /* NUNCA MÁS ANCHA QUE SU SITIO: con un nombre largo delante se salía del teléfono. */
+  envoltorio: { maxWidth: '100%', flexShrink: 1, minWidth: 0 },
   nuevo: { width: 8, height: 8, borderRadius: 4 },
   pulsado: { opacity: 0.8 },
 }));

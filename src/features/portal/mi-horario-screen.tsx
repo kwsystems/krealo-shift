@@ -585,7 +585,7 @@ function FilaDelDia({
             key={fila.id}
             fila={fila}
             primera
-            testID={`mi-horario-dia-${dia.dia}-disponibilidad`}
+            testID={`mi-disponibilidad-del-dia-${dia.dia}`}
           />
         ))}
         {marcas.map((marca, i) => (

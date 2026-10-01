@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -56,7 +56,15 @@ export function AvailabilityScreen() {
   const estilos = useEstilos();
   const tonos = useTonos();
   const { density } = useResponsive();
-  const ancha = density === 'wide' || density === 'extraWide';
+  /*
+   * LA TABLA, SOLO EN PANTALLA MUY ANCHA: en un iPad no caben siete columnas legibles
+   * junto al menú, y una tabla que se arrastra de lado esconde los días (`responsive:check`).
+   * Por debajo, la lista por persona, que es lo mismo dicho en vertical.
+   */
+  const ancha = density === 'extraWide';
+  /* Y aun así, solo si caben siete columnas de 120 px y la de nombres: medido, no supuesto. */
+  const [anchoDeLaTabla, setAnchoDeLaTabla] = useState(0);
+  const caben = anchoDeLaTabla >= 160 + 7 * 120;
   const ahora = useLiveClock('minute');
   const hoy = dateKeyOf(ahora.toISOString(), scope.timezone);
   const organizationId = scope.organization?.id ?? null;
@@ -120,7 +128,12 @@ export function AvailabilityScreen() {
               wrap
               style={StyleSheet.flatten([
                 estilos.barraNueva,
-                { backgroundColor: tonos.naranja.fondo, borderColor: tonos.naranja.borde },
+                // Fondo de superficie, borde naranja: sobre el naranja, en oscuro, el botón
+                // morado quedaba a 4,22:1 (`contraste:check`).
+                {
+                  backgroundColor: estilos.fondoDeSuperficie.backgroundColor,
+                  borderColor: tonos.naranja.solido,
+                },
               ])}
               testID="disponibilidad-nuevas"
             >
@@ -156,7 +169,8 @@ export function AvailabilityScreen() {
                     {t('availability.weekly')}
                   </AppText>
                 </Row>
-                {ancha ? (
+                <View onLayout={(evento) => setAnchoDeLaTabla(evento.nativeEvent.layout.width)} />
+                {ancha && caben ? (
                   <TablaSemanal
                     personas={personas.map((p) => ({ id: p.id, nombre: p.displayName }))}
                     filas={semanales}
@@ -276,8 +290,6 @@ function TablaSemanal({
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
-  const [ancho, setAncho] = useState(0);
-  const anchoDeDia = Math.max(120, Math.floor((ancho - 180) / 7));
   if (personas.length === 0) {
     return (
       <AppText variant="help" tone="subtle">
@@ -286,11 +298,8 @@ function TablaSemanal({
     );
   }
   return (
-    <ScrollView
-      horizontal
-      onLayout={(evento) => setAncho(evento.nativeEvent.layout.width)}
-      testID="disponibilidad-tabla"
-    >
+    /* Las siete columnas se reparten el ancho: nada se arrastra ni se queda fuera. */
+    <View testID="disponibilidad-tabla">
       <View>
         <Row gap={0}>
           <View style={[estilos.cabecera, estilos.columnaDeNombre]}>
@@ -299,7 +308,7 @@ function TablaSemanal({
             </AppText>
           </View>
           {DIAS.map((dia) => (
-            <View key={dia} style={[estilos.cabecera, { width: anchoDeDia }]}>
+            <View key={dia} style={[estilos.cabecera, estilos.columnaDeDia]}>
               <AppText variant="label" tone="subtle">
                 {nombreDelDiaDeSemana(dia, language)}
               </AppText>
@@ -326,7 +335,7 @@ function TablaSemanal({
                 (fila) => fila.employee_id === persona.id && fila.weekday === dia,
               );
               return (
-                <View key={dia} style={[estilos.celda, { width: anchoDeDia }]}>
+                <View key={dia} style={[estilos.celda, estilos.columnaDeDia]}>
                   <Stack gap={spacing.xs}>
                     {delDia.map((fila) => (
                       <ChipDeDisponibilidad
@@ -355,7 +364,7 @@ function TablaSemanal({
           </Row>
         ))}
       </View>
-    </ScrollView>
+    </View>
   );
 }
 
@@ -478,9 +487,10 @@ function FilaPuntual({
 
 const useEstilos = estilosDelTema((colors) => ({
   crece: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  fondoDeSuperficie: { backgroundColor: colors.surface },
   barraNueva: {
     borderRadius: radii.card,
-    borderWidth: borderWidth.hairline,
+    borderWidth: borderWidth.focus,
     paddingVertical: spacing.xs,
     paddingLeft: spacing.base,
     paddingRight: spacing.xs,
@@ -493,7 +503,8 @@ const useEstilos = estilosDelTema((colors) => ({
     borderBottomWidth: borderWidth.hairline,
     borderBottomColor: colors.border,
   },
-  columnaDeNombre: { width: 180 },
+  columnaDeNombre: { width: 160, flexShrink: 0 },
+  columnaDeDia: { flexGrow: 1, flexShrink: 1, flexBasis: 0, minWidth: 0 },
   celda: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.xs,

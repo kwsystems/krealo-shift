@@ -215,10 +215,7 @@ try {
         `lo agregado desde el celular no sale como enviado: «${despues.replace(/\s+/g, ' ').slice(0, 160)}»`,
       );
     }
-    const enSuSemana = await cuenta(
-      pagina,
-      '[data-testid$="-disponibilidad"][data-testid^="mi-horario-dia-"]',
-    );
+    const enSuSemana = await cuenta(pagina, '[data-testid^="mi-disponibilidad-del-dia-"]');
     if (enSuSemana === 0) problemas.push('su semana no enseña lo que dijo al lado de su día');
     const fuera = await desborde(pagina);
     if (fuera.length > 0) problemas.push(`en el celular se sale: ${fuera.join(', ')}`);
