@@ -7,6 +7,7 @@ import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
 import { EliminarEmpleadoSheet } from './eliminar-empleado-sheet';
 import { EliminarVariosSheet } from './eliminar-varios-sheet';
 import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from './employee-form';
+import { PestanasDeEquipo } from '@/features/availability/pestanas-de-equipo';
 import { useTeam, useTeamMutations, type TeamMember } from './hooks';
 import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
@@ -390,6 +391,8 @@ export function TeamScreen() {
               testID="team-add-employee"
             />
           </Row>
+          {/* En el teléfono, Personas | Disponibilidad: ver `pestanas-de-equipo.tsx`. */}
+          <PestanasDeEquipo activa="personas" />
 
           <AsyncSection
             isPending={scope.isLoading}

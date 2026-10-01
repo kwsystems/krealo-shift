@@ -73,6 +73,7 @@ import { useLiveClock } from '@/hooks/use-live-clock';
 import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
+import { useDisponibilidad } from '@/features/availability/api';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing } from '@/theme/tokens';
@@ -108,6 +109,8 @@ export function ScheduleScreen({
   const estilos = useEstilosDeHorario();
   const scope = useManagerScope();
   const { isWide, density } = useResponsive();
+  /* Lo que cada persona dijo de sus días: sale en la rejilla y avisa si un turno choca. */
+  const disponibilidad = useDisponibilidad(scope.organization?.id ?? null);
   const now = useLiveClock('minute');
   const language = currentLanguage();
 
@@ -794,6 +797,7 @@ export function ScheduleScreen({
                     onAddShift={openCreate}
                     onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
+                    disponibilidad={disponibilidad.data ?? []}
                   />
                 ) : view === 'week' ? (
                   <DayList
@@ -812,6 +816,7 @@ export function ScheduleScreen({
                     onAddShift={({ dateKey }) => openCreate({ dateKey })}
                     onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
+                    disponibilidad={disponibilidad.data ?? []}
                   />
                 ) : (
                   <Stack gap={spacing.base}>
@@ -842,6 +847,7 @@ export function ScheduleScreen({
                       onAddShift={({ dateKey }) => openCreate({ dateKey })}
                       onSelectRestDay={setRemovingRestDay}
                       readOnly={readOnly}
+                      disponibilidad={disponibilidad.data ?? []}
                     />
                   </Stack>
                 )}

@@ -47,6 +47,10 @@ import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 import { HorasQueDebes } from './horas-que-debes';
+import { MiDisponibilidad } from './mi-disponibilidad';
+import { ChipDeDisponibilidad } from '@/components/availability/chip-de-disponibilidad';
+import { useMiDisponibilidad } from '@/features/availability/api';
+import { disponibilidadDelDia, type Disponibilidad } from '@/features/availability/disponibilidad';
 
 /**
  * LA VISTA DEL VENDEDOR, en su celular (30-sep).
@@ -163,6 +167,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   });
 
   const hoy = dateKeyOf(nowISO, tz);
+  const miDisponibilidad = useMiDisponibilidad(base);
   const diasSemana = diasDelVendedor({
     dias: weekDays(semana === 'esta' ? inicio : addWeeks(inicio, 1)),
     turnos: turnosSemanas.data ?? [],
@@ -253,6 +258,18 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             language={language}
           />
 
+          {/*
+            MI DISPONIBILIDAD (1-oct): qué días no puede, qué horas prefiere o un
+            comentario. Antes de la semana, que es donde se piensa en ella.
+          */}
+          <MiDisponibilidad
+            organizationId={ficha.organizationId}
+            employeeId={ficha.employeeId}
+            hoy={hoy}
+            weekStartsOn={ficha.weekStartsOn}
+            language={language}
+          />
+
           {/* 2. LA SEMANA */}
           <Stack gap={spacing.sm}>
             <AppText variant="section">{t('portal.weekTitle')}</AppText>
@@ -279,6 +296,11 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                       hora={hora}
                       language={language}
                       zona={tz}
+                      loQueDije={disponibilidadDelDia(
+                        miDisponibilidad.data ?? [],
+                        ficha.employeeId,
+                        dia.dia,
+                      )}
                     />
                   </View>
                 ))
@@ -364,6 +386,11 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                       hora={hora}
                       language={language}
                       zona={tz}
+                      loQueDije={disponibilidadDelDia(
+                        miDisponibilidad.data ?? [],
+                        ficha.employeeId,
+                        dia.dia,
+                      )}
                     />
                   </View>
                 ))}
@@ -494,12 +521,15 @@ function FilaDelDia({
   hora,
   language,
   zona,
+  loQueDije = [],
 }: {
   dia: DiaDelVendedor;
   esHoy: boolean;
   hora: (instante: string) => string;
   language: SupportedLanguage;
   zona: string;
+  /** Lo que dijo de ese día en «Mi disponibilidad» (1-oct): se ve al lado de su turno. */
+  loQueDije?: readonly Disponibilidad[];
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -550,6 +580,14 @@ function FilaDelDia({
         <AppText variant="bodyStrong" tabular tone={dia.turnos.length === 0 ? 'subtle' : 'default'}>
           {rotuloDelTurno}
         </AppText>
+        {loQueDije.map((fila) => (
+          <ChipDeDisponibilidad
+            key={fila.id}
+            fila={fila}
+            primera
+            testID={`mi-horario-dia-${dia.dia}-disponibilidad`}
+          />
+        ))}
         {marcas.map((marca, i) => (
           <AppText key={i} variant="help" tone="muted" tabular>
             {marca}

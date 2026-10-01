@@ -10,6 +10,7 @@ import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
+import { useTonos, type Tono } from '@/theme/tonos';
 import { useTheme } from '@/theme/use-theme';
 import { localTimeOf } from '@/features/schedules/week';
 import { formatShiftRange, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
@@ -74,6 +75,8 @@ export function ShiftCard({
   enCurso = null,
   ventana = null,
   enFila = false,
+  avisoDeDisponibilidad = null,
+  tonoDelPuesto = null,
   onPress,
   testID,
 }: {
@@ -90,11 +93,20 @@ export function ShiftCard({
   ventana?: VentanaDelDia | null;
   /** La hora a la izquierda y la persona a la derecha: la lista por días del teléfono. */
   enFila?: boolean;
+  /** «Dijo que no puede»: el turno choca con su disponibilidad (1-oct). */
+  avisoDeDisponibilidad?: string | null;
+  /**
+   * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
+   * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
+   */
+  tonoDelPuesto?: Tono | null;
   onPress?: (shift: ShiftRow) => void;
   testID?: string;
 }) {
   const { colors } = useTheme();
   const styles = useEstilos();
+  const tonos = useTonos();
+  const tono = tonoDelPuesto === null ? null : tonos[tonoDelPuesto];
   const respuesta = useRespuestaAlPuntero();
   const { t } = useTranslation();
 
@@ -122,6 +134,7 @@ export function ShiftCard({
     estadoAhora,
     minutesToHHmm(netMinutes),
     statusLabel,
+    avisoDeDisponibilidad,
     ...warnings.map((warning) =>
       warning.kind === 'overlap' ? t('schedule.overlapShort') : t('schedule.shortRestShort'),
     ),
@@ -174,6 +187,8 @@ export function ShiftCard({
         enCurso === 'descanso' || enCurso === 'almorzando' ? styles.enDescanso : null,
         shift.status === 'cancelled' ? styles.cancelled : null,
         warnings.length > 0 ? styles.warned : null,
+        avisoDeDisponibilidad === null ? null : styles.choca,
+        tono === null ? null : { borderLeftWidth: 4, borderLeftColor: tono.solido },
       ]}
     >
       {/*
@@ -292,12 +307,28 @@ export function ShiftCard({
         </Row>
       ) : null}
 
+      {avisoDeDisponibilidad === null ? null : (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-choca`}
+        >
+          <Ionicons name="close-circle" size={14} color={colors.danger600} />
+          <AppText variant="label" tone="danger">
+            {avisoDeDisponibilidad}
+          </AppText>
+        </Row>
+      )}
+
       {ventana === null ? null : (
         <FranjaDelDia
           ventana={ventana}
           desde={minutoDelDia(shift.starts_at, timezone)}
           hasta={minutoDelDia(shift.ends_at, timezone)}
           tenue={shift.status !== 'published'}
+          color={
+            tono === null ? undefined : shift.status === 'published' ? tono.solido : tono.borde
+          }
         />
       )}
     </View>
@@ -344,11 +375,14 @@ function FranjaDelDia({
   desde,
   hasta,
   tenue,
+  color,
 }: {
   ventana: VentanaDelDia;
   desde: number;
   hasta: number;
   tenue: boolean;
+  /** El del puesto, si lo tiene; si no, el acento de la app. */
+  color?: string;
 }) {
   const styles = useEstilos();
   const total = Math.max(1, ventana.hasta - ventana.desde);
@@ -366,6 +400,7 @@ function FranjaDelDia({
         style={[
           styles.tramo,
           tenue ? styles.tramoTenue : null,
+          color === undefined ? null : { backgroundColor: color },
           { left: `${izquierda}%`, width: `${ancho}%` },
         ]}
       />
@@ -523,6 +558,8 @@ const useEstilos = estilosDelTema((colors) => ({
   enDescanso: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
   cancelled: { opacity: 0.55, borderStyle: 'dashed' },
   warned: { borderColor: colors.warning600, borderWidth: borderWidth.focus },
+  /* Choca con lo que dijo la persona: el filo en rojo, y la frase dice por qué. */
+  choca: { borderColor: colors.danger600, borderWidth: borderWidth.focus },
   pressed: { opacity: 0.7 },
   /*
    * UN HUECO TIENE QUE VERSE COMO UN HUECO, y antes medía y pesaba igual que un turno:

@@ -77,6 +77,7 @@ const ANCHOS = [
 const RUTAS = [
   ['inicio', '/'],
   ['equipo', '/team'],
+  ['disponibilidad', '/availability'],
   ['horario', '/schedule'],
   ['horas', '/hours'],
   ['reportes', '/reports'],

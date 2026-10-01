@@ -3,6 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
+import { MenuLateral, type PropsDelMenu } from '@/components/layout/menu-lateral';
 import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
 import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
@@ -124,6 +125,15 @@ function PanelConMarca() {
       */}
       <BarraDeAlcance />
       <Tabs
+        /*
+          EN PANTALLA ANCHA, EL MENÚ ES NUESTRO (1-oct): con subapartados dentro de Equipo y
+          un color por sección. Ver `menu-lateral.tsx`. En el teléfono sigue la barra de abajo.
+        */
+        tabBar={
+          useSidebar
+            ? (props) => <MenuLateral {...(props as unknown as PropsDelMenu)} />
+            : undefined
+        }
         screenOptions={{
           headerShown: false,
           /*
@@ -253,6 +263,20 @@ function PanelConMarca() {
             tabBarIcon: ({ color }) => (
               <Ionicons name="people-outline" size={sizes.iconMobile} color={color} />
             ),
+          }}
+        />
+        {/*
+          DISPONIBILIDAD, DENTRO DE EQUIPO (1-oct): en el menú lateral sale debajo de Equipo;
+          en el teléfono no tiene pestaña propia —ya hay siete— y se llega desde Equipo.
+        */}
+        <Tabs.Screen
+          name="availability"
+          options={{
+            title: t('admin.tabAvailability'),
+            tabBarIcon: ({ color }) => (
+              <Ionicons name="calendar-clear-outline" size={sizes.iconMobile} color={color} />
+            ),
+            ...(useSidebar ? null : { href: null }),
           }}
         />
         <Tabs.Screen

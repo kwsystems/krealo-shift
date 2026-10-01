@@ -2,7 +2,20 @@ import { useState } from 'react';
 import { Platform, ScrollView, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { EmptyShiftSlot, RestDayChip, ShiftCard, ventanaDeLosTurnos } from './shift-card';
+import {
+  EmptyShiftSlot,
+  minutoDelDia,
+  RestDayChip,
+  ShiftCard,
+  ventanaDeLosTurnos,
+} from './shift-card';
+import { ChipDeDisponibilidad } from '@/components/availability/chip-de-disponibilidad';
+import { tonoDelPuesto } from '@/theme/tonos';
+import {
+  chocaConElTurno,
+  disponibilidadDelDia,
+  type Disponibilidad,
+} from '@/features/availability/disponibilidad';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
@@ -114,7 +127,30 @@ export type GridProps = {
   onAddShift: (params: { employeeId: string; dateKey: DateKey }) => void;
   onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
+  /** Lo que cada persona dijo de sus días (1-oct): sale en su celda y avisa en su turno. */
+  disponibilidad?: readonly Disponibilidad[];
 };
+
+/**
+ * ¿Este turno choca con lo que la persona dijo de ese día? Devuelve el texto del aviso o
+ * `null`. Lo usan la rejilla y la lista por días.
+ */
+function avisoDeDisponibilidad(
+  filas: readonly Disponibilidad[],
+  shift: DatedShift,
+  timezone: string,
+  texto: string,
+): string | null {
+  const turno = {
+    desde: minutoDelDia(shift.starts_at, timezone),
+    hasta: minutoDelDia(shift.ends_at, timezone),
+  };
+  return disponibilidadDelDia(filas, shift.employee_id, shift.dateKey).some((fila) =>
+    chocaConElTurno(fila, turno),
+  )
+    ? texto
+    : null;
+}
 
 export function WeekGrid({
   days,
@@ -130,6 +166,7 @@ export function WeekGrid({
   onAddShift,
   onSelectRestDay,
   readOnly = false,
+  disponibilidad = [],
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -225,9 +262,22 @@ export function WeekGrid({
             {days.map((day) => {
               const dayShifts = row.shifts.filter((shift) => shift.dateKey === day);
               const descanso = row.restDays.find((libre) => libre.dateKey === day);
+              const loQueDijo = disponibilidadDelDia(disponibilidad, row.employeeId, day);
               return (
                 <View key={`${row.employeeId}-${day}`} style={[styles.cell, { width: anchoDeDia }]}>
                   <Stack gap={spacing.xs}>
+                    {/*
+                      LO QUE DIJO DE ESE DÍA, arriba de todo (1-oct): «no puede», «prefiere
+                      14:00–22:00» o un comentario. Se ve al poner el turno, que es cuando
+                      sirve. El comentario entero está en Equipo → Disponibilidad.
+                    */}
+                    {loQueDijo.map((fila) => (
+                      <ChipDeDisponibilidad
+                        key={fila.id}
+                        fila={fila}
+                        testID={`grid-disponibilidad-${row.employeeId}-${day}`}
+                      />
+                    ))}
                     {descanso === undefined ? null : (
                       <RestDayChip
                         label={t('schedule.restDay')}
@@ -253,6 +303,13 @@ export function WeekGrid({
                         warnings={warningsFor(shift.id)}
                         enCurso={enCursoFor?.(shift) ?? null}
                         ventana={ventana}
+                        tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
+                        avisoDeDisponibilidad={avisoDeDisponibilidad(
+                          disponibilidad,
+                          shift,
+                          timezone,
+                          t('availability.conflict'),
+                        )}
                         onPress={readOnly ? undefined : onSelectShift}
                         testID={`shift-${shift.id}`}
                       />
@@ -302,6 +359,7 @@ export type DayListProps = {
   onAddShift: (params: { dateKey: DateKey }) => void;
   onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
+  disponibilidad?: readonly Disponibilidad[];
 };
 
 export function DayList({
@@ -320,6 +378,7 @@ export function DayList({
   onAddShift,
   onSelectRestDay,
   readOnly = false,
+  disponibilidad = [],
 }: DayListProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -344,6 +403,26 @@ export function DayList({
               </AppText>
             </Row>
 
+            {/* Lo que dijo cada persona de ese día, con su nombre: aquí no hay fila de persona. */}
+            {(() => {
+              const personas = [...new Set(disponibilidad.map((fila) => fila.employee_id))];
+              const delDia = personas.flatMap((persona) =>
+                disponibilidadDelDia(disponibilidad, persona, day),
+              );
+              return delDia.length === 0 ? null : (
+                <Row gap={spacing.xs} wrap>
+                  {delDia.map((fila) => (
+                    <ChipDeDisponibilidad
+                      key={fila.id}
+                      fila={fila}
+                      nombre={employeeNames.get(fila.employee_id) ?? ''}
+                      testID={`dia-disponibilidad-${fila.employee_id}-${day}`}
+                    />
+                  ))}
+                </Row>
+              );
+            })()}
+
             {dayShifts.length === 0 && descansos.length === 0 ? (
               <AppText variant="help" tone="subtle">
                 {t('schedule.noShiftsThatDay')}
@@ -356,6 +435,13 @@ export function DayList({
                     shift={shift}
                     enFila
                     ventana={ventana}
+                    tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
+                    avisoDeDisponibilidad={avisoDeDisponibilidad(
+                      disponibilidad,
+                      shift,
+                      timezone,
+                      t('availability.conflict'),
+                    )}
                     showEmployeeName
                     employeeName={employeeNames.get(shift.employee_id) ?? ''}
                     jobRoleName={

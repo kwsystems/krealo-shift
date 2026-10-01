@@ -341,6 +341,8 @@ export const MARCADORES = {
    */
   '/': { testid: 'manager-home' },
   '/team': 'Agregar empleado',
+  /* Equipo → Disponibilidad (1-oct): la leyenda de colores está siempre. */
+  '/availability': { testid: 'disponibilidad-leyenda' },
   /*
    * HORARIO Y HORAS SE IDENTIFICAN POR `testID`, no por el texto de un botón, y la razón
    * la enseñó un fallo real: el marcador de Horas era «Ir a esta semana», y el día que

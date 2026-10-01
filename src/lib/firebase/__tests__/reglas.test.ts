@@ -652,6 +652,49 @@ describe('reglas de Firestore', () => {
       await assertFails(setDoc(doc(admin, 'owed_hours', 'debe-ajena'), { minutes: 0 }));
     });
 
+    /*
+     * SU DISPONIBILIDAD (1-oct): la ve la persona —la suya— y el personal. Nadie la escribe
+     * desde la app: va por `saveAvailability`, que valida lo mismo venga de donde venga.
+     */
+    it('ve su disponibilidad, no la de otra persona, y no puede escribirla', async () => {
+      const disponible = (id: string, empleado: string) =>
+        escribir(`availability/${id}`, {
+          id,
+          organization_id: ORG,
+          employee_id: empleado,
+          kind: 'weekly',
+          weekday: 2,
+          type: 'unavailable',
+          status: 'new',
+        });
+      await disponible('disp-mia', 'emp-yo');
+      await disponible('disp-ajena', 'emp-otra');
+
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      const mias = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'availability'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+          ),
+        ),
+      );
+      expect(mias.docs.map((d) => d.id)).toEqual(['disp-mia']);
+      await assertFails(getDoc(doc(db, 'availability', 'disp-ajena')));
+      await assertFails(
+        getDocs(query(collection(db, 'availability'), where('organization_id', '==', ORG))),
+      );
+      await assertFails(setDoc(doc(db, 'availability', 'disp-mia'), { type: 'note' }));
+
+      const admin = entorno.authenticatedContext(UID).firestore();
+      const todas = await assertSucceeds(
+        getDocs(query(collection(admin, 'availability'), where('organization_id', '==', ORG))),
+      );
+      expect(todas.size).toBe(2);
+      await assertFails(setDoc(doc(admin, 'availability', 'disp-ajena'), { type: 'note' }));
+    });
+
     it('quien administra sigue viéndolo todo', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
       await assertSucceeds(getDoc(doc(db, 'shifts', 'turno-ajeno')));

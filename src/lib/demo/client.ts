@@ -1182,6 +1182,65 @@ function crearRpc(almacen: Almacen) {
         return sinError({ minutos });
       }
 
+      /*
+       * LA DISPONIBILIDAD EN LA DEMOSTRACIÓN (1-oct), con las reglas de
+       * `functions/src/disponibilidad.ts`: desde el celular es la del vendedor y llega
+       * nueva; desde el panel, ya vista.
+       */
+      case 'save_availability': {
+        const id =
+          typeof argumentos.p_id === 'string' && argumentos.p_id !== '' ? argumentos.p_id : null;
+        const previa = id === null ? undefined : filas('availability').find((f) => f.id === id);
+        const delVendedor = filas('organization_memberships').find(
+          (f) => f.user_id === DEMO_VENDEDOR_USER_ID,
+        )?.employee_id;
+        const desdeElCelular =
+          argumentos.p_employee_id === null || argumentos.p_employee_id === undefined;
+        const employeeId =
+          previa?.employee_id ?? (desdeElCelular ? delVendedor : argumentos.p_employee_id);
+        const conHoras = typeof argumentos.p_from === 'string' && argumentos.p_from !== '';
+        const fila = {
+          id: id ?? `demo-disp-${Date.now().toString(36)}`,
+          organization_id: DEMO_ORG_ID,
+          employee_id: employeeId,
+          kind: argumentos.p_kind,
+          weekday: argumentos.p_kind === 'weekly' ? Number(argumentos.p_weekday) : null,
+          date: argumentos.p_kind === 'date' ? argumentos.p_date : null,
+          type: argumentos.p_type,
+          from_time: conHoras ? argumentos.p_from : null,
+          to_time: conHoras ? argumentos.p_to : null,
+          note:
+            typeof argumentos.p_note === 'string' && argumentos.p_note !== ''
+              ? argumentos.p_note
+              : null,
+          status: desdeElCelular ? 'new' : 'seen',
+          source: desdeElCelular ? 'employee' : 'manager',
+          updated_at: new Date().toISOString(),
+        };
+        almacen.set('availability', [
+          ...filas('availability').filter((f) => f.id !== fila.id),
+          fila,
+        ]);
+        return sinError({ id: fila.id });
+      }
+
+      case 'delete_availability': {
+        almacen.set(
+          'availability',
+          filas('availability').filter((f) => f.id !== argumentos.p_id),
+        );
+        return sinError({ id: argumentos.p_id });
+      }
+
+      case 'mark_availability_seen': {
+        const ids = new Set(Array.isArray(argumentos.p_ids) ? argumentos.p_ids : []);
+        almacen.set(
+          'availability',
+          filas('availability').map((f) => (ids.has(f.id) ? { ...f, status: 'seen' } : f)),
+        );
+        return sinError({ vistas: ids.size });
+      }
+
       case 'settle_owed_hours': {
         const id = String(argumentos.p_owed_id ?? '');
         const estado = String(argumentos.p_status ?? 'pending');

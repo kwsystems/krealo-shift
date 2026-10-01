@@ -63,6 +63,7 @@ export const TABLES = {
    * «Por resolver» en Horas y la persona las ve en su celular. Solo lectura desde la app.
    */
   owedHours: 'owed_hours',
+  availability: 'availability',
   announcements: 'announcements',
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
@@ -223,6 +224,10 @@ export const RPC = {
   applyPlannedBreak: 'apply_planned_break',
   /** Las horas que debía, compensadas o perdonadas. */
   settleOwedHours: 'settle_owed_hours',
+  /** La disponibilidad de cada persona: ver `functions/src/disponibilidad.ts`. */
+  saveAvailability: 'save_availability',
+  deleteAvailability: 'delete_availability',
+  markAvailabilitySeen: 'mark_availability_seen',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */

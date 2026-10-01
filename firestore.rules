@@ -335,6 +335,16 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // La disponibilidad de cada persona (1-oct): la ve ella misma y el personal de la
+    // empresa —sale en Equipo y en el Horario de todas las sedes donde trabaja—. Se escribe
+    // solo desde el servidor, que valida lo mismo venga de su celular o de quien gestiona:
+    // ver functions/src/disponibilidad.ts.
+    match /availability/{availabilityId} {
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
+      allow write: if false;
+    }
+
     match /break_intervals/{intervalId} {
       allow read: if isStaff(resource.data.organization_id)
         || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);

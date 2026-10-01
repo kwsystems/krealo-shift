@@ -72,6 +72,7 @@ export const COLLECTIONS = {
   timeEditRequests: 'time_edit_requests',
   /** Las horas que alguien debe a la tienda (1-oct): ver `functions/src/casos.ts`. */
   owedHours: 'owed_hours',
+  availability: 'availability',
   announcements: 'announcements',
   pushTokens: 'push_tokens',
   notificationPreferences: 'notification_preferences',

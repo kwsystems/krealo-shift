@@ -949,6 +949,57 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   almacen.set('audit_logs', []);
   almacen.set('break_intervals', intervalos);
   /*
+   * LA DISPONIBILIDAD DE LA DEMOSTRACIÓN (1-oct): una de cada clase, para que Equipo →
+   * Disponibilidad, el Horario y el celular enseñen algo sin tener que escribirlo antes.
+   * Dos nuevas —sin ver— para que se vea el contador.
+   */
+  const disponibilidad = (n: number, extra: Record<string, unknown>): Record<string, unknown> => ({
+    id: `demo-disp-${n}`,
+    organization_id: DEMO_ORG_ID,
+    kind: 'weekly',
+    weekday: null,
+    date: null,
+    from_time: null,
+    to_time: null,
+    note: null,
+    status: 'seen',
+    source: 'employee',
+    updated_at: aISO(sumarDias(hoy, -3)),
+    ...extra,
+  });
+  almacen.set('availability', [
+    disponibilidad(1, {
+      employee_id: empleadoId(2),
+      weekday: 2,
+      type: 'unavailable',
+      note: 'Estudio en la universidad',
+      status: 'new',
+    }),
+    disponibilidad(2, {
+      employee_id: empleadoId(3),
+      weekday: 6,
+      type: 'preferred',
+      from_time: '14:00',
+      to_time: '22:00',
+    }),
+    disponibilidad(3, {
+      employee_id: empleadoId(5),
+      kind: 'date',
+      date: fechaClave(sumarDias(hoy, 5)),
+      type: 'unavailable',
+      from_time: '09:00',
+      to_time: '13:00',
+      note: 'Cita médica',
+      status: 'new',
+    }),
+    disponibilidad(4, {
+      employee_id: empleadoId(1),
+      weekday: 5,
+      type: 'note',
+      note: 'Los viernes salgo a las 18:00 por clases',
+    }),
+  ]);
+  /*
    * UNAS HORAS QUE YA SE DEBEN (1-oct), de antes de lo sembrado: las de la persona del
    * celular de la demostración, para que su vista enseñe «Horas que debes» sin tener que
    * resolver nada antes, y la ficha de Equipo tenga una pendiente que saldar.

@@ -98,6 +98,8 @@ const PANTALLAS = [
   ['acceso', '/', 'Para administradores y gerentes'],
   ['inicio', '/', 'Para que lo sepas'],
   ['equipo', '/team', 'Agregar empleado'],
+  // Equipo → Disponibilidad (1-oct): la tabla de la semana y los días puntuales.
+  ['disponibilidad', '/availability', 'Días puntuales'],
   ['horario', '/schedule', 'Copiar semana anterior'],
   /*
    * Horas se reconocía por «Ir a esta semana», y ese botón pasó a salir SOLO cuando no
@@ -134,6 +136,12 @@ const HOJAS = [
   ['horario', '/schedule', '[data-testid^="shift-"]', 'shift-form-sheet'],
   ['horario', '/schedule', '[data-testid="schedule-copy-week"]', 'copy-week-sheet'],
   ['equipo', '/team', '[data-testid="team-add-employee"]', 'employee-form-sheet'],
+  [
+    'disponibilidad',
+    '/availability',
+    '[data-testid="disponibilidad-agregar"]',
+    'disponibilidad-hoja',
+  ],
   ['reportes', '/reports', '[data-testid="report-share-open"]', 'report-share-sheet'],
   /*
    * El selector de alcance entró aquí tarde y por un motivo que vale la pena dejar escrito:
