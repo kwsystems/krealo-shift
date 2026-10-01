@@ -16,6 +16,7 @@ import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
 import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useWorkSessions } from '@/features/timesheets/hooks';
+import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { acknowledgeUnusualClock } from '@/features/timesheets/api';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
 import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
@@ -279,6 +280,16 @@ export function ScheduleScreen({
    * decir «visto». Ver `marcas-raras.ts`.
    */
   const queryClient = useQueryClient();
+  /*
+   * Y LA SEMANA SE VUELVE A MEDIR AL MIRARLA, como en Horas, Reportes e Inicio: una
+   * jornada guardada antes de que existieran estas marcas —o con un turno que cambió sin
+   * publicarse por esta sede— se pone al día aquí, sin tener que abrir Horas primero.
+   */
+  useJornadasAlDia({
+    locationId: position === 'future' ? null : scope.locationId,
+    from: weekStart,
+    to: weekEnd(weekStart),
+  });
   const horasExtra = useHorasExtra({
     organizationId: scope.organization?.id ?? null,
     locationId: position === 'future' ? null : scope.locationId,
