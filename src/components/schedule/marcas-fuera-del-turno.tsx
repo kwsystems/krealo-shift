@@ -27,6 +27,10 @@ import { useTheme } from '@/theme/use-theme';
  *
  * Ámbar y no rojo: no es un error de nadie —marcar temprano no está prohibido—, es algo
  * que quien gestiona tiene que mirar. Con icono y palabras, nunca solo color (§21).
+ *
+ * EL ÁMBAR VA EN EL BORDE Y EL ICONO, NO DE FONDO. Con fondo ámbar, los botones de texto
+ * —«Ver en Horas», «Visto»— quedaban en tema oscuro a 4,36:1 y hace falta 4,5 (lo midió
+ * `contraste:check`). Sobre la superficie se leen en los dos temas.
  */
 
 export type FilaFueraDelTurno = {
@@ -151,15 +155,15 @@ const VISIBLES_PLEGADO = 3;
 
 const useEstilos = estilosDelTema((colors) => ({
   caja: {
-    backgroundColor: colors.warning50,
+    backgroundColor: colors.surface,
     borderRadius: radii.card,
-    borderWidth: borderWidth.hairline,
-    borderColor: colors.warning100,
+    borderWidth: borderWidth.focus,
+    borderColor: colors.warning600,
     padding: spacing.base,
   },
   crece: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   fila: { paddingVertical: spacing.md, gap: spacing.sm },
   /* En pantalla ancha, lo que pasó a la izquierda y qué hacer con ello a la derecha. */
   filaAncha: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
-  conRegla: { borderTopWidth: borderWidth.hairline, borderTopColor: colors.warning100 },
+  conRegla: { borderTopWidth: borderWidth.hairline, borderTopColor: colors.border },
 }));
