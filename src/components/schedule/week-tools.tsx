@@ -9,12 +9,15 @@ import { Card, Row, Stack } from '@/components/ui/layout';
 import type { ShiftPublication } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import {
+  addDaysToKey,
   formatDateKeyLong,
+  formatDateKeyShort,
   formatDayLong,
   formatMonthLong,
   type DateKey,
 } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
+import { useResponsive } from '@/hooks/use-responsive';
 import { useTheme } from '@/theme/use-theme';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, sizes, spacing } from '@/theme/tokens';
@@ -30,6 +33,7 @@ export function WeekNavigator({
   onNext,
   onGoToCurrent,
   testIDPrefix = 'week',
+  corto = false,
 }: {
   weekStart: DateKey;
   language: SupportedLanguage;
@@ -39,9 +43,16 @@ export function WeekNavigator({
   onGoToCurrent: () => void;
   /** Para cuando hay dos en pantalla: la ficha de Equipo lleva el suyo. */
   testIDPrefix?: string;
+  /**
+   * «28 sep – 4 oct» en vez de «Semana del 28 de septiembre de 2026» (1-oct): en un
+   * teléfono el título largo ocupaba dos líneas entre las flechas.
+   */
+  corto?: boolean;
 }) {
   const { t } = useTranslation();
-  const weekLabel = t('schedule.weekOf', { date: formatDateKeyLong(weekStart, language) });
+  const weekLabel = corto
+    ? `${formatDateKeyShort(weekStart, language)} – ${formatDateKeyShort(addDaysToKey(weekStart, 6), language)}`
+    : t('schedule.weekOf', { date: formatDateKeyLong(weekStart, language) });
 
   /*
    * UN SOLO CONTROL, y antes eran cuatro cosas en dos filas: el título de la semana en
@@ -341,6 +352,13 @@ export function WeeklyHoursSummary({
   totalMinutes: number;
 }) {
   const { t } = useTranslation();
+  /*
+   * EN COLUMNAS EN PANTALLA ANCHA (1-oct): ocho barras a todo el ancho de un monitor eran
+   * 400 px para dos datos por persona. Mismo ancho de columna para todas, para que las
+   * barras se puedan comparar de un vistazo.
+   */
+  const { density } = useResponsive();
+  const columnas = density === 'extraWide' ? 3 : density === 'wide' ? 2 : 1;
 
   return (
     <Card>
@@ -352,22 +370,26 @@ export function WeeklyHoursSummary({
           {t('schedule.noShiftsThisWeek')}
         </AppText>
       ) : (
-        <Stack gap={spacing.md}>
+        <View style={styles.columnas}>
           {totals.map((total) => (
-            <LimitBar
+            <View
               key={total.employeeId}
-              label={total.name}
-              value={total.minutes}
-              limit={weeklyLimitMinutes}
-              valueLabel={
-                weeklyLimitMinutes > 0
-                  ? `${minutesToHHmm(total.minutes)} / ${minutesToHHmm(weeklyLimitMinutes)}`
-                  : minutesToHHmm(total.minutes)
-              }
-              testID={`weekly-total-${total.employeeId}`}
-            />
+              style={[columnas > 1 ? styles.columna : null, { width: `${100 / columnas}%` }]}
+            >
+              <LimitBar
+                label={total.name}
+                value={total.minutes}
+                limit={weeklyLimitMinutes}
+                valueLabel={
+                  weeklyLimitMinutes > 0
+                    ? `${minutesToHHmm(total.minutes)} / ${minutesToHHmm(weeklyLimitMinutes)}`
+                    : minutesToHHmm(total.minutes)
+                }
+                testID={`weekly-total-${total.employeeId}`}
+              />
+            </View>
           ))}
-        </Stack>
+        </View>
       )}
     </Card>
   );
@@ -416,4 +438,7 @@ export function PublicationHistory({
 
 const styles = StyleSheet.create({
   history: { gap: spacing.sm },
+  /* El hueco va dentro de cada columna y no en `gap`: así los porcentajes suman 100. */
+  columnas: { flexDirection: 'row', flexWrap: 'wrap', rowGap: spacing.md },
+  columna: { paddingRight: spacing.xl },
 });

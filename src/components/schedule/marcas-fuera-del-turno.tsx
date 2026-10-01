@@ -71,75 +71,125 @@ export function MarcasFueraDelTurno({
    * empujaría fuera de la pantalla. Se ven las tres primeras y el botón dice cuántas más.
    */
   const [todas, setTodas] = useState(false);
+  /*
+   * EMPIEZA PLEGADO, EN UNA LÍNEA (1-oct). «Se ve muy grande», dijo Andree del Horario: este
+   * aviso eran 320 px encima de la rejilla en un monitor, y 800 en un teléfono, antes del
+   * primer turno. Plegado sigue avisando —el ámbar, cuántas son y de quién— y «Revisar»
+   * abre las marcas con sus tres salidas. Lo que se va es el sitio, no el aviso.
+   */
+  const [abierto, setAbierto] = useState(false);
+  const desplegado = abierto;
   if (filas.length === 0) return null;
   const visibles = todas ? filas : filas.slice(0, VISIBLES_PLEGADO);
+  /* «Ana · lun 28, Diego · mar 29, Ele · mié 30 y 1 más»: de quién son, sin abrirlas. */
+  const resumen = [
+    filas
+      .slice(0, VISIBLES_PLEGADO)
+      .map((fila) => `${fila.nombre} · ${fila.dia}`)
+      .join(', '),
+    filas.length > VISIBLES_PLEGADO
+      ? t('schedule.unusual.summaryMore', { count: filas.length - VISIBLES_PLEGADO })
+      : null,
+  ]
+    .filter((parte): parte is string => parte !== null)
+    .join(' ');
   const ocultas = filas.length - visibles.length;
 
   return (
     <View style={estilos.caja} testID="marcas-fuera-del-turno">
-      <Stack gap={spacing.md}>
-        <Row gap={spacing.sm} align="center">
+      <Stack gap={spacing.xs}>
+        {/*
+          EL TÍTULO Y SU EXPLICACIÓN EN UNA LÍNEA cuando caben (1-oct): eran dos filas de
+          cabecera para un aviso que vive encima de la rejilla.
+        */}
+        <Row gap={spacing.sm} align="center" wrap>
           <Ionicons name="alarm-outline" size={20} color={colors.warning600} />
-          <AppText variant="bodyStrong" accessibilityRole="header" style={estilos.crece}>
+          <AppText variant="bodyStrong" accessibilityRole="header">
             {t('schedule.unusual.title', { count: filas.length })}
           </AppText>
-        </Row>
-        <AppText variant="help" tone="muted">
-          {t('schedule.unusual.body')}
-        </AppText>
-
-        <Stack gap={0}>
-          {visibles.map((fila, indice) => (
-            <View
-              key={fila.id}
-              style={[
-                estilos.fila,
-                isWide ? estilos.filaAncha : null,
-                indice > 0 ? estilos.conRegla : null,
-              ]}
-              testID={`marca-rara-${fila.id}`}
+          {desplegado ? (
+            <AppText variant="help" tone="muted" style={estilos.crece}>
+              {t('schedule.unusual.body')}
+            </AppText>
+          ) : density === 'compact' ? (
+            <View style={estilos.crece} />
+          ) : (
+            <AppText
+              variant="help"
+              tone="muted"
+              numberOfLines={1}
+              style={estilos.crece}
+              testID="marcas-fuera-del-turno-resumen"
             >
-              <Stack gap={spacing.xs} style={isWide ? estilos.crece : undefined}>
-                <Row gap={spacing.sm} align="center" wrap>
-                  <AppText variant="bodyStrong">{fila.nombre}</AppText>
-                  <AppText variant="label" tone="subtle" tabular>
-                    {fila.dia}
-                  </AppText>
-                </Row>
-                <AppText variant="body">{fila.que}</AppText>
-                {fila.detalle === null ? null : (
-                  <AppText variant="label" tone="muted" tabular>
-                    {fila.detalle}
-                  </AppText>
-                )}
-              </Stack>
-              <Row gap={spacing.sm} wrap align="center">
-                {fila.puedeCambiarTurno ? (
-                  <SecondaryButton
-                    label={t('schedule.unusual.changeShift')}
-                    onPress={() => onCambiarTurno(fila.id)}
+              {resumen}
+            </AppText>
+          )}
+          <GhostButton
+            label={desplegado ? t('schedule.unusual.hide') : t('schedule.unusual.review')}
+            onPress={() => setAbierto((valor) => !valor)}
+            fullWidth={false}
+            testID="marcas-fuera-del-turno-abrir"
+          />
+        </Row>
+
+        {desplegado ? (
+          <Stack gap={0}>
+            {visibles.map((fila, indice) => (
+              <View
+                key={fila.id}
+                style={[
+                  estilos.fila,
+                  isWide ? estilos.filaAncha : null,
+                  indice > 0 ? estilos.conRegla : null,
+                ]}
+                testID={`marca-rara-${fila.id}`}
+              >
+                {/*
+                QUIÉN, QUÉ DÍA Y QUÉ PASÓ EN UNA LÍNEA, y el turno debajo (1-oct). Eran tres
+                líneas por marca.
+              */}
+                <Stack gap={0} style={isWide ? estilos.crece : undefined}>
+                  <Row gap={spacing.sm} align="baseline" wrap>
+                    <AppText variant="bodyStrong">{fila.nombre}</AppText>
+                    <AppText variant="label" tone="subtle" tabular>
+                      {fila.dia}
+                    </AppText>
+                    <AppText variant="body">{fila.que}</AppText>
+                  </Row>
+                  {fila.detalle === null ? null : (
+                    <AppText variant="label" tone="muted" tabular>
+                      {fila.detalle}
+                    </AppText>
+                  )}
+                </Stack>
+                <Row gap={spacing.sm} wrap align="center">
+                  {fila.puedeCambiarTurno ? (
+                    <SecondaryButton
+                      label={t('schedule.unusual.changeShift')}
+                      onPress={() => onCambiarTurno(fila.id)}
+                      fullWidth={false}
+                      testID={`marca-rara-${fila.id}-turno`}
+                    />
+                  ) : null}
+                  <GhostButton
+                    label={t('schedule.unusual.openHours')}
+                    onPress={() => onVerEnHoras(fila.id)}
                     fullWidth={false}
-                    testID={`marca-rara-${fila.id}-turno`}
+                    testID={`marca-rara-${fila.id}-horas`}
                   />
-                ) : null}
-                <GhostButton
-                  label={t('schedule.unusual.openHours')}
-                  onPress={() => onVerEnHoras(fila.id)}
-                  fullWidth={false}
-                  testID={`marca-rara-${fila.id}-horas`}
-                />
-                <GhostButton
-                  label={t('schedule.unusual.seen')}
-                  onPress={() => onVisto(fila.id)}
-                  loading={fila.viendo}
-                  fullWidth={false}
-                  testID={`marca-rara-${fila.id}-visto`}
-                />
-              </Row>
-            </View>
-          ))}
-        </Stack>
-        {filas.length > VISIBLES_PLEGADO ? (
+                  <GhostButton
+                    label={t('schedule.unusual.seen')}
+                    onPress={() => onVisto(fila.id)}
+                    loading={fila.viendo}
+                    fullWidth={false}
+                    testID={`marca-rara-${fila.id}-visto`}
+                  />
+                </Row>
+              </View>
+            ))}
+          </Stack>
+        ) : null}
+        {desplegado && filas.length > VISIBLES_PLEGADO ? (
           <GhostButton
             label={
               todas
@@ -164,10 +214,11 @@ const useEstilos = estilosDelTema((colors) => ({
     borderRadius: radii.card,
     borderWidth: borderWidth.focus,
     borderColor: colors.warning600,
-    padding: spacing.base,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.base,
   },
   crece: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
-  fila: { paddingVertical: spacing.md, gap: spacing.sm },
+  fila: { paddingVertical: spacing.sm, gap: spacing.sm },
   /* En pantalla ancha, lo que pasó a la izquierda y qué hacer con ello a la derecha. */
   filaAncha: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
   conRegla: { borderTopWidth: borderWidth.hairline, borderTopColor: colors.border },

@@ -6,7 +6,8 @@
  * extra… solo avisar en horario». Lo que se comprueba, en la demostración:
  *
  * 1. HORARIO AVISA de quien entró una hora o más antes de su turno y de quien salió una
- *    hora o más después, con las dos clases de marca, y pliega lo que pasa de tres.
+ *    hora o más después, con las dos clases de marca, y pliega lo que pasa de tres. Empieza
+ *    plegado en una línea que dice cuántas y de quién; «Revisar» lo abre.
  * 2. «VER EN HORAS» LLEVA A SU JORNADA: Horas se abre en esa semana con la jornada abierta.
  * 3. «VISTO, ESTÁ BIEN ASÍ» quita ese aviso y solo ese.
  * 4. CAMBIAR SU TURNO Y PUBLICAR quita el aviso solo: la jornada se vuelve a medir contra
@@ -52,8 +53,22 @@ async function entrar(pagina) {
   await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
 }
 
+/**
+ * El aviso empieza plegado en una línea (1-oct): «Revisar» lo abre. Si ya está abierto, no
+ * hace nada.
+ */
+async function abrirAviso(pagina) {
+  const boton = pagina.locator('[data-testid="marcas-fuera-del-turno-abrir"]');
+  if ((await boton.count()) === 0) return;
+  if (/Revisar/.test(await boton.innerText())) {
+    await boton.click();
+    await pagina.waitForTimeout(300);
+  }
+}
+
 /** Las filas del aviso que se ven: `{ id, texto }`. */
 async function filas(pagina) {
+  await abrirAviso(pagina);
   return pagina.locator('[data-testid^="marca-rara-"]').evaluateAll((nodos) =>
     nodos
       .map((n) => ({ id: n.getAttribute('data-testid').slice('marca-rara-'.length), n }))
@@ -76,6 +91,18 @@ const esperar = (pagina, ms = 1200) => pagina.waitForTimeout(ms);
   if ((await pagina.locator('[data-testid="marcas-fuera-del-turno"]').count()) === 0) {
     problemas.push('Horario no avisa de ninguna marca fuera de horario en la semana anterior');
   }
+  // Plegado, en una línea, dice cuántas y de quién: el aviso no se pierde por plegarse.
+  const resumen = await pagina
+    .locator('[data-testid="marcas-fuera-del-turno-resumen"]')
+    .innerText()
+    .catch(() => '');
+  if (!/·/.test(resumen)) {
+    problemas.push(`plegado, el aviso no dice de quién son las marcas: «${resumen}»`);
+  }
+  console.log(`  plegado              «${resumen}»`);
+  await pagina.locator('[data-testid="marcas-fuera-del-turno"]').screenshot({
+    path: 'capturas/marcas-horario-plegado.png',
+  });
   const plegadas = await filas(pagina);
   const plegar = pagina.locator('[data-testid="marcas-fuera-del-turno-todas"]');
   if ((await plegar.count()) > 0) {

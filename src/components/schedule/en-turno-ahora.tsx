@@ -3,7 +3,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { Row, Stack } from '@/components/ui/layout';
+import { Row } from '@/components/ui/layout';
 import {
   CLAVE_DE_ESTADO,
   ICONO_DE_ESTADO,
@@ -53,8 +53,12 @@ export function EnTurnoAhora({ personas }: { personas: PersonaEnTurno[] }) {
 
   return (
     <View style={estilos.caja} testID="en-turno-ahora">
-      <Stack gap={spacing.sm}>
-        <Row gap={spacing.sm} align="center" justify="space-between">
+      {/*
+        UNA FRANJA, NO UNA TARJETA DE DOS PISOS (1-oct): el título, cuántas son y quiénes,
+        seguidos. Si no caben, las píldoras bajan solas.
+      */}
+      <Row gap={spacing.sm} align="center" wrap>
+        <Row gap={spacing.xs} align="baseline">
           <AppText variant="bodyStrong" accessibilityRole="header">
             {t('schedule.onShiftNow')}
           </AppText>
@@ -62,41 +66,39 @@ export function EnTurnoAhora({ personas }: { personas: PersonaEnTurno[] }) {
             {t('timesheet.livePeople', { count: personas.length })}
           </AppText>
         </Row>
-        <Row gap={spacing.sm} wrap>
-          {personas.map((persona) => {
-            const trabaja = persona.estado === 'trabajando';
-            const clave = persona.motivo === null ? undefined : CLAVE_DE_MOTIVO[persona.motivo];
-            const detalle = [
-              t(CLAVE_DE_ESTADO[persona.estado]),
-              clave === undefined || persona.estado !== 'descanso' ? null : t(clave),
-              t('timesheet.sinceTime', { time: persona.desde }),
-            ]
-              .filter((parte): parte is string => parte !== null)
-              .join(' · ');
-            return (
-              <View
-                key={persona.id}
-                style={[estilos.pildora, trabaja ? estilos.trabaja : estilos.pausa]}
-                accessible
-                accessibilityLabel={`${persona.nombre}. ${detalle}`}
-                testID={`en-turno-${persona.id}`}
-              >
-                <Ionicons
-                  name={ICONO_DE_ESTADO[persona.estado]}
-                  size={16}
-                  color={trabaja ? colors.success600 : colors.warning600}
-                />
-                <AppText variant="label" style={estilos.encoge}>
-                  {persona.nombre}
-                </AppText>
-                <AppText variant="label" tone="muted" tabular>
-                  {detalle}
-                </AppText>
-              </View>
-            );
-          })}
-        </Row>
-      </Stack>
+        {personas.map((persona) => {
+          const trabaja = persona.estado === 'trabajando';
+          const clave = persona.motivo === null ? undefined : CLAVE_DE_MOTIVO[persona.motivo];
+          const detalle = [
+            t(CLAVE_DE_ESTADO[persona.estado]),
+            clave === undefined || persona.estado !== 'descanso' ? null : t(clave),
+            t('timesheet.sinceTime', { time: persona.desde }),
+          ]
+            .filter((parte): parte is string => parte !== null)
+            .join(' · ');
+          return (
+            <View
+              key={persona.id}
+              style={[estilos.pildora, trabaja ? estilos.trabaja : estilos.pausa]}
+              accessible
+              accessibilityLabel={`${persona.nombre}. ${detalle}`}
+              testID={`en-turno-${persona.id}`}
+            >
+              <Ionicons
+                name={ICONO_DE_ESTADO[persona.estado]}
+                size={16}
+                color={trabaja ? colors.success600 : colors.warning600}
+              />
+              <AppText variant="label" style={estilos.encoge}>
+                {persona.nombre}
+              </AppText>
+              <AppText variant="label" tone="muted" tabular>
+                {detalle}
+              </AppText>
+            </View>
+          );
+        })}
+      </Row>
     </View>
   );
 }
@@ -107,7 +109,8 @@ const useEstilos = estilosDelTema((colors) => ({
     borderRadius: radii.card,
     borderWidth: borderWidth.hairline,
     borderColor: colors.border,
-    padding: spacing.base,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.base,
   },
   pildora: {
     /*

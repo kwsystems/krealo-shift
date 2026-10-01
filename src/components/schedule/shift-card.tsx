@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
 import { Row, useRespuestaAlPuntero } from '@/components/ui/layout';
-import { StatusBadge } from '@/components/ui/states';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
@@ -12,8 +11,47 @@ import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
+import { localTimeOf } from '@/features/schedules/week';
 import { formatShiftRange, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 import { minutesBetween } from '@/utils/time';
+
+/**
+ * EL DÍA DE LA TIENDA EN UNA SEMANA, en minutos desde la medianoche: de la primera entrada
+ * a la última salida de sus turnos, redondeado a la hora. Es la regla contra la que cada
+ * turno pinta su franja.
+ */
+export type VentanaDelDia = { desde: number; hasta: number };
+
+/** Minuto del día local de un instante: «09:30» → 570. */
+export function minutoDelDia(iso: string, timezone: string): number {
+  const [h, m] = localTimeOf(iso, timezone).split(':').map(Number);
+  return (h ?? 0) * 60 + (m ?? 0);
+}
+
+/**
+ * La ventana de unos turnos. `null` si no hay ninguno. Un turno que cruza la medianoche
+ * llega hasta el día siguiente: su salida cuenta como 24 h más.
+ */
+export function ventanaDeLosTurnos(
+  turnos: readonly ShiftRow[],
+  timezone: string,
+): VentanaDelDia | null {
+  let desde = Number.POSITIVE_INFINITY;
+  let hasta = Number.NEGATIVE_INFINITY;
+  for (const turno of turnos) {
+    if (turno.status === 'cancelled') continue;
+    const entrada = minutoDelDia(turno.starts_at, timezone);
+    const salidaDelReloj = minutoDelDia(turno.ends_at, timezone);
+    const salida = salidaDelReloj <= entrada ? salidaDelReloj + 24 * 60 : salidaDelReloj;
+    desde = Math.min(desde, entrada);
+    hasta = Math.max(hasta, salida);
+  }
+  if (!Number.isFinite(desde) || !Number.isFinite(hasta)) return null;
+  const inicio = Math.floor(desde / 60) * 60;
+  // Al menos seis horas de regla: con una sola mañana, cada turno llenaría la franja entera.
+  const fin = Math.max(Math.ceil(hasta / 60) * 60, inicio + 6 * 60);
+  return { desde: inicio, hasta: fin };
+}
 
 /**
  * Turno en la cuadrícula y en las listas (§11.3, §25 ShiftCard).
@@ -34,6 +72,8 @@ export function ShiftCard({
   warnings = [],
   showEmployeeName = false,
   enCurso = null,
+  ventana = null,
+  enFila = false,
   onPress,
   testID,
 }: {
@@ -46,6 +86,10 @@ export function ShiftCard({
   showEmployeeName?: boolean;
   /** Si la persona está dentro AHORA en este turno. Ver `estadoDelTurnoAhora`. */
   enCurso?: EstadoDelTurno;
+  /** El día de la tienda en esta semana, para la franja. Ver `FranjaDelDia`. */
+  ventana?: VentanaDelDia | null;
+  /** La hora a la izquierda y la persona a la derecha: la lista por días del teléfono. */
+  enFila?: boolean;
   onPress?: (shift: ShiftRow) => void;
   testID?: string;
 }) {
@@ -85,10 +129,47 @@ export function ShiftCard({
     .filter((part): part is string => part !== null)
     .join('. ');
 
+  /*
+   * EL ESTADO VA EN LA LÍNEA DEL PUESTO, no en una insignia debajo (1-oct). La insignia
+   * «Borrador» era una tercera línea en cada turno sin publicar, y con una semana a medio
+   * armar la rejilla crecía justo cuando más había que verla entera. Lo dicen el borde
+   * discontinuo y la palabra con su icono: nunca solo el color (§21).
+   */
+  const estado =
+    shift.status === 'published' ? null : (
+      <Row gap={2} align="center">
+        <Ionicons
+          name={
+            shift.status === 'cancelled'
+              ? 'close-circle-outline'
+              : isChanged
+                ? 'sync-outline'
+                : 'create-outline'
+          }
+          size={12}
+          color={shift.status === 'cancelled' ? colors.ink500 : colors.primary600}
+        />
+        <AppText
+          variant="label"
+          tone={shift.status === 'cancelled' ? 'subtle' : 'primary'}
+          numberOfLines={1}
+        >
+          {statusLabel}
+        </AppText>
+      </Row>
+    );
+  const puesto =
+    jobRoleName !== undefined && jobRoleName !== null ? (
+      <AppText variant="label" tone="subtle" numberOfLines={1}>
+        {jobRoleName}
+      </AppText>
+    ) : null;
+
   const body = (
     <View
       style={[
         styles.card,
+        shift.status === 'draft' ? styles.borrador : null,
         enCurso === 'trabajando' ? styles.trabajando : null,
         enCurso === 'descanso' || enCurso === 'almorzando' ? styles.enDescanso : null,
         shift.status === 'cancelled' ? styles.cancelled : null,
@@ -105,17 +186,50 @@ export function ShiftCard({
         La alternativa era recortar la hora, que es lo que hacía antes y es peor:
         un turno sin hora de salida no dice a qué hora se sale.
       */}
-      <AppText variant="bodyStrong" tabular numberOfLines={2}>
-        {range}
-      </AppText>
-      {showEmployeeName && employeeName !== undefined ? (
+      {enFila ? (
+        /*
+          EN EL TELÉFONO, UNA FILA POR TURNO: la hora a la izquierda, siempre en la misma
+          columna, y a la derecha quién y de qué. Eran tres líneas apiladas por turno y un
+          día de cuatro turnos medía media pantalla.
+        */
+        <Row gap={spacing.md} align="center">
+          <AppText variant="bodyStrong" tabular style={styles.horaEnFila}>
+            {range}
+          </AppText>
+          <View style={styles.encoge}>
+            {showEmployeeName && employeeName !== undefined ? (
+              <AppText variant="body" numberOfLines={1}>
+                {employeeName}
+              </AppText>
+            ) : null}
+            <Row gap={spacing.sm} align="center" wrap>
+              {puesto}
+              {estado}
+            </Row>
+          </View>
+        </Row>
+      ) : (
+        /*
+          LA HORA ARRIBA Y EL PUESTO DEBAJO, SIEMPRE (1-oct). Probé a ponerlos en la misma
+          línea «cuando cupieran», y en una semana real unas tarjetas lo tenían al lado y
+          otras debajo según el largo del puesto: la columna parecía desordenada. Dos líneas
+          fijas se leen como una tabla. El estado —borrador, cambiado— va con el puesto.
+        */
+        <>
+          <AppText variant="bodyStrong" tabular numberOfLines={2}>
+            {range}
+          </AppText>
+          {puesto === null && estado === null ? null : (
+            <Row gap={spacing.sm} align="center" wrap>
+              {puesto}
+              {estado}
+            </Row>
+          )}
+        </>
+      )}
+      {showEmployeeName && employeeName !== undefined && !enFila ? (
         <AppText variant="help" tone="muted" numberOfLines={1}>
           {employeeName}
-        </AppText>
-      ) : null}
-      {jobRoleName !== undefined && jobRoleName !== null ? (
-        <AppText variant="label" tone="subtle" numberOfLines={1}>
-          {jobRoleName}
         </AppText>
       ) : null}
 
@@ -168,21 +282,6 @@ export function ShiftCard({
         Ahora aparece cuando el turno NO está en su estado normal: borrador, cambiado
         después de publicar, o cancelado. O sea justo cuando hay que mirarlo.
       */}
-      {shift.status === 'published' ? null : (
-        <StatusBadge
-          label={statusLabel}
-          compact
-          tone={shift.status === 'cancelled' ? 'offShift' : 'info'}
-          icon={
-            shift.status === 'cancelled'
-              ? 'close-circle-outline'
-              : isChanged
-                ? 'sync-outline'
-                : 'create-outline'
-          }
-        />
-      )}
-
       {warnings.length > 0 ? (
         <Row gap={spacing.xs}>
           <Ionicons name="alert-circle" size={14} color={colors.warning600} />
@@ -193,6 +292,15 @@ export function ShiftCard({
           </AppText>
         </Row>
       ) : null}
+
+      {ventana === null ? null : (
+        <FranjaDelDia
+          ventana={ventana}
+          desde={minutoDelDia(shift.starts_at, timezone)}
+          hasta={minutoDelDia(shift.ends_at, timezone)}
+          tenue={shift.status !== 'published'}
+        />
+      )}
     </View>
   );
 
@@ -225,14 +333,62 @@ export function ShiftCard({
   );
 }
 
+/**
+ * LA FRANJA DEL DÍA (1-oct): una línea fina al pie de cada turno, con su tramo pintado en
+ * la regla del día de la tienda. Se lee la semana de un vistazo —quién abre, quién cierra,
+ * dónde no hay nadie— sin leer una sola hora. No sustituye a la hora, que va encima: es lo
+ * que se ve antes de leerla. Decorativa para los lectores de pantalla, que ya tienen la
+ * hora en la etiqueta del turno.
+ */
+function FranjaDelDia({
+  ventana,
+  desde,
+  hasta,
+  tenue,
+}: {
+  ventana: VentanaDelDia;
+  desde: number;
+  hasta: number;
+  tenue: boolean;
+}) {
+  const styles = useEstilos();
+  const total = Math.max(1, ventana.hasta - ventana.desde);
+  const fin = hasta <= desde ? hasta + 24 * 60 : hasta;
+  const izquierda = Math.min(100, Math.max(0, ((desde - ventana.desde) / total) * 100));
+  const ancho = Math.min(100 - izquierda, Math.max(4, ((fin - desde) / total) * 100));
+  return (
+    <View
+      style={styles.franja}
+      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden
+      testID="franja-del-dia"
+    >
+      <View
+        style={[
+          styles.tramo,
+          tenue ? styles.tramoTenue : null,
+          { left: `${izquierda}%`, width: `${ancho}%` },
+        ]}
+      />
+    </View>
+  );
+}
+
 /** Celda vacía de la cuadrícula: siempre ofrece la acción siguiente (§20). */
 export function EmptyShiftSlot({
   onPress,
   accessibilityLabel,
+  sutil = false,
   testID,
 }: {
   onPress: () => void;
   accessibilityLabel: string;
+  /**
+   * EN LA REJILLA, SIN FONDO (1-oct): con las filas más bajas, cuarenta huecos grises
+   * hacían un tablero de ajedrez que competía con los turnos. El «+» queda sobre el fondo
+   * de la página y el gris aparece al pasar el puntero, al enfocarlo o al pulsarlo.
+   */
+  sutil?: boolean;
   testID?: string;
 }) {
   const { colors } = useTheme();
@@ -245,7 +401,11 @@ export function EmptyShiftSlot({
       accessibilityLabel={accessibilityLabel}
       testID={testID}
       {...respuesta.props}
-      style={({ pressed }) => [styles.slot, ...respuesta.estilo(pressed)]}
+      style={({ pressed }) => [
+        styles.slot,
+        sutil ? styles.slotSutil : null,
+        ...respuesta.estilo(pressed),
+      ]}
     >
       <Ionicons name="add" size={sizes.iconMobile} color={colors.ink500} />
     </Pressable>
@@ -311,7 +471,8 @@ export function RestDayChip({
 
 const useEstilos = estilosDelTema((colors) => ({
   card: {
-    gap: spacing.xs,
+    // Dos píxeles entre hora, puesto y franja: son tres líneas de un mismo dato.
+    gap: 2,
     backgroundColor: colors.surface,
     borderRadius: radii.input,
     borderWidth: borderWidth.hairline,
@@ -330,10 +491,31 @@ const useEstilos = estilosDelTema((colors) => ({
      *
      * Vertical se queda en `md`: lo que faltaba era ancho.
      */
-    paddingVertical: spacing.md,
+    paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,
     minHeight: sizes.touchTargetPreferred,
+    justifyContent: 'center',
   },
+  /* Lo que no está publicado tiene el filo discontinuo: se ve sin leer la palabra. */
+  borrador: { borderStyle: 'dashed', borderColor: colors.primary500 },
+  /* La hora en su columna: «03:00 – 09:00» mide 104 px y así las filas quedan alineadas. */
+  horaEnFila: { minWidth: 112 },
+  encoge: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  franja: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.hundido,
+    overflow: 'hidden',
+    marginTop: 2,
+  },
+  tramo: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    borderRadius: 2,
+    backgroundColor: colors.primary500,
+  },
+  tramoTenue: { backgroundColor: colors.primary200 },
   /*
    * EL BORDE DEL MISMO TONO QUE EL FONDO. Con el gris de siempre, una tarjeta verde tenía
    * un filo que no era de ella; con el del estado se lee como una sola pieza.
@@ -363,6 +545,7 @@ const useEstilos = estilosDelTema((colors) => ({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  slotSutil: { backgroundColor: 'transparent' },
   descanso: {
     minHeight: sizes.touchTargetMin,
     borderRadius: radii.input,

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Platform, ScrollView, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { EmptyShiftSlot, RestDayChip, ShiftCard } from './shift-card';
+import { EmptyShiftSlot, RestDayChip, ShiftCard, ventanaDeLosTurnos } from './shift-card';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
@@ -151,6 +151,12 @@ export function WeekGrid({
    * el hueco entre los días y nunca bajes del mínimo. Si no llega, la rejilla se
    * arrastra, que es lo correcto —comprimir más dejaría los turnos ilegibles—.
    */
+  /* La regla de la franja de cada turno: el día de la tienda en ESTA semana. */
+  const ventana = ventanaDeLosTurnos(
+    rows.flatMap((row) => row.shifts),
+    timezone,
+  );
+
   const anchoDeDia =
     anchoVisible === 0
       ? DAY_COLUMN_MIN_WIDTH
@@ -246,12 +252,20 @@ export function WeekGrid({
                         }
                         warnings={warningsFor(shift.id)}
                         enCurso={enCursoFor?.(shift) ?? null}
+                        ventana={ventana}
                         onPress={readOnly ? undefined : onSelectShift}
                         testID={`shift-${shift.id}`}
                       />
                     ))}
-                    {readOnly ? null : (
+                    {/*
+                      EL «+» SOLO EN EL HUECO (1-oct). Iba también debajo de cada turno y de
+                      cada descanso, y doblaba el alto de todas las filas: con ocho personas
+                      la semana no cabía en un monitor de 1080. Un segundo turno el mismo día
+                      se pone con «Duplicar» en la hoja del turno, o con «Agregar turno».
+                    */}
+                    {readOnly || dayShifts.length > 0 || descanso !== undefined ? null : (
                       <EmptyShiftSlot
+                        sutil
                         onPress={() => onAddShift({ employeeId: row.employeeId, dateKey: day })}
                         accessibilityLabel={t('schedule.addShiftFor', {
                           name: row.name,
@@ -309,9 +323,10 @@ export function DayList({
 }: DayListProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
+  const ventana = ventanaDeLosTurnos(Array.from(shiftsByDay.values()).flat(), timezone);
 
   return (
-    <Stack gap={spacing.base}>
+    <Stack gap={spacing.md}>
       {days.map((day) => {
         const dayShifts = shiftsByDay.get(day) ?? [];
         const descansos = restDaysByDay.get(day) ?? [];
@@ -334,11 +349,13 @@ export function DayList({
                 {t('schedule.noShiftsThatDay')}
               </AppText>
             ) : dayShifts.length === 0 ? null : (
-              <Stack gap={spacing.sm}>
+              <Stack gap={spacing.xs}>
                 {dayShifts.map((shift) => (
                   <ShiftCard
                     key={shift.id}
                     shift={shift}
+                    enFila
+                    ventana={ventana}
                     showEmployeeName
                     employeeName={employeeNames.get(shift.employee_id) ?? ''}
                     jobRoleName={
@@ -416,7 +433,12 @@ const useEstilos = estilosDelTema((colors) => ({
   /* El nombre del día se encoge antes que el recuento de turnos: el del feriado es largo. */
   encoge: { flexShrink: 1, minWidth: 0 },
   cell: {
-    padding: spacing.sm,
+    /*
+     * CUATRO DE LADO Y NO OCHO (1-oct): en 1280 la columna queda en su mínimo de 136 y
+     * con ocho la hora del turno se partía en dos líneas por cuatro píxeles.
+     */
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.xs,
     borderBottomWidth: borderWidth.hairline,
     borderBottomColor: colors.border,
     gap: spacing.xs,
@@ -462,6 +484,6 @@ const useEstilos = estilosDelTema((colors) => ({
     borderRadius: radii.card,
     borderWidth: borderWidth.hairline,
     borderColor: colors.border,
-    padding: spacing.base,
+    padding: spacing.md,
   },
 }));

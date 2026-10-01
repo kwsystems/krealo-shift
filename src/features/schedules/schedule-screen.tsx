@@ -107,7 +107,7 @@ export function ScheduleScreen({
   const { t } = useTranslation();
   const estilos = useEstilosDeHorario();
   const scope = useManagerScope();
-  const { isWide } = useResponsive();
+  const { isWide, density } = useResponsive();
   const now = useLiveClock('minute');
   const language = currentLanguage();
 
@@ -535,7 +535,8 @@ export function ScheduleScreen({
             emptyBody={t('settings.noLocationsHint')}
             onRetry={scope.refetch}
           >
-            <Stack gap={spacing.lg}>
+            {/* Entre bloques, `md`: con `lg` eran 20 px por cada uno de los seis de arriba. */}
+            <Stack gap={spacing.md}>
               {/*
                 TODOS LOS MANDOS DE LA SEMANA EN UNA FILA.
 
@@ -566,6 +567,7 @@ export function ScheduleScreen({
                     onPrevious={() => cambiarDeSemana((current) => current - 1)}
                     onNext={() => cambiarDeSemana((current) => current + 1)}
                     onGoToCurrent={() => cambiarDeSemana(() => 0)}
+                    corto={density === 'compact'}
                   />
                   <SegmentedControl
                     label={t('schedule.viewLabel')}
@@ -577,6 +579,25 @@ export function ScheduleScreen({
                     onChange={setView}
                     testID="schedule-view"
                   />
+                  {/*
+                    LA SEDE, EN LA MISMA FILA (1-oct). Era un bloque aparte con su rótulo
+                    «Ubicación» —70 px más de mandos sobre la rejilla— para dos chips que ya
+                    se leen solos: dicen el nombre de la sede.
+                  */}
+                  {scope.locations.length > 1 ? (
+                    <Row gap={spacing.xs} wrap align="center" testID="schedule-location">
+                      {locationOptions.map((opcion) => (
+                        <Chip
+                          key={opcion.value}
+                          label={opcion.label}
+                          hint={opcion.hint}
+                          selected={opcion.value === scope.locationId}
+                          onPress={() => scope.setLocationId(opcion.value)}
+                          testID={`schedule-location-${opcion.value}`}
+                        />
+                      ))}
+                    </Row>
+                  ) : null}
                 </Row>
 
                 {readOnly ? null : (
@@ -621,16 +642,6 @@ export function ScheduleScreen({
                   </Row>
                 )}
               </Row>
-
-              {scope.locations.length > 1 ? (
-                <SelectField
-                  label={t('schedule.location')}
-                  value={scope.locationId}
-                  options={locationOptions}
-                  onChange={scope.setLocationId}
-                  testID="schedule-location"
-                />
-              ) : null}
 
               {position === 'past' ? (
                 <InlineNotice
