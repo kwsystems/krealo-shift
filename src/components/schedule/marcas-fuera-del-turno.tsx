@@ -60,7 +60,12 @@ export function MarcasFueraDelTurno({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const estilos = useEstilos();
-  const { isWide } = useResponsive();
+  /*
+   * Los botones al lado del texto solo desde 1024 px: en un iPad vertical, con la barra
+   * lateral, los tres no caben junto al texto y se salían 53 px (`responsive:check`).
+   */
+  const { density } = useResponsive();
+  const isWide = density === 'extraWide';
   /*
    * MÁS DE TRES SE PLIEGAN: el aviso va encima de la rejilla, y una lista de diez la
    * empujaría fuera de la pantalla. Se ven las tres primeras y el botón dice cuántas más.
