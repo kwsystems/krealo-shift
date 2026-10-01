@@ -200,13 +200,22 @@ async function asentar(pagina) {
   await pagina.locator('[data-testid="report-days-sheet"]').waitFor({ state: 'detached' });
   await asentar(pagina);
   const totalSeguidos = await leerTotal(pagina);
-  if (totalSeguidos !== totalSemana) {
+  /*
+   * Contra las columnas de esos mismos días, no contra la semana entera: la demostración
+   * siembra «hoy» con la fecha del navegador, y entre la medianoche UTC y la de Lima hay
+   * horas en un día que para la sede todavía no ha llegado.
+   */
+  const hastaHoy =
+    hoy === undefined
+      ? totalSemana
+      : dias.filter((dia) => dia <= hoy).reduce((suma, dia) => suma + (semana[dia] ?? 0), 0);
+  if (totalSeguidos !== hastaHoy) {
     problemas.push(
-      `días seguidos del ${dias[0]} a hoy suman ${totalSeguidos} min y la semana ${totalSemana}`,
+      `días seguidos del ${dias[0]} a hoy suman ${totalSeguidos} min y sus columnas ${hastaHoy}`,
     );
   }
   console.log(
-    `  días seguidos        del ${dias[0]} a hoy ${totalSeguidos} min = semana ${totalSemana}`,
+    `  días seguidos        del ${dias[0]} a hoy ${totalSeguidos} min = columnas ${hastaHoy}`,
   );
   await contexto.close();
 }
