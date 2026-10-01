@@ -585,7 +585,13 @@ export function ScheduleScreen({
                     se leen solos: dicen el nombre de la sede.
                   */}
                   {scope.locations.length > 1 ? (
-                    <Row gap={spacing.xs} wrap align="center" testID="schedule-location">
+                    <Row
+                      gap={spacing.xs}
+                      wrap
+                      align="center"
+                      style={estilos.chipsDeSede}
+                      testID="schedule-location"
+                    >
                       {locationOptions.map((opcion) => (
                         <Chip
                           key={opcion.value}
@@ -1247,6 +1253,12 @@ const useEstilosDeHorario = estilosDelTema((colors) => ({
   },
   creceEnLaBarra: { flexGrow: 1, flexShrink: 1 },
   encoge: { flexShrink: 1, minWidth: 0 },
+  /*
+   * LOS CHIPS DE SEDE CEDEN AL ANCHO, como en el selector de siempre: el nombre de la sede
+   * lo escribe el cliente, y «Sucursal Miraflores Centro Comercial Larcomar» se salía 115 px
+   * de un teléfono de 360 (`responsive:check`).
+   */
+  chipsDeSede: { flexShrink: 1, minWidth: 0, maxWidth: '100%' },
 }));
 
 /** Una marca rara, escrita para la fila del aviso: quién, qué día, qué hizo y contra qué turno. */

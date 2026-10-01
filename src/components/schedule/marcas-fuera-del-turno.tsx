@@ -111,13 +111,13 @@ export function MarcasFueraDelTurno({
             <AppText variant="help" tone="muted" style={estilos.crece}>
               {t('schedule.unusual.body')}
             </AppText>
-          ) : density === 'compact' ? (
+          ) : density === 'compact' || density === 'regular' ? (
+            // En un teléfono, el resumen de nombres no cabe en la línea: basta con cuántas.
             <View style={estilos.crece} />
           ) : (
             <AppText
               variant="help"
               tone="muted"
-              numberOfLines={1}
               style={estilos.crece}
               testID="marcas-fuera-del-turno-resumen"
             >

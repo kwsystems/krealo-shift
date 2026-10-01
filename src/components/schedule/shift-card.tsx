@@ -197,10 +197,9 @@ export function ShiftCard({
             {range}
           </AppText>
           <View style={styles.encoge}>
+            {/* El nombre ENVUELVE, no se corta: con «…» dejaba de saberse de quién era. */}
             {showEmployeeName && employeeName !== undefined ? (
-              <AppText variant="body" numberOfLines={1}>
-                {employeeName}
-              </AppText>
+              <AppText variant="body">{employeeName}</AppText>
             ) : null}
             <Row gap={spacing.sm} align="center" wrap>
               {puesto}
