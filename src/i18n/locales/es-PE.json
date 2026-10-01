@@ -1329,7 +1329,7 @@
     "pinTitle": "Tu PIN es tuyo",
     "pinBody": "No lo compartas y no marques por otra persona: eso es un problema para las dos. Si lo olvidas, quien administra te lo reinicia en un minuto.",
     "adminScheduleTitle": "Horario",
-    "adminScheduleBody": "Los turnos de la semana. Con «Pegar horario» entra la tabla entera de una vez, y con «Copiar semana anterior» se repite la semana pasada. Los días libres se marcan y se ven en la rejilla. Arriba salen también las marcas fuera de horario (quien entró una hora o más antes de su turno o salió una hora o más después), para que decidas si cambias su turno, apruebas la extra en Horas o lo das por visto.",
+    "adminScheduleBody": "Los turnos de la semana. Con «Pegar horario» entra la tabla entera de una vez, y con «Copiar semana anterior» se repite la semana pasada. Los días libres se marcan y se ven en la rejilla. Un turno se pone con el «+» de su hueco, y un segundo turno el mismo día con «Duplicar turno» en la hoja del turno. La línea fina de cada turno dice en qué parte del día cae: así se ve quién abre y quién cierra. Arriba salen también las marcas fuera de horario (quien entró una hora o más antes de su turno o salió una hora o más después): pulsa «Revisar» para decidir si cambias su turno, apruebas la extra en Horas o lo das por visto.",
     "adminPublishTitle": "Publicar es lo que lo hace real",
     "adminPublishBody": "Un turno en borrador NO existe para el reloj: quien marque verá «No tienes un turno programado». Pulsa «Publicar horario» cuando la semana esté lista.",
     "adminTeamTitle": "Equipo",

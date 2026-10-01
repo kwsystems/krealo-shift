@@ -1329,7 +1329,7 @@
     "pinTitle": "Your PIN is yours",
     "pinBody": "Do not share it and do not clock for someone else: that is a problem for both of you. If you forget it, whoever runs the store resets it in a minute.",
     "adminScheduleTitle": "Schedule",
-    "adminScheduleBody": "The week's shifts. “Paste schedule” enters the whole table at once, and “Copy previous week” repeats last week. Days off are marked and show on the grid. At the top you'll also see clock-ins outside the shift (anyone who came in an hour or more early or left an hour or more late), so you can change their shift, approve the overtime in Hours or mark it as seen.",
+    "adminScheduleBody": "The week's shifts. “Paste schedule” enters the whole table at once, and “Copy previous week” repeats last week. Days off are marked and show on the grid. Add a shift with the “+” in its empty slot, and a second shift on the same day with “Duplicate shift” in the shift sheet. The thin line on each shift shows which part of the day it covers, so you can see who opens and who closes. At the top you'll also see clock-ins outside the shift (anyone who came in an hour or more early or left an hour or more late): tap “Review” to change their shift, approve the overtime in Hours or mark it as seen.",
     "adminPublishTitle": "Publishing is what makes it real",
     "adminPublishBody": "A draft shift does NOT exist for the clock: whoever clocks will see “You have no scheduled shift”. Press “Publish schedule” once the week is ready.",
     "adminTeamTitle": "Team",
