@@ -558,6 +558,47 @@ function crearRpc(almacen: Almacen) {
             author_name: 'Andree (demostración)',
           },
         ]);
+        /*
+         * UNA SALIDA QUE FALTABA CIERRA SU JORNADA, como al reconstruirla en el servidor:
+         * sin esto, «Marcar salida a las 19:00» en «Por resolver» no cambiaba nada en la
+         * demostración. Solo la jornada abierta de esa persona que empezó antes de la salida.
+         */
+        if (argumentos.p_event_type === 'clock_out') {
+          const salida = String(argumentos.p_occurred_at);
+          const abierta = filas('work_sessions').find(
+            (fila) =>
+              fila.employee_id === argumentos.p_employee_id &&
+              fila.ends_at === null &&
+              String(fila.starts_at) < salida,
+          );
+          if (abierta !== undefined) {
+            const brutos = Math.round(
+              (Date.parse(salida) - Date.parse(String(abierta.starts_at))) / 60_000,
+            );
+            const sinPagar = Number(abierta.unpaid_break_minutes ?? 0);
+            almacen.set(
+              'work_sessions',
+              filas('work_sessions').map((fila) =>
+                fila.id !== abierta.id
+                  ? fila
+                  : {
+                      ...fila,
+                      ends_at: salida,
+                      gross_minutes: brutos,
+                      net_minutes: brutos - sinPagar,
+                      status: 'complete',
+                    },
+              ),
+            );
+            almacen.set(
+              'employees_working_now',
+              filas('employees_working_now').filter(
+                (fila) => fila.employee_id !== argumentos.p_employee_id,
+              ),
+            );
+            return sinError([{ event_id: idEvento, work_session_id: abierta.id }]);
+          }
+        }
         return sinError([{ event_id: idEvento, work_session_id: null }]);
       }
 
@@ -1010,6 +1051,127 @@ function crearRpc(almacen: Almacen) {
       // En la demostración las jornadas no guardan marcas contra el turno: nada que revisar.
       case 'recheck_sessions_for_shift':
         return sinError(null);
+
+      /*
+       * «POR RESOLVER» EN LA DEMOSTRACIÓN (1-oct), con las mismas reglas que
+       * `functions/src/casos.ts`. La jornada y su resumen del día se tocan aquí directamente:
+       * en la demostración son tablas, no proyecciones.
+       */
+      case 'resolve_session_case': {
+        const id = String(argumentos.p_work_session_id ?? '');
+        const caso = String(argumentos.p_case ?? '');
+        const decision = String(argumentos.p_decision ?? '');
+        const sesion = filas('work_sessions').find((fila) => fila.id === id);
+        if (sesion === undefined) return conError('Esa jornada no existe.');
+        if (decision === 'owes') {
+          const zona = String(
+            filas('locations').find((fila) => fila.id === sesion.location_id)?.timezone ??
+              'America/Lima',
+          );
+          const dia = new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(String(sesion.starts_at)));
+          const ahora = new Date().toISOString();
+          almacen.set('owed_hours', [
+            ...filas('owed_hours').filter((fila) => fila.id !== id),
+            {
+              id,
+              organization_id: DEMO_ORG_ID,
+              location_id: sesion.location_id,
+              employee_id: sesion.employee_id,
+              work_session_id: id,
+              work_date: dia,
+              minutes: Number(argumentos.p_minutes ?? 0),
+              note: typeof argumentos.p_note === 'string' ? argumentos.p_note : null,
+              status: 'pending',
+              created_at: ahora,
+              updated_at: ahora,
+            },
+          ]);
+        }
+        almacen.set(
+          'work_sessions',
+          filas('work_sessions').map((fila) =>
+            fila.id !== id
+              ? fila
+              : {
+                  ...fila,
+                  casos_resueltos: [
+                    ...new Set([
+                      ...(Array.isArray(fila.casos_resueltos)
+                        ? (fila.casos_resueltos as string[])
+                        : []),
+                      caso,
+                    ]),
+                  ],
+                },
+          ),
+        );
+        return sinError({ caso, decision });
+      }
+
+      case 'apply_planned_break': {
+        const id = String(argumentos.p_work_session_id ?? '');
+        const sesion = filas('work_sessions').find((fila) => fila.id === id);
+        const turno = filas('shifts').find((fila) => fila.id === sesion?.shift_id);
+        const minutos = Number(turno?.planned_unpaid_break_minutes ?? 0);
+        if (sesion === undefined || turno === undefined || minutos <= 0) {
+          return conError('Su turno no tiene refrigerio que descontar.');
+        }
+        if (Number(sesion.unpaid_break_minutes ?? 0) + Number(sesion.paid_break_minutes ?? 0) > 0) {
+          return conError('Esa jornada ya tiene su pausa.');
+        }
+        const zona = String(
+          filas('locations').find((fila) => fila.id === sesion.location_id)?.timezone ??
+            'America/Lima',
+        );
+        const dia = new Intl.DateTimeFormat('en-CA', {
+          timeZone: zona,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date(String(sesion.starts_at)));
+        almacen.set(
+          'work_sessions',
+          filas('work_sessions').map((fila) =>
+            fila.id !== id
+              ? fila
+              : {
+                  ...fila,
+                  unpaid_break_minutes: Number(fila.unpaid_break_minutes ?? 0) + minutos,
+                  net_minutes: Number(fila.net_minutes ?? 0) - minutos,
+                },
+          ),
+        );
+        almacen.set(
+          'daily_time_summary',
+          filas('daily_time_summary').map((fila) =>
+            fila.employee_id !== sesion.employee_id ||
+            fila.location_id !== sesion.location_id ||
+            fila.work_date !== dia
+              ? fila
+              : {
+                  ...fila,
+                  unpaid_break_minutes: Number(fila.unpaid_break_minutes ?? 0) + minutos,
+                  net_minutes: Number(fila.net_minutes ?? 0) - minutos,
+                },
+          ),
+        );
+        return sinError({ minutos });
+      }
+
+      case 'settle_owed_hours': {
+        const id = String(argumentos.p_owed_id ?? '');
+        const estado = String(argumentos.p_status ?? 'pending');
+        almacen.set(
+          'owed_hours',
+          filas('owed_hours').map((fila) => (fila.id === id ? { ...fila, status: estado } : fila)),
+        );
+        return sinError({ status: estado });
+      }
 
       /* «Visto, está bien así», como `acknowledgeUnusualClock`: por marca, en la jornada. */
       case 'acknowledge_unusual_clock': {

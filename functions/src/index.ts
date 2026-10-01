@@ -90,3 +90,4 @@ export {
  * esos días: después, un turno sin marcas se corrige persona por persona, con motivo.
  */
 export { registerScheduleAsWorked } from './horario-cumplido';
+export { applyPlannedBreak, resolveSessionCase, settleOwedHours } from './casos';

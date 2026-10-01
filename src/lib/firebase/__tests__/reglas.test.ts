@@ -597,6 +597,61 @@ describe('reglas de Firestore', () => {
       );
     });
 
+    /*
+     * LAS HORAS QUE DEBE (1-oct): las ve en su celular, y solo las suyas. Quien administra,
+     * las de la sede. Nadie las escribe desde la app: van por `resolveSessionCase`.
+     */
+    it('ve las horas que debe, no las de otra persona, y no puede escribirlas', async () => {
+      const debe = (id: string, empleado: string) =>
+        escribir(`owed_hours/${id}`, {
+          id,
+          organization_id: ORG,
+          location_id: SEDE,
+          employee_id: empleado,
+          minutes: 289,
+          status: 'pending',
+        });
+      await debe('debe-mia', 'emp-yo');
+      await debe('debe-ajena', 'emp-otra');
+
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      const mias = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'owed_hours'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+          ),
+        ),
+      );
+      expect(mias.docs.map((d) => d.id)).toEqual(['debe-mia']);
+      await assertFails(getDoc(doc(db, 'owed_hours', 'debe-ajena')));
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'owed_hours'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+          ),
+        ),
+      );
+      await assertFails(setDoc(doc(db, 'owed_hours', 'debe-mia'), { minutes: 0 }));
+
+      const admin = entorno.authenticatedContext(UID).firestore();
+      const deLaSede = await assertSucceeds(
+        getDocs(
+          query(
+            collection(admin, 'owed_hours'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+            where('employee_id', '==', 'emp-otra'),
+          ),
+        ),
+      );
+      expect(deLaSede.size).toBe(1);
+      await assertFails(setDoc(doc(admin, 'owed_hours', 'debe-ajena'), { minutes: 0 }));
+    });
+
     it('quien administra sigue viéndolo todo', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
       await assertSucceeds(getDoc(doc(db, 'shifts', 'turno-ajeno')));

@@ -48,6 +48,7 @@ import { HoraExtraDelDia } from '@/components/timesheets/hora-extra-del-dia';
 import { SessionList } from '@/components/timesheets/session-list';
 import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
 import { useWeekShifts } from '@/features/schedules/hooks';
+import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
@@ -479,6 +480,26 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                       testID="timesheet-status-filter"
                     />
                   </BarraDeControl>
+
+                  {/*
+                    POR RESOLVER (1-oct): lo que hay que decidir de esta semana, con su arreglo
+                    a un toque. Va ANTES de los totales porque es lo único de la pantalla que
+                    pide algo («esto es algo que yo debería ver rápido»), y los totales de
+                    debajo cambian en cuanto se resuelve un caso. Ver
+                    `por-resolver-de-la-semana.tsx`.
+                  */}
+                  <PorResolverDeLaSemana
+                    sesiones={allSessions}
+                    turnos={turnosDeLaSemana.data ?? []}
+                    nombres={names}
+                    personaFiltrada={employeeFilter}
+                    locationId={scope.locationId}
+                    nowISO={nowISO}
+                    timezone={scope.timezone}
+                    timeFormat={scope.timeFormat}
+                    language={language}
+                    onVerJornada={setSelected}
+                  />
 
                   {/*
                     `stretch` Y NO `flex-start`: todas las casillas de un renglón miden lo que

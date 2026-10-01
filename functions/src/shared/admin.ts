@@ -70,6 +70,8 @@ export const COLLECTIONS = {
   timeAdjustments: 'time_adjustments',
   timesheetPeriods: 'timesheet_periods',
   timeEditRequests: 'time_edit_requests',
+  /** Las horas que alguien debe a la tienda (1-oct): ver `functions/src/casos.ts`. */
+  owedHours: 'owed_hours',
   announcements: 'announcements',
   pushTokens: 'push_tokens',
   notificationPreferences: 'notification_preferences',

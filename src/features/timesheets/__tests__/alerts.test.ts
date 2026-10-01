@@ -25,6 +25,7 @@ function session(overrides: Partial<WorkSession> & { id: string }): WorkSession 
     departure_note: null,
     source: null,
     avisos_vistos: [],
+    casos_resueltos: [],
     updated_at: '2026-08-27T22:00:01.000Z',
     ...overrides,
   };

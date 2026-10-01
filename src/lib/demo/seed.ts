@@ -373,8 +373,19 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
        * la que no demuestra nada.
        */
       const cierra = persona === 3 ? 'tarde' : persona === 0 ? 'pronto' : null;
-      const salida =
-        cierra === 'tarde'
+      /*
+       * LOS DOS CASOS DE «POR RESOLVER» (1-oct), los de las capturas de Andree: los martes
+       * la segunda persona se va enferma a las 10:20 de un turno hasta las 14:00, y los
+       * viernes la quinta marca de 8:00 a 14:00 sin refrigerio en un turno que lo lleva (el
+       * jueves de la semana anterior solo trabajan cuatro: ver `plantilla`).
+       */
+      const diaDeLaSemanaDelCaso = ((dia % 7) + 7) % 7;
+      const enferma = persona === 1 && diaDeLaSemanaDelCaso === 1;
+      const sinRefrigerio = persona === 4 && diaDeLaSemanaDelCaso === 4;
+      const sinPausa = enferma || sinRefrigerio;
+      const salida = enferma
+        ? conHora(fecha, 10, 20)
+        : cierra === 'tarde'
           ? conHora(fecha, 19, 30)
           : cierra === 'pronto'
             ? conHora(fecha, 17, 10)
@@ -408,7 +419,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
        * semana cada motivo pasa por gente de las dos.
        */
       const motivo = MOTIVOS_DEMO[(persona + Math.abs(dia)) % MOTIVOS_DEMO.length] ?? 'meal';
-      const minutosPausa = MINUTOS_POR_MOTIVO[motivo];
+      const minutosPausa = sinPausa ? 0 : MINUTOS_POR_MOTIVO[motivo];
       const pagada = DEFAULT_PAID_REASONS[motivo];
       const descansoPagado = pagada ? minutosPausa : 0;
       const descansoNoPagado = pagada ? 0 : minutosPausa;
@@ -442,7 +453,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         organization_id: DEMO_ORG_ID,
         employee_id: empleadoId(persona + 1),
         location_id: ubicacion,
-        shift_id: raras.length > 0 && suTurno !== undefined ? suTurno.id : null,
+        shift_id: (raras.length > 0 || sinPausa) && suTurno !== undefined ? suTurno.id : null,
         starts_at: aISO(entrada),
         ends_at: aISO(salida),
         gross_minutes: brutos,
@@ -450,7 +461,12 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
         status: tarde ? 'needs_review' : 'complete',
-        flags: [...(tarde ? ['late_arrival'] : []), ...raras],
+        flags: [
+          ...(tarde ? ['late_arrival'] : []),
+          ...(enferma ? ['early_departure'] : []),
+          ...raras,
+        ],
+        departure_reason: enferma ? 'medical' : null,
         updated_at: aISO(salida),
       });
 
@@ -478,40 +494,48 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
        */
       const nota = motivo === 'other' ? (NOTAS_DEMO[persona % NOTAS_DEMO.length] ?? null) : null;
 
-      intervalos.push({
-        id: pausaId(contadorSesion),
-        work_session_id: sesionId(contadorSesion),
-        organization_id: DEMO_ORG_ID,
-        employee_id: empleadoId(persona + 1),
-        starts_at: aISO(inicioPausa),
-        ends_at: aISO(finPausa),
-        duration_minutes: minutosPausa,
-        break_type: tipoPausa,
-        break_reason: motivo,
-        break_note: nota,
-      });
+      if (!sinPausa) {
+        intervalos.push({
+          id: pausaId(contadorSesion),
+          work_session_id: sesionId(contadorSesion),
+          organization_id: DEMO_ORG_ID,
+          employee_id: empleadoId(persona + 1),
+          starts_at: aISO(inicioPausa),
+          ends_at: aISO(finPausa),
+          duration_minutes: minutosPausa,
+          break_type: tipoPausa,
+          break_reason: motivo,
+          break_note: nota,
+        });
 
-      // La vista `break_time_by_reason` la calcula la base con SQL; aquí es una tabla
-      // ya agregada, igual que `daily_time_summary`. Se construye del MISMO intervalo
-      // de arriba para que el gráfico de motivos no pueda discrepar de las pausas.
-      pausasPorMotivo.push({
-        organization_id: DEMO_ORG_ID,
-        location_id: ubicacion,
-        employee_id: empleadoId(persona + 1),
-        work_date: fechaClave(fecha),
-        break_reason: motivo,
-        break_type: tipoPausa,
-        pauses: 1,
-        minutes: minutosPausa,
-        notes: nota === null ? [] : [{ at: aISO(inicioPausa), minutes: minutosPausa, note: nota }],
-      });
+        // La vista `break_time_by_reason` la calcula la base con SQL; aquí es una tabla
+        // ya agregada, igual que `daily_time_summary`. Se construye del MISMO intervalo
+        // de arriba para que el gráfico de motivos no pueda discrepar de las pausas.
+        pausasPorMotivo.push({
+          organization_id: DEMO_ORG_ID,
+          location_id: ubicacion,
+          employee_id: empleadoId(persona + 1),
+          work_date: fechaClave(fecha),
+          break_reason: motivo,
+          break_type: tipoPausa,
+          pauses: 1,
+          minutes: minutosPausa,
+          notes:
+            nota === null ? [] : [{ at: aISO(inicioPausa), minutes: minutosPausa, note: nota }],
+        });
+      }
 
-      for (const [tipo, cuando, descanso] of [
-        ['clock_in', entrada, null],
-        ['break_start', inicioPausa, tipoPausa],
-        ['break_end', finPausa, tipoPausa],
-        ['clock_out', salida, null],
-      ] as const) {
+      for (const [tipo, cuando, descanso] of (sinPausa
+        ? [
+            ['clock_in', entrada, null],
+            ['clock_out', salida, null],
+          ]
+        : [
+            ['clock_in', entrada, null],
+            ['break_start', inicioPausa, tipoPausa],
+            ['break_end', finPausa, tipoPausa],
+            ['clock_out', salida, null],
+          ]) as readonly (readonly [string, Date, string | null])[]) {
         contadorEvento += 1;
         eventos.push({
           id: eventoId(contadorEvento),
@@ -924,6 +948,25 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   almacen.set('announcements', []);
   almacen.set('audit_logs', []);
   almacen.set('break_intervals', intervalos);
+  /*
+   * UNAS HORAS QUE YA SE DEBEN (1-oct), de antes de lo sembrado: las de la persona del
+   * celular de la demostración, para que su vista enseñe «Horas que debes» sin tener que
+   * resolver nada antes, y la ficha de Equipo tenga una pendiente que saldar.
+   */
+  almacen.set('owed_hours', [
+    {
+      id: 'demo-debe-1',
+      organization_id: DEMO_ORG_ID,
+      location_id: DEMO_LOCATION_1,
+      employee_id: empleadoId(1),
+      work_session_id: null,
+      work_date: fechaClave(sumarDias(lunes, -10)),
+      minutes: 150,
+      note: 'Cita médica',
+      status: 'pending',
+      created_at: aISO(sumarDias(lunes, -9)),
+    },
+  ]);
   almacen.set('time_adjustments', correcciones);
 
   // Vistas: aquí son tablas de solo lectura ya calculadas. La base las deriva con SQL.

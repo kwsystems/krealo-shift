@@ -58,6 +58,11 @@ export const TABLES = {
   timeAdjustments: 'time_adjustments',
   timesheetPeriods: 'timesheet_periods',
   timeEditRequests: 'time_edit_requests',
+  /**
+   * Las horas que alguien debe a la tienda (1-oct): las registra quien gestiona desde
+   * «Por resolver» en Horas y la persona las ve en su celular. Solo lectura desde la app.
+   */
+  owedHours: 'owed_hours',
   announcements: 'announcements',
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
@@ -207,6 +212,15 @@ export const RPC = {
    * las horas que se pagan. Ver `acknowledgeUnusualClock` en `functions/src/manager.ts`.
    */
   acknowledgeUnusualClock: 'acknowledge_unusual_clock',
+  /**
+   * «Por resolver» en Horas (1-oct): «le debe N h», «está justificado», «trabajó sin
+   * refrigerio». Ver `functions/src/casos.ts`.
+   */
+  resolveSessionCase: 'resolve_session_case',
+  /** «Descontar el refrigerio del turno» de quien no lo marcó. */
+  applyPlannedBreak: 'apply_planned_break',
+  /** Las horas que debía, compensadas o perdonadas. */
+  settleOwedHours: 'settle_owed_hours',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */

@@ -49,6 +49,7 @@
     "bandeja:check": "node scripts/bandeja-check.mjs dist-demo",
     "horas:check": "node scripts/horas-check.mjs dist-demo",
     "marcas:check": "node scripts/marcas-check.mjs dist-demo",
+    "casos:check": "node scripts/casos-check.mjs dist-demo",
     "correo:export": "cross-env EXPO_PUBLIC_AUTH_EMULATOR_URL=http://127.0.0.1:9099 EXPO_PUBLIC_FIREBASE_API_KEY=demo-api-key-solo-emulador EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN=demo-krealo-shift.firebaseapp.com EXPO_PUBLIC_FIREBASE_PROJECT_ID=demo-krealo-shift EXPO_PUBLIC_FIREBASE_STORAGE_BUCKET=demo-krealo-shift.appspot.com EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=0 EXPO_PUBLIC_FIREBASE_APP_ID=demo-solo-emulador expo export --platform web --output-dir dist-correo --clear",
     "correo:check": "npx --yes firebase-tools@15 emulators:exec --only auth --project demo-krealo-shift \"node scripts/correo-check.mjs dist-correo\""
   },

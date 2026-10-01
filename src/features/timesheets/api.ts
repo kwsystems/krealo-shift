@@ -78,6 +78,8 @@ export const workSessionSchema = z.object({
    * `acknowledgeUnusualClock`. Las jornadas de antes no lo traen.
    */
   avisos_vistos: z.array(z.string()).default([]),
+  /** Los casos de «Por resolver» ya resueltos en esta jornada (1-oct): ver `casos.ts`. */
+  casos_resueltos: z.array(z.string()).default([]),
   updated_at: z.string(),
 });
 
@@ -171,7 +173,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, avisos_vistos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, avisos_vistos, casos_resueltos, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)

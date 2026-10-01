@@ -2,6 +2,7 @@ import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { HorasDeLaPersona } from './horas-de-la-persona';
+import { HorasQueDebe } from './horas-que-debe';
 import { useUpcomingShifts, type TeamMember } from './hooks';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { AdminSheet, KeyValueRow } from '@/components/schedule/fields';
@@ -219,6 +220,14 @@ export function EmployeeDetailSheet({
         timezone={timezone}
         timeFormat={timeFormat}
         weekStartsOn={weekStartsOn}
+        language={language}
+      />
+
+      {/* Lo que debe a la tienda, registrado desde «Por resolver» en Horas (1-oct). */}
+      <HorasQueDebe
+        organizationId={organizationId}
+        locationId={locationId}
+        employeeId={member.id}
         language={language}
       />
 

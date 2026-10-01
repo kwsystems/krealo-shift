@@ -48,6 +48,7 @@ function jornada(extra: Partial<WorkSession> = {}): WorkSession {
     departure_note: null,
     source: 'kiosk',
     avisos_vistos: [],
+    casos_resueltos: [],
     updated_at: '2026-09-30T00:00:00.000Z',
     ...extra,
   };

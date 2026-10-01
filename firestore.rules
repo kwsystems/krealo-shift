@@ -326,6 +326,15 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Las horas que alguien debe (1-oct): las ve la persona —en su celular— y quien
+    // gestiona su sede. Se escriben solo desde el servidor, con su motivo y su autor:
+    // ver functions/src/casos.ts.
+    match /owed_hours/{owedId} {
+      allow read: if isSelfEmployee(resource.data.organization_id, resource.data.employee_id)
+        || managesLocation(resource.data.organization_id, resource.data.location_id);
+      allow write: if false;
+    }
+
     match /break_intervals/{intervalId} {
       allow read: if isStaff(resource.data.organization_id)
         || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);

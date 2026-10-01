@@ -46,6 +46,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
+import { HorasQueDebes } from './horas-que-debes';
 
 /**
  * LA VISTA DEL VENDEDOR, en su celular (30-sep).
@@ -244,6 +245,13 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               zona={tz}
             />
           )}
+
+          {/* LO QUE DEBE, si debe algo: registrado por quien gestiona (1-oct). */}
+          <HorasQueDebes
+            organizationId={ficha.organizationId}
+            employeeId={ficha.employeeId}
+            language={language}
+          />
 
           {/* 2. LA SEMANA */}
           <Stack gap={spacing.sm}>

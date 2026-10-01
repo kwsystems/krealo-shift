@@ -53,6 +53,7 @@ function sesion(t: ShiftRow, extra: Partial<WorkSession> = {}): WorkSession {
     departure_note: null,
     source: null,
     avisos_vistos: [],
+    casos_resueltos: [],
     updated_at: '',
     ...extra,
   };

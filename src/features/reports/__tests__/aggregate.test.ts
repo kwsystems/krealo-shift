@@ -67,6 +67,7 @@ function sesion(
     departure_note: null,
     source: null,
     avisos_vistos: [],
+    casos_resueltos: [],
     updated_at: '2026-09-14T21:00:00.000Z',
     ...parcial,
   };
