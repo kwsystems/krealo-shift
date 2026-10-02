@@ -188,6 +188,8 @@ export type DentroDeLaPersona = {
   motivo: string | null;
   /** Cuándo entró. */
   desde: string;
+  /** Si está en una pausa, desde cuándo; `null` si trabaja o no se sabe. */
+  descansoDesde: string | null;
   /** Lo que lleva trabajado en la jornada abierta, con la misma cuenta que Horas. */
   minutos: number;
 };
@@ -214,6 +216,7 @@ export function dentroPorEmpleado(
       estado,
       motivo: enCurso?.motivo ?? null,
       desde: session.starts_at,
+      descansoDesde: estado === 'descanso' ? (enCurso?.descansoDesde ?? null) : null,
       minutos: minutosEnCurso(session, enCurso, nowISO),
     });
   }

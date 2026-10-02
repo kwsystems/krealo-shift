@@ -14,7 +14,6 @@
   },
   "availability": {
     "title": "Availability",
-    "intro": "What each person says about the days they can or can't work. It also shows on the Schedule, next to their shifts.",
     "add": "Add availability",
     "addFor": "Add availability for {{name}} on {{day}}",
     "newCount_one": "1 new update",
@@ -28,9 +27,6 @@
     "emptyWeekly": "Nobody has said anything that repeats every week yet.",
     "emptyDates": "No specific days coming up.",
     "everyWeekday": "Every {{day}}",
-    "legendUnavailable": "Can't work",
-    "legendPreferred": "Prefers some hours",
-    "legendNote": "Comment",
     "howTitle": "Your team writes it from their phone",
     "howBody": "Each person signs in to Krealo Shift with their account and, in “My availability”, taps Add: “I can't on Tuesdays”, “I have an appointment on the 15th” or a comment. It reaches you here with an orange dot and shows in the Schedule next to their shifts. You can also add it on their behalf.",
     "countUnavailable_one": "{{count}} can't work",
@@ -82,8 +78,7 @@
     "portalAdd": "Add",
     "portalEmpty": "You haven't said anything yet. If there's a day you can't work, add it here.",
     "portalSeen": "Seen",
-    "portalSent": "Sent, not seen yet",
-    "portalDay": "You said: {{what}}"
+    "portalSent": "Sent, not seen yet"
   },
   "admin": {
     "tabHome": "Home",
@@ -106,7 +101,6 @@
     "openSchedule": "Open the schedule",
     "sinceLabel": "Since {{time}}",
     "elapsedLabel": "{{duration}} so far",
-    "sinceBreakLabel": "On break since {{time}}",
     "dueAtLabel": "Starts at {{time}}",
     "shouldHaveEnteredLabel": "Was due at {{time}}",
     "tabReports": "Reports",
@@ -245,12 +239,12 @@
   "home": {
     "justSoYouKnow": "Just so you know",
     "allClearTitle": "Nothing needs you right now",
-    "allClearBody": "Nobody arrived late, nobody is missing, and there are no requests or entries to fix. Right now {{working}} are working and {{onBreak}} are on a break.",
+    "allClearBody": "Nobody is running late, nobody is missing, and there are no requests or entries to fix. Right now {{working}} are working and {{onBreak}} are on a break.",
     "headline": {
       "absent_one": "person missed their shift",
       "absent_other": "people missed their shifts",
-      "late_one": "person arrived late today",
-      "late_other": "people arrived late today",
+      "late_one": "person hasn't arrived for their shift",
+      "late_other": "people haven't arrived for their shifts",
       "incomplete_one": "unclosed entry",
       "incomplete_other": "unclosed entries",
       "requests_one": "request waiting on you",
@@ -259,14 +253,14 @@
       "pendingSync_other": "entries not yet uploaded"
     },
     "action": {
-      "absent_one": "Their shift ended with no clock-in at all, so it counts as an absence. If they came and forgot to clock in, fix it in Hours with a manual entry.",
-      "absent_other": "Their shifts ended with no clock-in at all, so they count as absences. If they came and forgot to clock in, fix it in Hours with a manual entry.",
-      "late_one": "They've clocked in or are on their way. Check it in the schedule.",
-      "late_other": "They've clocked in or are on their way. Check it in the schedule.",
+      "absent_one": "Their shift ended with no clock-in at all, so it counts as an absence. In Hours you say why they were absent or, if they came and didn't clock in, record their clock-in and clock-out.",
+      "absent_other": "Their shifts ended with no clock-in at all, so they count as absences. In Hours you say why they were absent or, if they came and didn't clock in, record their clock-in and clock-out.",
+      "late_one": "Their shift has started and they haven't clocked in yet. Call them or check the schedule.",
+      "late_other": "Their shifts have started and they haven't clocked in yet. Call them or check the schedule.",
       "incomplete_one": "An unclosed day can't be paid correctly. Fix it in Hours.",
       "incomplete_other": "An unclosed day can't be paid correctly. Fix them in Hours.",
-      "requests_one": "Someone is waiting on you. Answer it under More.",
-      "requests_other": "People are waiting on you. Answer them under More.",
+      "requests_one": "Someone is waiting on you. Answer it in Inbox.",
+      "requests_other": "People are waiting on you. Answer them in Inbox.",
       "pendingSync_one": "It will upload by itself once the connection is back. If it's still here tomorrow, flag it.",
       "pendingSync_other": "They will upload by themselves once the connection is back. If they're still here tomorrow, flag it."
     }
@@ -438,7 +432,6 @@
     "unknownPerson": "No name",
     "noData": "No data",
     "totalHours": "Hours this period",
-    "totalHoursDetail": "Marked meal breaks deducted",
     "onHolidays": "Worked on holidays",
     "onHolidaysDetail": "100% surcharge in Peru (D.L. 713)",
     "people": "People who clocked in",
@@ -732,6 +725,7 @@
     "shortRestWarning": "Not enough rest between shifts: {{hours}}.",
     "weeklyLimitWarning": "{{name}} goes over the configured weekly limit.",
     "totalWeeklyHours": "Weekly total: {{hours}}",
+    "totalWeeklyDrafts": "{{drafts}} in draft and {{published}} published. Home and Reports count only what's published.",
     "noShiftsThisWeek": "No shifts this week",
     "retroactiveWarning": "You're changing a past week. We record who did it and when.",
     "publishHistory": "Publish history",
@@ -1531,6 +1525,7 @@
     "badgeLate": "Late",
     "badgeWorking": "Working",
     "badgeNoMark": "No clock-in",
+    "badgeNoClockOut": "No clock-out",
     "badgeAbsent": "Absent",
     "todayAbsentJustified": "You missed your {{range}} shift today: excused",
     "badgeAbsentJustified": "Excused absence",

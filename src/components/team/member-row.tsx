@@ -36,7 +36,10 @@ export type DentroEnEquipo = {
   estado: 'trabajando' | 'descanso';
   /** El motivo de la pausa abierta: «Almorzando» si es la comida. Ver `estadoVisible`. */
   motivo?: string | null;
-  /** La hora de entrada, ya escrita en el formato de la sede. */
+  /**
+   * Desde cuándo está así, ya escrito en el formato de la sede: la entrada si trabaja, el
+   * inicio de la pausa si descansa.
+   */
   desde: string;
 };
 

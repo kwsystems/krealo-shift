@@ -155,6 +155,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     setPedida(null);
   };
   const period = usePeriod({ organizationId, locationId: scope.locationId, from, to });
+  const periodoAprobado = period.data?.status === 'approved';
   // Las jornadas de la semana que se mira, al día con el horario publicado de ahora.
   useJornadasAlDia({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
@@ -324,12 +325,38 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
       if (statusFilter === 'needsReview') {
         return (alertsBySession.get(session.id) ?? []).length > 0;
       }
-      if (statusFilter === 'approved') return session.status === 'approved';
+      /*
+       * APROBADO ES EL PERIODO (2-oct): el servidor aprueba la semana entera, no jornada por
+       * jornada, así que `status === 'approved'` no lo lleva ninguna jornada y el filtro
+       * salía vacío con la semana aprobada. Ahora dice lo mismo que la insignia del periodo.
+       */
+      if (statusFilter === 'approved') {
+        return periodoAprobado || session.status === 'approved';
+      }
       return true;
     });
     // Quien está dentro, arriba: ver `dentroPrimero`.
     return dentroPrimero(filtradas, alertsBySession, enCursoPorSesion);
-  }, [allSessions, employeeFilter, statusFilter, alertsBySession, enCursoPorSesion]);
+  }, [
+    allSessions,
+    employeeFilter,
+    statusFilter,
+    alertsBySession,
+    enCursoPorSesion,
+    periodoAprobado,
+  ]);
+
+  /*
+   * LA CASILLA «NECESITA REVISIÓN» CUENTA LO QUE LISTA EL FILTRO DEL MISMO NOMBRE (2-oct):
+   * las jornadas con algún aviso. Antes contaba días con `needs_review`, un estado que el
+   * servidor no escribe, así que en producción decía siempre 0 mientras el filtro, debajo,
+   * enseñaba varias.
+   */
+  const porRevisar = allSessions.filter(
+    (session) =>
+      (employeeFilter === null || session.employee_id === employeeFilter) &&
+      (alertsBySession.get(session.id) ?? []).length > 0,
+  ).length;
 
   /*
    * LO QUE SE ESTÁ TRABAJANDO AHORA, APARTE DEL TOTAL. «Horas netas» suma jornadas
@@ -636,14 +663,15 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     />
                     <StatTile
                       label={t('states.needsReviewBadge')}
-                      value={String(totals.needsReviewDays)}
+                      value={String(porRevisar)}
                       /*
                        * EL UNICO TONO DE ESTA FILA, y por eso funciona: una jornada sin
                        * cerrar es lo que hay que atender hoy. Con las otras cinco tenidas
                        * tambien, esta no destacaba sobre nada.
                        */
-                      tone={totals.needsReviewDays > 0 ? 'late' : undefined}
+                      tone={porRevisar > 0 ? 'late' : undefined}
                       icon="alert-circle"
+                      testID="total-por-revisar"
                     />
                     <StatTile
                       label={t('timesheet.absences.tile')}

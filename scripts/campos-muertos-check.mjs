@@ -76,6 +76,36 @@ const FIJOS_A_PROPOSITO = new Map([
     'clearOrganizationLogo.path',
     'la respuesta dice cual es el logo ahora, y despues de quitarlo no hay ninguno',
   ],
+  /*
+   * Revisados el 2-oct: el chequeo no estaba en el lote de cada despliegue y estos ocho se
+   * acumularon sin que nadie los mirara. Los ocho son fijos a propósito.
+   */
+  [
+    'ligarFichaDeEmpleado.claimed',
+    'respuesta en dos formas: `claimed: false` es la rama de «no se pudo», con su motivo',
+  ],
+  ['claimInvitation.claimed', 'lo mismo, la rama de «sí»: la de «no» lanza un error'],
+  [
+    'registerScheduleAsWorked.before_value',
+    'la jornada se CREA desde el horario: no había nada antes, como en un fichaje añadido',
+  ],
+  [
+    'reopenTimesheetPeriod.approved_at',
+    'reabrir ES borrar la aprobación: el valor fijo es el trabajo',
+  ],
+  ['reopenTimesheetPeriod.approved_by', 'lo mismo: un periodo reabierto no lo aprobó nadie'],
+  [
+    'recheckSessionsForPeriod.cambiadas',
+    'la salida temprana de unas fechas inválidas: no se revisó nada, así que no cambió nada',
+  ],
+  [
+    'periodoPedido.datos',
+    'un periodo que todavía no existe: sin datos guardados hasta que se aprueba o se reabre',
+  ],
+  [
+    'filaDelEvento.photo_path',
+    'el fichaje nace sin foto: la sube el reloj después y la ata `attachPhoto`',
+  ],
   // El marcador de éxito de las funciones que no devuelven datos.
   ['attachPhoto.ok', 'marcador de éxito'],
   ['revokeAllSessions.ok', 'marcador de éxito'],

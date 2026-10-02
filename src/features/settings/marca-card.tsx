@@ -131,7 +131,9 @@ export function MarcaCard({
             key={aviso.estado}
             tone="warning"
             icon="alert-circle"
-            title={t('settings.brandNearStatus', { estado: t(`settings.brandState.${aviso.estado}`) })}
+            title={t('settings.brandNearStatus', {
+              estado: t(`settings.brandState.${aviso.estado}`),
+            })}
             body={t('settings.brandNearStatusBody', { distancia: aviso.distancia })}
             testID={`brand-aviso-${aviso.estado}`}
           />
@@ -265,7 +267,7 @@ function VistaPreviaDelReloj({
           08:30
         </AppText>
         <AppText variant="help" style={{ color: apagada }}>
-          {t('kiosk.enterPin')}
+          {t('kiosk.idleSubtitle')}
         </AppText>
         <Row gap={spacing.xs}>
           {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -274,7 +276,7 @@ function VistaPreviaDelReloj({
         </Row>
         <View style={[estilos.boton, { backgroundColor: rampa.p500 }]}>
           <AppText variant="label" style={{ color: rampa.tintaSobreAcento }}>
-            {t('attendance.clockIn')}
+            {t('kiosk.clockIn')}
           </AppText>
         </View>
       </View>

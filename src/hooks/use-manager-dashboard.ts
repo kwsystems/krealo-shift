@@ -9,8 +9,11 @@ import { fetchWeekShifts } from '@/features/schedules/api';
 import { currentWeekStart, dateKeyOf, weekRangeInstants } from '@/features/schedules/week';
 import { shiftScheduledMinutes } from '@/features/schedules/conflicts';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
+import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { fetchWorkSessions } from '@/features/timesheets/api';
-import { cubreElTurno, faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import { minutosEnCurso } from '@/features/timesheets/en-curso';
+import { cubreElTurno, estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import { useJustificaciones } from '@/features/timesheets/justificaciones';
 import { ADMIN_LIST_STALE_MS, DASHBOARD_POLL_MS, selectRows } from '@/hooks/use-admin-query';
 import { useNetworkStore } from '@/stores/network-store';
 import { minutesBetween } from '@/utils/time';
@@ -74,6 +77,25 @@ export function useWorkingNow(locationId: string | null) {
   });
 }
 
+/**
+ * Cuántas solicitudes esperan respuesta en la sede: lo dice Inicio y, desde el 2-oct, el
+ * número de Bandeja en el menú. Una sola consulta con una sola clave, así que contestar
+ * una en Bandeja baja los dos a la vez.
+ */
+export function usePendingRequestCount(organizationId: string | null, locationId: string | null) {
+  return useQuery({
+    queryKey: dashboardKeys.pendingRequests(locationId ?? 'none'),
+    queryFn: () =>
+      countPendingRequests({
+        organizationId: organizationId ?? '',
+        locationId: locationId ?? '',
+      }),
+    enabled: locationId !== null && organizationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+    refetchInterval: DASHBOARD_POLL_MS,
+  });
+}
+
 export const dashboardKeys = {
   workingNow: (locationId: string) => ['dashboard', 'workingNow', locationId] as const,
   weekShifts: (locationId: string, weekStart: string) =>
@@ -112,6 +134,13 @@ export type RightNowEntry = {
   /** Instante de referencia: entrada, inicio de descanso o inicio del turno. */
   since: string;
   shiftId: string | null;
+  /** El motivo de la pausa abierta (`meal`…): con él se dice «Almorzando», como en Horas. */
+  motivo: string | null;
+  /**
+   * Lo trabajado en la jornada abierta, con la cuenta de Horas y Equipo
+   * (`minutosEnCurso`): sin los descansos ya tomados. `null` si no está dentro.
+   */
+  minutosTrabajados: number | null;
 };
 
 export type ManagerDashboard = {
@@ -142,8 +171,6 @@ export type ManagerDashboard = {
 
 /** Ventana en la que un turno cuenta como "próximo a entrar". */
 const UPCOMING_WINDOW_MINUTES = 120;
-/** Una sesión abierta más allá de esta duración es un fichaje incompleto. */
-const OPEN_SESSION_LIMIT_MINUTES = 16 * 60;
 
 export function useManagerDashboard(params: {
   organizationId: string | null;
@@ -198,18 +225,10 @@ export function useManagerDashboard(params: {
     timezone,
     enabled,
   }).data;
+  // Lo que se dijo de cada falta (2-oct): una justificada ya no es algo que atender hoy.
+  const justificaciones = useJustificaciones(organizationId, locationId);
 
-  const pendingRequests = useQuery({
-    queryKey: dashboardKeys.pendingRequests(locationId ?? 'none'),
-    queryFn: () =>
-      countPendingRequests({
-        organizationId: organizationId ?? '',
-        locationId: locationId ?? '',
-      }),
-    enabled: enabled && organizationId !== null,
-    staleTime: ADMIN_LIST_STALE_MS,
-    refetchInterval: DASHBOARD_POLL_MS,
-  });
+  const pendingRequests = usePendingRequestCount(organizationId, locationId);
 
   // Pendientes de este dispositivo. Los pendientes de cada kiosco requieren leer
   // `kiosk_devices`, que hoy no está expuesta al rol autenticado.
@@ -218,9 +237,19 @@ export function useManagerDashboard(params: {
   const todayKey = dateKeyOf(nowISO, timezone);
 
   return useMemo(() => {
-    const live = workingNow.data ?? [];
     const shifts = weekShifts.data ?? [];
     const sessions = weekSessions.data ?? [];
+    const sesionPorId = new Map(sessions.map((session) => [session.id, session]));
+    /*
+     * UNA SALIDA OLVIDADA NO ES ALGUIEN DENTRO (2-oct), con la regla de Horas, Equipo y
+     * Reportes (`OPEN_SESSION_ALERT_MINUTES`). Inicio contaba como «Trabajando · Lleva
+     * 26:00» a quien se fue ayer sin marcar, y a la vez lo contaba como fichaje sin cerrar:
+     * la misma persona dentro y olvidada en la misma pantalla. Ahora es solo lo segundo.
+     */
+    const live = (workingNow.data ?? []).filter((row) => {
+      const desde = sesionPorId.get(row.work_session_id)?.starts_at ?? row.starts_at;
+      return minutesBetween(desde, nowISO) <= OPEN_SESSION_ALERT_MINUTES;
+    });
 
     const activeByEmployee = new Set(live.map((row) => row.employee_id));
 
@@ -231,12 +260,26 @@ export function useManagerDashboard(params: {
         row.preferred_name !== null && row.preferred_name.trim() !== ''
           ? row.preferred_name
           : row.full_name;
+      const enDescanso = row.attendance_state === 'ON_BREAK';
+      const sesion = sesionPorId.get(row.work_session_id);
       rightNow.push({
         employeeId: row.employee_id,
         name,
-        state: row.attendance_state === 'ON_BREAK' ? 'onBreak' : 'working',
+        state: enDescanso ? 'onBreak' : 'working',
         since: row.break_started_at ?? row.starts_at,
         shiftId: row.shift_id,
+        motivo: row.break_reason,
+        minutosTrabajados:
+          sesion === undefined
+            ? minutesBetween(row.starts_at, row.break_started_at ?? nowISO)
+            : minutosEnCurso(
+                sesion,
+                {
+                  estado: enDescanso ? 'descanso' : 'trabajando',
+                  descansoDesde: row.break_started_at,
+                },
+                nowISO,
+              ),
       });
     }
 
@@ -256,6 +299,11 @@ export function useManagerDashboard(params: {
      * falta solo desde que la sede usa el reloj, como en Horario, Horas y Reportes.
      */
     const ahoraMs = Date.parse(nowISO);
+    /*
+     * Y UNA FALTA YA JUSTIFICADA NO ES ALGO QUE ATENDER (2-oct): quien gestiona ya dijo por
+     * qué faltó. Sigue siendo falta en Horas, Horario y Reportes, en ámbar; aquí, que es lo
+     * que pide una acción hoy, deja de salir.
+     */
     const faltasDeHoy = new Set(
       faltasDeLosTurnos({
         turnos: todaysShifts,
@@ -263,7 +311,10 @@ export function useManagerDashboard(params: {
         relojDesde: () => relojDesde,
         ahoraISO: nowISO,
         timezone,
-      }).map((falta) => falta.id),
+        resoluciones: justificaciones.data ?? [],
+      })
+        .filter((falta) => estadoDeFalta(falta) !== 'justificada')
+        .map((falta) => falta.id),
     );
 
     for (const shift of todaysShifts) {
@@ -280,13 +331,15 @@ export function useManagerDashboard(params: {
             state: 'upcoming',
             since: shift.starts_at,
             shiftId: shift.id,
+            motivo: null,
+            minutosTrabajados: null,
           });
         }
         continue;
       }
 
       if (shift.ends_at < nowISO) {
-        // Terminado y sin cubrir, pero de antes del reloj: no es una falta.
+        // Terminado y sin cubrir, pero de antes del reloj o ya justificado: no se atiende.
         if (!faltasDeHoy.has(shift.id)) continue;
         absentCount += 1;
         rightNow.push({
@@ -295,6 +348,8 @@ export function useManagerDashboard(params: {
           state: 'absent',
           since: shift.starts_at,
           shiftId: shift.id,
+          motivo: null,
+          minutosTrabajados: null,
         });
         continue;
       }
@@ -308,6 +363,8 @@ export function useManagerDashboard(params: {
           state: 'late',
           since: shift.starts_at,
           shiftId: shift.id,
+          motivo: null,
+          minutosTrabajados: null,
         });
       }
     }
@@ -320,27 +377,63 @@ export function useManagerDashboard(params: {
     const franjasPorEmpleado = new Map<string, FranjaDeHoy>();
 
     const deHoy = (iso: string) => dateKeyOf(iso, timezone) === todayKey;
+    const masTemprano = (a: Date, b: Date) => (a.getTime() <= b.getTime() ? a : b);
+    const masTarde = (a: Date, b: Date) => (a.getTime() >= b.getTime() ? a : b);
 
+    /*
+     * EL DÍA ENTERO DE CADA PERSONA, no su último tramo (2-oct). Con un turno partido o
+     * una salida a almorzar marcada en el reloj, la franja se quedaba con el último turno
+     * y la última jornada, y la mañana desaparecía: quien vino a las 8 salía como si
+     * hubiera entrado a las 14. Ahora el turno va del primero al último, y lo trabajado de
+     * la primera entrada a la última salida.
+     */
     for (const shift of todaysShifts) {
+      const previa = franjasPorEmpleado.get(shift.employee_id);
+      const desde = new Date(shift.starts_at);
+      const hasta = new Date(shift.ends_at);
       franjasPorEmpleado.set(shift.employee_id, {
         employeeId: shift.employee_id,
-        turno: { desde: new Date(shift.starts_at), hasta: new Date(shift.ends_at) },
+        turno:
+          previa?.turno === null || previa?.turno === undefined
+            ? { desde, hasta }
+            : {
+                desde: masTemprano(previa.turno.desde, desde),
+                hasta: masTarde(previa.turno.hasta, hasta),
+              },
         trabajado: null,
         estado: 'normal',
       });
     }
 
+    /*
+     * TARDE ES LA MARCA DEL SERVIDOR (2-oct), `late_arrival` en su primera jornada del día:
+     * la misma que dice «Entrada tardía» en Horas y cuenta en Reportes. Antes la franja lo
+     * calculaba aquí con la tolerancia de la sede, y comparando la ÚLTIMA jornada con el
+     * ÚLTIMO turno: quien volvía de almorzar a las 14:00 a un turno de 9 salía «tarde».
+     */
+    const primeraDeHoy = new Map<string, (typeof sessions)[number]>();
     for (const session of sessions) {
       if (!deHoy(session.starts_at)) continue;
+      const primera = primeraDeHoy.get(session.employee_id);
+      if (primera === undefined || session.starts_at < primera.starts_at) {
+        primeraDeHoy.set(session.employee_id, session);
+      }
       const previa = franjasPorEmpleado.get(session.employee_id);
+      const desde = new Date(session.starts_at);
+      const hasta = session.ends_at === null ? null : new Date(session.ends_at);
+      const antes = previa?.trabajado ?? null;
       franjasPorEmpleado.set(session.employee_id, {
         employeeId: session.employee_id,
         turno: previa?.turno ?? null,
-        trabajado: {
-          desde: new Date(session.starts_at),
-          hasta: session.ends_at === null ? null : new Date(session.ends_at),
-        },
-        estado: previa?.estado ?? 'normal',
+        trabajado:
+          antes === null
+            ? { desde, hasta }
+            : {
+                desde: masTemprano(antes.desde, desde),
+                // Una jornada abierta deja la franja abierta: sigue dentro.
+                hasta: antes.hasta === null || hasta === null ? null : masTarde(antes.hasta, hasta),
+              },
+        estado: 'normal',
       });
     }
 
@@ -350,27 +443,26 @@ export function useManagerDashboard(params: {
      */
     for (const row of live) {
       const previa = franjasPorEmpleado.get(row.employee_id);
+      const desde = new Date(row.starts_at);
       franjasPorEmpleado.set(row.employee_id, {
         employeeId: row.employee_id,
         turno: previa?.turno ?? null,
-        trabajado: { desde: new Date(row.starts_at), hasta: null },
+        trabajado: {
+          desde:
+            previa?.trabajado === null || previa?.trabajado === undefined
+              ? desde
+              : masTemprano(previa.trabajado.desde, desde),
+          hasta: null,
+        },
         estado: row.attendance_state === 'ON_BREAK' ? 'pausa' : 'normal',
       });
     }
 
-    /*
-     * TARDE se decide con la MISMA tolerancia que usan los contadores de arriba, no con
-     * «entró un minuto después». Si la franja llamara tarde a alguien que el contador no
-     * cuenta como tardanza, la pantalla se contradiría a sí misma a dos centímetros de
-     * distancia.
-     */
     const franjas = [...franjasPorEmpleado.values()]
       .map((franja) => {
-        if (franja.turno === null || franja.trabajado === null || franja.estado === 'pausa') {
-          return franja;
-        }
-        const retraso = (franja.trabajado.desde.getTime() - franja.turno.desde.getTime()) / 60_000;
-        return retraso > lateGraceMinutes ? { ...franja, estado: 'tarde' as const } : franja;
+        if (franja.estado === 'pausa') return franja;
+        const tarde = primeraDeHoy.get(franja.employeeId)?.flags.includes('late_arrival') === true;
+        return tarde ? { ...franja, estado: 'tarde' as const } : franja;
       })
       .sort((a, b) => {
         const refA = (a.turno ?? a.trabajado)?.desde.getTime() ?? 0;
@@ -378,16 +470,26 @@ export function useManagerDashboard(params: {
         return refA - refB;
       });
 
+    /*
+     * SIN CERRAR ES SIN SALIDA (2-oct): una jornada abierta más allá de lo que dura un turno,
+     * la misma regla que la fila «Sin salida» de Horas. Aquí también contaba `needs_review`,
+     * un estado que el servidor no escribe: en la demostración lo llevaban las tardanzas, y
+     * Inicio llamaba «fichajes sin cerrar» a jornadas cerradas y bien.
+     */
     const incompleteCount = sessions.filter(
       (session) =>
-        session.status === 'needs_review' ||
-        (session.status === 'open' &&
-          minutesBetween(session.starts_at, nowISO) > OPEN_SESSION_LIMIT_MINUTES),
+        session.ends_at === null &&
+        minutesBetween(session.starts_at, nowISO) > OPEN_SESSION_ALERT_MINUTES,
     ).length;
 
+    /*
+     * LO PROGRAMADO SON LOS TURNOS PUBLICADOS (2-oct), como en Reportes: un borrador no se
+     * le dio a nadie. Inicio sumaba también los borradores y decía «144:00 programadas»
+     * donde Reportes decía 122:00 de la misma semana.
+     */
     let scheduledMinutesThisWeek = 0;
     for (const shift of shifts) {
-      if (shift.status === 'cancelled') continue;
+      if (shift.status !== 'published') continue;
       scheduledMinutesThisWeek += shiftScheduledMinutes({
         id: shift.id,
         employeeId: shift.employee_id,
@@ -427,6 +529,7 @@ export function useManagerDashboard(params: {
       franjas,
     };
   }, [
+    justificaciones.data,
     workingNow,
     weekShifts,
     weekSessions,

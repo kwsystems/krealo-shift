@@ -80,7 +80,7 @@ describe('lo más importante del día', () => {
 
   it('cada cosa que se destaca lleva a donde se resuelve', () => {
     const resultado = prioridadDelDia({ ...nada, absent: 1, incomplete: 2, requests: 1 });
-    expect(resultado.titular?.destino).toBe('/(manager)/schedule');
+    expect(resultado.titular?.destino).toBe('/(manager)/hours');
     expect(resultado.resto.map((fila) => fila.destino)).toEqual([
       '/(manager)/hours',
       '/(manager)/requests',

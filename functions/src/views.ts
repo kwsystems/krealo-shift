@@ -300,12 +300,22 @@ export const viewBreakTimeByReason = onCall(async (request) => {
   const { membership, location } = await autorizarUbicacion(request, locationId);
   const zona = (location.timezone as string | undefined) ?? 'America/Lima';
 
+  /*
+   * LOS DÍAS SON LOS DE LA SEDE (2-oct), con el mismo margen que el resumen diario de
+   * arriba: un día de más por cada lado y se recorta por el día local del inicio de la
+   * pausa. Cortando en medianoche UTC, en Lima faltaban las pausas de después de las 19:00
+   * del último día y entraban las de la víspera, y «En qué se va el tiempo» de Reportes no
+   * cuadraba con los descansos de Horas.
+   */
+  const MARGEN_MS = 24 * 60 * 60 * 1000;
+  const desplazar = (iso: string, ms: number) =>
+    new Date(new Date(iso).getTime() + ms).toISOString();
   const eventos = await db
     .collection(COLLECTIONS.timeEvents)
     .where('organization_id', '==', membership.organizationId)
     .where('location_id', '==', locationId)
-    .where('occurred_at', '>=', `${desde}T00:00:00.000Z`)
-    .where('occurred_at', '<=', `${hasta}T23:59:59.999Z`)
+    .where('occurred_at', '>=', desplazar(`${desde}T00:00:00.000Z`, -MARGEN_MS))
+    .where('occurred_at', '<=', desplazar(`${hasta}T23:59:59.999Z`, MARGEN_MS))
     .orderBy('occurred_at', 'asc')
     .get();
 
@@ -338,6 +348,10 @@ export const viewBreakTimeByReason = onCall(async (request) => {
           60000,
       );
       const dia = claveDeDia(String(inicio.occurred_at), zona);
+      if (dia < desde || dia > hasta) {
+        inicio = null;
+        continue;
+      }
       const motivo = (inicio.break_reason as string | null) ?? 'other';
       const tipo = (inicio.break_type as string | null) ?? null;
       const clave = `${employeeId}_${dia}_${motivo}`;

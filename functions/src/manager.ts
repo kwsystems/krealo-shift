@@ -941,37 +941,70 @@ export const exportTimesheetRows = onCall(async (request) => {
   if (location === undefined) throw new HttpsError('not-found', 'Esa ubicación no existe.');
   const membership = await membershipOf(uid, location.organization_id as string);
   requireManagesLocation(membership, locationId);
+  const zona = zonaSegura(location.timezone ?? 'America/Lima', 'exportTimesheetRows');
 
+  /*
+   * LOS DÍAS SON LOS DE LA SEDE (2-oct), como en el resumen diario: se pide un día de más
+   * por cada lado y se recorta por día local. Cortando en medianoche UTC, en Lima se
+   * quedaban fuera las jornadas que empiezan después de las 19:00 del último día, y
+   * entraban las del día anterior a la misma hora.
+   */
+  const MARGEN_MS = 24 * 60 * 60 * 1000;
+  const desplazar = (iso: string, ms: number) =>
+    new Date(new Date(iso).getTime() + ms).toISOString();
   const sesiones = await db
     .collection(COLLECTIONS.workSessions)
     .where('location_id', '==', locationId)
-    .where('starts_at', '>=', `${desde}T00:00:00.000Z`)
-    .where('starts_at', '<=', `${hasta}T23:59:59.999Z`)
+    .where('starts_at', '>=', desplazar(`${desde}T00:00:00.000Z`, -MARGEN_MS))
+    .where('starts_at', '<=', desplazar(`${hasta}T23:59:59.999Z`, MARGEN_MS))
     .orderBy('starts_at', 'asc')
     .get();
+
+  const diaDe = (instante: string) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: zona,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(instante));
 
   const nombres = new Map<string, string>();
   const filas = [];
 
   for (const doc of sesiones.docs) {
     const sesion = doc.data();
+    const dia = diaDe(String(sesion.starts_at));
+    if (dia < desde || dia > hasta) continue;
     const employeeId = sesion.employee_id as string;
     if (!nombres.has(employeeId)) {
       const empleado = await db.collection(COLLECTIONS.employees).doc(employeeId).get();
       nombres.set(employeeId, (empleado.data()?.full_name as string | undefined) ?? '');
     }
+    const netos = (sesion.net_minutes as number | null | undefined) ?? 0;
+    /*
+     * LA FORMA QUE LEE LA APP (2-oct): `employee_name`, `work_date`, `clock_in`,
+     * `clock_out` y `net_hours_decimal`. Antes salían `full_name`, `starts_at` y
+     * `ends_at`, la app rechazaba la respuesta por forma y «Exportar CSV» de Horas fallaba
+     * siempre que la semana tuviera alguna jornada. La demostración ya mandaba esta forma,
+     * y por eso allí funcionaba. Los nombres de antes se mantienen al lado.
+     */
     filas.push({
       employee_id: employeeId,
+      employee_name: nombres.get(employeeId) ?? '',
+      work_date: dia,
+      clock_in: sesion.starts_at,
+      clock_out: sesion.ends_at ?? null,
+      gross_minutes: sesion.gross_minutes ?? 0,
+      paid_break_minutes: sesion.paid_break_minutes ?? 0,
+      unpaid_break_minutes: sesion.unpaid_break_minutes ?? 0,
+      net_minutes: netos,
+      net_hours_decimal: Math.round((netos / 60) * 100) / 100,
+      status: sesion.status,
+      flags: sesion.flags ?? [],
       full_name: nombres.get(employeeId) ?? '',
       work_session_id: doc.id,
       starts_at: sesion.starts_at,
       ends_at: sesion.ends_at ?? null,
-      gross_minutes: sesion.gross_minutes ?? 0,
-      paid_break_minutes: sesion.paid_break_minutes ?? 0,
-      unpaid_break_minutes: sesion.unpaid_break_minutes ?? 0,
-      net_minutes: sesion.net_minutes ?? 0,
-      status: sesion.status,
-      flags: sesion.flags ?? [],
     });
   }
 

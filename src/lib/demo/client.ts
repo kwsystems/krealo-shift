@@ -1473,18 +1473,41 @@ function crearRpc(almacen: Almacen) {
       }
 
       case 'export_timesheet_rows': {
+        /*
+         * Como `exportTimesheetRows` (2-oct): las jornadas de los días de la SEDE pedidos,
+         * abiertas incluidas, con la misma forma. Antes aquí salía el día en UTC y sin las
+         * abiertas, y el servidor mandaba otra forma: la demostración funcionaba y
+         * producción no.
+         */
         const ubicacion = argumentos.p_location_id;
+        const desde = String(argumentos.p_from ?? '');
+        const hasta = String(argumentos.p_to ?? '\uffff');
+        const zona = String(
+          filas('locations').find((fila) => fila.id === ubicacion)?.timezone ?? 'America/Lima',
+        );
+        const diaDe = (instante: string) =>
+          new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(instante));
         const nombres = new Map(
           filas('employees').map((fila) => [fila.id, String(fila.full_name ?? '')]),
         );
         const salida = filas('work_sessions')
-          .filter((fila) => fila.location_id === ubicacion && fila.ends_at !== null)
+          .filter((fila) => {
+            if (fila.location_id !== ubicacion) return false;
+            const dia = diaDe(String(fila.starts_at));
+            return dia >= desde && dia <= hasta;
+          })
+          .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))
           .map((fila) => {
             const netos = Number(fila.net_minutes ?? 0);
             return {
               employee_id: fila.employee_id,
               employee_name: nombres.get(fila.employee_id) ?? 'Empleado',
-              work_date: String(fila.starts_at).slice(0, 10),
+              work_date: diaDe(String(fila.starts_at)),
               clock_in: fila.starts_at,
               clock_out: fila.ends_at,
               gross_minutes: fila.gross_minutes,

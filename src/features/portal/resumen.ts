@@ -1,7 +1,10 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
+import { minutesBetween } from '@/utils/time';
 import { sesionDelTurno } from '@/features/reports/bono';
 import type { WorkSession } from '@/features/timesheets/api';
+import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
+import { minutosEnCurso } from '@/features/timesheets/en-curso';
 import { estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
 import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 
@@ -44,7 +47,9 @@ export type EstadoDelDia =
   /** Una falta que quien administra justificó: no le quita el bono. */
   | 'faltaJustificada'
   /** Turno terminado sin ninguna jornada de antes del reloj, o sin saber aún desde cuándo. */
-  | 'sinMarca';
+  | 'sinMarca'
+  /** Entró y no marcó la salida, y ya pasó más de lo que dura un turno: ver `jornadaOlvidada`. */
+  | 'sinSalida';
 
 export type DiaDelVendedor = {
   dia: DateKey;
@@ -63,11 +68,37 @@ export type DiaDelVendedor = {
 
 const MIN = 60 * 1000;
 
-/** Minutos netos de una jornada; si sigue abierta, lo que lleva hasta ahora. */
-export function minutosDeLaJornada(jornada: WorkSession, nowISO: string): number {
+/**
+ * Una jornada abierta más de lo que dura un turno es una salida olvidada (2-oct), con la
+ * regla de Horas (`OPEN_SESSION_ALERT_MINUTES`): no está trabajando, y sus horas no se
+ * saben hasta que alguien ponga la salida.
+ */
+export function jornadaOlvidada(jornada: WorkSession, nowISO: string): boolean {
+  return (
+    jornada.ends_at === null &&
+    minutesBetween(jornada.starts_at, nowISO) > OPEN_SESSION_ALERT_MINUTES
+  );
+}
+
+/**
+ * Minutos netos de una jornada; si sigue abierta, lo que lleva hasta ahora con LA CUENTA DE
+ * HORAS Y EQUIPO (`minutosEnCurso`): sin los descansos ya tomados y parada mientras está en
+ * su pausa (`descansoDesde`). Antes aquí se redondeaba y se seguía contando durante el
+ * refrigerio, así que el celular decía un minuto más que Horas, o una hora más a la hora
+ * de comer. Una salida olvidada no suma nada: sus horas no se saben.
+ */
+export function minutosDeLaJornada(
+  jornada: WorkSession,
+  nowISO: string,
+  descansoDesde: string | null = null,
+): number {
   if (jornada.ends_at !== null) return jornada.net_minutes ?? 0;
-  const bruto = Math.max(0, Math.round((Date.parse(nowISO) - Date.parse(jornada.starts_at)) / MIN));
-  return Math.max(0, bruto - (jornada.unpaid_break_minutes ?? 0));
+  if (jornadaOlvidada(jornada, nowISO)) return 0;
+  return minutosEnCurso(
+    jornada,
+    descansoDesde === null ? undefined : { estado: 'descanso', descansoDesde },
+    nowISO,
+  );
 }
 
 export function diasDelVendedor(params: {
@@ -80,6 +111,8 @@ export function diasDelVendedor(params: {
   relojDesde?: (locationId: string) => DateKey | null | undefined;
   /** Lo que se dijo de sus faltas. */
   resoluciones?: readonly ResolucionDeFalta[];
+  /** Si está en su pausa ahora, desde cuándo: sus horas de hoy se paran ahí. */
+  descansoDesde?: string | null;
 }): DiaDelVendedor[] {
   const { dias, turnos, jornadas, timezone, nowISO } = params;
   const faltas = faltasDeLosTurnos({
@@ -100,7 +133,10 @@ export function diasDelVendedor(params: {
     const delDia = jornadas
       .filter((j) => dateKeyOf(j.starts_at, timezone) === dia)
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
-    const minutosNetos = delDia.reduce((suma, j) => suma + minutosDeLaJornada(j, nowISO), 0);
+    const minutosNetos = delDia.reduce(
+      (suma, j) => suma + minutosDeLaJornada(j, nowISO, params.descansoDesde ?? null),
+      0,
+    );
 
     const primerTurno = suyos[0];
     const primeraJornada =
@@ -115,7 +151,8 @@ export function diasDelVendedor(params: {
     }
 
     const estado = ((): EstadoDelDia => {
-      if (delDia.some((j) => j.ends_at === null)) return 'enCurso';
+      if (delDia.some((j) => j.ends_at === null && !jornadaOlvidada(j, nowISO))) return 'enCurso';
+      if (delDia.some((j) => jornadaOlvidada(j, nowISO))) return 'sinSalida';
       if (primeraJornada !== undefined) {
         return primeraJornada.flags.includes('late_arrival') ? 'tarde' : 'aTiempo';
       }

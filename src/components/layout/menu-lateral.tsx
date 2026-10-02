@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
-import { useDisponibilidad } from '@/features/availability/api';
+import { useNovedadesDeDisponibilidad } from '@/features/availability/novedades';
+import { usePendingRequestCount } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTonos, type Tono } from '@/theme/tonos';
@@ -40,6 +41,8 @@ type Destino = {
   etiqueta: string;
   icono: keyof typeof Ionicons.glyphMap;
   tono: Tono;
+  /** Lo que espera respuesta ahí: las solicitudes de Bandeja. */
+  insignia?: number;
   hijos?: readonly { ruta: string; etiqueta: string; insignia?: number }[];
 };
 
@@ -49,8 +52,10 @@ export function MenuLateral({ state, navigation }: PropsDelMenu) {
   const { t } = useTranslation();
   const estilos = useEstilos();
   const scope = useManagerScope();
-  const disponibilidad = useDisponibilidad(scope.organization?.id ?? null);
-  const nuevas = (disponibilidad.data ?? []).filter((fila) => fila.status === 'new').length;
+  // Los dos números del menú son los de sus pantallas: ver `novedades.ts` y Bandeja.
+  const nuevas = useNovedadesDeDisponibilidad();
+  const pendientes =
+    usePendingRequestCount(scope.organization?.id ?? null, scope.locationId).data ?? 0;
   const activa = state.routes[state.index]?.name ?? 'index';
 
   const destinos: readonly Destino[] = [
@@ -73,6 +78,7 @@ export function MenuLateral({ state, navigation }: PropsDelMenu) {
       etiqueta: t('admin.tabRequests'),
       icono: 'file-tray-outline',
       tono: 'naranja',
+      insignia: pendientes,
     },
     {
       ruta: 'settings',
@@ -148,7 +154,9 @@ function Entrada({
       onPress={onPress}
       onHoverIn={() => setEncima(true)}
       onHoverOut={() => setEncima(false)}
-      accessibilityLabel={destino.etiqueta}
+      accessibilityLabel={
+        (destino.insignia ?? 0) > 0 ? `${destino.etiqueta}, ${destino.insignia}` : destino.etiqueta
+      }
       accessibilityState={{ selected: activa }}
       testID={`menu-${destino.ruta}`}
       style={({ pressed }) => [
@@ -174,6 +182,19 @@ function Entrada({
       >
         {destino.etiqueta}
       </AppText>
+      {(destino.insignia ?? 0) > 0 ? (
+        <View
+          style={[
+            estilos.insignia,
+            { backgroundColor: tonos.naranja.fondo, borderColor: tonos.naranja.borde },
+          ]}
+          testID={`menu-${destino.ruta}-insignia`}
+        >
+          <AppText variant="label" style={{ color: tonos.naranja.tinta }} tabular>
+            {String(destino.insignia)}
+          </AppText>
+        </View>
+      ) : null}
     </Pressable>
   );
 }

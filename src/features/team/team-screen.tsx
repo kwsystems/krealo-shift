@@ -158,10 +158,20 @@ export function TeamScreen() {
   const dentroPorMiembro = useMemo(() => {
     const map = new Map<string, DentroEnEquipo>();
     for (const [employeeId, persona] of dentro) {
+      /*
+       * «ALMORZANDO DESDE LAS 14:18», no desde que entró (2-oct). Al lado del estado, la
+       * hora es la de ese estado: la entrada si trabaja, el inicio de la pausa si descansa.
+       * Es lo que dicen Horas, Horario e Inicio de la misma persona.
+       */
       map.set(employeeId, {
         estado: persona.estado,
         motivo: persona.motivo,
-        desde: formatClockTime(persona.desde, scope.timezone, scope.timeFormat, language),
+        desde: formatClockTime(
+          persona.descansoDesde ?? persona.desde,
+          scope.timezone,
+          scope.timeFormat,
+          language,
+        ),
       });
     }
     return map;

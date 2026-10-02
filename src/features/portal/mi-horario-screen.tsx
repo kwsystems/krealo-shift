@@ -14,6 +14,7 @@ import {
 } from './api';
 import {
   diasDelVendedor,
+  jornadaOlvidada,
   minutosDeLaJornada,
   resumenDelMes,
   type DiaDelVendedor,
@@ -198,42 +199,15 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   const misJustificaciones = useMisJustificaciones(base);
   const resoluciones = misJustificaciones.data ?? [];
 
-  const hoy = dateKeyOf(nowISO, tz);
-  const miDisponibilidad = useMiDisponibilidad(base);
-  const diasSemana = diasDelVendedor({
-    dias: weekDays(semana === 'esta' ? inicio : addWeeks(inicio, 1)),
-    turnos: turnosSemanas.data ?? [],
-    jornadas: jornadasSemanas.data ?? [],
-    timezone: tz,
-    nowISO,
-    relojDesde,
-    resoluciones,
-  });
-  const diaDeHoy = diasDelVendedor({
-    dias: [hoy],
-    turnos: turnosSemanas.data ?? [],
-    jornadas: jornadasSemanas.data ?? [],
-    timezone: tz,
-    nowISO,
-    relojDesde,
-    resoluciones,
-  })[0];
-  const diasMes = diasDelVendedor({
-    dias: periodo.dias,
-    turnos: turnosMes.data ?? [],
-    jornadas: jornadasMes.data ?? [],
-    timezone: tz,
-    nowISO,
-    relojDesde,
-    resoluciones,
-  });
-  const mes = resumenDelMes(diasMes);
-  const diasConAlgo = diasMes.filter(
-    (d) => d.jornadas.length > 0 || d.estado === 'sinMarca' || d.faltas.length > 0,
+  /*
+   * SOLO SI ESTÁ DENTRO: ¿trabajando o en su descanso? Lo dice la última marca. Se mira
+   * ANTES de contar los días (2-oct), porque durante el refrigerio el reloj se para: con
+   * la cuenta de Horas y Equipo (`minutosEnCurso`), sus horas de hoy no siguen subiendo
+   * mientras come. Antes el celular las seguía sumando y bajaban de golpe al volver.
+   */
+  const abierta = (jornadasSemanas.data ?? []).find(
+    (j) => j.ends_at === null && !jornadaOlvidada(j, nowISO),
   );
-
-  // Solo si está dentro: ¿trabajando o en su descanso? Lo dice la última marca de hoy.
-  const abierta = diaDeHoy?.jornadas.find((j) => j.ends_at === null);
   const marcasDeHoy = useQuery({
     queryKey: ['portal', 'marcas', ficha.employeeId, abierta?.id ?? 'ninguna'],
     queryFn: () =>
@@ -247,6 +221,44 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   });
   const ultima = marcasDeHoy.data?.at(-1);
   const enDescanso = abierta !== undefined && ultima?.event_type === 'break_start';
+  const descansoDesde = enDescanso && ultima !== undefined ? ultima.occurred_at : null;
+
+  const hoy = dateKeyOf(nowISO, tz);
+  const miDisponibilidad = useMiDisponibilidad(base);
+  const diasSemana = diasDelVendedor({
+    dias: weekDays(semana === 'esta' ? inicio : addWeeks(inicio, 1)),
+    turnos: turnosSemanas.data ?? [],
+    jornadas: jornadasSemanas.data ?? [],
+    timezone: tz,
+    nowISO,
+    relojDesde,
+    resoluciones,
+    descansoDesde,
+  });
+  const diaDeHoy = diasDelVendedor({
+    dias: [hoy],
+    turnos: turnosSemanas.data ?? [],
+    jornadas: jornadasSemanas.data ?? [],
+    timezone: tz,
+    nowISO,
+    relojDesde,
+    resoluciones,
+    descansoDesde,
+  })[0];
+  const diasMes = diasDelVendedor({
+    dias: periodo.dias,
+    turnos: turnosMes.data ?? [],
+    jornadas: jornadasMes.data ?? [],
+    timezone: tz,
+    nowISO,
+    relojDesde,
+    resoluciones,
+    descansoDesde,
+  });
+  const mes = resumenDelMes(diasMes);
+  const diasConAlgo = diasMes.filter(
+    (d) => d.jornadas.length > 0 || d.estado === 'sinMarca' || d.faltas.length > 0,
+  );
 
   const cargandoSemana = turnosSemanas.isPending || jornadasSemanas.isPending;
   const fallo =
@@ -284,7 +296,8 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             <Hoy
               dia={diaDeHoy}
               enDescanso={enDescanso}
-              desdeDescanso={enDescanso && ultima !== undefined ? hora(ultima.occurred_at) : null}
+              desdeDescanso={descansoDesde === null ? null : hora(descansoDesde)}
+              descansoDesdeISO={descansoDesde}
               hora={hora}
               nowISO={nowISO}
               zona={tz}
@@ -478,6 +491,7 @@ function Hoy({
   dia,
   enDescanso,
   desdeDescanso,
+  descansoDesdeISO,
   hora,
   nowISO,
   zona,
@@ -485,6 +499,8 @@ function Hoy({
   dia: DiaDelVendedor;
   enDescanso: boolean;
   desdeDescanso: string | null;
+  /** El instante en que empezó su pausa: con él, sus horas no suben mientras descansa. */
+  descansoDesdeISO: string | null;
   hora: (instante: string) => string;
   nowISO: string;
   /** La de su sede: los feriados del Perú solo salen en sedes del Perú. */
@@ -493,7 +509,7 @@ function Hoy({
   const { t } = useTranslation();
   const estilos = useEstilos();
   const turno = dia.turnos[0];
-  const abierta = dia.jornadas.find((j) => j.ends_at === null);
+  const abierta = dia.jornadas.find((j) => j.ends_at === null && !jornadaOlvidada(j, nowISO));
   const rango =
     turno === undefined
       ? null
@@ -518,10 +534,12 @@ function Hoy({
         detalle:
           dia.jornadas.length > 1
             ? t('portal.nowSoFarDay', {
-                hours: duracion(minutosDeLaJornada(abierta, nowISO), t),
+                hours: duracion(minutosDeLaJornada(abierta, nowISO, descansoDesdeISO), t),
                 day: duracion(dia.minutosNetos, t),
               })
-            : t('portal.nowSoFar', { hours: duracion(minutosDeLaJornada(abierta, nowISO), t) }),
+            : t('portal.nowSoFar', {
+                hours: duracion(minutosDeLaJornada(abierta, nowISO, descansoDesdeISO), t),
+              }),
       };
     }
     if (dia.jornadas.length > 0) {
@@ -616,6 +634,8 @@ const INSIGNIA: Partial<
     clave: 'portal.badgeAbsentJustified',
   },
   sinMarca: { tono: 'warning', icono: 'help-circle-outline', clave: 'portal.badgeNoMark' },
+  // La misma palabra que Horas para la salida olvidada.
+  sinSalida: { tono: 'warning', icono: 'alert-circle', clave: 'portal.badgeNoClockOut' },
 };
 
 /** Un día: a la izquierda cuándo, en medio el turno y lo que marcó, a la derecha cómo fue. */

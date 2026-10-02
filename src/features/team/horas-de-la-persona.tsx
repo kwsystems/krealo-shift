@@ -16,6 +16,7 @@ import {
   type DateKey,
 } from '@/features/schedules/week';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
+import { alertsForSession } from '@/features/timesheets/alerts';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
 import { estadoDeFalta } from '@/features/timesheets/faltas';
 import {
@@ -142,11 +143,22 @@ export function HorasDeLaPersona({
   const detalleDeSusFaltas = detalleDeFaltas(t, susFaltas);
   const diaEnCurso = enCurso === undefined ? null : dateKeyOf(enCurso.desde, timezone);
   const minutosPorDia = new Map<DateKey, number>();
-  const porRevisar = new Set<DateKey>();
   for (const fila of resumenes.data ?? []) {
     if (fila.employee_id !== employeeId) continue;
     minutosPorDia.set(fila.work_date, (minutosPorDia.get(fila.work_date) ?? 0) + fila.net_minutes);
-    if (fila.needs_review === true) porRevisar.add(fila.work_date);
+  }
+  /*
+   * «NECESITA REVISIÓN» CON LA REGLA DEL FILTRO DE HORAS (2-oct): un día con alguna jornada
+   * con aviso (`alertsForSession`). Antes se leía `needs_review` del resumen, un estado que
+   * el servidor no escribe: en producción ningún día salía nunca por revisar, y Horas sí
+   * listaba esas jornadas bajo el mismo nombre.
+   */
+  const porRevisar = new Set<DateKey>();
+  for (const jornada of jornadas.data ?? []) {
+    if (jornada.employee_id !== employeeId) continue;
+    if (alertsForSession(jornada, nowISO).length > 0) {
+      porRevisar.add(dateKeyOf(jornada.starts_at, timezone));
+    }
   }
   if (diaEnCurso !== null && enCurso !== undefined && periodo.dias.includes(diaEnCurso)) {
     minutosPorDia.set(diaEnCurso, (minutosPorDia.get(diaEnCurso) ?? 0) + enCurso.minutos);
@@ -335,7 +347,7 @@ function TarjetaDeLaSemana({
               valor === '—' ? t('team.noHoursThatDay') : valor,
               detalle,
               dia === diaEnCurso ? t('timesheet.live') : null,
-              revisar ? t('timesheet.needsReviewBadge') : null,
+              revisar ? t('states.needsReviewBadge') : null,
               falta === undefined ? null : falta.texto,
             ]
               .filter((parte): parte is string => parte !== null)
@@ -368,7 +380,7 @@ function TarjetaDeLaSemana({
                   tabular
                   testID={`person-day-${dia}-tramos`}
                 >
-                  {revisar ? `${detalle} · ${t('timesheet.needsReviewBadge')}` : detalle}
+                  {revisar ? `${detalle} · ${t('states.needsReviewBadge')}` : detalle}
                 </AppText>
               )}
               {falta === undefined ? null : (

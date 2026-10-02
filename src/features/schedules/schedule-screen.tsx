@@ -71,6 +71,7 @@ import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/but
 import { AppScreen, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { useEmployeeNames, useJobRoles, useTeam } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
+import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -78,7 +79,7 @@ import { useDisponibilidad } from '@/features/availability/api';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing } from '@/theme/tokens';
-import { formatClockTime, formatShiftRange } from '@/utils/time';
+import { formatClockTime, formatShiftRange, minutesBetween } from '@/utils/time';
 
 /**
  * Editor de horarios semanales (§11.3): la función principal del panel.
@@ -216,6 +217,16 @@ export function ScheduleScreen({
       }),
     [workingNow.data, names, scope.timezone, scope.timeFormat, language],
   );
+  /*
+   * SIN LAS SALIDAS OLVIDADAS (2-oct): con la regla de 16 h de Horas y de las tarjetas de
+   * aquí abajo (`estadoDelTurnoAhora`), quien se fue ayer sin marcar no está «en turno».
+   */
+  const olvidadas = new Set(
+    (workingNow.data ?? [])
+      .filter((fila) => minutesBetween(fila.starts_at, nowISO) > OPEN_SESSION_ALERT_MINUTES)
+      .map((fila) => fila.employee_id),
+  );
+  const enTurnoDeVerdad = enTurnoAhora.filter((persona) => !olvidadas.has(persona.id));
   const jobRolesQuery = useJobRoles(scope.organization?.id ?? null);
   const team = useTeam({
     organizationId: scope.organization?.id ?? null,
@@ -781,7 +792,7 @@ export function ScheduleScreen({
               ) : null}
 
               {/* Quién está en la tienda ahora mismo: solo tiene sentido en esta semana. */}
-              {position === 'current' ? <EnTurnoAhora personas={enTurnoAhora} /> : null}
+              {position === 'current' ? <EnTurnoAhora personas={enTurnoDeVerdad} /> : null}
 
               <AsyncSection
                 isPending={shiftsQuery.isPending || team.isPending}
@@ -874,6 +885,7 @@ export function ScheduleScreen({
                 totals={totals}
                 weeklyLimitMinutes={scope.settings.weeklyOvertimeThresholdMinutes}
                 totalMinutes={analysis.totalMinutes}
+                draftMinutes={analysis.draftMinutes}
               />
 
               <PublicationHistory

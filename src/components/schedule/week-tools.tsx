@@ -346,10 +346,17 @@ export function WeeklyHoursSummary({
   totals,
   weeklyLimitMinutes,
   totalMinutes,
+  draftMinutes = 0,
 }: {
   totals: EmployeeTotal[];
   weeklyLimitMinutes: number;
   totalMinutes: number;
+  /**
+   * Lo que de ese total está en borrador (2-oct). Horario suma los borradores porque es
+   * donde se arma la semana; Inicio y Reportes cuentan solo lo publicado. Sin decirlo, el
+   * mismo día Horario decía 144:00 e Inicio 122:00, y parecía que uno de los dos fallaba.
+   */
+  draftMinutes?: number;
 }) {
   const { t } = useTranslation();
   /*
@@ -365,6 +372,14 @@ export function WeeklyHoursSummary({
       <AppText variant="bodyStrong">
         {t('schedule.totalWeeklyHours', { hours: minutesToHHmm(totalMinutes) })}
       </AppText>
+      {draftMinutes > 0 ? (
+        <AppText variant="help" tone="subtle" testID="weekly-total-drafts">
+          {t('schedule.totalWeeklyDrafts', {
+            drafts: minutesToHHmm(draftMinutes),
+            published: minutesToHHmm(Math.max(0, totalMinutes - draftMinutes)),
+          })}
+        </AppText>
+      ) : null}
       {totals.length === 0 ? (
         <AppText variant="help" tone="subtle">
           {t('schedule.noShiftsThisWeek')}

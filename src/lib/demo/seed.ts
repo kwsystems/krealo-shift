@@ -461,7 +461,9 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         paid_break_minutes: descansoPagado,
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
-        status: tarde ? 'needs_review' : 'complete',
+        // `complete`, con su marca de tardanza: el servidor no escribe `needs_review` en
+        // una jornada (2-oct), y con él la demostración contaba tardanzas como «sin cerrar».
+        status: 'complete',
         flags: [
           ...(tarde ? ['late_arrival'] : []),
           ...(enferma ? ['early_departure'] : []),
@@ -480,7 +482,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         paid_break_minutes: descansoPagado,
         unpaid_break_minutes: descansoNoPagado,
         net_minutes: netos,
-        needs_review: tarde,
+        needs_review: false,
         flags: tarde ? ['late_arrival'] : [],
       });
 
@@ -615,7 +617,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       paid_break_minutes: descansoPagado,
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
-      status: revisar ? 'needs_review' : 'complete',
+      status: 'complete',
       flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
       updated_at: aISO(salida),
     });
@@ -629,7 +631,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       paid_break_minutes: descansoPagado,
       unpaid_break_minutes: descansoNoPagado,
       net_minutes: netos,
-      needs_review: revisar,
+      needs_review: false,
       flags: sinTurno ? ['unscheduled'] : revisar ? ['late_arrival'] : [],
     });
 

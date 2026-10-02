@@ -42,6 +42,7 @@ import {
 } from '@/utils/time';
 import { dateKeyOf } from '@/features/schedules/week';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
+import { CLAVE_DE_ESTADO, estadoVisible, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
 
 /**
  * Inicio administrativo (§11.1).
@@ -146,10 +147,12 @@ export default function ManagerHomeScreen() {
    */
   const timeLabelKey = (estado: RightNowEntry['state']): string => {
     switch (estado) {
+      // «Desde las 14:42» en los dos: el estado —«Trabajando», «Almorzando», «En
+      // descanso»— lo dice la insignia de al lado (2-oct). Con «En descanso desde las
+      // 14:42» junto a «Almorzando», la misma fila decía dos cosas.
       case 'working':
-        return 'admin.sinceLabel';
       case 'onBreak':
-        return 'admin.sinceBreakLabel';
+        return 'admin.sinceLabel';
       case 'upcoming':
         return 'admin.dueAtLabel';
       default:
@@ -161,12 +164,20 @@ export default function ManagerHomeScreen() {
   const cuentaTiempo = (estado: RightNowEntry['state']): boolean =>
     estado === 'working' || estado === 'onBreak';
 
+  /*
+   * «TRABAJANDO», «ALMORZANDO» O «EN DESCANSO», con las palabras de Horas, Equipo y
+   * Horario (`estadoVisible`). Inicio decía «En descanso» de quien Equipo, en el mismo
+   * minuto, decía «Almorzando».
+   */
   const stateLabel = (entry: RightNowEntry): string => {
     switch (entry.state) {
       case 'working':
-        return t('attendance.statusWorking');
       case 'onBreak':
-        return t('attendance.statusOnBreak');
+        return t(
+          CLAVE_DE_ESTADO[
+            estadoVisible(entry.state === 'working' ? 'trabajando' : 'descanso', entry.motivo)
+          ],
+        );
       case 'upcoming':
         return t('admin.upcoming');
       case 'late':
@@ -414,15 +425,24 @@ export default function ManagerHomeScreen() {
                                     tabular
                                     style={estilosDeColumna.transcurrido}
                                   >
+                                    {/*
+                                      Quien trabaja: lo trabajado, sin los descansos ya
+                                      tomados, con la cuenta de Horas. Quien descansa:
+                                      cuánto lleva de descanso.
+                                    */}
                                     {cuentaTiempo(entry.state)
                                       ? t('admin.elapsedLabel', {
                                           duration: minutesToHHmm(
-                                            Math.max(
-                                              0,
-                                              Math.round(
-                                                (now.getTime() - Date.parse(entry.since)) / 60000,
-                                              ),
-                                            ),
+                                            entry.state === 'working' &&
+                                              entry.minutosTrabajados !== null
+                                              ? entry.minutosTrabajados
+                                              : Math.max(
+                                                  0,
+                                                  Math.floor(
+                                                    (now.getTime() - Date.parse(entry.since)) /
+                                                      60000,
+                                                  ),
+                                                ),
                                           ),
                                         })
                                       : ''}
@@ -444,7 +464,7 @@ export default function ManagerHomeScreen() {
                                       entry.state === 'working'
                                         ? 'checkmark-circle'
                                         : entry.state === 'onBreak'
-                                          ? 'cafe-outline'
+                                          ? ICONO_DE_ESTADO[estadoVisible('descanso', entry.motivo)]
                                           : entry.state === 'upcoming'
                                             ? 'log-in-outline'
                                             : 'alert-circle'

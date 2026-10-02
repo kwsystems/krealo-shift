@@ -37,6 +37,17 @@ export function diaDeSemanaIso(dia: DateKey): number {
   return domingoCero === 0 ? 7 : domingoCero;
 }
 
+/**
+ * Los siete días (1 = lunes … 7 = domingo) en el orden de la semana de la sede (2-oct):
+ * `weekStartsOn` es el de Horario, Horas y Reportes (0 = domingo). La tabla de
+ * Disponibilidad empezaba siempre en lunes, y con la semana de domingo a sábado sus
+ * columnas no caían en el orden de las de Horario.
+ */
+export function diasEnOrden(weekStartsOn: number): number[] {
+  const primero = ((weekStartsOn % 7) + 7) % 7 || 7;
+  return Array.from({ length: 7 }, (_, indice) => ((primero - 1 + indice) % 7) + 1);
+}
+
 /** ¿Esta fila dice algo de ese día? */
 export function aplicaAlDia(fila: Disponibilidad, dia: DateKey): boolean {
   return fila.kind === 'date' ? fila.date === dia : fila.weekday === diaDeSemanaIso(dia);

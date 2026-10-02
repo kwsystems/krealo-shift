@@ -1,6 +1,6 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import type { WorkSession } from '@/features/timesheets/api';
-import { diasDelVendedor, resumenDelMes } from '../resumen';
+import { diasDelVendedor, minutosDeLaJornada, resumenDelMes } from '../resumen';
 
 /**
  * Lo que ve el vendedor de cada día. Cada caso es una pregunta que se hace mirando su
@@ -197,5 +197,39 @@ describe('el resumen del mes', () => {
     expect(lista[0]?.justificaciones).toEqual([justificada]);
     expect(lista[1]?.justificaciones).toEqual([]);
     expect(resumenDelMes(lista)).toMatchObject({ faltas: 2, faltasJustificadas: 1 });
+  });
+});
+
+describe('lo que lleva hoy, con la cuenta de Horas (2-oct)', () => {
+  const t = turno('07', '14:00', '23:00');
+  const abierta = jornada(t, {
+    starts_at: '2026-10-07T14:00:00.000Z',
+    ends_at: null,
+    net_minutes: null,
+    unpaid_break_minutes: 30,
+    status: 'open',
+  });
+
+  it('descuenta los descansos tomados y trunca como Horas', () => {
+    // 14:00 → 20:00:59 son 360 min; menos 30 de descanso.
+    expect(minutosDeLaJornada(abierta, '2026-10-07T20:00:59.000Z')).toBe(330);
+  });
+
+  it('se para mientras está en su pausa', () => {
+    expect(
+      minutosDeLaJornada(abierta, '2026-10-07T20:00:00.000Z', '2026-10-07T19:00:00.000Z'),
+    ).toBe(270);
+  });
+
+  it('una salida olvidada no suma horas ni sale como «trabajando»', () => {
+    const ayer = jornada(turno('06'), {
+      starts_at: '2026-10-06T14:00:00.000Z',
+      ends_at: null,
+      net_minutes: null,
+      status: 'open',
+    });
+    expect(minutosDeLaJornada(ayer, AHORA)).toBe(0);
+    const [d] = dias([turno('06')], [ayer], ['06'], '2026-10-01');
+    expect(d).toMatchObject({ estado: 'sinSalida', minutosNetos: 0 });
   });
 });

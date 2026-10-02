@@ -20,6 +20,7 @@ import {
 import {
   collectScheduleWarnings,
   scheduledMinutesByEmployee,
+  shiftScheduledMinutes,
   type ScheduledShift,
   type ScheduleWarning,
 } from './conflicts';
@@ -122,6 +123,8 @@ export type WeekAnalysis = {
   warnings: ScheduleWarning[];
   minutesByEmployee: Map<string, number>;
   totalMinutes: number;
+  /** De ese total, lo que está en borrador: Inicio y Reportes cuentan solo lo publicado. */
+  draftMinutes: number;
   pendingShiftIds: string[];
 };
 
@@ -140,6 +143,9 @@ export function analyzeWeek(params: {
     warnings: collectScheduleWarnings(shifts, { minimumRestMinutes, weeklyLimitMinutes }),
     minutesByEmployee,
     totalMinutes,
+    draftMinutes: shifts
+      .filter((shift) => shift.status === 'draft')
+      .reduce((suma, shift) => suma + shiftScheduledMinutes(shift), 0),
     // Lo pendiente de publicar es exactamente lo que está en borrador (§11.3).
     pendingShiftIds: shifts.filter((shift) => shift.status === 'draft').map((shift) => shift.id),
   };

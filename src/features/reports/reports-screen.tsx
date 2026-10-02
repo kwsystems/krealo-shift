@@ -62,7 +62,11 @@ import {
   type DateKey,
 } from '@/features/schedules/week';
 import { useEmployeeNames, useEmployees } from '@/features/team/hooks';
-import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
+import {
+  useDailySummaries,
+  useSesionesAlDiaCon,
+  useWorkSessions,
+} from '@/features/timesheets/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { track } from '@/lib/analytics';
@@ -274,6 +278,9 @@ export function ReportsScreen() {
    */
   const incluyeHoy = periodo.dias.includes(hoyKey);
   const workingNow = useWorkingNow(incluyeHoy ? scope.locationId : null);
+  // Una salida o un descanso cambian quién está dentro (2-oct): lo mismo que hacen Horas y
+  // Equipo, para que Reportes no siga contando dentro a quien ya se fue.
+  useSesionesAlDiaCon(incluyeHoy ? scope.locationId : null, workingNow.data);
   const programado = programadoDelPeriodo({
     turnos: turnosDelMes.data ?? [],
     dias: periodo.dias,

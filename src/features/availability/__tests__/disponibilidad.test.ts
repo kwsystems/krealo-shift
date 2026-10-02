@@ -2,9 +2,11 @@ import {
   aplicaAlDia,
   chocaConElTurno,
   diaDeSemanaIso,
+  diasEnOrden,
   disponibilidadDelDia,
   type Disponibilidad,
 } from '../disponibilidad';
+import { esNovedad } from '../novedades';
 
 /** «Los martes no puedo» y «el 15 tengo cita»: qué aplica a qué día y con qué choca. */
 
@@ -63,5 +65,36 @@ describe('disponibilidad', () => {
       chocaConElTurno(fila({ type: 'preferred', from_time: '14:00', to_time: '22:00' }), turno),
     ).toBe(false);
     expect(chocaConElTurno(fila({ type: 'note', note: 'x' }), turno)).toBe(false);
+  });
+});
+
+describe('la semana de la sede y lo nuevo (2-oct)', () => {
+  it('las columnas siguen la semana de Horario: de lunes o de domingo', () => {
+    expect(diasEnOrden(1)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(diasEnOrden(0)).toEqual([7, 1, 2, 3, 4, 5, 6]);
+    expect(diasEnOrden(6)).toEqual([6, 7, 1, 2, 3, 4, 5]);
+  });
+
+  it('una fecha que ya pasó no es novedad: la pantalla no la enseña', () => {
+    const base = {
+      id: 'd',
+      organization_id: 'o',
+      employee_id: 'e',
+      type: 'unavailable',
+      from_time: null,
+      to_time: null,
+      note: null,
+      source: 'employee',
+      updated_at: '',
+    };
+    const hoy = '2026-10-02';
+    const pasada = { ...base, kind: 'date', weekday: null, date: '2026-10-01', status: 'new' };
+    const futura = { ...pasada, date: '2026-10-05' };
+    const semanal = { ...base, kind: 'weekly', weekday: 5, date: null, status: 'new' };
+    const vista = { ...semanal, status: 'seen' };
+    expect(esNovedad(pasada as unknown as Disponibilidad, hoy)).toBe(false);
+    expect(esNovedad(futura as unknown as Disponibilidad, hoy)).toBe(true);
+    expect(esNovedad(semanal as unknown as Disponibilidad, hoy)).toBe(true);
+    expect(esNovedad(vista as unknown as Disponibilidad, hoy)).toBe(false);
   });
 });

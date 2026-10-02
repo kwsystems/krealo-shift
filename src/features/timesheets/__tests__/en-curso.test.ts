@@ -191,10 +191,29 @@ describe('quién está dentro, por persona (Equipo)', () => {
       estado: 'trabajando',
       motivo: null,
       desde: trabajando.starts_at,
+      descansoDesde: null,
       minutos: 75,
     });
     // Y es exactamente lo que diría su fila en Horas.
     expect(persona?.minutos).toBe(minutosEnCurso(trabajando, enCurso.get('a'), AHORA));
+  });
+
+  it('en su pausa, dice desde cuándo descansa: la hora que Equipo pone al lado (2-oct)', () => {
+    const comiendo = abierta({ id: 'b', employee_id: 'e2' });
+    const enCurso = enCursoPorSesionDe([
+      {
+        work_session_id: 'b',
+        attendance_state: 'ON_BREAK',
+        break_started_at: '2026-09-29T16:30:00.000Z',
+        break_reason: 'meal',
+      },
+    ]);
+    expect(dentroPorEmpleado([comiendo], enCurso, AHORA).get('e2')).toMatchObject({
+      estado: 'descanso',
+      motivo: 'meal',
+      desde: comiendo.starts_at,
+      descansoDesde: '2026-09-29T16:30:00.000Z',
+    });
   });
 
   it('ni la jornada cerrada ni la salida olvidada son alguien dentro', () => {

@@ -55,9 +55,10 @@ const ORDEN: Readonly<Record<ClaveAccionable, number>> = {
 /** Dónde se resuelve cada cosa. Una cifra destacada que no lleva a ningún sitio obliga
  *  a buscar la pantalla a mano, y entonces da igual lo visible que sea. */
 const DESTINO: Readonly<Record<ClaveAccionable, string | null>> = {
-  // Un ausente y un atrasado se resuelven llamando por teléfono, no dentro de la app.
-  // Se lleva al horario, que es donde se ve a quién le tocaba y se puede recolocar.
-  absent: '/(manager)/schedule',
+  // UNA FALTA SE RESUELVE EN HORAS (2-oct): ahí se dice por qué faltó o, si vino y no
+  // marcó, se registran sus horas. El texto del aviso lo dice así, y llevaba a Horario.
+  absent: '/(manager)/hours',
+  // Quien no ha llegado se resuelve llamando; en el horario se ve a quién le tocaba.
   late: '/(manager)/schedule',
   incomplete: '/(manager)/hours',
   requests: '/(manager)/requests',

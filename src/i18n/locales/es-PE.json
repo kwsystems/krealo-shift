@@ -14,7 +14,6 @@
   },
   "availability": {
     "title": "Disponibilidad",
-    "intro": "Lo que cada persona dice de los días que puede o no trabajar. Sale también en el Horario, al lado de sus turnos.",
     "add": "Agregar disponibilidad",
     "addFor": "Agregar disponibilidad de {{name}} el {{day}}",
     "newCount_one": "1 novedad sin ver",
@@ -28,9 +27,6 @@
     "emptyWeekly": "Nadie ha dicho todavía nada que se repita cada semana.",
     "emptyDates": "No hay días puntuales por delante.",
     "everyWeekday": "Cada {{day}}",
-    "legendUnavailable": "No puede",
-    "legendPreferred": "Prefiere unas horas",
-    "legendNote": "Comentario",
     "howTitle": "Tu equipo lo escribe desde su celular",
     "howBody": "Cada persona entra a Krealo Shift con su cuenta y, en «Mi disponibilidad», toca Agregar: «los martes no puedo», «el 15 tengo cita» o un comentario. Te llega aquí con un punto naranja y sale en el Horario junto a sus turnos. También puedes agregarlo tú en su nombre.",
     "countUnavailable_one": "{{count}} no puede",
@@ -82,8 +78,7 @@
     "portalAdd": "Agregar",
     "portalEmpty": "Todavía no has dicho nada. Si hay un día que no puedes, agrégalo aquí.",
     "portalSeen": "Visto",
-    "portalSent": "Enviado, sin ver todavía",
-    "portalDay": "Dijiste: {{what}}"
+    "portalSent": "Enviado, sin ver todavía"
   },
   "admin": {
     "tabHome": "Inicio",
@@ -106,7 +101,6 @@
     "openSchedule": "Abrir el horario",
     "sinceLabel": "Desde las {{time}}",
     "elapsedLabel": "Lleva {{duration}}",
-    "sinceBreakLabel": "En descanso desde las {{time}}",
     "dueAtLabel": "Entra a las {{time}}",
     "shouldHaveEnteredLabel": "Debía entrar a las {{time}}",
     "tabReports": "Reportes",
@@ -245,12 +239,12 @@
   "home": {
     "justSoYouKnow": "Para que lo sepas",
     "allClearTitle": "No hay nada pendiente",
-    "allClearBody": "Nadie llegó tarde, nadie falta y no hay solicitudes ni fichajes por arreglar. Ahora mismo hay {{working}} trabajando y {{onBreak}} en pausa.",
+    "allClearBody": "Nadie va tarde, nadie falta y no hay solicitudes ni fichajes por arreglar. Ahora mismo hay {{working}} trabajando y {{onBreak}} en pausa.",
     "headline": {
       "absent_one": "persona faltó a su turno",
       "absent_other": "personas faltaron a su turno",
-      "late_one": "persona llegó tarde hoy",
-      "late_other": "personas llegaron tarde hoy",
+      "late_one": "persona no ha llegado a su turno",
+      "late_other": "personas no han llegado a su turno",
       "incomplete_one": "fichaje sin cerrar",
       "incomplete_other": "fichajes sin cerrar",
       "requests_one": "solicitud esperando tu respuesta",
@@ -259,14 +253,14 @@
       "pendingSync_other": "fichajes sin subir al servidor"
     },
     "action": {
-      "absent_one": "Su turno terminó sin ninguna marca y cuenta como falta. Si vino y no marcó, se arregla en Horas con un fichaje manual.",
-      "absent_other": "Sus turnos terminaron sin ninguna marca y cuentan como falta. Si vinieron y no marcaron, se arregla en Horas con un fichaje manual.",
-      "late_one": "Ya fichó o está por llegar. Se revisa en el horario.",
-      "late_other": "Ya ficharon o están por llegar. Se revisa en el horario.",
+      "absent_one": "Su turno terminó sin ninguna marca y cuenta como falta. En Horas dices por qué faltó o, si vino y no marcó, registras su entrada y su salida.",
+      "absent_other": "Sus turnos terminaron sin ninguna marca y cuentan como falta. En Horas dices por qué faltaron o, si vinieron y no marcaron, registras su entrada y su salida.",
+      "late_one": "Su turno ya empezó y todavía no marca. Llámala o revisa el horario.",
+      "late_other": "Sus turnos ya empezaron y todavía no marcan. Llámalas o revisa el horario.",
       "incomplete_one": "Una jornada sin cerrar no se puede pagar bien. Se arregla en Horas.",
       "incomplete_other": "Una jornada sin cerrar no se puede pagar bien. Se arreglan en Horas.",
-      "requests_one": "Alguien está esperando por ti. Se contesta en Más.",
-      "requests_other": "Hay gente esperando por ti. Se contestan en Más.",
+      "requests_one": "Alguien está esperando por ti. Se contesta en Bandeja.",
+      "requests_other": "Hay gente esperando por ti. Se contestan en Bandeja.",
       "pendingSync_one": "Se subirá solo cuando vuelva la conexión. Si sigue aquí mañana, avisa.",
       "pendingSync_other": "Se subirán solos cuando vuelva la conexión. Si siguen aquí mañana, avisa."
     }
@@ -438,7 +432,6 @@
     "unknownPerson": "Sin nombre",
     "noData": "Sin datos",
     "totalHours": "Horas del periodo",
-    "totalHoursDetail": "Descontado el refrigerio marcado",
     "onHolidays": "Trabajado en feriados",
     "onHolidaysDetail": "Con recargo del 100 % (D.L. 713)",
     "people": "Personas que ficharon",
@@ -732,6 +725,7 @@
     "shortRestWarning": "Descanso insuficiente entre turnos: {{hours}}.",
     "weeklyLimitWarning": "{{name}} supera el límite semanal configurado.",
     "totalWeeklyHours": "Total semanal: {{hours}}",
+    "totalWeeklyDrafts": "{{drafts}} en borrador y {{published}} publicadas. Inicio y Reportes cuentan solo lo publicado.",
     "noShiftsThisWeek": "Esta semana no tiene turnos",
     "retroactiveWarning": "Estás cambiando una semana pasada. Queda registrado quién lo hizo y cuándo.",
     "publishHistory": "Historial de publicación",
@@ -1531,6 +1525,7 @@
     "badgeLate": "Tarde",
     "badgeWorking": "Trabajando",
     "badgeNoMark": "Sin marca",
+    "badgeNoClockOut": "Sin salida",
     "badgeAbsent": "Falta",
     "todayAbsentJustified": "Hoy faltaste a tu turno de {{range}}: justificada",
     "badgeAbsentJustified": "Falta justificada",

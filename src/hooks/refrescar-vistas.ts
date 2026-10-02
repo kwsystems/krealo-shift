@@ -22,8 +22,17 @@ export const VISTAS_DE_HORAS = [
   'requests',
 ] as const;
 
+/**
+ * Y los próximos turnos de la ficha de Equipo (2-oct), que salían de Horario y no se
+ * refrescaban: tras publicar, la ficha seguía diciendo «Borrador» hasta que caducaba. Solo
+ * esa consulta de Equipo y no `['team']` entera: el resto de Equipo —personas, puestos— no
+ * cambia al tocar una hora.
+ */
+export const PROXIMOS_TURNOS_DE_EQUIPO = ['team', 'upcomingShifts'] as const;
+
 export function refrescarVistasDeHoras(queryClient: QueryClient): void {
   for (const vista of VISTAS_DE_HORAS) {
     void queryClient.invalidateQueries({ queryKey: [vista] });
   }
+  void queryClient.invalidateQueries({ queryKey: [...PROXIMOS_TURNOS_DE_EQUIPO] });
 }

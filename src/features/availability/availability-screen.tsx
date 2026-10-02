@@ -36,7 +36,8 @@ import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
 import { useDisponibilidad, useMutacionesDeDisponibilidad } from './api';
-import { diaDeSemanaIso, type Disponibilidad } from './disponibilidad';
+import { diaDeSemanaIso, diasEnOrden, type Disponibilidad } from './disponibilidad';
+import { esNovedad, personasDeLaSede } from './novedades';
 import { PestanasDeEquipo } from './pestanas-de-equipo';
 
 /**
@@ -53,8 +54,6 @@ import { PestanasDeEquipo } from './pestanas-de-equipo';
  * arriba se cuenta y se da por visto de una vez. Tocar cualquier cosa la abre para verla
  * entera, cambiarla o quitarla; tocar un hueco agrega ahí mismo.
  */
-
-const DIAS = [1, 2, 3, 4, 5, 6, 7] as const;
 
 export function AvailabilityScreen() {
   const { t } = useTranslation();
@@ -86,20 +85,15 @@ export function AvailabilityScreen() {
   const [hoja, setHoja] = useState<ValoresIniciales | null>(null);
 
   // Las personas de la sede que se mira, activas: las mismas que Equipo enseña.
-  const personas = team.members
-    .filter(
-      (persona) =>
-        persona.status === 'active' &&
-        (scope.locationId === null || persona.locationIds.includes(scope.locationId)),
-    )
-    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  const personas = personasDeLaSede(team.members, scope.locationId);
   const deLaSede = new Set(personas.map((persona) => persona.id));
   const filas = (consulta.data ?? []).filter((fila) => deLaSede.has(fila.employee_id));
   const semanales = filas.filter((fila) => fila.kind === 'weekly');
   const puntuales = filas
     .filter((fila) => fila.kind === 'date' && (fila.date ?? '') >= hoy)
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const nuevas = filas.filter((fila) => fila.status === 'new');
+  // Las mismas que cuenta el menú: ver `novedades.ts`.
+  const nuevas = filas.filter((fila) => esNovedad(fila, hoy));
   const nombre = (id: string) => personas.find((p) => p.id === id)?.displayName ?? '';
   const opcionesDePersona = personas.map((p) => ({ value: p.id, label: p.displayName }));
 
@@ -184,6 +178,7 @@ export function AvailabilityScreen() {
                     personas={personas.map((p) => ({ id: p.id, nombre: p.displayName }))}
                     filas={semanales}
                     diaDeHoy={diaDeSemanaIso(hoy)}
+                    dias={diasEnOrden(scope.weekStartsOn)}
                     language={language}
                     onAbrir={abrir}
                     onAgregar={(employeeId, weekday) =>
@@ -436,6 +431,7 @@ function TablaSemanal({
   onAbrir,
   onAgregar,
   diaDeHoy,
+  dias,
 }: {
   personas: readonly Persona[];
   filas: readonly Disponibilidad[];
@@ -444,6 +440,8 @@ function TablaSemanal({
   onAgregar: (employeeId: string, weekday: number) => void;
   /** El día de la semana de hoy (1-7): su columna se marca, como en Horario. */
   diaDeHoy: number;
+  /** Los siete días en el orden de la semana de la sede: ver `diasEnOrden`. */
+  dias: readonly number[];
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -464,7 +462,7 @@ function TablaSemanal({
               {t('schedule.employee')}
             </AppText>
           </View>
-          {DIAS.map((dia) => (
+          {dias.map((dia) => (
             <View
               key={dia}
               style={[
@@ -501,7 +499,7 @@ function TablaSemanal({
                 </AppText>
               </Row>
             </View>
-            {DIAS.map((dia) => {
+            {dias.map((dia) => {
               const delDia = filas.filter(
                 (fila) => fila.employee_id === persona.id && fila.weekday === dia,
               );
