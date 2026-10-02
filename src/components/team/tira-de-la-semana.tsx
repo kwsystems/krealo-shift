@@ -35,6 +35,8 @@ export type DiaDeLaTira = {
   /**
    * FALTA (1-oct): tenía turno, terminó, y no marcó nada. Una cruz roja sobre la base, que
    * es donde estaría su columna: la semana enseña el hueco Y dice que no es un día libre.
+   * Su identificador es `…-semana-falta-<día>` y no `…-semana-<día>-falta`: el de la columna
+   * es `…-semana-<día>`, y con el mismo comienzo los arneses contaban la cruz como columna.
    */
   falta?: boolean;
 };
@@ -72,7 +74,7 @@ export function TiraDeLaSemana({
                 />
               ) : null}
               {dia.falta === true ? (
-                <View testID={testID === undefined ? undefined : `${testID}-${dia.dia}-falta`}>
+                <View testID={testID === undefined ? undefined : `${testID}-falta-${dia.dia}`}>
                   <Ionicons name="close" size={12} color={colors.danger600} />
                 </View>
               ) : null}

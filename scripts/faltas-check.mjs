@@ -224,7 +224,7 @@ try {
     // La tira es decorativa (`aria-hidden`: la fila ya lo dice en palabras), así que se
     // busca sin el filtro de la pestaña de delante. Solo Equipo tiene estas filas.
     const cruces = await pagina
-      .locator('[data-testid^="team-member-"][data-testid$="-falta"]')
+      .locator('[data-testid^="team-member-"][data-testid*="-semana-falta-"]')
       .count();
     if (estaSemana > 0 && cruces === 0)
       problemas.push('la tira de Equipo no marca el día de la falta');
