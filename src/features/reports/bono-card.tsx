@@ -97,8 +97,10 @@ export function BonoCard({
       }
       return partes.join(' · ');
     }
-    return r.estado === 'gana'
-      ? t('reports.bonusAllOnTime', { count: r.cumplidos })
+    if (r.estado === 'gana') return t('reports.bonusAllOnTime', { count: r.cumplidos });
+    // El día 1 nadie lleva «0 turnos a tiempo»: es que todavía no terminó ninguno.
+    return r.turnosContados === 0
+      ? t('reports.bonusNothingYet')
       : t('reports.bonusSoFar', { count: r.cumplidos });
   };
 

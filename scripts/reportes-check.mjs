@@ -574,7 +574,13 @@ function soloHoras(texto) {
   const etiquetas = await pagina
     .locator('[data-testid^="day-column-"]')
     .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('aria-label') ?? ''));
-  const suma = etiquetas.reduce((acumulado, e) => acumulado + (aMinutos(e) ?? 0), 0);
+  /*
+   * LA ÚLTIMA CIFRA DE CADA ETIQUETA, que es lo trabajado. Desde el 2-oct la columna dice
+   * también lo programado —«del 28 sep al 4 oct: 40:00 programadas, 38:12»— y la primera
+   * cifra ya no es la que se suma.
+   */
+  const ultima = (e) => aMinutos([...e.matchAll(/\d+:\d\d/g)].at(-1)?.[0] ?? '');
+  const suma = etiquetas.reduce((acumulado, e) => acumulado + (ultima(e) ?? 0), 0);
   const titulo = await pagina.locator('[data-testid="month-title"]').innerText();
 
   if (total === null) problemas.push('por mes no se pudo leer el total del periodo');

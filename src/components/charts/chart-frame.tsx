@@ -16,7 +16,12 @@ import { estilosDelTema } from '@/theme/estilos';
  * diga ya, y se come el espacio del gráfico.
  */
 
-export type LegendItem = { color: string; label: string };
+export type LegendItem = {
+  color: string;
+  label: string;
+  /** Muestra en contorno: lo que se esperaba, no lo que pasó (lo programado). */
+  contorno?: boolean;
+};
 
 export function ChartCard({
   title,
@@ -25,6 +30,7 @@ export function ChartCard({
   readout,
   footnote,
   children,
+  estirar = false,
   testID,
 }: {
   title: string;
@@ -42,13 +48,15 @@ export function ChartCard({
   readout?: string | null;
   footnote?: string;
   children: ReactNode;
+  /** Llenar el alto de su celda: dos tarjetas lado a lado miden lo mismo. */
+  estirar?: boolean;
   testID?: string;
 }) {
   const styles = useEstilos();
   const hayLeyenda = legend !== undefined && legend.length >= 2;
 
   return (
-    <Card testID={testID}>
+    <Card testID={testID} style={estirar ? ESTIRADA : undefined}>
       <Stack gap={spacing.xs}>
         <AppText variant="section" accessibilityRole="header">
           {title}
@@ -73,7 +81,18 @@ export function ChartCard({
         <Row gap={spacing.base} wrap>
           {legend.map((item) => (
             <Row key={item.label} gap={spacing.xs}>
-              <View style={[styles.swatch, { backgroundColor: item.color }]} />
+              <View
+                style={[
+                  styles.swatch,
+                  item.contorno === true
+                    ? {
+                        backgroundColor: item.color,
+                        borderWidth: 1,
+                        borderColor: styles.contorno.borderColor,
+                      }
+                    : { backgroundColor: item.color },
+                ]}
+              />
               {/* El texto va en tinta, NUNCA del color de la serie: el cuadrito de al
                   lado es el que lleva la identidad. */}
               <AppText variant="label" tone="muted">
@@ -95,6 +114,8 @@ export function ChartCard({
   );
 }
 
+const ESTIRADA = { flexGrow: 1 } as const;
+
 /** Línea base del gráfico: un pelo sólido, del color de la rejilla. Nunca punteada. */
 export function Baseline() {
   const styles = useEstilos();
@@ -103,5 +124,6 @@ export function Baseline() {
 
 const useEstilos = estilosDelTema((colors) => ({
   swatch: { width: 12, height: 12, borderRadius: radii.pill, backgroundColor: colors.border },
+  contorno: { borderColor: colors.reglaFuerte },
   baseline: { height: 1, backgroundColor: chart(colors).grid },
 }));

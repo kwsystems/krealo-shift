@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 
@@ -33,6 +33,11 @@ import { bonoDeAsistencia } from './bono';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { faltasDeLosTurnos, faltasPorPersona } from '@/features/timesheets/faltas';
 import { BonoCard } from './bono-card';
+import { AsistenciaPorPersona, type FilaDeAsistencia } from './asistencia-por-persona';
+import { programadoDelPeriodo } from './programado';
+import { ResumenDelPeriodo } from './resumen-del-periodo';
+import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
+import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { fetchWeekShifts } from '@/features/schedules/api';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
 import { ShareReportSheet } from './share-sheet';
@@ -257,6 +262,27 @@ export function ReportsScreen() {
       : faltasDelPeriodo.filter((falta) => falta.employeeId === personaElegida);
   const faltasPorPersonaDelPeriodo = faltasPorPersona(faltasDelPeriodo);
 
+  /*
+   * LO PROGRAMADO Y LO QUE VA EN CURSO (2-oct): lo que dice «Cómo va». Lo programado son
+   * los turnos publicados de los días que se miran (`programado.ts`); lo en curso, la misma
+   * cuenta de Horas y Equipo (`dentroPorEmpleado`), y solo si el periodo llega a hoy.
+   */
+  const incluyeHoy = periodo.dias.includes(hoyKey);
+  const workingNow = useWorkingNow(incluyeHoy ? scope.locationId : null);
+  const programado = programadoDelPeriodo({
+    turnos: turnosDelMes.data ?? [],
+    dias: periodo.dias,
+    ahoraISO: nowISO,
+    timezone: scope.timezone,
+  });
+  const dentro = incluyeHoy
+    ? dentroPorEmpleado(sessions.data ?? [], enCursoPorSesionDe(workingNow.data), nowISO)
+    : new Map<string, { minutos: number }>();
+  const enCursoTotal = {
+    personas: dentro.size,
+    minutos: [...dentro.values()].reduce((suma, persona) => suma + persona.minutos, 0),
+  };
+
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
   /* Lo trabajado en feriados, y si el periodo tiene alguno: ver `minutosEnFeriados`. */
   const enFeriados = minutosEnFeriados(resumenFiltrado, scope.timezone);
@@ -284,6 +310,44 @@ export function ReportsScreen() {
 
   const cargando = summaries.isPending || sessions.isPending;
   const error = summaries.error ?? sessions.error;
+
+  // ------------------------------------------------------------- asistencia
+  /*
+   * Una fila por persona que trabajó, tenía turno, faltó o está dentro: las cuatro cosas,
+   * porque quien no vino ningún día también tiene que salir —con cero—.
+   */
+  const puntualPorPersona = new Map(puntualidad.byEmployee.map((fila) => [fila.employeeId, fila]));
+  const rankingPorPersona = new Map(ranking.map((fila) => [fila.employeeId, fila]));
+  const idsDeAsistencia = new Set([
+    ...ranking.map((fila) => fila.employeeId),
+    ...programado.porPersona.keys(),
+    ...faltasPorPersonaDelPeriodo.keys(),
+    ...dentro.keys(),
+  ]);
+  const filasAsistencia: FilaDeAsistencia[] = [...idsDeAsistencia]
+    .map((employeeId) => {
+      const horas = rankingPorPersona.get(employeeId);
+      const plan = programado.porPersona.get(employeeId);
+      const puntual = puntualPorPersona.get(employeeId);
+      return {
+        employeeId,
+        nombre: nombre(employeeId),
+        trabajado: horas?.netMinutes ?? 0,
+        enCurso: dentro.get(employeeId)?.minutos ?? 0,
+        programado: plan?.total ?? 0,
+        programadoHastaAhora: plan?.hastaAhora ?? 0,
+        medidos: puntual?.measured ?? 0,
+        tardanzas: puntual?.late ?? 0,
+        faltas: faltasPorPersonaDelPeriodo.get(employeeId)?.length ?? 0,
+        extra: horas?.overtimeMinutes ?? 0,
+      };
+    })
+    .sort(
+      (a, b) =>
+        b.trabajado + b.enCurso - (a.trabajado + a.enCurso) ||
+        b.programado - a.programado ||
+        a.nombre.localeCompare(b.nombre),
+    );
 
   // --------------------------------------------------------------- ranking
   const filasRanking: RankingRow[] = ranking.map((fila) => ({
@@ -377,6 +441,14 @@ export function ReportsScreen() {
    * cuando son más, por lo mismo que el mes. Por semana se cuentan SOLO los elegidos.
    */
   const porDia = tipo === 'semana' || (tipo === 'dias' && periodo.dias.length <= 14);
+  /* Lo programado de una columna, para su contorno y para lo que se lee al señalarla. */
+  const conProgramado = (minutos: number) =>
+    minutos > 0
+      ? {
+          planned: minutos,
+          plannedLabel: t('reports.plannedColumn', { hours: minutesToHHmm(minutos) }),
+        }
+      : {};
   const columnas: DayColumn[] = porDia
     ? dias.map((dia) => ({
         key: dia.dateKey,
@@ -386,6 +458,7 @@ export function ReportsScreen() {
         value: dia.netMinutes,
         valueText: minutesToHHmm(dia.netMinutes),
         isToday: dia.dateKey === hoyKey,
+        ...conProgramado(programado.porDia.get(dia.dateKey)?.total ?? 0),
       }))
     : semanasDelMes(periodo.dias, scope.weekStartsOn).map((semana) => {
         const minutos = semana.dias.reduce((suma, d) => suma + (minutosPorDia.get(d) ?? 0), 0);
@@ -407,6 +480,9 @@ export function ReportsScreen() {
           valueText: minutesToHHmm(minutos),
           isToday: semana.dias.includes(hoyKey),
           isFuture: semana.inicio > hoyKey,
+          ...conProgramado(
+            semana.dias.reduce((suma, d) => suma + (programado.porDia.get(d)?.total ?? 0), 0),
+          ),
         };
       });
 
@@ -670,7 +746,9 @@ export function ReportsScreen() {
           <AsyncSection
             isPending={cargando}
             error={error}
-            isEmpty={filasResumen.length === 0 && filasSesiones.length === 0}
+            isEmpty={
+              filasResumen.length === 0 && filasSesiones.length === 0 && programado.total === 0
+            }
             loadingLabel={t('reports.loading')}
             emptyTitle={t('reports.emptyTitle')}
             emptyBody={t('reports.emptyBody')}
@@ -701,20 +779,20 @@ export function ReportsScreen() {
                 />
               ) : null}
 
-              <Row gap={spacing.sm} wrap>
-                <StatTile
-                  label={t('reports.totalHours')}
-                  value={minutesToHHmm(totalMinutos)}
-                  /*
-                   * «¿Esto cuenta el almuerzo?» (Andree, 30-sep). No: son horas netas, con el
-                   * refrigerio descontado. Pero solo el que se MARCA —o el del turno, en lo
-                   * registrado desde el horario—: quien marca entrada y salida y nada más
-                   * tiene el almuerzo dentro. La línea lo dice para que no haya que preguntar.
-                   */
-                  detalle={t('reports.totalHoursDetail')}
-                  icon="time-outline"
-                  testID="report-total"
-                />
+              {/*
+                LO PRIMERO: lo trabajado contra lo programado, y quién está dentro ahora. Ver
+                `resumen-del-periodo.tsx`: es lo que faltaba para que el primer día del mes no
+                pareciera un mes vacío.
+              */}
+              <ResumenDelPeriodo
+                titulo={tituloDelResumen(tipo, incluyeHoy, t)}
+                trabajado={totalMinutos}
+                enCurso={enCursoTotal}
+                programado={programado}
+                incluyeHoy={incluyeHoy}
+              />
+
+              <Row gap={spacing.sm} wrap align="stretch">
                 <StatTile
                   label={t('reports.people')}
                   value={String(ranking.length)}
@@ -800,174 +878,224 @@ export function ReportsScreen() {
                 </AsyncSection>
               ) : null}
 
-              <ChartCard
-                title={t('reports.whoWorkedMost')}
-                subtitle={t('reports.whoWorkedMostHint')}
-                readout={lectura('ranking')}
-                footnote={t('reports.hoursAreNotOutput')}
-                testID="chart-ranking"
-              >
-                {filasRanking.length === 0 ? (
-                  <AppText variant="help" tone="subtle">
-                    {t('reports.noHours')}
-                  </AppText>
-                ) : (
-                  <RankingBars
-                    rows={filasRanking}
-                    max={maxRanking}
-                    onPoint={señalarFila('ranking')}
-                    onPress={(row) =>
-                      setPersonaElegida((actual) => (actual === row.id ? null : row.id))
-                    }
-                    selectedId={personaElegida}
-                    testID="ranking-hours"
-                  />
-                )}
-              </ChartCard>
+              <AsistenciaPorPersona
+                filas={filasAsistencia}
+                incluyeHoy={incluyeHoy}
+                elegida={personaElegida}
+                onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}
+              />
 
               {/*
+                LOS GRÁFICOS, DE DOS EN DOS cuando caben. Uno debajo de otro eran seis tarjetas
+                a todo el ancho, y en un monitor la página medía cuatro pantallas para decir
+                cosas que se leen juntas: quién y cuándo, tardanzas y faltas, extra y pausas.
+              */}
+              <View style={estilosDeCabecera.pareja}>
+                <View style={estilosDeCabecera.celda}>
+                  <ChartCard
+                    title={t('reports.whoWorkedMost')}
+                    subtitle={t('reports.whoWorkedMostHint')}
+                    readout={lectura('ranking')}
+                    footnote={t('reports.hoursAreNotOutput')}
+                    estirar
+                    testID="chart-ranking"
+                  >
+                    {filasRanking.length === 0 ? (
+                      <AppText variant="help" tone="subtle">
+                        {t('reports.noHours')}
+                      </AppText>
+                    ) : (
+                      <RankingBars
+                        rows={filasRanking}
+                        max={maxRanking}
+                        onPoint={señalarFila('ranking')}
+                        onPress={(row) =>
+                          setPersonaElegida((actual) => (actual === row.id ? null : row.id))
+                        }
+                        selectedId={personaElegida}
+                        testID="ranking-hours"
+                      />
+                    )}
+                  </ChartCard>
+                </View>
+
+                {/*
                 UN SOLO DÍA NO TIENE «CÓMO VA»: sería una columna sola, que no compara nada.
                 El ranking de arriba ya dice lo que hizo cada quien ese día.
               */}
-              {tipo === 'dia' ? null : (
-                <ChartCard
-                  title={tituloDeColumnas(tipo, porDia, t)}
-                  subtitle={subtituloDeColumnas(tipo, porDia, t)}
-                  readout={
-                    señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null
-                  }
-                  testID="chart-week"
-                >
-                  <DayColumns
-                    days={columnas}
-                    onPoint={(day) =>
-                      setSeñalado(
-                        day === null
-                          ? null
-                          : { titulo: 'dias', detalle: `${day.long}: ${day.valueText}` },
-                      )
-                    }
-                    testID="week-columns"
-                  />
-                </ChartCard>
-              )}
-
-              <ChartCard
-                title={t('reports.punctuality')}
-                subtitle={
-                  puntualidad.onTimePercent === null
-                    ? t('reports.punctualityNoData')
-                    : /*
-                       * DOS plurales en una frase, y `count` de i18next solo cubre uno.
-                       * Con un solo `count` la frase salia «1 tardanzas de 1 turnos»
-                       * en cuanto se filtraba por una persona —se vio al probar el
-                       * filtro, no leyendo el codigo—. Asi que el numero de tardanzas
-                       * se traduce aparte, con su propio plural, y entra ya escrito.
-                       */
-                      t('reports.punctualitySummary', {
-                        percent: puntualidad.onTimePercent,
-                        lateText: t('reports.lateCount', { count: puntualidad.late }),
-                        count: puntualidad.measured,
-                      })
-                }
-                readout={lectura('tardanzas')}
-                footnote={
-                  puntualidad.unscheduled > 0
-                    ? t('reports.unscheduledExcluded', { count: puntualidad.unscheduled })
-                    : undefined
-                }
-                testID="chart-punctuality"
-              >
-                {filasTardanza.length === 0 ? (
-                  <AppText variant="help" tone="subtle">
-                    {t('reports.nobodyLate')}
-                  </AppText>
-                ) : (
-                  <RankingBars
-                    rows={filasTardanza}
-                    max={maxTardanza}
-                    onPoint={señalarFila('tardanzas')}
-                    testID="ranking-late"
-                  />
+                {tipo === 'dia' ? null : (
+                  <View style={estilosDeCabecera.celda}>
+                    <ChartCard
+                      title={tituloDeColumnas(tipo, porDia, t)}
+                      subtitle={subtituloDeColumnas(tipo, porDia, t)}
+                      legend={
+                        columnas.some((columna) => (columna.planned ?? 0) > 0)
+                          ? [
+                              { color: chart(colors).series1, label: t('reports.workedLegend') },
+                              {
+                                color: colors.hundido,
+                                label: t('reports.planned'),
+                                contorno: true,
+                              },
+                            ]
+                          : undefined
+                      }
+                      readout={
+                        señalado !== null && señalado.titulo === 'dias' ? señalado.detalle : null
+                      }
+                      estirar
+                      testID="chart-week"
+                    >
+                      <DayColumns
+                        days={columnas}
+                        onPoint={(day) =>
+                          setSeñalado(
+                            day === null
+                              ? null
+                              : {
+                                  titulo: 'dias',
+                                  detalle:
+                                    day.plannedLabel === undefined
+                                      ? `${day.long}: ${day.valueText}`
+                                      : `${day.long}: ${t('reports.workedColumn', { hours: day.valueText })} · ${day.plannedLabel}`,
+                                },
+                          )
+                        }
+                        testID="week-columns"
+                      />
+                    </ChartCard>
+                  </View>
                 )}
-              </ChartCard>
+              </View>
 
-              {/*
+              <View style={estilosDeCabecera.pareja}>
+                <View style={estilosDeCabecera.celda}>
+                  <ChartCard
+                    title={t('reports.punctuality')}
+                    subtitle={
+                      puntualidad.onTimePercent === null
+                        ? t('reports.punctualityNoData')
+                        : /*
+                           * DOS plurales en una frase, y `count` de i18next solo cubre uno.
+                           * Con un solo `count` la frase salia «1 tardanzas de 1 turnos»
+                           * en cuanto se filtraba por una persona —se vio al probar el
+                           * filtro, no leyendo el codigo—. Asi que el numero de tardanzas
+                           * se traduce aparte, con su propio plural, y entra ya escrito.
+                           */
+                          t('reports.punctualitySummary', {
+                            percent: puntualidad.onTimePercent,
+                            lateText: t('reports.lateCount', { count: puntualidad.late }),
+                            count: puntualidad.measured,
+                          })
+                    }
+                    readout={lectura('tardanzas')}
+                    footnote={
+                      puntualidad.unscheduled > 0
+                        ? t('reports.unscheduledExcluded', { count: puntualidad.unscheduled })
+                        : undefined
+                    }
+                    estirar
+                    testID="chart-punctuality"
+                  >
+                    {filasTardanza.length === 0 ? (
+                      <AppText variant="help" tone="subtle">
+                        {t('reports.nobodyLate')}
+                      </AppText>
+                    ) : (
+                      <RankingBars
+                        rows={filasTardanza}
+                        max={maxTardanza}
+                        onPoint={señalarFila('tardanzas')}
+                        testID="ranking-late"
+                      />
+                    )}
+                  </ChartCard>
+                </View>
+                <View style={estilosDeCabecera.celda}>
+                  {/*
                 LAS FALTAS, al lado de las tardanzas (1-oct): las dos son lo que se mira para el
                 bono y para hablar con alguien. Cada barra dice qué días.
               */}
-              <ChartCard
-                title={t('reports.absencesTitle')}
-                subtitle={t('reports.absencesHint')}
-                readout={lectura('faltas')}
-                testID="chart-absences"
-              >
-                {filasFalta.length === 0 ? (
-                  <AppText variant="help" tone="subtle">
-                    {t('reports.nobodyAbsent')}
-                  </AppText>
-                ) : (
-                  <RankingBars
-                    rows={filasFalta}
-                    max={maxFalta}
-                    onPoint={señalarFila('faltas')}
-                    testID="ranking-absences"
-                  />
-                )}
-              </ChartCard>
+                  <ChartCard
+                    title={t('reports.absencesTitle')}
+                    subtitle={t('reports.absencesHint')}
+                    readout={lectura('faltas')}
+                    estirar
+                    testID="chart-absences"
+                  >
+                    {filasFalta.length === 0 ? (
+                      <AppText variant="help" tone="subtle">
+                        {t('reports.nobodyAbsent')}
+                      </AppText>
+                    ) : (
+                      <RankingBars
+                        rows={filasFalta}
+                        max={maxFalta}
+                        onPoint={señalarFila('faltas')}
+                        testID="ranking-absences"
+                      />
+                    )}
+                  </ChartCard>
+                </View>
+              </View>
 
-              <ChartCard
-                title={t('reports.overtimeTitle')}
-                subtitle={t('reports.overtimeHint')}
-                legend={[
-                  { color: chart(colors).series1, label: t('reports.regular') },
-                  { color: chart(colors).series2, label: t('reports.overtime') },
-                ]}
-                readout={lectura('extra')}
-                footnote={t('reports.overtimeIsInformational')}
-                testID="chart-overtime"
-              >
-                {filasExtra.length === 0 ? (
-                  <AppText variant="help" tone="subtle">
-                    {t('reports.noOvertime')}
-                  </AppText>
-                ) : (
-                  <RankingBars
-                    rows={filasExtra}
-                    max={maxExtra}
-                    onPoint={señalarFila('extra')}
-                    testID="ranking-overtime"
-                  />
-                )}
-              </ChartCard>
+              <View style={estilosDeCabecera.pareja}>
+                <View style={estilosDeCabecera.celda}>
+                  <ChartCard
+                    title={t('reports.overtimeTitle')}
+                    subtitle={t('reports.overtimeHint')}
+                    legend={[
+                      { color: chart(colors).series1, label: t('reports.regular') },
+                      { color: chart(colors).series2, label: t('reports.overtime') },
+                    ]}
+                    readout={lectura('extra')}
+                    footnote={t('reports.overtimeIsInformational')}
+                    estirar
+                    testID="chart-overtime"
+                  >
+                    {filasExtra.length === 0 ? (
+                      <AppText variant="help" tone="subtle">
+                        {t('reports.noOvertime')}
+                      </AppText>
+                    ) : (
+                      <RankingBars
+                        rows={filasExtra}
+                        max={maxExtra}
+                        onPoint={señalarFila('extra')}
+                        testID="ranking-overtime"
+                      />
+                    )}
+                  </ChartCard>
+                </View>
+                <View style={estilosDeCabecera.celda}>
+                  <ChartCard
+                    title={t('reports.whereTimeGoes')}
+                    subtitle={t('reports.whereTimeGoesHint', { total: minutesToHHmm(totalPausas) })}
+                    readout={lectura('motivos')}
+                    estirar
+                    testID="chart-reasons"
+                  >
+                    <AsyncSection
+                      isPending={breaks.isPending}
+                      error={breaks.error}
+                      isEmpty={filasMotivo.length === 0}
+                      emptyTitle={t('reports.noBreaksTitle')}
+                      emptyBody={t('reports.noBreaksBody')}
+                      onRetry={() => void breaks.refetch()}
+                    >
+                      <Stack gap={spacing.sm}>
+                        <RankingBars
+                          rows={filasMotivo}
+                          max={maxMotivo}
+                          onPoint={señalarFila('motivos')}
+                          onPress={(row) =>
+                            setMotivoAbierto((actual) => (actual === row.id ? null : row.id))
+                          }
+                          selectedId={motivoAbierto}
+                          testID="ranking-reasons"
+                        />
 
-              <ChartCard
-                title={t('reports.whereTimeGoes')}
-                subtitle={t('reports.whereTimeGoesHint', { total: minutesToHHmm(totalPausas) })}
-                readout={lectura('motivos')}
-                testID="chart-reasons"
-              >
-                <AsyncSection
-                  isPending={breaks.isPending}
-                  error={breaks.error}
-                  isEmpty={filasMotivo.length === 0}
-                  emptyTitle={t('reports.noBreaksTitle')}
-                  emptyBody={t('reports.noBreaksBody')}
-                  onRetry={() => void breaks.refetch()}
-                >
-                  <Stack gap={spacing.sm}>
-                    <RankingBars
-                      rows={filasMotivo}
-                      max={maxMotivo}
-                      onPoint={señalarFila('motivos')}
-                      onPress={(row) =>
-                        setMotivoAbierto((actual) => (actual === row.id ? null : row.id))
-                      }
-                      selectedId={motivoAbierto}
-                      testID="ranking-reasons"
-                    />
-
-                    {/*
+                        {/*
                       LO QUE ESCRIBIÓ LA GENTE, que hasta ahora no leía nadie.
                       La app OBLIGA a poner un motivo al pausar por «Otro»; si esa frase
                       no se lee nunca, se le está pidiendo algo a cambio de nada.
@@ -975,7 +1103,7 @@ export function ReportsScreen() {
                       que viven AQUÍ y solo aquí: no van al resumen que se comparte por
                       chat ni al CSV que se manda por correo.
                     */}
-                    {/*
+                        {/*
                       EL AVISO DE QUE SE PUEDE ABRIR VA AQUÍ Y NO EN LA PISTA DE LA FILA.
                       Se probó a añadirlo a la pista —«9% del total · 1 pausa · toca para
                       ver 1 explicación»— y `responsive:check` lo cazó: en la disposición
@@ -984,38 +1112,46 @@ export function ReportsScreen() {
                       horizontal para arriba. Aquí abajo el texto envuelve y cabe en
                       cualquier ancho.
                     */}
-                    {motivoConNotas !== undefined && motivoAbierto === null ? (
-                      <AppText variant="help" tone="subtle">
-                        {t('reports.reasonNotesToggle', {
-                          reason: etiquetaMotivo[motivoConNotas.reason],
-                          count: motivoConNotas.notes.length,
-                        })}
-                      </AppText>
-                    ) : null}
+                        {motivoConNotas !== undefined && motivoAbierto === null ? (
+                          <AppText variant="help" tone="subtle">
+                            {t('reports.reasonNotesToggle', {
+                              reason: etiquetaMotivo[motivoConNotas.reason],
+                              count: motivoConNotas.notes.length,
+                            })}
+                          </AppText>
+                        ) : null}
 
-                    {notasAbiertas.length > 0 ? (
-                      <Stack gap={spacing.xs} testID="reason-notes">
-                        {notasAbiertas.map((nota) => (
-                          <Stack key={`${nota.employeeId}-${nota.at}`} gap={0}>
-                            <AppText variant="label" tone="subtle">
-                              {`${formatDateKeyShort(dateKeyOf(nota.at, scope.timezone), language)} · ${nombre(
-                                nota.employeeId,
-                              )} · ${minutesToHHmm(nota.minutes)}`}
-                            </AppText>
-                            <AppText variant="body">{nota.note}</AppText>
+                        {notasAbiertas.length > 0 ? (
+                          <Stack gap={spacing.xs} testID="reason-notes">
+                            {notasAbiertas.map((nota) => (
+                              <Stack key={`${nota.employeeId}-${nota.at}`} gap={0}>
+                                <AppText variant="label" tone="subtle">
+                                  {`${formatDateKeyShort(dateKeyOf(nota.at, scope.timezone), language)} · ${nombre(
+                                    nota.employeeId,
+                                  )} · ${minutesToHHmm(nota.minutes)}`}
+                                </AppText>
+                                <AppText variant="body">{nota.note}</AppText>
+                              </Stack>
+                            ))}
                           </Stack>
-                        ))}
+                        ) : null}
                       </Stack>
-                    ) : null}
-                  </Stack>
-                </AsyncSection>
-              </ChartCard>
+                    </AsyncSection>
+                  </ChartCard>
+                </View>
+              </View>
             </Stack>
           </AsyncSection>
         </Stack>
       </ResponsiveContainer>
     </AppScreen>
   );
+}
+
+/** «Cómo va la semana» mientras dura; «Cómo fue la semana» cuando ya pasó. */
+function tituloDelResumen(tipo: TipoDePeriodo, incluyeHoy: boolean, t: TFunction): string {
+  const cuando = incluyeHoy ? 'now' : 'past';
+  return t(`reports.hero.title.${tipo}.${cuando}`);
 }
 
 function tituloDeColumnas(tipo: TipoDePeriodo, porDia: boolean, t: TFunction): string {
@@ -1033,4 +1169,11 @@ function subtituloDeColumnas(tipo: TipoDePeriodo, porDia: boolean, t: TFunction)
 const estilosDeCabecera = StyleSheet.create({
   /* Sin `minWidth: 0` esta fila no encoge y el navegador se sale en un teléfono. */
   encoge: { flexShrink: 1, minWidth: 0 },
+  /*
+   * DOS TARJETAS POR FILA cuando caben las dos a 460 px; si no, una debajo de otra. Lo
+   * decide el ancho de la fila y no el de la ventana: con la barra lateral, una ventana de
+   * 1024 deja 776 px, y ahí dos gráficos serían dos rayas.
+   */
+  pareja: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.lg, alignItems: 'stretch' },
+  celda: { flexGrow: 1, flexShrink: 1, flexBasis: 460, minWidth: 0 },
 });

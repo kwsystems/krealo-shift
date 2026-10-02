@@ -972,7 +972,58 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         updated_at: aISO(sumarDias(lunes, dia < 0 ? -9 : -2)),
       };
     });
+  /*
+   * Y AL REVÉS: CADA JORNADA PASADA SIN TURNO RECIBE EL SUYO (2-oct). Desde que Reportes
+   * compara lo trabajado con lo programado, una semana donde la mitad de las jornadas no
+   * tenía turno salía «al 231 % de lo programado»: una tienda que no programa a quien viene.
+   * Se le da el turno que habría tenido —de la hora en punto en que entró a la hora en punto
+   * más cercana a su salida—, así que la tardanza de las 8:09 sigue siendo tardanza y la
+   * jornada no cambia: cambia lo que se esperaba de ella.
+   */
+  const HORA_MS = 60 * 60 * 1000;
+  const turnosDeSusJornadas: Fila[] = [];
+  for (const sesion of sesiones) {
+    if (sesion.ends_at === null || Date.parse(String(sesion.starts_at)) >= hoy.getTime()) continue;
+    const yaCubierta = turnos.some(
+      (turno) =>
+        turno.status === 'published' &&
+        cubreElTurno(
+          turno as unknown as Parameters<typeof cubreElTurno>[0],
+          [sesion as unknown as Parameters<typeof cubreElTurno>[1][number]],
+          ahora.getTime(),
+        ),
+    );
+    if (yaCubierta) continue;
+    const entrada = Date.parse(String(sesion.starts_at));
+    const salida = Date.parse(String(sesion.ends_at));
+    const desde = Math.floor(entrada / HORA_MS) * HORA_MS;
+    const hasta = Math.max(desde + HORA_MS, Math.round(salida / HORA_MS) * HORA_MS);
+    const persona = PERSONAS.findIndex(
+      (_, indice) => empleadoId(indice + 1) === sesion.employee_id,
+    );
+    turnosDeSusJornadas.push({
+      id: id('55555555', 1000 + turnosDeSusJornadas.length),
+      organization_id: DEMO_ORG_ID,
+      employee_id: sesion.employee_id,
+      location_id: sesion.location_id,
+      job_role_id: puestoId(PERSONAS[persona]?.puesto ?? 1),
+      starts_at: new Date(desde).toISOString(),
+      ends_at: new Date(hasta).toISOString(),
+      timezone: TZ,
+      planned_unpaid_break_minutes: hasta - desde >= 6 * HORA_MS ? 30 : 0,
+      employee_note: null,
+      manager_note: null,
+      status: 'published',
+      publication_version: 7,
+      published_at: aISO(
+        sumarDias(lunes, Date.parse(String(sesion.starts_at)) < lunes.getTime() ? -9 : -2),
+      ),
+      updated_at: aISO(sumarDias(lunes, -2)),
+    });
+  }
+
   const turnosCoherentes = [
+    ...turnosDeSusJornadas,
     ...turnos.filter(
       (turno) =>
         turno.status !== 'published' ||

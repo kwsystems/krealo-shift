@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
@@ -13,11 +13,17 @@ import {
   type ValoresIniciales,
 } from '@/components/availability/hoja-de-disponibilidad';
 import { AsyncSection } from '@/components/schedule/data-states';
-import { EmptyShiftSlot } from '@/components/schedule/shift-card';
 import { AppText } from '@/components/ui/app-text';
 import { AnclaDePersona } from '@/components/ui/ancla';
 import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import {
+  AppScreen,
+  Card,
+  ResponsiveContainer,
+  Row,
+  Stack,
+  useRespuestaAlPuntero,
+} from '@/components/ui/layout';
 import { dateKeyOf, formatDateKeyShort, type DateKey } from '@/features/schedules/week';
 import { useTeam } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
@@ -25,11 +31,12 @@ import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
-import { useTonos } from '@/theme/tonos';
-import { borderWidth, radii, spacing } from '@/theme/tokens';
+import { useTonos, type Tono } from '@/theme/tonos';
+import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
+import { useTheme } from '@/theme/use-theme';
 
 import { useDisponibilidad, useMutacionesDeDisponibilidad } from './api';
-import type { Disponibilidad } from './disponibilidad';
+import { diaDeSemanaIso, type Disponibilidad } from './disponibilidad';
 import { PestanasDeEquipo } from './pestanas-de-equipo';
 
 /**
@@ -116,9 +123,7 @@ export function AvailabilityScreen() {
             />
           </Row>
           <PestanasDeEquipo activa="disponibilidad" />
-          <AppText variant="help" tone="muted">
-            {t('availability.intro')}
-          </AppText>
+          <ComoLoAgregan />
 
           {/* LO NUEVO, contado y a un toque de darse por visto. */}
           {nuevas.length > 0 ? (
@@ -151,7 +156,11 @@ export function AvailabilityScreen() {
             </Row>
           ) : null}
 
-          <Leyenda />
+          <Resumen
+            noPueden={filas.filter((fila) => fila.type === 'unavailable').length}
+            prefieren={filas.filter((fila) => fila.type === 'preferred').length}
+            comentarios={filas.filter((fila) => fila.type === 'note').length}
+          />
 
           <AsyncSection
             isPending={consulta.isPending || team.isPending}
@@ -163,17 +172,18 @@ export function AvailabilityScreen() {
           >
             <Stack gap={spacing.md}>
               <Card>
-                <Row gap={spacing.sm} align="center">
-                  <Ionicons name="repeat-outline" size={18} color={tonos.turquesa.tinta} />
-                  <AppText variant="bodyStrong" accessibilityRole="header">
-                    {t('availability.weekly')}
-                  </AppText>
-                </Row>
+                <CabeceraDeSeccion
+                  icono="repeat-outline"
+                  tono="turquesa"
+                  titulo={t('availability.weekly')}
+                  cuenta={semanales.length}
+                />
                 <View onLayout={(evento) => setAnchoDeLaTabla(evento.nativeEvent.layout.width)} />
                 {ancha && caben ? (
                   <TablaSemanal
                     personas={personas.map((p) => ({ id: p.id, nombre: p.displayName }))}
                     filas={semanales}
+                    diaDeHoy={diaDeSemanaIso(hoy)}
                     language={language}
                     onAbrir={abrir}
                     onAgregar={(employeeId, weekday) =>
@@ -191,12 +201,12 @@ export function AvailabilityScreen() {
               </Card>
 
               <Card>
-                <Row gap={spacing.sm} align="center">
-                  <Ionicons name="calendar-number-outline" size={18} color={tonos.azul.tinta} />
-                  <AppText variant="bodyStrong" accessibilityRole="header">
-                    {t('availability.dates')}
-                  </AppText>
-                </Row>
+                <CabeceraDeSeccion
+                  icono="calendar-number-outline"
+                  tono="azul"
+                  titulo={t('availability.dates')}
+                  cuenta={puntuales.length}
+                />
                 {puntuales.length === 0 ? (
                   <AppText variant="help" tone="subtle" testID="disponibilidad-sin-puntuales">
                     {t('availability.emptyDates')}
@@ -237,38 +247,182 @@ export function AvailabilityScreen() {
   );
 }
 
-/** Qué color es qué: con icono y palabra, nunca solo color. */
-function Leyenda() {
+/**
+ * CÓMO LLEGA AQUÍ LO QUE ESCRIBEN (2-oct). Andree preguntó «pueden entrar la gente a poner
+ * sus cosas, no?»: sí, y la pantalla tiene que decirlo sin que haya que preguntarlo. Quien
+ * la mira es quien arma el horario, y lo que necesita saber es de dónde viene lo de la tabla
+ * y qué decirle a su equipo.
+ */
+function ComoLoAgregan() {
+  const { t } = useTranslation();
+  const tonos = useTonos();
+  const estilos = useEstilos();
+  return (
+    <Row gap={spacing.md} align="center" style={estilos.como} testID="disponibilidad-como">
+      <View
+        style={[
+          estilos.baldosa,
+          { backgroundColor: tonos.turquesa.fondo, borderColor: tonos.turquesa.borde },
+        ]}
+      >
+        <Ionicons name="phone-portrait-outline" size={20} color={tonos.turquesa.tinta} />
+      </View>
+      <Stack gap={2} style={estilos.crece}>
+        <AppText variant="bodyStrong">{t('availability.howTitle')}</AppText>
+        <AppText variant="help" tone="muted">
+          {t('availability.howBody')}
+        </AppText>
+      </Stack>
+    </Row>
+  );
+}
+
+/**
+ * EL RESUMEN ES LA LEYENDA: cada color con su palabra y CUÁNTOS hay. Una leyenda sola dice
+ * qué significa el rojo; con la cuenta dice además si hay que mirarlo. Nunca solo color.
+ * Lo nuevo no se cuenta aquí: ya lo cuenta la barra naranja de encima.
+ */
+function Resumen({
+  noPueden,
+  prefieren,
+  comentarios,
+}: {
+  noPueden: number;
+  prefieren: number;
+  comentarios: number;
+}) {
   const { t } = useTranslation();
   const tonos = useTonos();
   const estilos = useEstilos();
   const piezas = [
-    { tono: tonos[TONO_DE_DISPONIBILIDAD.unavailable], texto: t('availability.legendUnavailable') },
-    { tono: tonos[TONO_DE_DISPONIBILIDAD.preferred], texto: t('availability.legendPreferred') },
-    { tono: tonos[TONO_DE_DISPONIBILIDAD.note], texto: t('availability.legendNote') },
+    {
+      clave: 'no-puede',
+      tono: tonos[TONO_DE_DISPONIBILIDAD.unavailable],
+      icono: 'close-circle-outline' as const,
+      texto: t('availability.countUnavailable', { count: noPueden }),
+    },
+    {
+      clave: 'prefiere',
+      tono: tonos[TONO_DE_DISPONIBILIDAD.preferred],
+      icono: 'time-outline' as const,
+      texto: t('availability.countPreferred', { count: prefieren }),
+    },
+    {
+      clave: 'comentario',
+      tono: tonos[TONO_DE_DISPONIBILIDAD.note],
+      icono: 'chatbubble-ellipses-outline' as const,
+      texto: t('availability.countNote', { count: comentarios }),
+    },
   ];
   return (
-    <Row gap={spacing.md} wrap align="center" testID="disponibilidad-leyenda">
+    <Row gap={spacing.sm} wrap align="center" testID="disponibilidad-leyenda">
       {piezas.map((pieza) => (
-        <Row key={pieza.texto} gap={spacing.xs} align="center">
-          <View
-            style={[
-              estilos.muestra,
-              { backgroundColor: pieza.tono.fondo, borderColor: pieza.tono.borde },
-            ]}
-          />
-          <AppText variant="label" tone="muted">
+        <View
+          key={pieza.clave}
+          style={[
+            estilos.pieza,
+            { backgroundColor: pieza.tono.fondo, borderColor: pieza.tono.borde },
+          ]}
+          testID={`disponibilidad-cuenta-${pieza.clave}`}
+        >
+          <Ionicons name={pieza.icono} size={16} color={pieza.tono.tinta} />
+          <AppText variant="label" style={{ color: pieza.tono.tinta }} tabular>
             {pieza.texto}
           </AppText>
-        </Row>
+        </View>
       ))}
-      <Row gap={spacing.xs} align="center">
+      <Row gap={spacing.xs} align="center" style={estilos.piezaSuelta}>
         <View style={[estilos.punto, { backgroundColor: tonos.naranja.solido }]} />
         <AppText variant="label" tone="muted">
           {t('availability.legendNew')}
         </AppText>
       </Row>
     </Row>
+  );
+}
+
+/** La cabecera de cada tarjeta, con su baldosa de color y cuántas cosas trae. */
+function CabeceraDeSeccion({
+  icono,
+  tono,
+  titulo,
+  cuenta,
+}: {
+  icono: keyof typeof Ionicons.glyphMap;
+  tono: Tono;
+  titulo: string;
+  cuenta: number;
+}) {
+  const tonos = useTonos();
+  const estilos = useEstilos();
+  return (
+    <Row gap={spacing.sm} align="center">
+      <View
+        style={[
+          estilos.baldosaChica,
+          { backgroundColor: tonos[tono].fondo, borderColor: tonos[tono].borde },
+        ]}
+      >
+        <Ionicons name={icono} size={16} color={tonos[tono].tinta} />
+      </View>
+      <AppText variant="bodyStrong" accessibilityRole="header" style={estilos.crece}>
+        {titulo}
+      </AppText>
+      <AppText variant="label" tone="subtle" tabular>
+        {String(cuenta)}
+      </AppText>
+    </Row>
+  );
+}
+
+/**
+ * EL HUECO DE LA TABLA: un «+» que aparece al pasar el puntero o al llegar con el teclado.
+ *
+ * Eran cincuenta «+» grises a la vista a la vez —siete por persona— y la tabla parecía una
+ * hoja de cálculo vacía, con lo que alguien dijo perdido entre ellos. La tabla solo sale en
+ * pantalla ancha, o sea con ratón: el hueco responde al puntero y sigue siendo un botón de
+ * 44 px con su nombre para el lector de pantalla.
+ */
+function HuecoDeLaTabla({
+  onPress,
+  accessibilityLabel,
+  testID,
+}: {
+  onPress: () => void;
+  accessibilityLabel: string;
+  testID: string;
+}) {
+  const { colors } = useTheme();
+  const estilos = useEstilos();
+  const respuesta = useRespuestaAlPuntero();
+  const [visible, setVisible] = useState(false);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      testID={testID}
+      {...respuesta.props}
+      onHoverIn={() => {
+        respuesta.props.onHoverIn();
+        setVisible(true);
+      }}
+      onHoverOut={() => {
+        respuesta.props.onHoverOut();
+        setVisible(false);
+      }}
+      onFocus={() => {
+        respuesta.props.onFocus();
+        setVisible(true);
+      }}
+      onBlur={() => {
+        respuesta.props.onBlur();
+        setVisible(false);
+      }}
+      style={({ pressed }) => [estilos.hueco, ...respuesta.estilo(pressed)]}
+    >
+      <Ionicons name="add" size={18} color={visible ? colors.ink500 : 'transparent'} />
+    </Pressable>
   );
 }
 
@@ -281,12 +435,15 @@ function TablaSemanal({
   language,
   onAbrir,
   onAgregar,
+  diaDeHoy,
 }: {
   personas: readonly Persona[];
   filas: readonly Disponibilidad[];
   language: ReturnType<typeof currentLanguage>;
   onAbrir: (fila: Disponibilidad) => void;
   onAgregar: (employeeId: string, weekday: number) => void;
+  /** El día de la semana de hoy (1-7): su columna se marca, como en Horario. */
+  diaDeHoy: number;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -308,9 +465,23 @@ function TablaSemanal({
             </AppText>
           </View>
           {DIAS.map((dia) => (
-            <View key={dia} style={[estilos.cabecera, estilos.columnaDeDia]}>
-              <AppText variant="label" tone="subtle">
-                {nombreDelDiaDeSemana(dia, language)}
+            <View
+              key={dia}
+              style={[
+                estilos.cabecera,
+                estilos.columnaDeDia,
+                dia === diaDeHoy ? estilos.cabeceraDeHoy : null,
+              ]}
+              testID={dia === diaDeHoy ? 'disponibilidad-hoy' : undefined}
+            >
+              <AppText
+                variant="label"
+                tone={dia === diaDeHoy ? 'primary' : 'subtle'}
+                style={dia === diaDeHoy ? estilos.negrita : null}
+              >
+                {dia === diaDeHoy
+                  ? t('availability.todayColumn', { day: nombreDelDiaDeSemana(dia, language) })
+                  : nombreDelDiaDeSemana(dia, language)}
               </AppText>
             </View>
           ))}
@@ -335,7 +506,14 @@ function TablaSemanal({
                 (fila) => fila.employee_id === persona.id && fila.weekday === dia,
               );
               return (
-                <View key={dia} style={[estilos.celda, estilos.columnaDeDia]}>
+                <View
+                  key={dia}
+                  style={[
+                    estilos.celda,
+                    estilos.columnaDeDia,
+                    dia === diaDeHoy ? estilos.celdaDeHoy : null,
+                  ]}
+                >
                   <Stack gap={spacing.xs}>
                     {delDia.map((fila) => (
                       <ChipDeDisponibilidad
@@ -347,8 +525,7 @@ function TablaSemanal({
                       />
                     ))}
                     {delDia.length === 0 ? (
-                      <EmptyShiftSlot
-                        sutil
+                      <HuecoDeLaTabla
                         onPress={() => onAgregar(persona.id, dia)}
                         accessibilityLabel={t('availability.addFor', {
                           name: persona.nombre,
@@ -495,8 +672,51 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingLeft: spacing.base,
     paddingRight: spacing.xs,
   },
-  muestra: { width: 14, height: 14, borderRadius: 4, borderWidth: borderWidth.hairline },
   punto: { width: 8, height: 8, borderRadius: 4 },
+  como: {
+    padding: spacing.md,
+    borderRadius: radii.card,
+    backgroundColor: colors.surface,
+    borderWidth: borderWidth.hairline,
+    borderColor: colors.border,
+  },
+  baldosa: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: borderWidth.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  baldosaChica: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    borderWidth: borderWidth.hairline,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pieza: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.xs,
+    borderRadius: radii.pill,
+    borderWidth: borderWidth.hairline,
+    maxWidth: '100%',
+  },
+  piezaSuelta: { paddingHorizontal: spacing.xs },
+  /* Hoy, como en Horario: la cabecera en el color de la app y la columna apenas teñida. */
+  cabeceraDeHoy: { backgroundColor: colors.primary50, borderBottomColor: colors.primary600 },
+  celdaDeHoy: { backgroundColor: colors.primary50 },
+  negrita: { fontWeight: '700' },
+  hueco: {
+    minHeight: sizes.touchTargetMin,
+    borderRadius: radii.input,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   cabecera: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.sm,

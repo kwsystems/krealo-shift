@@ -33,6 +33,14 @@ export type DayColumn = {
   isToday?: boolean;
   /** Un día futuro no es un día con cero horas: no se ha trabajado todavía. */
   isFuture?: boolean;
+  /**
+   * LO PROGRAMADO ESE DÍA (2-oct), dibujado como el contorno de la columna que se esperaba:
+   * la columna llena es lo trabajado, el contorno detrás es lo que se programó. Programado
+   * contra real en cada día, como en Homebase.
+   */
+  planned?: number;
+  /** «08:00 programadas», para el lector de pantalla y la lectura al señalar. */
+  plannedLabel?: string;
 };
 
 /**
@@ -76,10 +84,12 @@ export function DayColumns({
    * no el texto que se elija.
    */
   const [anchoDeEtiqueta, setAnchoDeEtiqueta] = useState(0);
-  const max = Math.max(...days.map((day) => day.value), 0);
+  const max = Math.max(...days.map((day) => Math.max(day.value, day.planned ?? 0)), 0);
+  const maxTrabajado = Math.max(...days.map((day) => day.value), 0);
   const escala = max > 0 ? max : 1;
   // Solo el máximo lleva número fijo; si empatan, el primero, para no rotular dos.
-  const claveMaxima = max > 0 ? (days.find((day) => day.value === max)?.key ?? null) : null;
+  const claveMaxima =
+    maxTrabajado > 0 ? (days.find((day) => day.value === maxTrabajado)?.key ?? null) : null;
 
   return (
     <Stack gap={spacing.xs} testID={testID}>
@@ -99,12 +109,21 @@ export function DayColumns({
               ? Math.max(3, Math.round((day.value / escala) * chartMarks.columnPlotHeight))
               : 0;
           const rotulado = day.key === claveMaxima || day.key === pointedKey;
+          const altoProgramado =
+            (day.planned ?? 0) > 0
+              ? Math.max(3, Math.round(((day.planned ?? 0) / escala) * chartMarks.columnPlotHeight))
+              : 0;
 
           return (
             <Pressable
               key={day.key}
               testID={`day-column-${day.key}`}
-              accessibilityLabel={`${day.long}: ${day.valueText}`}
+              // El valor trabajado va el ÚLTIMO: los arneses leen la última cifra.
+              accessibilityLabel={
+                day.plannedLabel === undefined
+                  ? `${day.long}: ${day.valueText}`
+                  : `${day.long}: ${day.plannedLabel}, ${day.valueText}`
+              }
               onHoverIn={() => onPoint?.(day)}
               onHoverOut={() => onPoint?.(null)}
               onPressIn={() => onPoint?.(day)}
@@ -129,16 +148,24 @@ export function DayColumns({
                   </AppText>
                 ) : null}
               </View>
-              <View
-                style={[
-                  styles.barra,
-                  {
-                    height: alto,
-                    backgroundColor:
-                      day.key === pointedKey ? colors.primary700 : chart(colors).series1,
-                  },
-                ]}
-              />
+              <View style={[styles.pila, { height: Math.max(alto, altoProgramado) }]}>
+                {altoProgramado > 0 ? (
+                  <View
+                    style={[styles.programado, { height: altoProgramado }]}
+                    testID={`day-planned-${day.key}`}
+                  />
+                ) : null}
+                <View
+                  style={[
+                    styles.barra,
+                    {
+                      height: alto,
+                      backgroundColor:
+                        day.key === pointedKey ? colors.primary700 : chart(colors).series1,
+                    },
+                  ]}
+                />
+              </View>
             </Pressable>
           );
         })}
@@ -191,6 +218,29 @@ const useEstilos = estilosDelTema((colors) => ({
   // Sin ella, rotular al señalar empujaría la columna hacia abajo y el gráfico
   // entero bailaría bajo el dedo.
   tapa: { height: sizes.iconMobile, justifyContent: 'flex-end', paddingBottom: spacing.xs },
+  /* La columna y su contorno de lo programado, apoyados los dos en la línea base. */
+  pila: {
+    width: chartMarks.columnThickness + 10,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  /*
+   * LO PROGRAMADO EN CONTORNO, más ancho que la columna para que se vea alrededor de ella:
+   * `reglaFuerte` llega al 3:1 que pide una marca con significado, y no es un relleno porque
+   * no es algo que pasó.
+   */
+  programado: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: colors.reglaFuerte,
+    backgroundColor: colors.hundido,
+    borderTopLeftRadius: chartMarks.endRadius,
+    borderTopRightRadius: chartMarks.endRadius,
+  },
   barra: {
     width: chartMarks.columnThickness,
     borderTopLeftRadius: chartMarks.endRadius,

@@ -176,6 +176,13 @@ for (const tema of ['light', 'dark']) {
       for (const el of document.querySelectorAll('div, section, main')) {
         const caja = el.getBoundingClientRect();
         if (caja.width * caja.height < areaMinima) continue;
+        /*
+         * UNA MARCA DE DATOS NO ES UN FONDO (2-oct). El medidor de Reportes —lo trabajado
+         * contra lo programado— es una barra de casi mil píxeles del color de las horas, y
+         * en claro ese violeta es oscuro a propósito: es el dato. Va dentro de un
+         * `role="img"`, que es lo que dice que es un gráfico, y eso es lo que se salta.
+         */
+        if (el.closest('[role="img"]') !== null) continue;
         const l = luz(getComputedStyle(el).backgroundColor);
         if (l === null) continue;
         fuera.push({
