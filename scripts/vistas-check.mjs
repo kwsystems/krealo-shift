@@ -18,6 +18,9 @@
  *    Disponibilidad = las novedades de su pantalla.
  * 5. LA CASILLA «NECESITA REVISIÓN» DE HORAS = las filas que lista su filtro.
  * 6. EL CELULAR de la vendedora suma esta semana lo mismo que su fila de Equipo.
+ * 7. «NO HA LLEGADO» (2-oct): con turnos ya empezados sin marca (`?escenario=sinllegar`),
+ *    Horario marca en la tarjeta a las mismas personas que Inicio cuenta. Andree miraba un
+ *    turno de las 13:00 a las 15:27 y Horario no decía nada.
  *
  * Uso:
  *   npm run demo:export
@@ -279,6 +282,37 @@ try {
     }
     console.log(
       `  celular              ${suma} min esta semana (Equipo ${minutosDeLaVendedoraEnEquipo}${esLaMisma ? '' : ', otra persona'})`,
+    );
+    await contexto.close();
+  }
+
+  /* --------------------------------------------------- 7. quien no ha llegado */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+    const pagina = await contexto.newPage();
+    await pagina.goto(base + '/?escenario=sinllegar', { waitUntil: 'networkidle' });
+    await esperarPantalla(pagina, MARCADOR_ACCESO, { asentar: 0 });
+    await pagina.locator('[data-testid="sign-in-demo"]').click();
+    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 1500 });
+    const titulares = (
+      await texto(pagina, '[data-testid^="hoy-titular-"], [data-testid^="hoy-secundario-"]')
+    ).replace(/\|/g, '\n');
+    const enInicio = Number(/(\d+)\s*\n?\s*personas? no ha/.exec(titulares)?.[1] ?? 0);
+    const enLaLista = (
+      (await texto(pagina, '[data-testid="right-now-list"]')).match(/No ha llegado/g) ?? []
+    ).length;
+    await irPorElMenu(pagina, '/schedule');
+    const enHorario = await delante(pagina, '[data-testid$="-sin-llegar"]').count();
+    if (enInicio === 0)
+      problemas.push('el escenario «sinllegar» no deja a nadie sin llegar en Inicio');
+    if (enHorario !== enInicio || enLaLista !== enInicio) {
+      problemas.push(
+        `no ha llegado: Inicio ${enInicio} (lista ${enLaLista}), tarjetas de Horario ${enHorario}`,
+      );
+    }
+    await pagina.screenshot({ path: 'capturas/vistas-sin-llegar-horario.png' });
+    console.log(
+      `  no ha llegado        Inicio ${enInicio} (lista ${enLaLista}), Horario ${enHorario}`,
     );
     await contexto.close();
   }

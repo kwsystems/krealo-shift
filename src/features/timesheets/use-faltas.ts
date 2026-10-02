@@ -4,7 +4,7 @@ import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { weekEnd, weekRangeInstants, type DateKey } from '@/features/schedules/week';
 
-import { faltasDeLosTurnos, faltasPorPersona, type Falta } from './faltas';
+import { faltasDeLosTurnos, faltasPorPersona, turnoSinLlegar, type Falta } from './faltas';
 import { useWorkSessions } from './hooks';
 import { useJustificaciones } from './justificaciones';
 
@@ -13,6 +13,11 @@ export type FaltasDeLaSemana = {
   /** Las faltas por id de turno: para marcar la tarjeta en Horario con su estado. */
   porTurno: ReadonlyMap<string, Falta>;
   porPersona: ReadonlyMap<string, Falta[]>;
+  /**
+   * Los turnos en curso de quien todavía no ha llegado (2-oct): ver `turnoSinLlegar`. Lo
+   * pinta la tarjeta de Horario; Inicio lo cuenta con la misma regla.
+   */
+  sinLlegar: ReadonlySet<string>;
 };
 
 /**
@@ -29,8 +34,11 @@ export function useFaltasDeLaSemana(params: {
   weekStart: DateKey;
   timezone: string;
   nowISO: string;
+  /** La tolerancia de la sede para llegar tarde: lo que se espera antes de «no ha llegado». */
+  toleranciaMin?: number;
 }): FaltasDeLaSemana {
   const { organizationId, locationId, weekStart, timezone, nowISO } = params;
+  const toleranciaMin = params.toleranciaMin ?? 0;
   const rango = weekRangeInstants(weekStart, timezone);
   const turnos = useWeekShifts({ organizationId, locationId, weekStart, timezone });
   const jornadas = useWorkSessions({
@@ -62,10 +70,29 @@ export function useFaltasDeLaSemana(params: {
             timezone,
             resoluciones: justificaciones.data ?? [],
           });
+    // Igual que las faltas: sin las jornadas no se sabe quién vino, y no se afirma nada.
+    const sinLlegar = new Set(
+      jornadas.data === undefined
+        ? []
+        : (turnos.data ?? [])
+            .filter((turno) =>
+              turnoSinLlegar({ turno, jornadas: jornadas.data, ahoraISO: nowISO, toleranciaMin }),
+            )
+            .map((turno) => turno.id),
+    );
     return {
       faltas,
       porTurno: new Map(faltas.map((falta) => [falta.id, falta])),
       porPersona: faltasPorPersona(faltas),
+      sinLlegar,
     };
-  }, [turnos.data, jornadas.data, relojDesde, nowISO, timezone, justificaciones.data]);
+  }, [
+    turnos.data,
+    jornadas.data,
+    relojDesde,
+    nowISO,
+    timezone,
+    justificaciones.data,
+    toleranciaMin,
+  ]);
 }

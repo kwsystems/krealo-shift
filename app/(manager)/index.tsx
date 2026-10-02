@@ -180,8 +180,10 @@ export default function ManagerHomeScreen() {
         );
       case 'upcoming':
         return t('admin.upcoming');
+      // «No ha llegado», como el titular y la tarjeta de Horario: todavía no es tarde, es
+      // que no está (2-oct).
       case 'late':
-        return t('attendance.statusLate');
+        return t('attendance.statusNotArrived');
       default:
         return t('attendance.statusNoShow');
     }

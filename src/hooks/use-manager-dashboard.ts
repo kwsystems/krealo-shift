@@ -12,7 +12,12 @@ import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { fetchWorkSessions } from '@/features/timesheets/api';
 import { minutosEnCurso } from '@/features/timesheets/en-curso';
-import { cubreElTurno, estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import {
+  cubreElTurno,
+  estadoDeFalta,
+  faltasDeLosTurnos,
+  turnoSinLlegar,
+} from '@/features/timesheets/faltas';
 import { useJustificaciones } from '@/features/timesheets/justificaciones';
 import { ADMIN_LIST_STALE_MS, DASHBOARD_POLL_MS, selectRows } from '@/hooks/use-admin-query';
 import { useNetworkStore } from '@/stores/network-store';
@@ -354,8 +359,15 @@ export function useManagerDashboard(params: {
         continue;
       }
 
-      // Empezó su turno y no ha fichado: es tardanza pasada la tolerancia.
-      if (minutesBetween(shift.starts_at, nowISO) > lateGraceMinutes) {
+      // Empezó su turno y no ha fichado, pasada la tolerancia: la regla de Horario también.
+      if (
+        turnoSinLlegar({
+          turno: shift,
+          jornadas: sessions,
+          ahoraISO: nowISO,
+          toleranciaMin: lateGraceMinutes,
+        })
+      ) {
         lateCount += 1;
         rightNow.push({
           employeeId: shift.employee_id,

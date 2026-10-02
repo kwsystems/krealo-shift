@@ -79,6 +79,7 @@ export function ShiftCard({
   enFila = false,
   avisoDeDisponibilidad = null,
   falta = null,
+  sinLlegar = false,
   tonoDelPuesto = null,
   onPress,
   testID,
@@ -107,6 +108,12 @@ export function ShiftCard({
    * textos y colores que Horas, Equipo y Reportes (`textos-de-falta.ts`).
    */
   falta?: Pick<Falta, 'resolucion'> | null;
+  /**
+   * «NO HA LLEGADO» (2-oct): su turno ya empezó, pasada la tolerancia, y no ha marcado. La
+   * regla es la de Inicio (`turnoSinLlegar`); cuando el turno termina sin marca pasa a ser
+   * `falta`. Andree miraba el turno de las 13:00 a las 15:27 y la tarjeta no decía nada.
+   */
+  sinLlegar?: boolean;
   /**
    * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
    * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
@@ -146,6 +153,7 @@ export function ShiftCard({
     range,
     estadoAhora,
     falta === null ? null : rotuloDeFaltaEnTurno(t, falta),
+    sinLlegar ? t('schedule.notArrived') : null,
     minutesToHHmm(netMinutes),
     statusLabel,
     avisoDeDisponibilidad,
@@ -203,6 +211,7 @@ export function ShiftCard({
         warnings.length > 0 ? styles.warned : null,
         avisoDeDisponibilidad === null ? null : styles.choca,
         falta === null ? null : faltaJustificada ? styles.faltaJustificada : styles.falta,
+        sinLlegar ? styles.sinLlegar : null,
         tono === null ? null : { borderLeftWidth: 4, borderLeftColor: tono.solido },
       ]}
     >
@@ -318,6 +327,19 @@ export function ShiftCard({
             {warnings[0]?.kind === 'overlap'
               ? t('schedule.overlapShort')
               : t('schedule.shortRestShort')}
+          </AppText>
+        </Row>
+      ) : null}
+
+      {sinLlegar ? (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-sin-llegar`}
+        >
+          <Ionicons name="time-outline" size={14} color={colors.danger600} />
+          <AppText variant="label" tone="danger" style={styles.textoDeFalta}>
+            {t('schedule.notArrived')}
           </AppText>
         </Row>
       ) : null}
@@ -598,6 +620,8 @@ const useEstilos = estilosDelTema((colors) => ({
   choca: { borderColor: colors.danger600, borderWidth: borderWidth.focus },
   /* Falta: el turno entero en el rojo suave de «Tarde», que es el mismo par de colores. */
   falta: { backgroundColor: colors.danger50, borderColor: colors.danger600 },
+  /* No ha llegado: el borde rojo y sin relleno; el relleno rojo es para la falta, que ya pasó. */
+  sinLlegar: { borderColor: colors.danger600 },
   /* Justificada: sigue siendo falta, pero ya no cuenta en contra; el ámbar de los avisos. */
   faltaJustificada: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
   textoDeFalta: { flexShrink: 1, minWidth: 0 },

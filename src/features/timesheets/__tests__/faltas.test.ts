@@ -4,6 +4,7 @@ import {
   cubreElTurno,
   estadoDeFalta,
   faltasDeLosTurnos,
+  turnoSinLlegar,
   type JornadaParaFaltas,
 } from '../faltas';
 import type { ResolucionDeFalta } from '../justificaciones';
@@ -197,5 +198,52 @@ describe('por qué faltó (2-oct)', () => {
       resoluciones: [dicho('a', 'justified')],
     });
     expect(lista).toEqual([]);
+  });
+});
+
+describe('no ha llegado (2-oct)', () => {
+  // El turno de `turno()`: 10:00–18:00 en Lima del 30 de septiembre.
+  const t = turno();
+  const sinLlegar = (ahora: string, jornadas: JornadaParaFaltas[] = [], toleranciaMin = 5) =>
+    turnoSinLlegar({ turno: t, jornadas, ahoraISO: ahora, toleranciaMin });
+
+  it('su turno ya empezó, pasada la tolerancia, y no ha marcado', () => {
+    expect(sinLlegar('2026-09-30T15:03:00.000Z')).toBe(false); // dentro de la tolerancia
+    expect(sinLlegar('2026-09-30T15:06:00.000Z')).toBe(true);
+    expect(sinLlegar('2026-09-30T20:27:00.000Z')).toBe(true);
+  });
+
+  it('no antes de empezar, ni cuando ya terminó: entonces es falta, no esto', () => {
+    expect(sinLlegar('2026-09-30T14:00:00.000Z')).toBe(false);
+    expect(sinLlegar('2026-09-30T23:30:00.000Z')).toBe(false);
+  });
+
+  it('con una jornada suya dentro del turno ya llegó, aunque fuera tarde', () => {
+    const llego = jornada({ starts_at: '2026-09-30T16:00:00.000Z', ends_at: null });
+    expect(sinLlegar('2026-09-30T17:00:00.000Z', [llego])).toBe(false);
+  });
+
+  it('un borrador no se le dio a nadie', () => {
+    expect(
+      turnoSinLlegar({
+        turno: { ...t, status: 'draft' },
+        jornadas: [],
+        ahoraISO: '2026-09-30T17:00:00.000Z',
+        toleranciaMin: 5,
+      }),
+    ).toBe(false);
+  });
+
+  it('una salida olvidada de ayer no cubre el turno de hoy', () => {
+    const deAyer = jornada({
+      shift_id: 'otro',
+      starts_at: '2026-09-29T15:00:00.000Z',
+      ends_at: null,
+    });
+    expect(sinLlegar('2026-09-30T20:27:00.000Z', [deAyer])).toBe(true);
+    // Y al terminar el turno, es falta: antes la jornada abierta de ayer lo tapaba.
+    expect(faltas([t], [deAyer], { ahora: '2026-10-01T00:30:00.000Z' }).map((f) => f.id)).toEqual([
+      't1',
+    ]);
   });
 });

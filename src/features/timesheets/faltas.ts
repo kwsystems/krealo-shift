@@ -1,6 +1,7 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 
+import { OPEN_SESSION_ALERT_MINUTES } from './alerts';
 import type { WorkSession } from './api';
 import type { ResolucionDeFalta } from './justificaciones';
 
@@ -63,9 +64,17 @@ export type JornadaParaFaltas = Pick<
   'employee_id' | 'shift_id' | 'starts_at' | 'ends_at'
 >;
 
-/** Lo que dura una jornada; si sigue abierta, hasta ahora. */
+/**
+ * Lo que dura una jornada; si sigue abierta, hasta ahora.
+ *
+ * PERO UNA SALIDA OLVIDADA NO SE ESTIRA PARA SIEMPRE (2-oct). Abierta más de lo que dura un
+ * turno (`OPEN_SESSION_ALERT_MINUTES`, la regla de «Sin salida» de Horas), se corta ahí:
+ * quien entró ayer y no marcó la salida no está «cubriendo» el turno de hoy. Antes sí, y
+ * ese turno no salía ni como «no ha llegado» en Inicio ni, al terminar, como falta.
+ */
 function finDeLaJornada(jornada: JornadaParaFaltas, ahora: number): number {
-  return jornada.ends_at === null ? ahora : Date.parse(jornada.ends_at);
+  if (jornada.ends_at !== null) return Date.parse(jornada.ends_at);
+  return Math.min(ahora, Date.parse(jornada.starts_at) + OPEN_SESSION_ALERT_MINUTES * 60_000);
 }
 
 /** Si la persona tiene alguna jornada en ese turno. */
@@ -148,4 +157,29 @@ export function contarFaltas(faltas: readonly Pick<Falta, 'resolucion'>[]) {
     sinRevisar,
     sinJustificar: faltas.length - justificadas,
   };
+}
+
+/**
+ * «NO HA LLEGADO» (2-oct): un turno publicado que ya empezó —pasada la tolerancia de la
+ * sede— y todavía no termina, sin ninguna jornada suya que lo cubra. Es lo que Inicio
+ * cuenta como «persona no ha llegado a su turno», y desde el 2-oct también lo dice la
+ * tarjeta de Horario: Andree miraba el turno de las 13:00 a las 15:27 y no salía nada.
+ *
+ * Cuando el turno termina sin marca deja de ser esto y pasa a ser una FALTA
+ * (`faltasDeLosTurnos`). Las dos reglas no se pisan: una mira turnos en curso, la otra
+ * turnos terminados.
+ */
+export function turnoSinLlegar(params: {
+  turno: Pick<ShiftRow, 'id' | 'employee_id' | 'starts_at' | 'ends_at' | 'status'>;
+  jornadas: readonly JornadaParaFaltas[];
+  ahoraISO: string;
+  /** La tolerancia de la sede para llegar tarde, en minutos. */
+  toleranciaMin: number;
+}): boolean {
+  const { turno, jornadas, ahoraISO, toleranciaMin } = params;
+  if (turno.status !== 'published') return false;
+  const ahora = Date.parse(ahoraISO);
+  if (Date.parse(turno.ends_at) <= ahora) return false;
+  if (Date.parse(turno.starts_at) + Math.max(0, toleranciaMin) * 60_000 >= ahora) return false;
+  return !cubreElTurno(turno, jornadas, ahora);
 }

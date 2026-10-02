@@ -576,6 +576,18 @@ function Hoy({
         detalle: null,
       };
     }
+    /*
+     * YA EMPEZÓ Y NO HA MARCADO (2-oct): lo mismo que ve quien administra —«No ha llegado»
+     * en Horario e Inicio—, dicho a la persona. Antes, pasada la hora, seguía diciendo
+     * «Hoy te toca de 13:00 a 22:00» como si no hubiera empezado.
+     */
+    if (Date.parse(turno.starts_at) <= Date.parse(nowISO)) {
+      return {
+        tono: 'late',
+        titulo: t('portal.todayNotArrived', { time: hora(turno.starts_at) }),
+        detalle: t('portal.todayNotArrivedDetail'),
+      };
+    }
     return {
       tono: 'info',
       titulo: t('portal.todayUpcoming', { range: rango ?? '' }),

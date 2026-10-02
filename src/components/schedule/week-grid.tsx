@@ -132,6 +132,8 @@ export type GridProps = {
   disponibilidad?: readonly Disponibilidad[];
   /** Los turnos que son falta (1-oct), con lo que se dijo de cada una: ver `faltas.ts`. */
   faltas?: ReadonlyMap<string, Falta>;
+  /** Los turnos en curso de quien no ha llegado (2-oct): ver `turnoSinLlegar`. */
+  sinLlegar?: ReadonlySet<string>;
 };
 
 /**
@@ -156,6 +158,7 @@ function avisoDeDisponibilidad(
 }
 
 const SIN_FALTAS: ReadonlyMap<string, Falta> = new Map();
+const NADIE_SIN_LLEGAR: ReadonlySet<string> = new Set();
 
 export function WeekGrid({
   days,
@@ -173,6 +176,7 @@ export function WeekGrid({
   readOnly = false,
   disponibilidad = [],
   faltas = SIN_FALTAS,
+  sinLlegar = NADIE_SIN_LLEGAR,
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -328,6 +332,7 @@ export function WeekGrid({
                         warnings={warningsFor(shift.id)}
                         enCurso={enCursoFor?.(shift) ?? null}
                         falta={faltas.get(shift.id) ?? null}
+                        sinLlegar={sinLlegar.has(shift.id)}
                         ventana={ventana}
                         tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
                         avisoDeDisponibilidad={avisoDeDisponibilidad(
@@ -387,6 +392,8 @@ export type DayListProps = {
   readOnly?: boolean;
   disponibilidad?: readonly Disponibilidad[];
   faltas?: ReadonlyMap<string, Falta>;
+  /** Los turnos en curso de quien no ha llegado (2-oct): ver `turnoSinLlegar`. */
+  sinLlegar?: ReadonlySet<string>;
 };
 
 export function DayList({
@@ -407,6 +414,7 @@ export function DayList({
   readOnly = false,
   disponibilidad = [],
   faltas = SIN_FALTAS,
+  sinLlegar = NADIE_SIN_LLEGAR,
 }: DayListProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -482,6 +490,7 @@ export function DayList({
                     warnings={warningsFor(shift.id)}
                     enCurso={enCursoFor?.(shift) ?? null}
                     falta={faltas.get(shift.id) ?? null}
+                    sinLlegar={sinLlegar.has(shift.id)}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
                   />

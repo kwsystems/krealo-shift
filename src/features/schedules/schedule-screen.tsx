@@ -15,7 +15,7 @@ import { warningsForShift } from './conflicts';
 import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
 import { estadoVisible } from '@/features/timesheets/en-curso';
-import { useWorkSessions } from '@/features/timesheets/hooks';
+import { useSesionesAlDiaCon, useWorkSessions } from '@/features/timesheets/hooks';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { acknowledgeUnusualClock } from '@/features/timesheets/api';
@@ -253,7 +253,27 @@ export function ScheduleScreen({
     weekStart,
     timezone: scope.timezone,
     nowISO,
+    toleranciaMin: scope.settings.lateGraceMinutes,
   });
+  // Una entrada o una salida cambian quién está dentro: las jornadas se piden otra vez, como
+  // en Horas y Equipo, para que «No ha llegado» se quite en cuanto marca.
+  useSesionesAlDiaCon(scope.locationId, workingNow.data);
+  /*
+   * «NO HA LLEGADO» (2-oct), con la regla de Inicio (`turnoSinLlegar`). Quien ya está dentro
+   * según «quién está dentro» no se marca aunque sus jornadas aún no se hayan refrescado:
+   * si no, la tira de arriba diría «Trabajando» y su tarjeta «No ha llegado» a la vez.
+   */
+  const empleadoDelTurno = new Map(rows.map((turno) => [turno.id, turno.employee_id]));
+  const dentroDeVerdad = new Set(
+    (workingNow.data ?? [])
+      .filter((fila) => minutesBetween(fila.starts_at, nowISO) <= OPEN_SESSION_ALERT_MINUTES)
+      .map((fila) => fila.employee_id),
+  );
+  const sinLlegar = new Set(
+    [...faltasDeLaSemana.sinLlegar].filter(
+      (id) => !dentroDeVerdad.has(empleadoDelTurno.get(id) ?? ''),
+    ),
+  );
 
   /*
    * LAS SEMANAS DE ANTES DEL RELOJ. Hasta el día en que la sede empezó a fichar, un turno
@@ -824,6 +844,7 @@ export function ScheduleScreen({
                     readOnly={readOnly}
                     disponibilidad={disponibilidad.data ?? []}
                     faltas={faltasDeLaSemana.porTurno}
+                    sinLlegar={sinLlegar}
                   />
                 ) : view === 'week' ? (
                   <DayList
@@ -844,6 +865,7 @@ export function ScheduleScreen({
                     readOnly={readOnly}
                     disponibilidad={disponibilidad.data ?? []}
                     faltas={faltasDeLaSemana.porTurno}
+                    sinLlegar={sinLlegar}
                   />
                 ) : (
                   <Stack gap={spacing.base}>
@@ -876,6 +898,7 @@ export function ScheduleScreen({
                       readOnly={readOnly}
                       disponibilidad={disponibilidad.data ?? []}
                       faltas={faltasDeLaSemana.porTurno}
+                      sinLlegar={sinLlegar}
                     />
                   </Stack>
                 )}

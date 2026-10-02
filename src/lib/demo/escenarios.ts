@@ -21,7 +21,7 @@ import { cubreElTurno } from '@/features/timesheets/faltas';
  * verdad no existe: no hay nada que sembrar, los días los trae la vida.
  */
 
-export const ESCENARIOS = ['normal', 'tranquilo', 'ausentes', 'solicitudes'] as const;
+export const ESCENARIOS = ['normal', 'tranquilo', 'ausentes', 'solicitudes', 'sinllegar'] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
 export function escenarioDeLaUrl(): Escenario {
@@ -283,6 +283,51 @@ function dejarSinCubrir(almacen: Almacen, cuantos: number): number {
   return faltan.size;
 }
 
+/**
+ * «NO HA LLEGADO» (2-oct): turnos de hoy que empezaron hace un rato y siguen, de gente que
+ * no está dentro y no ha marcado. Con la semilla eso depende de la hora a la que se abra
+ * —sus turnos acaban a media tarde—, así que se colocan: empiezan hace cuarenta minutos
+ * (nunca antes de la medianoche de la tienda) y acaban dentro de tres horas. Es lo que
+ * `scripts/vistas-check.mjs` mira en Inicio y en Horario a la vez.
+ */
+function dejarSinLlegar(almacen: Almacen, cuantos: number): number {
+  const ahoraMs = Date.now();
+  const ahora = new Date(ahoraMs).toISOString();
+  const medianoche = localDateTimeToInstant(dateKeyOf(ahora, TZ), '00:00', TZ);
+  const inicioDelDia = medianoche === null ? ahoraMs : Date.parse(medianoche);
+  const desde = new Date(Math.max(inicioDelDia + 60_000, ahoraMs - 40 * 60_000)).toISOString();
+  const hasta = new Date(ahoraMs + 3 * 60 * 60_000).toISOString();
+
+  const dentro = new Set(
+    (almacen.get('employees_working_now') ?? []).map((fila) => String(fila.employee_id)),
+  );
+  const elegidos = new Map<string, string>();
+  for (const turno of almacen.get('shifts') ?? []) {
+    if (elegidos.size === cuantos) break;
+    const quien = String(turno.employee_id);
+    if (turno.status !== 'published' || turno.location_id !== DEMO_LOCATION_1) continue;
+    if (dentro.has(quien) || [...elegidos.values()].includes(quien)) continue;
+    elegidos.set(String(turno.id), quien);
+  }
+  const quienes = new Set(elegidos.values());
+  almacen.set(
+    'shifts',
+    (almacen.get('shifts') ?? []).map((turno) =>
+      elegidos.has(String(turno.id)) ? { ...turno, starts_at: desde, ends_at: hasta } : turno,
+    ),
+  );
+  // Ninguna jornada suya en ese rato: si no, ya habría llegado.
+  almacen.set(
+    'work_sessions',
+    (almacen.get('work_sessions') ?? []).filter(
+      (sesion) =>
+        !quienes.has(String(sesion.employee_id)) ||
+        (sesion.ends_at !== null && String(sesion.ends_at) <= desde),
+    ),
+  );
+  return elegidos.size;
+}
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
   if (escenario === 'normal') return almacen;
 
@@ -295,6 +340,11 @@ export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almace
 
   if (escenario === 'ausentes') {
     dejarSinCubrir(almacen, 3);
+    return almacen;
+  }
+
+  if (escenario === 'sinllegar') {
+    dejarSinLlegar(almacen, 2);
     return almacen;
   }
 
