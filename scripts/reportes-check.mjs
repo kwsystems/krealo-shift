@@ -235,18 +235,21 @@ function soloHoras(texto) {
     const texto = readFileSync(ruta, 'utf8');
     const lineas = texto.trim().split(/\r?\n/);
     /*
-     * El decimal es la 4ª de nueve columnas, y se cuenta DESDE EL FINAL: un apellido con
+     * El decimal es la 4ª de diez columnas, y se cuenta DESDE EL FINAL: un apellido con
      * coma va entrecomillado y `split(',')` lo parte igual, así que contar desde el
-     * principio se desplazaría justo en las filas que importan. Desde el final, las seis
-     * últimas columnas nunca se mueven.
+     * principio se desplazaría justo en las filas que importan. Desde el final, las siete
+     * últimas columnas nunca se mueven. Eran nueve hasta el 1-oct, cuando entró «Faltas».
+     * El número se toma de la cabecera, y así la próxima columna no lo vuelve a correr.
      *
      * Contándolo desde el principio la primera versión leía la columna del reloj y
      * `parseFloat('11:21')` daba 11: sumaba 45 h donde hay 48.85, y el arnés acusaba a
      * la app de un error que era suyo.
      */
+    const cabecera = (lineas[0] ?? '').replace(/^\uFEFF/, '').split(',');
+    const desdeElFinal = cabecera.length - 3;
     const suma = lineas
       .slice(1)
-      .map((linea) => Number.parseFloat(linea.split(',').slice(-6)[0] ?? '0'))
+      .map((linea) => Number.parseFloat(linea.split(',').slice(-desdeElFinal)[0] ?? '0'))
       .reduce((a, b) => a + b, 0);
     /*
      * EL TOTAL SE LEE AHORA, no se reutiliza el del bloque 1. Aquel se tomó en la
