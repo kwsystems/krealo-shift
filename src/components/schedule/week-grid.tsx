@@ -129,6 +129,8 @@ export type GridProps = {
   readOnly?: boolean;
   /** Lo que cada persona dijo de sus días (1-oct): sale en su celda y avisa en su turno. */
   disponibilidad?: readonly Disponibilidad[];
+  /** Los turnos que son falta (1-oct): ver `features/timesheets/faltas.ts`. */
+  faltas?: ReadonlySet<string>;
 };
 
 /**
@@ -152,6 +154,8 @@ function avisoDeDisponibilidad(
     : null;
 }
 
+const SIN_FALTAS: ReadonlySet<string> = new Set();
+
 export function WeekGrid({
   days,
   rows,
@@ -167,6 +171,7 @@ export function WeekGrid({
   onSelectRestDay,
   readOnly = false,
   disponibilidad = [],
+  faltas = SIN_FALTAS,
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -257,6 +262,15 @@ export function WeekGrid({
               <AppText variant="label" tone="subtle" tabular numberOfLines={1}>
                 {t('schedule.weekTotalShort', { total: minutesToHHmm(row.scheduledMinutes) })}
               </AppText>
+              {/* Sus faltas de la semana, contadas al lado de su nombre: se ven sin buscarlas. */}
+              {(() => {
+                const cuantas = row.shifts.filter((shift) => faltas.has(shift.id)).length;
+                return cuantas === 0 ? null : (
+                  <AppText variant="label" tone="danger" testID={`grid-faltas-${row.employeeId}`}>
+                    {t('schedule.absencesCount', { count: cuantas })}
+                  </AppText>
+                );
+              })()}
             </View>
 
             {days.map((day) => {
@@ -302,6 +316,7 @@ export function WeekGrid({
                         }
                         warnings={warningsFor(shift.id)}
                         enCurso={enCursoFor?.(shift) ?? null}
+                        falta={faltas.has(shift.id)}
                         ventana={ventana}
                         tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
                         avisoDeDisponibilidad={avisoDeDisponibilidad(
@@ -360,6 +375,7 @@ export type DayListProps = {
   onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
   disponibilidad?: readonly Disponibilidad[];
+  faltas?: ReadonlySet<string>;
 };
 
 export function DayList({
@@ -379,6 +395,7 @@ export function DayList({
   onSelectRestDay,
   readOnly = false,
   disponibilidad = [],
+  faltas = SIN_FALTAS,
 }: DayListProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -453,6 +470,7 @@ export function DayList({
                     timeFormat={timeFormat}
                     warnings={warningsFor(shift.id)}
                     enCurso={enCursoFor?.(shift) ?? null}
+                    falta={faltas.has(shift.id)}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
                   />

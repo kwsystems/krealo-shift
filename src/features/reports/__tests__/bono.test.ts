@@ -78,6 +78,7 @@ function calcular(
     desde: DESDE,
     finISO: FIN,
     nowISO,
+    relojDesde: DESDE,
     timezone: LIMA,
   }).resultados;
 }
@@ -155,8 +156,8 @@ describe('bono de asistencia', () => {
     ).toEqual([]);
   });
 
-  it('un día en que NADIE fichó en la tienda no cuenta como falta para nadie', () => {
-    // El 28 nadie fichó (el reloj aún no se usaba); el 29 sí. Ana y Bea fueron el 29.
+  it('un día de ANTES DEL RELOJ no cuenta como falta para nadie', () => {
+    // El reloj empezó el 29: el 28 nadie pudo fichar. Ana y Bea fueron el 29.
     const ta28 = turno('a', '28');
     const tb28 = turno('b', '28');
     const ta29 = turno('a', '29');
@@ -169,12 +170,36 @@ describe('bono de asistencia', () => {
       finISO: FIN,
       nowISO: TRAS_EL_MES,
       timezone: LIMA,
+      relojDesde: '2026-09-29',
     });
     expect(bono.diasSinReloj).toEqual(['2026-09-28']);
     expect(bono.resultados.map((r) => [r.employeeId, r.estado, r.turnosContados])).toEqual([
       ['a', 'gana', 1],
       ['b', 'gana', 1],
     ]);
+  });
+
+  it('desde el reloj, quien era la única de turno y no vino faltó (1-oct)', () => {
+    // Antes «nadie fichó ese día» la libraba: si era la única de turno, nadie fichó porque
+    // no vino. Ahora la falta es la de toda la app.
+    const ta = turno('a', '02');
+    const [ana] = calcular([ta], [], [activo('a')]);
+    expect(ana).toMatchObject({ estado: 'pierde', faltas: ['2026-09-02'] });
+  });
+
+  it('sin saber desde cuándo hay reloj, no se acusa a nadie de faltar', () => {
+    const ta = turno('a', '02');
+    const bono = bonoDeAsistencia({
+      turnos: [ta],
+      sesiones: [],
+      empleados: [activo('a')],
+      desde: DESDE,
+      finISO: FIN,
+      nowISO: TRAS_EL_MES,
+      timezone: LIMA,
+      relojDesde: undefined,
+    });
+    expect(bono.resultados[0]).toMatchObject({ faltas: [], turnosContados: 0 });
   });
 
   it('pero si otro sí fichó ese día, quien no vino faltó', () => {

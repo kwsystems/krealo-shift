@@ -16,6 +16,7 @@ import { estadoDelTurnoAhora, type DentroAhora } from './en-turno';
 import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turno-ahora';
 import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useWorkSessions } from '@/features/timesheets/hooks';
+import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { acknowledgeUnusualClock } from '@/features/timesheets/api';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
@@ -229,6 +230,19 @@ export function ScheduleScreen({
   });
 
   const rows = useMemo(() => shiftsQuery.data ?? [], [shiftsQuery.data]);
+
+  /*
+   * LAS FALTAS DE LA SEMANA (1-oct): cada turno que terminó sin ninguna marca sale en rojo
+   * con «Falta», y la persona lleva la cuenta al lado de su nombre. Con las mismas jornadas
+   * que Horas, así que un fichaje manual allí la quita aquí. Ver `faltas.ts`.
+   */
+  const faltasDeLaSemana = useFaltasDeLaSemana({
+    organizationId: scope.organization?.id ?? null,
+    locationId: scope.locationId,
+    weekStart,
+    timezone: scope.timezone,
+    nowISO,
+  });
 
   /*
    * LAS SEMANAS DE ANTES DEL RELOJ. Hasta el día en que la sede empezó a fichar, un turno
@@ -798,6 +812,7 @@ export function ScheduleScreen({
                     onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
                     disponibilidad={disponibilidad.data ?? []}
+                    faltas={faltasDeLaSemana.porTurno}
                   />
                 ) : view === 'week' ? (
                   <DayList
@@ -817,6 +832,7 @@ export function ScheduleScreen({
                     onSelectRestDay={setRemovingRestDay}
                     readOnly={readOnly}
                     disponibilidad={disponibilidad.data ?? []}
+                    faltas={faltasDeLaSemana.porTurno}
                   />
                 ) : (
                   <Stack gap={spacing.base}>
@@ -848,6 +864,7 @@ export function ScheduleScreen({
                       onSelectRestDay={setRemovingRestDay}
                       readOnly={readOnly}
                       disponibilidad={disponibilidad.data ?? []}
+                      faltas={faltasDeLaSemana.porTurno}
                     />
                   </Stack>
                 )}

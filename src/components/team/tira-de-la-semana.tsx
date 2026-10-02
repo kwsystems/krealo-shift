@@ -1,4 +1,5 @@
 import { View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import { AppText } from '@/components/ui/app-text';
 import { formatWeekdayNarrow, type DateKey } from '@/features/schedules/week';
@@ -31,6 +32,11 @@ export type DiaDeLaTira = {
   minutos: number;
   esHoy: boolean;
   futuro: boolean;
+  /**
+   * FALTA (1-oct): tenía turno, terminó, y no marcó nada. Una cruz roja sobre la base, que
+   * es donde estaría su columna: la semana enseña el hueco Y dice que no es un día libre.
+   */
+  falta?: boolean;
 };
 
 const ALTO = 24;
@@ -64,6 +70,11 @@ export function TiraDeLaSemana({
                   style={[estilos.barra, { height: alto, backgroundColor: chart(colors).series1 }]}
                   testID={testID === undefined ? undefined : `${testID}-${dia.dia}`}
                 />
+              ) : null}
+              {dia.falta === true ? (
+                <View testID={testID === undefined ? undefined : `${testID}-${dia.dia}-falta`}>
+                  <Ionicons name="close" size={12} color={colors.danger600} />
+                </View>
               ) : null}
               {dia.futuro ? null : <View style={estilos.base} />}
             </View>

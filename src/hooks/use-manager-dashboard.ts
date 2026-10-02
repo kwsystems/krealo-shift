@@ -8,7 +8,9 @@ import { countPendingRequests } from '@/features/requests/api';
 import { fetchWeekShifts } from '@/features/schedules/api';
 import { currentWeekStart, dateKeyOf, weekRangeInstants } from '@/features/schedules/week';
 import { shiftScheduledMinutes } from '@/features/schedules/conflicts';
+import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { fetchWorkSessions } from '@/features/timesheets/api';
+import { cubreElTurno, faltasDeLosTurnos } from '@/features/timesheets/faltas';
 import { ADMIN_LIST_STALE_MS, DASHBOARD_POLL_MS, selectRows } from '@/hooks/use-admin-query';
 import { useNetworkStore } from '@/stores/network-store';
 import { minutesBetween } from '@/utils/time';
@@ -189,6 +191,14 @@ export function useManagerDashboard(params: {
     refetchInterval: DASHBOARD_POLL_MS,
   });
 
+  // Desde qué día la sede usa el reloj: antes de eso un turno sin marcas no es una falta.
+  const relojDesde = useInicioDelReloj({
+    organizationId,
+    locationId,
+    timezone,
+    enabled,
+  }).data;
+
   const pendingRequests = useQuery({
     queryKey: dashboardKeys.pendingRequests(locationId ?? 'none'),
     queryFn: () =>
@@ -213,11 +223,6 @@ export function useManagerDashboard(params: {
     const sessions = weekSessions.data ?? [];
 
     const activeByEmployee = new Set(live.map((row) => row.employee_id));
-    const sessionsByEmployee = new Map<string, number>();
-    for (const session of sessions) {
-      const key = `${session.employee_id}|${dateKeyOf(session.starts_at, timezone)}`;
-      sessionsByEmployee.set(key, (sessionsByEmployee.get(key) ?? 0) + 1);
-    }
 
     const rightNow: RightNowEntry[] = [];
 
@@ -243,11 +248,27 @@ export function useManagerDashboard(params: {
       (shift) => shift.status === 'published' && dateKeyOf(shift.starts_at, timezone) === todayKey,
     );
 
+    /*
+     * LA FALTA, CON LA REGLA DE TODA LA APP (1-oct): ver `features/timesheets/faltas.ts`.
+     * Antes bastaba con haber fichado algo hoy para no faltar, así que quien vino por la
+     * mañana y no a su turno de la tarde no faltaba aquí y sí en el bono. Ahora un turno
+     * está cubierto si hay una jornada suya DURANTE el turno, y uno terminado sin cubrir es
+     * falta solo desde que la sede usa el reloj, como en Horario, Horas y Reportes.
+     */
+    const ahoraMs = Date.parse(nowISO);
+    const faltasDeHoy = new Set(
+      faltasDeLosTurnos({
+        turnos: todaysShifts,
+        jornadas: sessions,
+        relojDesde: () => relojDesde,
+        ahoraISO: nowISO,
+        timezone,
+      }).map((falta) => falta.id),
+    );
+
     for (const shift of todaysShifts) {
       if (activeByEmployee.has(shift.employee_id)) continue;
-
-      const hasSessionToday = (sessionsByEmployee.get(`${shift.employee_id}|${todayKey}`) ?? 0) > 0;
-      if (hasSessionToday) continue;
+      if (cubreElTurno(shift, sessions, ahoraMs)) continue;
 
       if (shift.starts_at > nowISO) {
         const minutesToStart = minutesBetween(nowISO, shift.starts_at);
@@ -265,6 +286,8 @@ export function useManagerDashboard(params: {
       }
 
       if (shift.ends_at < nowISO) {
+        // Terminado y sin cubrir, pero de antes del reloj: no es una falta.
+        if (!faltasDeHoy.has(shift.id)) continue;
         absentCount += 1;
         rightNow.push({
           employeeId: shift.employee_id,
@@ -413,5 +436,6 @@ export function useManagerDashboard(params: {
     todayKey,
     timezone,
     lateGraceMinutes,
+    relojDesde,
   ]);
 }

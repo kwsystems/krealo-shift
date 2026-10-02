@@ -31,6 +31,7 @@ const ETIQUETAS: ReportExportLabels = {
   overtimeHours: 'Extra',
   shifts: 'Turnos',
   lateArrivals: 'Tardanzas',
+  absences: 'Faltas',
   breakMinutes: 'Minutos de pausa',
 };
 
@@ -53,6 +54,7 @@ describe('CSV del reporte', () => {
           hours: horas({ netMinutes: 90, regularMinutes: 90, days: 1 }),
           measuredShifts: 1,
           lateArrivals: 0,
+          absences: 0,
           breakMinutes: 0,
         },
       ],
@@ -73,6 +75,7 @@ describe('CSV del reporte', () => {
           hours: horas({ netMinutes: 480, regularMinutes: 480, days: 1 }),
           measuredShifts: 1,
           lateArrivals: 0,
+          absences: 0,
           breakMinutes: 30,
         },
       ],
@@ -80,10 +83,10 @@ describe('CSV del reporte', () => {
     });
     const fila = csv.split('\r\n')[1] ?? '';
     expect(fila.startsWith('"Salazar, Bruno",')).toBe(true);
-    // Nueve columnas exactas: si la coma del nombre hubiera partido la fila, serían diez
+    // Diez columnas exactas: si la coma del nombre hubiera partido la fila, serían once
     // y todos los números de esta persona estarían corridos un sitio.
     const columnas = (fila.match(/,/g) ?? []).length - 1;
-    expect(columnas).toBe(8);
+    expect(columnas).toBe(9);
   });
 
   it('las columnas de la cabecera y las de los datos coinciden en número', () => {
@@ -95,14 +98,15 @@ describe('CSV del reporte', () => {
           hours: horas({ netMinutes: 600, regularMinutes: 480, overtimeMinutes: 120, days: 2 }),
           measuredShifts: 2,
           lateArrivals: 1,
+          absences: 0,
           breakMinutes: 45,
         },
       ],
       labels: ETIQUETAS,
     });
     const [cabecera = '', datos = ''] = csv.split('\r\n');
-    expect(cabecera.split(',')).toHaveLength(9);
-    expect(datos.split(',')).toHaveLength(9);
+    expect(cabecera.split(',')).toHaveLength(10);
+    expect(datos.split(',')).toHaveLength(10);
   });
 
   it('sin nadie, deja la cabecera y ninguna fila', () => {
@@ -119,6 +123,7 @@ describe('resumen para pegar en un chat', () => {
     overtime: 'Extra',
     punctuality: 'Llegó a tiempo',
     punctualityUnknown: 'Puntualidad: sin turnos programados',
+    absences: 'Faltas',
     topPerson: 'Más horas',
     topReason: 'Más tiempo de pausa',
     footer: 'Son horas fichadas, no producción.',
@@ -139,6 +144,7 @@ describe('resumen para pegar en un chat', () => {
       people: 7,
       overtimeMinutes: 226,
       punctuality: PUNTUAL,
+      absences: 2,
       top: { name: 'Diego', minutes: 681 },
       topReason: { name: 'Comida', minutes: 45 },
     });
@@ -146,6 +152,7 @@ describe('resumen para pegar en un chat', () => {
     expect(texto).toContain('67% (3/9)');
     expect(texto).toContain('Diego 11:21');
     expect(texto).toContain('Comida 00:45');
+    expect(texto).toContain('• Faltas: 2');
     expect(texto).toContain('no producción');
   });
 
@@ -162,6 +169,7 @@ describe('resumen para pegar en un chat', () => {
       people: 7,
       overtimeMinutes: 0,
       punctuality: { ...PUNTUAL, byEmployee: [{ employeeId: 'e2', measured: 2, late: 2 }] },
+      absences: 0,
       top: { name: 'Diego', minutes: 681 },
       topReason: null,
     });
@@ -178,6 +186,7 @@ describe('resumen para pegar en un chat', () => {
       people: 1,
       overtimeMinutes: 0,
       punctuality: { measured: 0, late: 0, unscheduled: 3, onTimePercent: null, byEmployee: [] },
+      absences: 0,
       top: null,
       topReason: null,
     });
@@ -219,6 +228,23 @@ describe('armado de las filas', () => {
       lateArrivals: 0,
       breakMinutes: 30,
     });
+  });
+
+  it('quien faltó a todo sale igual, con cero horas y sus faltas (1-oct)', () => {
+    const filas = buildExportRows({
+      ranking: [horas({ employeeId: 'ana', netMinutes: 600, days: 2 })],
+      nameOf: (id) => (id === 'ana' ? 'Ana' : 'Carla'),
+      punctuality: { measured: 0, late: 0, unscheduled: 0, onTimePercent: null, byEmployee: [] },
+      breakMinutesByEmployee: new Map(),
+      absencesByEmployee: new Map([
+        ['ana', 1],
+        ['carla', 3],
+      ]),
+    });
+    expect(filas.map((fila) => [fila.name, fila.absences, fila.hours.netMinutes])).toEqual([
+      ['Ana', 1, 600],
+      ['Carla', 3, 0],
+    ]);
   });
 
   it('suma los minutos de pausa de una persona por todos sus motivos y días', () => {
@@ -269,12 +295,13 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
     overtime: 'Extra',
     punctuality: 'Llegó a tiempo',
     punctualityUnknown: 'Puntualidad: sin turnos programados',
+    absences: 'Faltas',
     topPerson: 'Más horas',
     topReason: 'Más tiempo de pausa',
     footer: 'Son horas fichadas, no producción.',
   };
 
-  it('el CSV tiene exactamente estas nueve columnas y ninguna de notas', () => {
+  it('el CSV tiene exactamente estas diez columnas y ninguna de notas', () => {
     const cabecera = buildReportCsv({
       rows: [
         {
@@ -283,6 +310,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
           hours: HORAS,
           measuredShifts: 1,
           lateArrivals: 0,
+          absences: 0,
           breakMinutes: 30,
         },
       ],
@@ -300,6 +328,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
       'Extra',
       'Turnos',
       'Tardanzas',
+      'Faltas',
       'Minutos de pausa',
     ]);
   });
@@ -311,6 +340,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
       people: 1,
       overtimeMinutes: 0,
       punctuality: { measured: 1, late: 0, unscheduled: 0, onTimePercent: 100, byEmployee: [] },
+      absences: 0,
       top: { name: 'Ana', minutes: 480 },
       topReason: { name: 'Otro', minutes: 45 },
     });

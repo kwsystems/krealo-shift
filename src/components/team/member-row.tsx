@@ -46,6 +46,8 @@ export type MemberRowProps = {
   weekMinutes: number;
   /** Los siete días de la semana con sus minutos, para la tira. Ver `TiraDeLaSemana`. */
   semana?: readonly DiaDeLaTira[];
+  /** Cuántos turnos de esta semana faltó (1-oct). Sale en rojo debajo de su total. */
+  faltas?: number;
   /** La escala común de todas las tiras de la lista, en minutos. */
   escala?: number;
   dentro?: DentroEnEquipo;
@@ -62,6 +64,7 @@ function MemberRowBase({
   member,
   weekMinutes,
   semana,
+  faltas = 0,
   escala = 600,
   dentro,
   jobRoleNames,
@@ -165,7 +168,9 @@ function MemberRowBase({
         dentro === undefined ? '' : `, ${t('timesheet.sinceTime', { time: dentro.desde })}`
       }. ${t('team.thisWeek')}: ${minutesToHHmm(weekMinutes)}${
         dentro === undefined ? '' : `, ${t('timesheet.live')}`
-      }${diasDichos === '' ? '' : `. ${diasDichos}`}`}
+      }${diasDichos === '' ? '' : `. ${diasDichos}`}${
+        faltas > 0 ? `. ${t('schedule.absencesCount', { count: faltas })}` : ''
+      }`}
       accessibilityHint={marcable ? t('team.markHint') : t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
       {...respuesta.props}
@@ -308,6 +313,16 @@ function MemberRowBase({
                     {dentro.estado === 'trabajando' ? t('timesheet.live') : t('timesheet.paused')}
                   </AppText>
                 )}
+                {faltas > 0 ? (
+                  <AppText
+                    variant="label"
+                    tone="danger"
+                    style={estilosDeColumna.derecha}
+                    testID={`team-member-${member.id}-faltas`}
+                  >
+                    {t('schedule.absencesCount', { count: faltas })}
+                  </AppText>
+                ) : null}
               </Stack>
             </Row>
             {isCompact ? null : (

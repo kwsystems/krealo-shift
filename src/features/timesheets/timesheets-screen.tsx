@@ -50,6 +50,12 @@ import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
+import { useFaltasDeLaSemana } from './use-faltas';
+import {
+  FaltasDeLaSemana,
+  RegistrarQueVinoSheet,
+} from '@/components/timesheets/faltas-de-la-semana';
+import type { Falta } from './faltas';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
@@ -111,6 +117,8 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   /* La jornada que pidió el aviso, hasta que se cierre: se abre en cuanto llegan los datos. */
   const [pedida, setPedida] = useState<string | null>(destino?.jornada ?? null);
   const [manualOpen, setManualOpen] = useState(false);
+  /* La falta que se está arreglando porque sí vino: ver `faltas-de-la-semana.tsx`. */
+  const [faltaElegida, setFaltaElegida] = useState<Falta | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
@@ -144,6 +152,21 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   // Las jornadas de la semana que se mira, al día con el horario publicado de ahora.
   useJornadasAlDia({ locationId: scope.locationId, from, to });
   const names = useEmployeeNames(organizationId);
+  /*
+   * LAS FALTAS DE LA SEMANA (1-oct): los turnos que terminaron sin ninguna marca. Con las
+   * mismas jornadas que esta hoja, así que un fichaje manual las quita en cuanto se guarda.
+   * Ver `faltas.ts`.
+   */
+  const faltasDeLaSemana = useFaltasDeLaSemana({
+    organizationId,
+    locationId: scope.locationId,
+    weekStart,
+    timezone: scope.timezone,
+    nowISO,
+  });
+  const faltasVisibles = faltasDeLaSemana.faltas.filter(
+    (falta) => employeeFilter === null || falta.employeeId === employeeFilter,
+  );
   const team = useTeam({
     organizationId,
     locationIds: scope.locationId === null ? [] : [scope.locationId],
@@ -510,6 +533,15 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     onVerJornada={setSelected}
                   />
 
+                  <FaltasDeLaSemana
+                    faltas={faltasVisibles}
+                    nombres={names}
+                    timezone={scope.timezone}
+                    timeFormat={scope.timeFormat}
+                    language={language}
+                    onVino={setFaltaElegida}
+                  />
+
                   {/*
                     `stretch` Y NO `flex-start`: todas las casillas de un renglón miden lo que
                     la más alta, y con el número abajo (ver `StatTile`) los números quedan en
@@ -605,6 +637,13 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                        */
                       tone={totals.needsReviewDays > 0 ? 'late' : undefined}
                       icon="alert-circle"
+                    />
+                    <StatTile
+                      label={t('timesheet.absences.tile')}
+                      value={String(faltasVisibles.length)}
+                      tone={faltasVisibles.length > 0 ? 'late' : undefined}
+                      icon="person-remove-outline"
+                      testID="total-faltas"
                     />
                   </Row>
 
@@ -825,6 +864,36 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
           onClose={() => cerrarDetalle()}
         />
       ) : null}
+
+      {faltaElegida === null ? null : (
+        <RegistrarQueVinoSheet
+          key={faltaElegida.id}
+          falta={faltaElegida}
+          nombre={names.get(faltaElegida.employeeId) ?? t('team.unknownEmployee')}
+          timezone={scope.timezone}
+          language={language}
+          ahoraISO={nowISO}
+          guardando={mutations.addEvent.isPending}
+          onGuardar={async ({ entradaISO, salidaISO, motivo }) => {
+            // Dos fichajes manuales, con el mismo motivo: los mismos que se pondrían a mano.
+            await mutations.addEvent.mutateAsync({
+              employeeId: faltaElegida.employeeId,
+              eventType: 'clock_in',
+              occurredAt: entradaISO,
+              reason: motivo,
+            });
+            await mutations.addEvent.mutateAsync({
+              employeeId: faltaElegida.employeeId,
+              eventType: 'clock_out',
+              occurredAt: salidaISO,
+              reason: motivo,
+            });
+            setFaltaElegida(null);
+            setFeedback(t('timesheet.absences.registered'));
+          }}
+          onClose={() => setFaltaElegida(null)}
+        />
+      )}
 
       {manualOpen ? (
         <ManualEntrySheet

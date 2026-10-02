@@ -26,6 +26,7 @@ export type ReportExportLabels = {
   overtimeHours: string;
   shifts: string;
   lateArrivals: string;
+  absences: string;
   breakMinutes: string;
 };
 
@@ -35,6 +36,8 @@ export type ReportExportRow = {
   hours: EmployeeHours;
   measuredShifts: number;
   lateArrivals: number;
+  /** Turnos del periodo que terminaron sin ninguna marca: ver `timesheets/faltas.ts`. */
+  absences: number;
   breakMinutes: number;
 };
 
@@ -58,6 +61,7 @@ export function buildReportCsv(params: {
     params.labels.overtimeHours,
     params.labels.shifts,
     params.labels.lateArrivals,
+    params.labels.absences,
     params.labels.breakMinutes,
   ];
 
@@ -74,6 +78,7 @@ export function buildReportCsv(params: {
         minutesToHHmm(fila.hours.overtimeMinutes),
         String(fila.measuredShifts),
         String(fila.lateArrivals),
+        String(fila.absences),
         String(fila.breakMinutes),
       ].join(','),
     );
@@ -90,6 +95,7 @@ export type SummaryLabels = {
   overtime: string;
   punctuality: string;
   punctualityUnknown: string;
+  absences: string;
   topPerson: string;
   topReason: string;
   footer: string;
@@ -110,6 +116,8 @@ export function buildReportSummary(params: {
   people: number;
   overtimeMinutes: number;
   punctuality: Punctuality;
+  /** Las faltas del periodo: se dicen siempre, también cuando son cero. */
+  absences: number;
   top: { name: string; minutes: number } | null;
   topReason: { name: string; minutes: number } | null;
 }): string {
@@ -127,6 +135,7 @@ export function buildReportSummary(params: {
       ? `• ${params.labels.punctualityUnknown}`
       : `• ${params.labels.punctuality}: ${params.punctuality.onTimePercent}% (${params.punctuality.late}/${params.punctuality.measured})`,
   );
+  lineas.push(`• ${params.labels.absences}: ${params.absences}`);
 
   if (params.top !== null) {
     lineas.push(
@@ -154,10 +163,13 @@ export function buildExportRows(params: {
   nameOf: (employeeId: string) => string;
   punctuality: Punctuality;
   breakMinutesByEmployee: Map<string, number>;
+  /** Faltas por persona. Quien solo tiene faltas sale igual, con cero horas. */
+  absencesByEmployee?: ReadonlyMap<string, number>;
 }): ReportExportRow[] {
   const puntual = new Map(params.punctuality.byEmployee.map((fila) => [fila.employeeId, fila]));
+  const faltas = params.absencesByEmployee ?? new Map<string, number>();
 
-  return params.ranking.map((fila) => {
+  const filas = params.ranking.map((fila) => {
     const suyo = puntual.get(fila.employeeId);
     return {
       employeeId: fila.employeeId,
@@ -165,9 +177,29 @@ export function buildExportRows(params: {
       hours: fila,
       measuredShifts: suyo?.measured ?? 0,
       lateArrivals: suyo?.late ?? 0,
+      absences: faltas.get(fila.employeeId) ?? 0,
       breakMinutes: params.breakMinutesByEmployee.get(fila.employeeId) ?? 0,
     };
   });
+  /*
+   * QUIEN FALTÓ A TODO TAMBIÉN VA EN EL ARCHIVO (1-oct). El ranking solo tiene a quien
+   * trabajó algo, así que una persona que no vino ningún día no salía en el CSV que se
+   * manda a quien paga: justo la fila que más le importa.
+   */
+  const conHoras = new Set(filas.map((fila) => fila.employeeId));
+  for (const [employeeId, cuantas] of faltas) {
+    if (conHoras.has(employeeId) || cuantas === 0) continue;
+    filas.push({
+      employeeId,
+      name: params.nameOf(employeeId),
+      hours: { employeeId, netMinutes: 0, regularMinutes: 0, overtimeMinutes: 0, days: 0 },
+      measuredShifts: 0,
+      lateArrivals: 0,
+      absences: cuantas,
+      breakMinutes: 0,
+    });
+  }
+  return filas;
 }
 
 /** Minutos de pausa por persona, para la columna del CSV. */

@@ -13,6 +13,7 @@ import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { MemberList, type SemanaDelMiembro } from '@/components/team/member-list';
 import type { DiaDeLaTira } from '@/components/team/tira-de-la-semana';
+import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import {
   InlineNotice,
   SegmentedControl,
@@ -116,6 +117,14 @@ export function TeamScreen() {
     locationId: scope.locationId,
     from: inicioDeSemana,
     to: weekEnd(inicioDeSemana),
+  });
+  /* Sus faltas de esta semana, con la regla de toda la app: ver `faltas.ts`. */
+  const faltasDeLaSemana = useFaltasDeLaSemana({
+    organizationId,
+    locationId: scope.locationId,
+    weekStart: inicioDeSemana,
+    timezone: scope.timezone,
+    nowISO,
   });
 
   /*
@@ -280,6 +289,10 @@ export function TeamScreen() {
    */
   const semanaPorMiembro = useMemo(() => {
     const porPersona = new Map<string, Map<string, number>>();
+    // Quien solo tiene faltas también lleva su semana: es justo a quien hay que ver.
+    for (const employeeId of faltasDeLaSemana.porPersona.keys()) {
+      porPersona.set(employeeId, new Map());
+    }
     const sumar = (employeeId: string, dia: string, minutos: number) => {
       const dias = porPersona.get(employeeId) ?? new Map<string, number>();
       dias.set(dia, (dias.get(dia) ?? 0) + minutos);
@@ -292,19 +305,23 @@ export function TeamScreen() {
     const dias = weekDays(inicioDeSemana);
     const resultado = new Map<string, SemanaDelMiembro>();
     for (const [employeeId, minutosPorDia] of porPersona) {
+      const suyas = faltasDeLaSemana.porPersona.get(employeeId) ?? [];
+      const diasConFalta = new Set(suyas.map((falta) => falta.dia));
       const tira: DiaDeLaTira[] = dias.map((dia) => ({
         dia,
         minutos: minutosPorDia.get(dia) ?? 0,
         esHoy: dia === todayKey,
         futuro: dia > todayKey,
+        falta: diasConFalta.has(dia),
       }));
       resultado.set(employeeId, {
         minutos: tira.reduce((suma, dia) => suma + dia.minutos, 0),
         dias: tira,
+        faltas: suyas.length,
       });
     }
     return resultado;
-  }, [semana.data, dentro, inicioDeSemana, todayKey, scope.timezone]);
+  }, [semana.data, dentro, inicioDeSemana, todayKey, scope.timezone, faltasDeLaSemana]);
 
   const semanaVacia = useMemo(
     () =>

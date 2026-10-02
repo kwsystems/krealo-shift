@@ -193,6 +193,11 @@ export const RPC = {
    */
   registerScheduleAsWorked: 'register_schedule_as_worked',
   /**
+   * Desde qué día cada sede usa el reloj (1-oct), para el celular de la persona: desde ese
+   * día, un turno sin ninguna marca es una falta. Ver `viewClockStart`.
+   */
+  viewClockStart: 'view_clock_start',
+  /**
    * Resolver una solicitud de la Bandeja (30-sep): aprobar, rechazar o comentar. Las reglas
    * no dejan tocar una solicitud desde la app —cambia horas pagadas— y esta función no
    * existía, así que aprobar fallaba en silencio. Aprobar un «olvidé marcar» registra los

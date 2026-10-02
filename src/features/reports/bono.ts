@@ -1,6 +1,7 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 import type { WorkSession } from '@/features/timesheets/api';
+import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
 
 /**
  * EL BONO DE ASISTENCIA DEL MES.
@@ -20,12 +21,17 @@ import type { WorkSession } from '@/features/timesheets/api';
  * Los días de descanso no son turnos y no cuentan; los turnos cancelados o sin publicar,
  * tampoco: nadie falta a un turno que no se le llegó a dar.
  *
- * NI LOS DÍAS EN QUE NADIE FICHÓ EN LA TIENDA. Un día con turnos y sin un solo fichaje de
- * nadie casi nunca es que faltaron todos: es que el reloj no se usó —antes de empezar a
- * usar la app, un iPad averiado, la tienda cerrada—. Contarlo como falta le quitaría el
- * bono a todo el equipo por algo que no hizo nadie. Se excluye, y la pantalla dice qué
- * días. Así pasó con septiembre de 2026: el reloj empezó el 29, y sin esto el lunes 28
- * habría dejado a todo el equipo sin bono.
+ * NI LOS DÍAS DE ANTES DEL RELOJ. Un turno de antes del día en que la sede empezó a usar
+ * el reloj no se pudo fichar: contarlo como falta le quitaría el bono a todo el equipo por
+ * algo que no hizo nadie. Se excluye, y la pantalla dice qué días. Así pasó con septiembre
+ * de 2026: el reloj empezó el 29, y sin esto el lunes 28 habría dejado a todo el equipo
+ * sin bono.
+ *
+ * LA FALTA ES LA DE TODA LA APP (1-oct), `timesheets/faltas.ts`: la misma que enseñan
+ * Horario, Horas, Equipo y el celular. Antes el bono tenía la suya —«un día en que nadie
+ * fichó no cuenta»—, y con una sola persona de turno eso borraba justo su falta: si no vino,
+ * nadie fichó. Dos definiciones de falta acabarían dando el bono a quien Horario marca en
+ * rojo.
  *
  * Es UNA PROPUESTA para quien paga, no un pago: la pantalla lo dice. Quien decide el bono
  * puede tener en cuenta cosas que la app no ve —un permiso avisado, un médico—.
@@ -83,7 +89,7 @@ export function sesionDelTurno(
 
 export type BonoDelMes = {
   resultados: ResultadoDelBono[];
-  /** Días con turnos en que nadie fichó en la tienda: no cuentan para nadie. */
+  /** Días con turnos de antes de que la sede usara el reloj: no cuentan para nadie. */
   diasSinReloj: DateKey[];
 };
 
@@ -96,13 +102,23 @@ export function bonoDeAsistencia(params: {
   finISO: string;
   nowISO: string;
   timezone: string;
+  /** Desde qué día la sede usa el reloj; `null` si nunca, `undefined` si aún no se sabe. */
+  relojDesde: DateKey | null | undefined;
 }): BonoDelMes {
-  const { turnos, sesiones, empleados, desde, finISO, nowISO, timezone } = params;
+  const { turnos, sesiones, empleados, desde, finISO, nowISO, timezone, relojDesde } = params;
   const ahora = Date.parse(nowISO);
   const mesTerminado = ahora >= Date.parse(finISO);
 
   const publicados = turnos.filter((t) => t.status === 'published');
-  const diasConFichaje = new Set(sesiones.map((s) => dateKeyOf(s.starts_at, timezone)));
+  const faltas = new Set(
+    faltasDeLosTurnos({
+      turnos: publicados,
+      jornadas: sesiones,
+      relojDesde: () => relojDesde,
+      ahoraISO: nowISO,
+      timezone,
+    }).map((falta) => falta.id),
+  );
   const diasSinReloj = new Set<DateKey>();
   const resultados: ResultadoDelBono[] = [];
 
@@ -138,14 +154,17 @@ export function bonoDeAsistencia(params: {
     for (const turno of suyos) {
       if (Date.parse(turno.ends_at) > ahora) continue; // aún no terminó: no cuenta
       const dia = dateKeyOf(turno.starts_at, timezone);
-      if (!diasConFichaje.has(dia)) {
-        diasSinReloj.add(dia); // nadie fichó en la tienda ese día: ver arriba
+      if (relojDesde === null || relojDesde === undefined || dia < relojDesde) {
+        diasSinReloj.add(dia); // de antes del reloj: ver arriba
         continue;
       }
       base.turnosContados += 1;
+      if (faltas.has(turno.id)) {
+        base.faltas.push(dia);
+        continue;
+      }
       const sesion = sesionDelTurno(turno, suyasSesiones);
-      if (sesion === null) base.faltas.push(dia);
-      else if (sesion.flags.includes('late_arrival')) base.tardanzas.push(dia);
+      if (sesion?.flags.includes('late_arrival') === true) base.tardanzas.push(dia);
       else base.cumplidos += 1;
     }
 

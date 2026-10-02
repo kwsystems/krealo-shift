@@ -121,6 +121,46 @@ async function primerDiaDelReloj(
   return doc === undefined ? null : diaLocal(String(doc.data().occurred_at), zona);
 }
 
+/**
+ * DESDE QUÉ DÍA CADA SEDE USA EL RELOJ, para el celular de la persona (1-oct).
+ *
+ * Desde ese día, un turno terminado sin ninguna marca es una FALTA en toda la app
+ * (`src/features/timesheets/faltas.ts`); antes, es que la app no existía. El panel lo lee
+ * directamente de los fichajes de la sede, pero una vendedora solo puede leer los suyos
+ * —las reglas la limitan a lo propio— y con eso no se sabe cuándo empezó el reloj: sin esta
+ * función su celular tendría que llamar «falta» a lo que su tienda no llama falta, o no
+ * llamarla nunca.
+ *
+ * Devuelve solo una fecha por sede, sin nada de nadie, y la puede pedir cualquier persona
+ * activa de la empresa. La cuenta es `primerDiaDelReloj`, la misma de arriba.
+ */
+export const viewClockStart = onCall(async (request) => {
+  const uid = requireUid(request);
+  const sedes: unknown = request.data?.p_location_ids;
+  if (
+    !Array.isArray(sedes) ||
+    sedes.length === 0 ||
+    sedes.length > 10 ||
+    !sedes.every((sede) => typeof sede === 'string' && sede !== '')
+  ) {
+    throw new HttpsError('invalid-argument', 'Elige entre una y diez sedes.');
+  }
+
+  const filas: { location_id: string; clock_since: string | null }[] = [];
+  for (const locationId of new Set(sedes as string[])) {
+    const sede = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+    if (sede === undefined) throw new HttpsError('not-found', 'Esa sede no existe.');
+    const organizationId = String(sede.organization_id);
+    await membershipOf(uid, organizationId);
+    const zona = typeof sede.timezone === 'string' ? sede.timezone : 'America/Lima';
+    filas.push({
+      location_id: locationId,
+      clock_since: await primerDiaDelReloj(organizationId, locationId, zona),
+    });
+  }
+  return filas;
+});
+
 async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
   const cerca = await db
     .collection(COLLECTIONS.timeEvents)

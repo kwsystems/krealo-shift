@@ -578,6 +578,53 @@ function crearRpc(almacen: Almacen) {
           },
         ]);
         /*
+         * UNA ENTRADA QUE FALTABA ABRE SU JORNADA (1-oct), como al reconstruirla en el
+         * servidor, atada al turno publicado en que cae. Sin esto, «Vino y no marcó» en las
+         * faltas de Horas no quitaba la falta en la demostración: no había jornada que la
+         * cubriera. Si a esa hora ya estaba dentro, no se abre otra.
+         */
+        if (argumentos.p_event_type === 'clock_in') {
+          const entrada = String(argumentos.p_occurred_at);
+          // Dentro A ESA HORA, no ahora: una entrada de la semana pasada no choca con hoy.
+          const yaDentro = filas('work_sessions').some(
+            (fila) =>
+              fila.employee_id === argumentos.p_employee_id &&
+              fila.ends_at === null &&
+              String(fila.starts_at) <= entrada,
+          );
+          if (!yaDentro) {
+            const instante = Date.parse(entrada);
+            const suTurno = filas('shifts').find(
+              (fila) =>
+                fila.employee_id === argumentos.p_employee_id &&
+                fila.status === 'published' &&
+                Date.parse(String(fila.starts_at)) - 2 * 60 * 60_000 <= instante &&
+                instante < Date.parse(String(fila.ends_at)),
+            );
+            const idSesion = `sesion-${idEvento}`;
+            almacen.set('work_sessions', [
+              ...filas('work_sessions'),
+              {
+                id: idSesion,
+                organization_id: DEMO_ORG_ID,
+                employee_id: argumentos.p_employee_id,
+                location_id: argumentos.p_location_id,
+                shift_id: suTurno?.id ?? null,
+                starts_at: entrada,
+                ends_at: null,
+                gross_minutes: null,
+                paid_break_minutes: 0,
+                unpaid_break_minutes: 0,
+                net_minutes: null,
+                status: 'open',
+                flags: suTurno === undefined ? ['unscheduled'] : [],
+                updated_at: new Date().toISOString(),
+              },
+            ]);
+            return sinError([{ event_id: idEvento, work_session_id: idSesion }]);
+          }
+        }
+        /*
          * UNA SALIDA QUE FALTABA CIERRA SU JORNADA, como al reconstruirla en el servidor:
          * sin esto, «Marcar salida a las 19:00» en «Por resolver» no cambiaba nada en la
          * demostración. Solo la jornada abierta de esa persona que empezó antes de la salida.
@@ -609,11 +656,11 @@ function crearRpc(almacen: Almacen) {
                     },
               ),
             );
+            // Solo si la que se cierra es la de ahora: cerrar la de la semana pasada no saca
+            // de la tienda a quien está trabajando hoy.
             almacen.set(
               'employees_working_now',
-              filas('employees_working_now').filter(
-                (fila) => fila.employee_id !== argumentos.p_employee_id,
-              ),
+              filas('employees_working_now').filter((fila) => fila.work_session_id !== abierta.id),
             );
             return sinError([{ event_id: idEvento, work_session_id: abierta.id }]);
           }
@@ -1270,6 +1317,38 @@ function crearRpc(almacen: Almacen) {
         return sinError({ vistos });
       }
 
+      case 'view_clock_start': {
+        /*
+         * El primer día con un fichaje del reloj en cada sede, en su zona: la misma cuenta
+         * que `primerDiaDelReloj` en el servidor (1-oct).
+         */
+        const sedes = Array.isArray(argumentos.p_location_ids)
+          ? (argumentos.p_location_ids as unknown[]).map(String)
+          : [];
+        return sinError(
+          [...new Set(sedes)].map((sede) => {
+            const zona = String(
+              filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+            );
+            const primero = filas('time_events')
+              .filter((fila) => fila.location_id === sede && fila.source === 'kiosk')
+              .map((fila) => String(fila.occurred_at))
+              .sort()[0];
+            return {
+              location_id: sede,
+              clock_since:
+                primero === undefined
+                  ? null
+                  : new Intl.DateTimeFormat('en-CA', {
+                      timeZone: zona,
+                      year: 'numeric',
+                      month: '2-digit',
+                      day: '2-digit',
+                    }).format(new Date(primero)),
+            };
+          }),
+        );
+      }
       case 'view_corrections_summary': {
         const sede = argumentos.p_location_id;
         const desde = String(argumentos.p_from ?? '');

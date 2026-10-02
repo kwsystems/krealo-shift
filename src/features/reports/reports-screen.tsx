@@ -30,6 +30,8 @@ import { useSesionesDeLosDias, useSoloLosDias } from './use-solo-los-dias';
 import { BotonDeDiasElegidos, ElegirDiasSheet } from './elegir-dias-sheet';
 import { etiquetaDeDias, etiquetaDelPeriodo } from './etiqueta-del-periodo';
 import { bonoDeAsistencia } from './bono';
+import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
+import { faltasDeLosTurnos, faltasPorPersona } from '@/features/timesheets/faltas';
 import { BonoCard } from './bono-card';
 import { fetchWeekShifts } from '@/features/schedules/api';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
@@ -157,9 +159,10 @@ export function ReportsScreen() {
   const names = useEmployeeNames(organizationId);
 
   /*
-   * LO QUE PIDE EL BONO, y solo por mes: los turnos del mes —para saber a qué tenía que
-   * venir cada uno— y los empleados —su estado y su fecha de alta—. Las jornadas ya están
-   * arriba (`sessions`), sin el filtro de persona: el bono es de todos. Ver `bono.ts`.
+   * LOS TURNOS DEL PERIODO: para saber a qué tenía que venir cada uno. Los pide el bono
+   * —solo por mes, con los empleados: su estado y su fecha de alta— y, desde el 1-oct, las
+   * FALTAS, en cualquier periodo. Las jornadas ya están arriba (`sessions`), sin el filtro
+   * de persona: el bono es de todos. Ver `bono.ts` y `timesheets/faltas.ts`.
    */
   const turnosDelMes = useQuery({
     queryKey: ['reports', 'turnos', scope.locationId ?? 'none', from, to],
@@ -170,10 +173,16 @@ export function ReportsScreen() {
         fromISO: periodo.fromISO,
         toISO: periodo.toISO,
       }),
-    enabled: tipo === 'mes' && scope.locationId !== null && organizationId !== null,
+    enabled: scope.locationId !== null && organizationId !== null,
     staleTime: ADMIN_LIST_STALE_MS,
   });
   const empleados = useEmployees(organizationId);
+  const relojDesde = useInicioDelReloj({
+    organizationId,
+    locationId: scope.locationId,
+    timezone: scope.timezone,
+    enabled: true,
+  }).data;
 
   const nombre = (employeeId: string) => names.get(employeeId) ?? t('reports.unknownPerson');
   const etiquetaMotivo = breakReasonLabels(t);
@@ -227,6 +236,27 @@ export function ReportsScreen() {
     [filasPausas, personaElegida],
   );
 
+  /*
+   * LAS FALTAS DEL PERIODO (1-oct), con la regla de toda la app: un turno publicado que
+   * terminó sin ninguna marca, desde que la sede usa el reloj. Solo de los días elegidos, y
+   * solo de quien se tocó en el ranking, como el resto del tablero.
+   */
+  const faltasDelPeriodo =
+    sessions.data === undefined
+      ? []
+      : faltasDeLosTurnos({
+          turnos: turnosDelMes.data ?? [],
+          jornadas: sessions.data,
+          relojDesde: () => relojDesde,
+          ahoraISO: nowISO,
+          timezone: scope.timezone,
+        }).filter((falta) => periodo.dias.includes(falta.dia));
+  const faltasFiltradas =
+    personaElegida === null
+      ? faltasDelPeriodo
+      : faltasDelPeriodo.filter((falta) => falta.employeeId === personaElegida);
+  const faltasPorPersonaDelPeriodo = faltasPorPersona(faltasDelPeriodo);
+
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
   /* Lo trabajado en feriados, y si el periodo tiene alguno: ver `minutosEnFeriados`. */
   const enFeriados = minutosEnFeriados(resumenFiltrado, scope.timezone);
@@ -249,6 +279,7 @@ export function ReportsScreen() {
     finISO: periodo.toISO,
     nowISO,
     timezone: scope.timezone,
+    relojDesde,
   });
 
   const cargando = summaries.isPending || sessions.isPending;
@@ -294,6 +325,25 @@ export function ReportsScreen() {
       ],
     }));
   const maxTardanza = Math.max(...filasTardanza.map((f) => f.segments[0]?.value ?? 0), 0);
+
+  // ---------------------------------------------------------------- faltas
+  const filasFalta: RankingRow[] = [...faltasPorPersona(faltasFiltradas)]
+    .map(([employeeId, suyas]) => ({ employeeId, suyas }))
+    .sort((a, b) => b.suyas.length - a.suyas.length)
+    .map(({ employeeId, suyas }) => ({
+      id: employeeId,
+      label: nombre(employeeId),
+      valueText: String(suyas.length),
+      // Qué días: «lun 28, mié 30». Con más de tres, los tres primeros y cuántos más.
+      hint: [
+        ...suyas.slice(0, 3).map((falta) => formatDateKeyShort(falta.dia, language)),
+        ...(suyas.length > 3 ? [t('reports.bonusMore', { count: suyas.length - 3 })] : []),
+      ].join(', '),
+      segments: [
+        { value: suyas.length, color: chart(colors).attention, label: t('reports.absences') },
+      ],
+    }));
+  const maxFalta = Math.max(...filasFalta.map((f) => f.segments[0]?.value ?? 0), 0);
 
   // --------------------------------------------------------------- motivos
   const totalPausas = motivos.reduce((suma, fila) => suma + fila.minutes, 0);
@@ -382,6 +432,9 @@ export function ReportsScreen() {
         nameOf: nombre,
         punctuality: punctuality(filasSesiones),
         breakMinutesByEmployee: pausasPorPersona,
+        absencesByEmployee: new Map(
+          [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [employeeId, suyas.length]),
+        ),
       });
 
       if (formato === 'csv') {
@@ -396,6 +449,7 @@ export function ReportsScreen() {
             overtimeHours: t('reports.csvOvertime'),
             shifts: t('reports.csvShifts'),
             lateArrivals: t('reports.csvLate'),
+            absences: t('reports.csvAbsences'),
             breakMinutes: t('reports.csvBreakMinutes'),
           },
         });
@@ -422,6 +476,7 @@ export function ReportsScreen() {
           overtime: t('reports.overtime'),
           punctuality: t('reports.onTime'),
           punctualityUnknown: t('reports.punctualityNoDataShort'),
+          absences: t('reports.absences'),
           topPerson: t('reports.summaryTop'),
           topReason: t('reports.summaryTopReason'),
           footer: t('reports.summaryFooter'),
@@ -430,6 +485,7 @@ export function ReportsScreen() {
         people: ranking.length,
         overtimeMinutes: extraMinutos,
         punctuality: punctuality(filasSesiones),
+        absences: faltasDelPeriodo.length,
         top:
           ranking[0] === undefined
             ? null
@@ -711,6 +767,14 @@ export function ReportsScreen() {
                   icon="walk-outline"
                   testID="report-ontime"
                 />
+                <StatTile
+                  label={t('reports.absences')}
+                  value={String(faltasFiltradas.length)}
+                  detalle={t('reports.absencesDetail')}
+                  tone={faltasFiltradas.length > 0 ? 'late' : undefined}
+                  icon="person-remove-outline"
+                  testID="report-absences"
+                />
               </Row>
 
               {/*
@@ -824,6 +888,30 @@ export function ReportsScreen() {
                     max={maxTardanza}
                     onPoint={señalarFila('tardanzas')}
                     testID="ranking-late"
+                  />
+                )}
+              </ChartCard>
+
+              {/*
+                LAS FALTAS, al lado de las tardanzas (1-oct): las dos son lo que se mira para el
+                bono y para hablar con alguien. Cada barra dice qué días.
+              */}
+              <ChartCard
+                title={t('reports.absencesTitle')}
+                subtitle={t('reports.absencesHint')}
+                readout={lectura('faltas')}
+                testID="chart-absences"
+              >
+                {filasFalta.length === 0 ? (
+                  <AppText variant="help" tone="subtle">
+                    {t('reports.nobodyAbsent')}
+                  </AppText>
+                ) : (
+                  <RankingBars
+                    rows={filasFalta}
+                    max={maxFalta}
+                    onPoint={señalarFila('faltas')}
+                    testID="ranking-absences"
                   />
                 )}
               </ChartCard>

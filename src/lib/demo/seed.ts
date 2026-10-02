@@ -1,6 +1,7 @@
 import type { Almacen, Fila } from './postgrest';
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { marcasFueraDelTurno, MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO } from '@/domain/fuera-del-turno';
+import { cubreElTurno } from '@/features/timesheets/faltas';
 
 /**
  * Los datos de la demostración.
@@ -932,12 +933,65 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       updated_at: aISO(sumarDias(lunes, -1)),
     }));
 
+  /*
+   * LOS TURNOS PASADOS LOS CUMPLIÓ QUIEN LOS TENÍA, menos DOS FALTAS a propósito (1-oct).
+   *
+   * Desde que un turno publicado y terminado sin ninguna jornada es una falta en todas las
+   * pantallas (`features/timesheets/faltas.ts`), la semilla se contradecía: sus jornadas son
+   * siempre de las mismas seis personas por la mañana, y sus turnos rotan entre once en dos
+   * tramos. Medido: 34 faltas en dos semanas, casi todas los turnos de la tarde. Una tienda
+   * así no existe, y una demostración en la que falta media plantilla cada día enseña la
+   * pantalla de las faltas llena y todas las demás manchadas de rojo.
+   *
+   * Se quitan los turnos de los días ya pasados que nadie cubrió —las jornadas, que sostienen
+   * las horas que comparan los arneses, no se tocan— y se siembran dos faltas de verdad: la
+   * vendedora de la demostración tenía un cierre de 18:00 a 21:00 el jueves de la semana
+   * pasada y el último día pasado de esta, y no vino. Es ella para que también se vea en su
+   * celular; sale a las 17:10, así que ninguna jornada suya cae en ese turno.
+   */
+  const faltasSembradas = [-4, diaSemana - 1]
+    .filter((dia) => dia >= 0 || dia === -4)
+    .filter((dia) => !esDomingo(dia))
+    .map((dia, indice) => {
+      const fecha = sumarDias(lunes, dia);
+      return {
+        id: id('55555555', 900 + indice),
+        organization_id: DEMO_ORG_ID,
+        employee_id: empleadoId(1),
+        location_id: DEMO_LOCATION_1,
+        job_role_id: puestoId(PERSONAS[0]?.puesto ?? 1),
+        starts_at: aISO(conHora(fecha, 18)),
+        ends_at: aISO(conHora(fecha, 21)),
+        timezone: TZ,
+        planned_unpaid_break_minutes: 0,
+        employee_note: null,
+        manager_note: null,
+        status: 'published',
+        publication_version: 7,
+        published_at: aISO(sumarDias(lunes, dia < 0 ? -9 : -2)),
+        updated_at: aISO(sumarDias(lunes, dia < 0 ? -9 : -2)),
+      };
+    });
+  const turnosCoherentes = [
+    ...turnos.filter(
+      (turno) =>
+        turno.status !== 'published' ||
+        Date.parse(String(turno.starts_at)) >= hoy.getTime() ||
+        cubreElTurno(
+          turno as unknown as Parameters<typeof cubreElTurno>[0],
+          sesiones as unknown as Parameters<typeof cubreElTurno>[1],
+          ahora.getTime(),
+        ),
+    ),
+    ...faltasSembradas,
+  ];
+
   almacen.set('employees', empleados);
   almacen.set('overtime_approvals', horasExtraAprobadas);
   almacen.set('job_roles', puestos);
   almacen.set('employee_location_assignments', asignaciones);
   almacen.set('employee_job_roles', puestosDeEmpleado);
-  almacen.set('shifts', turnos);
+  almacen.set('shifts', turnosCoherentes);
   almacen.set('shift_publications', publicaciones);
   almacen.set('time_events', eventos);
   almacen.set('work_sessions', sesiones);

@@ -5,7 +5,13 @@ import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
-import { fetchMiFicha, fetchMisJornadas, fetchMisTurnos, type MiFicha } from './api';
+import {
+  fetchMiFicha,
+  fetchMisJornadas,
+  fetchMisTurnos,
+  fetchRelojDesdeDeMisSedes,
+  type MiFicha,
+} from './api';
 import {
   diasDelVendedor,
   minutosDeLaJornada,
@@ -166,6 +172,23 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     queryFn: () => fetchMisJornadas({ ...base, fromISO: periodo.fromISO, toISO: periodo.toISO }),
   });
 
+  /*
+   * DESDE CUÁNDO SU TIENDA USA EL RELOJ (1-oct): lo que separa una FALTA de un turno de antes
+   * de la app. Una fecha por sede donde tiene turnos; mientras no llega, nada se llama falta.
+   */
+  const sedesConTurno = [
+    ...new Set(
+      [...(turnosSemanas.data ?? []), ...(turnosMes.data ?? [])].map((tt) => tt.location_id),
+    ),
+  ].sort();
+  const relojDesdeQuery = useQuery({
+    queryKey: ['portal', 'reloj-desde', sedesConTurno.join(',')],
+    queryFn: () => fetchRelojDesdeDeMisSedes(sedesConTurno),
+    enabled: sedesConTurno.length > 0,
+    staleTime: 10 * 60 * 1000,
+  });
+  const relojDesde = (locationId: string) => relojDesdeQuery.data?.get(locationId);
+
   const hoy = dateKeyOf(nowISO, tz);
   const miDisponibilidad = useMiDisponibilidad(base);
   const diasSemana = diasDelVendedor({
@@ -174,6 +197,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     jornadas: jornadasSemanas.data ?? [],
     timezone: tz,
     nowISO,
+    relojDesde,
   });
   const diaDeHoy = diasDelVendedor({
     dias: [hoy],
@@ -181,6 +205,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     jornadas: jornadasSemanas.data ?? [],
     timezone: tz,
     nowISO,
+    relojDesde,
   })[0];
   const diasMes = diasDelVendedor({
     dias: periodo.dias,
@@ -188,9 +213,12 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     jornadas: jornadasMes.data ?? [],
     timezone: tz,
     nowISO,
+    relojDesde,
   });
   const mes = resumenDelMes(diasMes);
-  const diasConAlgo = diasMes.filter((d) => d.jornadas.length > 0 || d.estado === 'sinMarca');
+  const diasConAlgo = diasMes.filter(
+    (d) => d.jornadas.length > 0 || d.estado === 'sinMarca' || d.faltas.length > 0,
+  );
 
   // Solo si está dentro: ¿trabajando o en su descanso? Lo dice la última marca de hoy.
   const abierta = diaDeHoy?.jornadas.find((j) => j.ends_at === null);
@@ -364,8 +392,21 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                   testID="mi-horario-tarde"
                 />
               </View>
+              <View style={estilos.ficha}>
+                <StatTile
+                  label={t('portal.statAbsences')}
+                  value={String(mes.faltas)}
+                  tone={mes.faltas > 0 ? 'late' : undefined}
+                  icon="person-remove-outline"
+                  testID="mi-horario-faltas"
+                />
+              </View>
             </View>
-            {mes.sinMarca > 0 ? (
+            {mes.faltas > 0 ? (
+              <AppText variant="help" tone="muted" testID="mi-horario-faltas-aviso">
+                {t('portal.absenceNotice', { count: mes.faltas })}
+              </AppText>
+            ) : mes.sinMarca > 0 ? (
               <AppText variant="help" tone="muted" testID="mi-horario-sin-marca">
                 {t('portal.noMarkNotice', { count: mes.sinMarca })}
               </AppText>
@@ -466,6 +507,13 @@ function Hoy({
     if (turno === undefined) {
       return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
     }
+    if (dia.estado === 'falta') {
+      return {
+        tono: 'late',
+        titulo: t('portal.todayAbsent', { range: rango ?? '' }),
+        detalle: t('portal.todayAbsentDetail'),
+      };
+    }
     if (Date.parse(turno.ends_at) <= Date.parse(nowISO)) {
       return {
         tono: 'warning',
@@ -503,7 +551,12 @@ const INSIGNIA: Partial<
     EstadoDelDia,
     {
       tono: StatusTone;
-      icono: 'checkmark-circle' | 'alert-circle' | 'radio-button-on' | 'help-circle-outline';
+      icono:
+        | 'checkmark-circle'
+        | 'alert-circle'
+        | 'radio-button-on'
+        | 'help-circle-outline'
+        | 'person-remove-outline';
       clave: string;
     }
   >
@@ -511,6 +564,7 @@ const INSIGNIA: Partial<
   aTiempo: { tono: 'working', icono: 'checkmark-circle', clave: 'portal.badgeOnTime' },
   tarde: { tono: 'late', icono: 'alert-circle', clave: 'portal.badgeLate' },
   enCurso: { tono: 'working', icono: 'radio-button-on', clave: 'portal.badgeWorking' },
+  falta: { tono: 'late', icono: 'person-remove-outline', clave: 'portal.badgeAbsent' },
   sinMarca: { tono: 'warning', icono: 'help-circle-outline', clave: 'portal.badgeNoMark' },
 };
 
@@ -593,6 +647,16 @@ function FilaDelDia({
             {marca}
           </AppText>
         ))}
+        {/* Vino a un turno y no al otro del mismo día: la falta se dice aunque marcara. */}
+        {dia.estado !== 'falta' && dia.faltas.length > 0 ? (
+          <AppText variant="help" tone="danger" testID={`mi-horario-falta-${dia.dia}`}>
+            {t('portal.missedShift', {
+              range: dia.faltas
+                .map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`)
+                .join(' · '),
+            })}
+          </AppText>
+        ) : null}
         {dia.estado === 'aTiempo' && dia.minutosAntes !== null ? (
           <AppText variant="help" tone="success">
             {t('portal.early', { count: dia.minutosAntes })}

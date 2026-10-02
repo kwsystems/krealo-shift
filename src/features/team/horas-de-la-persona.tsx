@@ -17,11 +17,17 @@ import {
 } from '@/features/schedules/week';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
+import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { chart, chartMarks, radii, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
-import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
+import {
+  formatClockTime,
+  formatShiftRange,
+  minutesToHHmm,
+  type TimeFormatPreference,
+} from '@/utils/time';
 
 /**
  * LAS HORAS DE UNA PERSONA, DÍA POR DÍA Y SEMANA POR SEMANA, en su ficha de Equipo.
@@ -92,6 +98,31 @@ export function HorasDeLaPersona({
     cacheKey: { from: periodo.from, to: periodo.to },
   });
 
+  /*
+   * SUS FALTAS DE LA SEMANA (1-oct). Un día sin horas decía «Día libre» aunque tuviera turno
+   * y no hubiera venido: justo lo contrario de lo que pasó. Ver `faltas.ts`.
+   */
+  const faltasDeLaSemana = useFaltasDeLaSemana({
+    organizationId,
+    locationId: vista === 'dia' ? locationId : null,
+    weekStart: periodo.from,
+    timezone,
+    nowISO,
+  });
+  const faltasPorDia = new Map<DateKey, string>();
+  for (const falta of faltasDeLaSemana.porPersona.get(employeeId) ?? []) {
+    const rango = formatShiftRange(
+      falta.turno.starts_at,
+      falta.turno.ends_at,
+      timezone,
+      timeFormat,
+    );
+    const antes = faltasPorDia.get(falta.dia);
+    faltasPorDia.set(falta.dia, antes === undefined ? rango : `${antes} · ${rango}`);
+  }
+
+  const cuantasFaltas =
+    vista === 'dia' ? (faltasDeLaSemana.porPersona.get(employeeId) ?? []).length : 0;
   const diaEnCurso = enCurso === undefined ? null : dateKeyOf(enCurso.desde, timezone);
   const minutosPorDia = new Map<DateKey, number>();
   const porRevisar = new Set<DateKey>();
@@ -167,6 +198,7 @@ export function HorasDeLaPersona({
               language,
             )}
             diaEnCurso={diaEnCurso}
+            faltas={faltasPorDia}
             language={language}
           />
         ) : (
@@ -197,6 +229,11 @@ export function HorasDeLaPersona({
                   average: minutesToHHmm(Math.round(total / diasTrabajados)),
                 })}
           </AppText>
+          {cuantasFaltas === 0 ? null : (
+            <AppText variant="help" tone="danger" testID="person-hours-faltas">
+              {t('schedule.absencesCount', { count: cuantasFaltas })}
+            </AppText>
+          )}
         </View>
       </AsyncSection>
     </Stack>
@@ -233,6 +270,7 @@ function TarjetaDeLaSemana({
   porRevisar,
   tramos,
   diaEnCurso,
+  faltas,
   language,
 }: {
   dias: readonly DateKey[];
@@ -241,6 +279,8 @@ function TarjetaDeLaSemana({
   porRevisar: ReadonlySet<DateKey>;
   tramos: ReadonlyMap<DateKey, string>;
   diaEnCurso: DateKey | null;
+  /** El turno que faltó cada día, ya escrito: «18:00 – 21:00». */
+  faltas: ReadonlyMap<DateKey, string>;
   language: SupportedLanguage;
 }) {
   const { t } = useTranslation();
@@ -255,9 +295,11 @@ function TarjetaDeLaSemana({
         const futuro = dia > hoy;
         const esHoy = dia === hoy;
         const revisar = porRevisar.has(dia);
+        const falta = faltas.get(dia);
         const detalle = futuro
           ? null
-          : (tramos.get(dia) ?? (minutos > 0 ? null : t('team.dayOff')));
+          : (tramos.get(dia) ??
+            (falta !== undefined ? null : minutos > 0 ? null : t('team.dayOff')));
         const valor = futuro || minutos === 0 ? '—' : minutesToHHmm(minutos);
         return (
           <Row
@@ -271,6 +313,7 @@ function TarjetaDeLaSemana({
               detalle,
               dia === diaEnCurso ? t('timesheet.live') : null,
               revisar ? t('timesheet.needsReviewBadge') : null,
+              falta === undefined ? null : t('team.absentShift', { range: falta }),
             ]
               .filter((parte): parte is string => parte !== null)
               .join(', ')}
@@ -303,6 +346,11 @@ function TarjetaDeLaSemana({
                   testID={`person-day-${dia}-tramos`}
                 >
                   {revisar ? `${detalle} · ${t('timesheet.needsReviewBadge')}` : detalle}
+                </AppText>
+              )}
+              {falta === undefined ? null : (
+                <AppText variant="label" tone="danger" tabular testID={`person-day-${dia}-falta`}>
+                  {t('team.absentShift', { range: falta })}
                 </AppText>
               )}
               {/* Un día que no ha llegado no tiene pista: no es un día a cero, es un día por venir. */}

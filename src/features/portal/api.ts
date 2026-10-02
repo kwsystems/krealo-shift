@@ -2,11 +2,12 @@ import { z } from 'zod';
 
 import { shiftRowSchema, type ShiftRow } from '@/features/schedules/api';
 import { workSessionSchema, type WorkSession } from '@/features/timesheets/api';
-import { AdminError, selectRows } from '@/hooks/use-admin-query';
+import type { DateKey } from '@/features/schedules/week';
+import { AdminError, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { locationSchema, type ManagerLocation } from '@/hooks/use-manager-scope';
 import { docId } from '@/lib/firebase/ids';
 import { getDataClient } from '@/lib/firebase/query';
-import { TABLES } from '@/lib/firebase/tables';
+import { RPC, TABLES } from '@/lib/firebase/tables';
 
 /**
  * LO QUE LEE LA VISTA DEL VENDEDOR, y nada más.
@@ -170,4 +171,31 @@ export async function fetchMisJornadas(params: {
       .lt('starts_at', params.toISO)
       .order('starts_at', { ascending: true }),
   );
+}
+
+const relojDesdeSchema = z.array(
+  z.object({ location_id: docId(), clock_since: z.string().nullable() }),
+);
+
+/**
+ * Desde qué día usa el reloj cada una de sus sedes (1-oct): desde ese día, un turno sin
+ * ninguna marca es una falta. Lo da el servidor porque la persona solo puede leer sus
+ * propios fichajes. Ver `viewClockStart` en `functions/src/horario-cumplido.ts`.
+ */
+export async function fetchRelojDesdeDeMisSedes(
+  locationIds: readonly string[],
+): Promise<Map<string, DateKey | null>> {
+  if (locationIds.length === 0) return new Map();
+  const db = requireClient();
+  try {
+    const { data, error } = await db.rpc(RPC.viewClockStart, {
+      p_location_ids: [...locationIds],
+    });
+    if (error !== null) throw toAdminError(error);
+    const leido = relojDesdeSchema.safeParse(data);
+    if (!leido.success) throw toAdminError({ code: 'shape', message: 'UNEXPECTED_SHAPE' });
+    return new Map(leido.data.map((fila) => [fila.location_id, fila.clock_since]));
+  } catch (error) {
+    throw toAdminError(error);
+  }
 }

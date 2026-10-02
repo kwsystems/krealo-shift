@@ -1,6 +1,7 @@
 import type { Almacen, Fila } from './postgrest';
 import { DEMO_EMPLEADOS_DENTRO, DEMO_LOCATION_1, TZ } from './seed';
 import { dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
+import { cubreElTurno } from '@/features/timesheets/faltas';
 
 /**
  * Tres días distintos en la misma demostración.
@@ -73,15 +74,6 @@ export function marcaDeLaUrl(): string | null {
 const esHoy = (iso: unknown): boolean =>
   typeof iso === 'string' && dateKeyOf(iso, TZ) === dateKeyOf(new Date().toISOString(), TZ);
 
-/** Quién tiene ya una sesión hoy: esa gente ni falta ni llega tarde. */
-function conSesionHoy(almacen: Almacen): Set<string> {
-  return new Set(
-    (almacen.get('work_sessions') ?? [])
-      .filter((fila) => esHoy(fila.starts_at))
-      .map((fila) => String(fila.employee_id)),
-  );
-}
-
 /**
  * Quita del tablero los fichajes incompletos y las solicitudes pendientes.
  *
@@ -116,16 +108,29 @@ function despejarLoDemas(almacen: Almacen): void {
   );
 }
 
-/** Deja en borrador los turnos de hoy que ya empezaron y nadie fichó: ni ausentes ni tardanzas. */
+/**
+ * Deja en borrador los turnos de hoy que ya empezaron y nadie cubrió: ni faltas ni tardanzas.
+ *
+ * «Cubrir» con la MISMA regla que la falta (`cubreElTurno`): una jornada de esa persona
+ * durante el turno. Antes bastaba con haber fichado algo hoy, y desde el 1-oct eso ya no
+ * libra de la falta —quien vino por la mañana y no a su turno de la tarde faltó a ese turno—,
+ * así que el día tranquilo habría salido con faltas.
+ */
 function cubrirTurnosDeHoy(almacen: Almacen): void {
   const ahora = new Date().toISOString();
-  const fichados = conSesionHoy(almacen);
+  const jornadas = (almacen.get('work_sessions') ?? []) as unknown as Parameters<
+    typeof cubreElTurno
+  >[1];
   almacen.set(
     'shifts',
     (almacen.get('shifts') ?? []).map((turno) =>
       esHoy(turno.starts_at) &&
       String(turno.starts_at) < ahora &&
-      !fichados.has(String(turno.employee_id))
+      !cubreElTurno(
+        turno as unknown as Parameters<typeof cubreElTurno>[0],
+        jornadas,
+        Date.parse(ahora),
+      )
         ? { ...turno, status: 'draft', published_at: null }
         : turno,
     ),

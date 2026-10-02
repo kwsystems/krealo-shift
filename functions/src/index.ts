@@ -90,6 +90,6 @@ export {
  * Registrar como cumplido el horario de las semanas de ANTES del reloj (30-sep). Solo
  * esos días: después, un turno sin marcas se corrige persona por persona, con motivo.
  */
-export { registerScheduleAsWorked } from './horario-cumplido';
+export { registerScheduleAsWorked, viewClockStart } from './horario-cumplido';
 export { applyPlannedBreak, resolveSessionCase, settleOwedHours } from './casos';
 export { deleteAvailability, markAvailabilitySeen, saveAvailability } from './disponibilidad';

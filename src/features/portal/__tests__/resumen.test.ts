@@ -55,13 +55,19 @@ function jornada(t: ShiftRow, extra: Partial<WorkSession> = {}): WorkSession {
   };
 }
 
-const dias = (turnos: ShiftRow[], jornadas: WorkSession[], lista: string[]) =>
+const dias = (
+  turnos: ShiftRow[],
+  jornadas: WorkSession[],
+  lista: string[],
+  relojDesde?: string | null,
+) =>
   diasDelVendedor({
     dias: lista.map((d) => `2026-10-${d}`),
     turnos,
     jornadas,
     timezone: LIMA,
     nowISO: AHORA,
+    relojDesde: relojDesde === undefined ? undefined : () => relojDesde,
   });
 
 describe('los días del vendedor', () => {
@@ -86,9 +92,30 @@ describe('los días del vendedor', () => {
     expect(d).toMatchObject({ estado: 'enCurso', minutosNetos: 300 });
   });
 
-  it('un turno que ya terminó sin ninguna marca dice «sin marca», no «faltó»', () => {
+  it('sin saber desde cuándo hay reloj, un turno terminado sin marca dice «sin marca»', () => {
     const [d] = dias([turno('05')], [], ['05']);
     expect(d?.estado).toBe('sinMarca');
+  });
+
+  it('desde que su tienda usa el reloj, ese turno es una FALTA (1-oct)', () => {
+    const t = turno('05');
+    const [d] = dias([t], [], ['05'], '2026-10-01');
+    expect(d?.estado).toBe('falta');
+    expect(d?.faltas.map((f) => f.id)).toEqual([t.id]);
+  });
+
+  it('de antes del reloj sigue siendo «sin marca»: no se pudo marcar', () => {
+    const [d] = dias([turno('05')], [], ['05'], '2026-10-06');
+    expect(d?.estado).toBe('sinMarca');
+    expect(d?.faltas).toEqual([]);
+  });
+
+  it('vino a un turno y no al otro del mismo día: dice cómo llegó, y la falta aparte', () => {
+    const manana = turno('05', '13:00', '17:00');
+    const tarde = turno('05', '19:00', '23:00');
+    const [d] = dias([manana, tarde], [jornada(manana)], ['05'], '2026-10-01');
+    expect(d?.estado).toBe('aTiempo');
+    expect(d?.faltas.map((f) => f.id)).toEqual([tarde.id]);
   });
 
   it('el turno de hoy que aún no empieza es «hoy»; uno de otro día, «por venir»', () => {
@@ -132,7 +159,13 @@ describe('el resumen del mes', () => {
       aTiempo: 2,
       antesDeHora: 1,
       tarde: 1,
+      faltas: 0,
       sinMarca: 1,
     });
+  });
+
+  it('las faltas se cuentan por turno, como las cuenta quien administra', () => {
+    const lista = dias([turno('05'), turno('06')], [], ['05', '06'], '2026-10-01');
+    expect(resumenDelMes(lista)).toMatchObject({ faltas: 2, sinMarca: 0 });
   });
 });

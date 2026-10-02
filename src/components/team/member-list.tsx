@@ -34,7 +34,12 @@ import { spacing } from '@/theme/tokens';
  */
 
 /** La semana de una persona: su total y sus siete días. */
-export type SemanaDelMiembro = { minutos: number; dias: readonly DiaDeLaTira[] };
+export type SemanaDelMiembro = {
+  minutos: number;
+  dias: readonly DiaDeLaTira[];
+  /** Sus faltas de la semana (1-oct): ver `features/timesheets/faltas.ts`. */
+  faltas?: number;
+};
 
 export type MemberListProps = {
   members: TeamMember[];
@@ -70,6 +75,7 @@ export function MemberList({
         member={item}
         weekMinutes={semanaPorMiembro.get(item.id)?.minutos ?? 0}
         semana={semanaPorMiembro.get(item.id)?.dias ?? semanaVacia}
+        faltas={semanaPorMiembro.get(item.id)?.faltas ?? 0}
         escala={escala}
         dentro={dentroPorMiembro?.get(item.id)}
         jobRoleNames={jobRoleNames}

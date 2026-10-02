@@ -2,6 +2,7 @@ import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 import { sesionDelTurno } from '@/features/reports/bono';
 import type { WorkSession } from '@/features/timesheets/api';
+import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
 
 /**
  * LO QUE VE EL VENDEDOR, día por día y en el mes, a partir de sus turnos y sus jornadas.
@@ -13,10 +14,11 @@ import type { WorkSession } from '@/features/timesheets/api';
  * «Antes de hora» es lo único que se calcula aquí: el panel no lo marca porque no es un
  * problema, pero Andree pidió que cada uno vea si llegó temprano.
  *
- * LO QUE NO SE DICE: «faltó». Con solo sus propios datos no se sabe si ese día el reloj de
- * la tienda funcionaba —el bono lo mira comparando con el resto del equipo, que el vendedor
- * no ve—. Así que un turno pasado sin marca se dice como lo que es, «sin marca», y quien lo
- * explica es quien administra.
+ * «FALTA», CON LA REGLA DE TODA LA APP (1-oct). Antes aquí no se decía: con solo sus
+ * propios datos no se sabía desde cuándo su tienda usa el reloj, y un turno de antes de eso
+ * no es una falta. Ahora esa fecha la da el servidor (`viewClockStart`) y la falta es la de
+ * `timesheets/faltas.ts`: la misma que ve quien administra en Horario, Horas y Reportes, y la
+ * que mira el bono. Un turno sin marca de ANTES del reloj sigue diciéndose «sin marca».
  */
 
 export type EstadoDelDia =
@@ -32,7 +34,9 @@ export type EstadoDelDia =
   | 'tarde'
   /** Está trabajando ahora mismo. */
   | 'enCurso'
-  /** Turno terminado sin ninguna jornada. */
+  /** Turno terminado sin ninguna jornada, desde que su tienda usa el reloj: una falta. */
+  | 'falta'
+  /** Turno terminado sin ninguna jornada de antes del reloj, o sin saber aún desde cuándo. */
   | 'sinMarca';
 
 export type DiaDelVendedor = {
@@ -44,6 +48,8 @@ export type DiaDelVendedor = {
   minutosAntes: number | null;
   /** Minutos netos trabajados ese día, con lo que lleva si sigue dentro. */
   minutosNetos: number;
+  /** Los turnos de ese día que faltó: ver `timesheets/faltas.ts`. */
+  faltas: ShiftRow[];
 };
 
 const MIN = 60 * 1000;
@@ -61,8 +67,17 @@ export function diasDelVendedor(params: {
   jornadas: readonly WorkSession[];
   timezone: string;
   nowISO: string;
+  /** Desde qué día usa el reloj cada sede; `undefined` mientras no se sabe. */
+  relojDesde?: (locationId: string) => DateKey | null | undefined;
 }): DiaDelVendedor[] {
   const { dias, turnos, jornadas, timezone, nowISO } = params;
+  const faltas = faltasDeLosTurnos({
+    turnos,
+    jornadas,
+    relojDesde: params.relojDesde ?? (() => undefined),
+    ahoraISO: nowISO,
+    timezone,
+  });
   const ahora = Date.parse(nowISO);
   const hoy = dateKeyOf(nowISO, timezone);
 
@@ -93,11 +108,20 @@ export function diasDelVendedor(params: {
         return primeraJornada.flags.includes('late_arrival') ? 'tarde' : 'aTiempo';
       }
       if (primerTurno === undefined) return 'libre';
+      if (faltas.some((falta) => falta.dia === dia)) return 'falta';
       if (Date.parse(primerTurno.ends_at) <= ahora) return 'sinMarca';
       return dia === hoy ? 'hoy' : 'porVenir';
     })();
 
-    return { dia, turnos: suyos, jornadas: delDia, estado, minutosAntes, minutosNetos };
+    return {
+      dia,
+      turnos: suyos,
+      jornadas: delDia,
+      estado,
+      minutosAntes,
+      minutosNetos,
+      faltas: faltas.filter((falta) => falta.dia === dia).map((falta) => falta.turno),
+    };
   });
 }
 
@@ -108,6 +132,8 @@ export type ResumenDelMes = {
   /** De los a tiempo, cuántos entró antes de la hora. */
   antesDeHora: number;
   tarde: number;
+  /** Turnos que faltó: uno por turno, como los cuenta quien administra. */
+  faltas: number;
   sinMarca: number;
 };
 
@@ -118,6 +144,7 @@ export function resumenDelMes(dias: readonly DiaDelVendedor[]): ResumenDelMes {
     aTiempo: dias.filter((d) => d.estado === 'aTiempo').length,
     antesDeHora: dias.filter((d) => d.estado === 'aTiempo' && d.minutosAntes !== null).length,
     tarde: dias.filter((d) => d.estado === 'tarde').length,
+    faltas: dias.reduce((suma, d) => suma + d.faltas.length, 0),
     sinMarca: dias.filter((d) => d.estado === 'sinMarca').length,
   };
 }

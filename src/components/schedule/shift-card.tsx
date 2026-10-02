@@ -76,6 +76,7 @@ export function ShiftCard({
   ventana = null,
   enFila = false,
   avisoDeDisponibilidad = null,
+  falta = false,
   tonoDelPuesto = null,
   onPress,
   testID,
@@ -95,6 +96,11 @@ export function ShiftCard({
   enFila?: boolean;
   /** «Dijo que no puede»: el turno choca con su disponibilidad (1-oct). */
   avisoDeDisponibilidad?: string | null;
+  /**
+   * FALTA (1-oct): el turno terminó sin ninguna marca suya. La regla es la de toda la app,
+   * `features/timesheets/faltas.ts`; aquí solo se pinta, en rojo y con la palabra.
+   */
+  falta?: boolean;
   /**
    * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
    * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
@@ -132,6 +138,7 @@ export function ShiftCard({
     showEmployeeName && employeeName !== undefined ? employeeName : null,
     range,
     estadoAhora,
+    falta ? t('schedule.absent') : null,
     minutesToHHmm(netMinutes),
     statusLabel,
     avisoDeDisponibilidad,
@@ -188,6 +195,7 @@ export function ShiftCard({
         shift.status === 'cancelled' ? styles.cancelled : null,
         warnings.length > 0 ? styles.warned : null,
         avisoDeDisponibilidad === null ? null : styles.choca,
+        falta ? styles.falta : null,
         tono === null ? null : { borderLeftWidth: 4, borderLeftColor: tono.solido },
       ]}
     >
@@ -303,6 +311,19 @@ export function ShiftCard({
             {warnings[0]?.kind === 'overlap'
               ? t('schedule.overlapShort')
               : t('schedule.shortRestShort')}
+          </AppText>
+        </Row>
+      ) : null}
+
+      {falta ? (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-falta`}
+        >
+          <Ionicons name="person-remove-outline" size={14} color={colors.danger600} />
+          <AppText variant="label" tone="danger">
+            {t('schedule.absent')}
           </AppText>
         </Row>
       ) : null}
@@ -560,6 +581,8 @@ const useEstilos = estilosDelTema((colors) => ({
   warned: { borderColor: colors.warning600, borderWidth: borderWidth.focus },
   /* Choca con lo que dijo la persona: el filo en rojo, y la frase dice por qué. */
   choca: { borderColor: colors.danger600, borderWidth: borderWidth.focus },
+  /* Falta: el turno entero en el rojo suave de «Tarde», que es el mismo par de colores. */
+  falta: { backgroundColor: colors.danger50, borderColor: colors.danger600 },
   pressed: { opacity: 0.7 },
   /*
    * UN HUECO TIENE QUE VERSE COMO UN HUECO, y antes medía y pesaba igual que un turno:
