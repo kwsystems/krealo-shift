@@ -93,3 +93,4 @@ export {
 export { registerScheduleAsWorked, viewClockStart } from './horario-cumplido';
 export { applyPlannedBreak, resolveSessionCase, settleOwedHours } from './casos';
 export { deleteAvailability, markAvailabilitySeen, saveAvailability } from './disponibilidad';
+export { clearAbsenceResolution, resolveAbsence } from './faltas';

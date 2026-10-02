@@ -1043,6 +1043,37 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   almacen.set('employee_location_assignments', asignaciones);
   almacen.set('employee_job_roles', puestosDeEmpleado);
   almacen.set('shifts', turnosCoherentes);
+  /*
+   * POR QUÉ FALTÓ (2-oct): la falta de la semana pasada ya está justificada —un descanso
+   * médico, con su comentario— y la de esta, sin revisar. Así la demostración enseña los dos
+   * estados en Horas, Horario, Equipo, Reportes y el celular sin tener que hacer nada antes.
+   */
+  const faltaPasada = faltasSembradas[0];
+  almacen.set(
+    'absence_resolutions',
+    faltaPasada === undefined
+      ? []
+      : [
+          {
+            id: faltaPasada.id,
+            organization_id: DEMO_ORG_ID,
+            location_id: faltaPasada.location_id,
+            employee_id: faltaPasada.employee_id,
+            shift_id: faltaPasada.id,
+            work_date: new Intl.DateTimeFormat('en-CA', {
+              timeZone: TZ,
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            }).format(new Date(faltaPasada.starts_at)),
+            kind: 'justified',
+            reason: 'medical',
+            note: 'Trajo su certificado médico',
+            decided_at: aISO(sumarDias(lunes, -1)),
+            updated_at: aISO(sumarDias(lunes, -1)),
+          },
+        ],
+  );
   almacen.set('shift_publications', publicaciones);
   almacen.set('time_events', eventos);
   almacen.set('work_sessions', sesiones);

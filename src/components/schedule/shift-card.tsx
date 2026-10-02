@@ -8,6 +8,8 @@ import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
+import { estadoDeFalta, type Falta } from '@/features/timesheets/faltas';
+import { iconoDeFalta, rotuloDeFaltaEnTurno } from '@/features/timesheets/textos-de-falta';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTonos, type Tono } from '@/theme/tonos';
@@ -76,7 +78,7 @@ export function ShiftCard({
   ventana = null,
   enFila = false,
   avisoDeDisponibilidad = null,
-  falta = false,
+  falta = null,
   tonoDelPuesto = null,
   onPress,
   testID,
@@ -98,9 +100,13 @@ export function ShiftCard({
   avisoDeDisponibilidad?: string | null;
   /**
    * FALTA (1-oct): el turno terminó sin ninguna marca suya. La regla es la de toda la app,
-   * `features/timesheets/faltas.ts`; aquí solo se pinta, en rojo y con la palabra.
+   * `features/timesheets/faltas.ts`; aquí solo se pinta, con la palabra.
+   *
+   * CON LO QUE SE DIJO DE ELLA (2-oct): en rojo mientras cuenta en contra —sin revisar o
+   * sin justificar—, en ámbar si está justificada, y con el motivo escrito. Los mismos
+   * textos y colores que Horas, Equipo y Reportes (`textos-de-falta.ts`).
    */
-  falta?: boolean;
+  falta?: Pick<Falta, 'resolucion'> | null;
   /**
    * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
    * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
@@ -133,12 +139,13 @@ export function ShiftCard({
           : t('schedule.statusDraft');
 
   const estadoAhora = enCurso === null ? null : t(CLAVE_DE_ESTADO[enCurso]);
+  const faltaJustificada = falta !== null && estadoDeFalta(falta) === 'justificada';
 
   const accessibilityLabel = [
     showEmployeeName && employeeName !== undefined ? employeeName : null,
     range,
     estadoAhora,
-    falta ? t('schedule.absent') : null,
+    falta === null ? null : rotuloDeFaltaEnTurno(t, falta),
     minutesToHHmm(netMinutes),
     statusLabel,
     avisoDeDisponibilidad,
@@ -195,7 +202,7 @@ export function ShiftCard({
         shift.status === 'cancelled' ? styles.cancelled : null,
         warnings.length > 0 ? styles.warned : null,
         avisoDeDisponibilidad === null ? null : styles.choca,
-        falta ? styles.falta : null,
+        falta === null ? null : faltaJustificada ? styles.faltaJustificada : styles.falta,
         tono === null ? null : { borderLeftWidth: 4, borderLeftColor: tono.solido },
       ]}
     >
@@ -315,18 +322,26 @@ export function ShiftCard({
         </Row>
       ) : null}
 
-      {falta ? (
+      {falta === null ? null : (
         <Row
           gap={spacing.xs}
           align="center"
           testID={testID === undefined ? undefined : `${testID}-falta`}
         >
-          <Ionicons name="person-remove-outline" size={14} color={colors.danger600} />
-          <AppText variant="label" tone="danger">
-            {t('schedule.absent')}
+          <Ionicons
+            name={iconoDeFalta(falta)}
+            size={14}
+            color={faltaJustificada ? colors.warning600 : colors.danger600}
+          />
+          <AppText
+            variant="label"
+            tone={faltaJustificada ? 'warning' : 'danger'}
+            style={styles.textoDeFalta}
+          >
+            {rotuloDeFaltaEnTurno(t, falta)}
           </AppText>
         </Row>
-      ) : null}
+      )}
 
       {avisoDeDisponibilidad === null ? null : (
         <Row
@@ -583,6 +598,9 @@ const useEstilos = estilosDelTema((colors) => ({
   choca: { borderColor: colors.danger600, borderWidth: borderWidth.focus },
   /* Falta: el turno entero en el rojo suave de «Tarde», que es el mismo par de colores. */
   falta: { backgroundColor: colors.danger50, borderColor: colors.danger600 },
+  /* Justificada: sigue siendo falta, pero ya no cuenta en contra; el ámbar de los avisos. */
+  faltaJustificada: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
+  textoDeFalta: { flexShrink: 1, minWidth: 0 },
   pressed: { opacity: 0.7 },
   /*
    * UN HUECO TIENE QUE VERSE COMO UN HUECO, y antes medía y pesaba igual que un turno:

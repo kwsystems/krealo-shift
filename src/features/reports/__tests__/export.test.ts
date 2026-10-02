@@ -32,6 +32,7 @@ const ETIQUETAS: ReportExportLabels = {
   shifts: 'Turnos',
   lateArrivals: 'Tardanzas',
   absences: 'Faltas',
+  justifiedAbsences: 'Faltas justificadas',
   breakMinutes: 'Minutos de pausa',
 };
 
@@ -55,6 +56,7 @@ describe('CSV del reporte', () => {
           measuredShifts: 1,
           lateArrivals: 0,
           absences: 0,
+          justifiedAbsences: 0,
           breakMinutes: 0,
         },
       ],
@@ -76,6 +78,7 @@ describe('CSV del reporte', () => {
           measuredShifts: 1,
           lateArrivals: 0,
           absences: 0,
+          justifiedAbsences: 0,
           breakMinutes: 30,
         },
       ],
@@ -83,10 +86,10 @@ describe('CSV del reporte', () => {
     });
     const fila = csv.split('\r\n')[1] ?? '';
     expect(fila.startsWith('"Salazar, Bruno",')).toBe(true);
-    // Diez columnas exactas: si la coma del nombre hubiera partido la fila, serían once
+    // Once columnas exactas: si la coma del nombre hubiera partido la fila, serían doce
     // y todos los números de esta persona estarían corridos un sitio.
     const columnas = (fila.match(/,/g) ?? []).length - 1;
-    expect(columnas).toBe(9);
+    expect(columnas).toBe(10);
   });
 
   it('las columnas de la cabecera y las de los datos coinciden en número', () => {
@@ -99,14 +102,15 @@ describe('CSV del reporte', () => {
           measuredShifts: 2,
           lateArrivals: 1,
           absences: 0,
+          justifiedAbsences: 0,
           breakMinutes: 45,
         },
       ],
       labels: ETIQUETAS,
     });
     const [cabecera = '', datos = ''] = csv.split('\r\n');
-    expect(cabecera.split(',')).toHaveLength(10);
-    expect(datos.split(',')).toHaveLength(10);
+    expect(cabecera.split(',')).toHaveLength(11);
+    expect(datos.split(',')).toHaveLength(11);
   });
 
   it('sin nadie, deja la cabecera y ninguna fila', () => {
@@ -154,6 +158,21 @@ describe('resumen para pegar en un chat', () => {
     expect(texto).toContain('Comida 00:45');
     expect(texto).toContain('• Faltas: 2');
     expect(texto).toContain('no producción');
+  });
+
+  it('dice cuántas faltas están justificadas, si se lo dan escrito (2-oct)', () => {
+    const texto = buildReportSummary({
+      labels: ETIQUETAS_RESUMEN,
+      totalMinutes: 60,
+      people: 1,
+      overtimeMinutes: 0,
+      punctuality: PUNTUAL,
+      absences: 3,
+      absencesDetail: '1 justificada · 2 sin revisar',
+      top: null,
+      topReason: null,
+    });
+    expect(texto).toContain('• Faltas: 3 (1 justificada · 2 sin revisar)');
   });
 
   /**
@@ -247,6 +266,24 @@ describe('armado de las filas', () => {
     ]);
   });
 
+  it('lleva sus faltas justificadas al lado de las faltas (2-oct)', () => {
+    const filas = buildExportRows({
+      ranking: [horas({ employeeId: 'ana', netMinutes: 600, days: 2 })],
+      nameOf: (id) => (id === 'ana' ? 'Ana' : 'Carla'),
+      punctuality: { measured: 0, late: 0, unscheduled: 0, onTimePercent: null, byEmployee: [] },
+      breakMinutesByEmployee: new Map(),
+      absencesByEmployee: new Map([
+        ['ana', 1],
+        ['carla', 3],
+      ]),
+      justifiedAbsencesByEmployee: new Map([['carla', 2]]),
+    });
+    expect(filas.map((fila) => [fila.name, fila.absences, fila.justifiedAbsences])).toEqual([
+      ['Ana', 1, 0],
+      ['Carla', 3, 2],
+    ]);
+  });
+
   it('suma los minutos de pausa de una persona por todos sus motivos y días', () => {
     const mapa = breakMinutesByEmployee([
       { employee_id: 'ana', minutes: 45 },
@@ -301,7 +338,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
     footer: 'Son horas fichadas, no producción.',
   };
 
-  it('el CSV tiene exactamente estas diez columnas y ninguna de notas', () => {
+  it('el CSV tiene exactamente estas once columnas y ninguna de notas', () => {
     const cabecera = buildReportCsv({
       rows: [
         {
@@ -311,6 +348,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
           measuredShifts: 1,
           lateArrivals: 0,
           absences: 0,
+          justifiedAbsences: 0,
           breakMinutes: 30,
         },
       ],
@@ -329,6 +367,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
       'Turnos',
       'Tardanzas',
       'Faltas',
+      'Faltas justificadas',
       'Minutos de pausa',
     ]);
   });

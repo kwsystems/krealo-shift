@@ -50,9 +50,12 @@ import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
+import { useMutacionesDeFaltas } from './justificaciones';
+import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
 import {
   FaltasDeLaSemana,
+  JustificarFaltaSheet,
   RegistrarQueVinoSheet,
 } from '@/components/timesheets/faltas-de-la-semana';
 import type { Falta } from './faltas';
@@ -119,6 +122,9 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   const [manualOpen, setManualOpen] = useState(false);
   /* La falta que se está arreglando porque sí vino: ver `faltas-de-la-semana.tsx`. */
   const [faltaElegida, setFaltaElegida] = useState<Falta | null>(null);
+  /* La falta de la que se está diciendo por qué faltó. */
+  const [faltaAExplicar, setFaltaAExplicar] = useState<Falta | null>(null);
+  const mutacionesDeFaltas = useMutacionesDeFaltas();
   const [feedback, setFeedback] = useState<string | null>(null);
 
   const nowISO = now.toISOString();
@@ -540,6 +546,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     timeFormat={scope.timeFormat}
                     language={language}
                     onVino={setFaltaElegida}
+                    onPorQue={setFaltaAExplicar}
                   />
 
                   {/*
@@ -641,7 +648,8 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     <StatTile
                       label={t('timesheet.absences.tile')}
                       value={String(faltasVisibles.length)}
-                      tone={faltasVisibles.length > 0 ? 'late' : undefined}
+                      detalle={detalleDeFaltas(t, faltasVisibles)}
+                      tone={tonoDelTotalDeFaltas(faltasVisibles)}
                       icon="person-remove-outline"
                       testID="total-faltas"
                     />
@@ -892,6 +900,35 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
             setFeedback(t('timesheet.absences.registered'));
           }}
           onClose={() => setFaltaElegida(null)}
+        />
+      )}
+
+      {faltaAExplicar === null ? null : (
+        <JustificarFaltaSheet
+          key={faltaAExplicar.id}
+          falta={faltaAExplicar}
+          nombre={names.get(faltaAExplicar.employeeId) ?? t('team.unknownEmployee')}
+          timezone={scope.timezone}
+          timeFormat={scope.timeFormat}
+          language={language}
+          guardando={mutacionesDeFaltas.justificar.isPending}
+          quitando={mutacionesDeFaltas.quitar.isPending}
+          onGuardar={async ({ kind, reason, note }) => {
+            await mutacionesDeFaltas.justificar.mutateAsync({
+              shiftId: faltaAExplicar.id,
+              kind,
+              reason,
+              note,
+            });
+            setFaltaAExplicar(null);
+            setFeedback(t('absence.saved'));
+          }}
+          onQuitar={async () => {
+            await mutacionesDeFaltas.quitar.mutateAsync(faltaAExplicar.id);
+            setFaltaAExplicar(null);
+            setFeedback(t('absence.saved'));
+          }}
+          onClose={() => setFaltaAExplicar(null)}
         />
       )}
 

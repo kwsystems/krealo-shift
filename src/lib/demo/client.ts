@@ -1,4 +1,5 @@
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
+import { motivoValido, NOTA_MAXIMA_DE_FALTA } from '@/domain/motivos-de-falta';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import {
   aplicarEscenario,
@@ -1315,6 +1316,67 @@ function crearRpc(almacen: Almacen) {
           }),
         );
         return sinError({ vistos });
+      }
+
+      /*
+       * «¿POR QUÉ FALTÓ?» (2-oct), como `resolveAbsence` en el servidor: un turno publicado
+       * que ya terminó, un tipo y un motivo que vayan juntos, y la nota si es «Otro».
+       */
+      case 'resolve_absence': {
+        const turno = filas('shifts').find((fila) => fila.id === argumentos.p_shift_id);
+        if (turno === undefined || turno.status !== 'published') {
+          return conError('Ese turno no está publicado.');
+        }
+        if (Date.parse(String(turno.ends_at)) > Date.now()) {
+          return conError('Ese turno todavía no terminó.');
+        }
+        if (!motivoValido(argumentos.p_kind, argumentos.p_reason)) {
+          return conError('Ese motivo no vale para ese tipo de falta.');
+        }
+        const nota =
+          typeof argumentos.p_note === 'string' && argumentos.p_note.trim() !== ''
+            ? argumentos.p_note.trim().slice(0, NOTA_MAXIMA_DE_FALTA)
+            : null;
+        if (argumentos.p_reason === 'other' && nota === null) {
+          return conError('Con «Otro motivo» hay que escribir qué pasó.');
+        }
+        const zona = String(
+          filas('locations').find((fila) => fila.id === turno.location_id)?.timezone ??
+            'America/Lima',
+        );
+        const ahora = new Date().toISOString();
+        const previa = filas('absence_resolutions').find((fila) => fila.id === turno.id);
+        const fila = {
+          id: turno.id,
+          organization_id: DEMO_ORG_ID,
+          location_id: turno.location_id,
+          employee_id: turno.employee_id,
+          shift_id: turno.id,
+          work_date: new Intl.DateTimeFormat('en-CA', {
+            timeZone: zona,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+          }).format(new Date(String(turno.starts_at))),
+          kind: argumentos.p_kind,
+          reason: argumentos.p_reason,
+          note: nota,
+          decided_at: previa?.decided_at ?? ahora,
+          updated_at: ahora,
+        };
+        almacen.set('absence_resolutions', [
+          ...filas('absence_resolutions').filter((f) => f.id !== fila.id),
+          fila,
+        ]);
+        return sinError({ id: fila.id });
+      }
+
+      case 'clear_absence_resolution': {
+        almacen.set(
+          'absence_resolutions',
+          filas('absence_resolutions').filter((f) => f.id !== argumentos.p_shift_id),
+        );
+        return sinError({ id: argumentos.p_shift_id });
       }
 
       case 'view_clock_start': {

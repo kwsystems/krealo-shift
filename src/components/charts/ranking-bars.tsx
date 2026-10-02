@@ -29,6 +29,13 @@ export type RankingSegment = {
   color: string;
   /** Nombre del tramo para el lector de pantalla y la lectura al señalar. */
   label: string;
+  /**
+   * TRAMO HUECO (2-oct): relleno claro (`color`) con borde de este color. Para lo que se
+   * cuenta pero no en contra —las faltas justificadas, junto a las que no—. Rojo y ámbar
+   * MACIZOS uno al lado del otro no se distinguen bien (validador: ΔE 12,6 en claro, por
+   * debajo de 15); macizo contra hueco se distingue por la forma, sin depender del color.
+   */
+  borde?: string;
 };
 
 export type RankingRow = {
@@ -98,6 +105,9 @@ export function RankingBars({
                       {
                         flexGrow: tramo.value,
                         backgroundColor: tramo.color,
+                        ...(tramo.borde === undefined
+                          ? null
+                          : { borderWidth: 1.5, borderColor: tramo.borde }),
                         // Solo el extremo del dato se redondea. El que apoya en la
                         // línea base queda cuadrado, para que se lea como apoyado.
                         borderTopRightRadius: ultimo ? chartMarks.endRadius : 0,

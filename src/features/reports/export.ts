@@ -27,6 +27,7 @@ export type ReportExportLabels = {
   shifts: string;
   lateArrivals: string;
   absences: string;
+  justifiedAbsences: string;
   breakMinutes: string;
 };
 
@@ -38,6 +39,8 @@ export type ReportExportRow = {
   lateArrivals: number;
   /** Turnos del periodo que terminaron sin ninguna marca: ver `timesheets/faltas.ts`. */
   absences: number;
+  /** De esas, las justificadas (2-oct): quien paga el bono necesita las dos cifras. */
+  justifiedAbsences: number;
   breakMinutes: number;
 };
 
@@ -62,6 +65,7 @@ export function buildReportCsv(params: {
     params.labels.shifts,
     params.labels.lateArrivals,
     params.labels.absences,
+    params.labels.justifiedAbsences,
     params.labels.breakMinutes,
   ];
 
@@ -79,6 +83,7 @@ export function buildReportCsv(params: {
         String(fila.measuredShifts),
         String(fila.lateArrivals),
         String(fila.absences),
+        String(fila.justifiedAbsences),
         String(fila.breakMinutes),
       ].join(','),
     );
@@ -118,6 +123,8 @@ export function buildReportSummary(params: {
   punctuality: Punctuality;
   /** Las faltas del periodo: se dicen siempre, también cuando son cero. */
   absences: number;
+  /** Cuántas justificadas y sin revisar, ya escrito: «1 justificada · 2 sin revisar». */
+  absencesDetail?: string;
   top: { name: string; minutes: number } | null;
   topReason: { name: string; minutes: number } | null;
 }): string {
@@ -135,7 +142,11 @@ export function buildReportSummary(params: {
       ? `• ${params.labels.punctualityUnknown}`
       : `• ${params.labels.punctuality}: ${params.punctuality.onTimePercent}% (${params.punctuality.late}/${params.punctuality.measured})`,
   );
-  lineas.push(`• ${params.labels.absences}: ${params.absences}`);
+  lineas.push(
+    params.absencesDetail === undefined
+      ? `• ${params.labels.absences}: ${params.absences}`
+      : `• ${params.labels.absences}: ${params.absences} (${params.absencesDetail})`,
+  );
 
   if (params.top !== null) {
     lineas.push(
@@ -165,9 +176,12 @@ export function buildExportRows(params: {
   breakMinutesByEmployee: Map<string, number>;
   /** Faltas por persona. Quien solo tiene faltas sale igual, con cero horas. */
   absencesByEmployee?: ReadonlyMap<string, number>;
+  /** De esas, las justificadas. */
+  justifiedAbsencesByEmployee?: ReadonlyMap<string, number>;
 }): ReportExportRow[] {
   const puntual = new Map(params.punctuality.byEmployee.map((fila) => [fila.employeeId, fila]));
   const faltas = params.absencesByEmployee ?? new Map<string, number>();
+  const justificadas = params.justifiedAbsencesByEmployee ?? new Map<string, number>();
 
   const filas = params.ranking.map((fila) => {
     const suyo = puntual.get(fila.employeeId);
@@ -178,6 +192,7 @@ export function buildExportRows(params: {
       measuredShifts: suyo?.measured ?? 0,
       lateArrivals: suyo?.late ?? 0,
       absences: faltas.get(fila.employeeId) ?? 0,
+      justifiedAbsences: justificadas.get(fila.employeeId) ?? 0,
       breakMinutes: params.breakMinutesByEmployee.get(fila.employeeId) ?? 0,
     };
   });
@@ -196,6 +211,7 @@ export function buildExportRows(params: {
       measuredShifts: 0,
       lateArrivals: 0,
       absences: cuantas,
+      justifiedAbsences: justificadas.get(employeeId) ?? 0,
       breakMinutes: 0,
     });
   }

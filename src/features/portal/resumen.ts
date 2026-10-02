@@ -2,7 +2,8 @@ import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 import { sesionDelTurno } from '@/features/reports/bono';
 import type { WorkSession } from '@/features/timesheets/api';
-import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import { estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 
 /**
  * LO QUE VE EL VENDEDOR, día por día y en el mes, a partir de sus turnos y sus jornadas.
@@ -19,6 +20,10 @@ import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
  * no es una falta. Ahora esa fecha la da el servidor (`viewClockStart`) y la falta es la de
  * `timesheets/faltas.ts`: la misma que ve quien administra en Horario, Horas y Reportes, y la
  * que mira el bono. Un turno sin marca de ANTES del reloj sigue diciéndose «sin marca».
+ *
+ * Y CON LO QUE SE DIJO DE ELLA (2-oct): si quien administra la justificó, el día dice
+ * «Falta justificada» con el motivo, en ámbar; sin justificar, sigue en rojo con el motivo.
+ * Lo mismo que ve quien administra, en su celular.
  */
 
 export type EstadoDelDia =
@@ -36,6 +41,8 @@ export type EstadoDelDia =
   | 'enCurso'
   /** Turno terminado sin ninguna jornada, desde que su tienda usa el reloj: una falta. */
   | 'falta'
+  /** Una falta que quien administra justificó: no le quita el bono. */
+  | 'faltaJustificada'
   /** Turno terminado sin ninguna jornada de antes del reloj, o sin saber aún desde cuándo. */
   | 'sinMarca';
 
@@ -50,6 +57,8 @@ export type DiaDelVendedor = {
   minutosNetos: number;
   /** Los turnos de ese día que faltó: ver `timesheets/faltas.ts`. */
   faltas: ShiftRow[];
+  /** Lo que se dijo de esas faltas, de las que ya se dijo algo. */
+  justificaciones: ResolucionDeFalta[];
 };
 
 const MIN = 60 * 1000;
@@ -69,6 +78,8 @@ export function diasDelVendedor(params: {
   nowISO: string;
   /** Desde qué día usa el reloj cada sede; `undefined` mientras no se sabe. */
   relojDesde?: (locationId: string) => DateKey | null | undefined;
+  /** Lo que se dijo de sus faltas. */
+  resoluciones?: readonly ResolucionDeFalta[];
 }): DiaDelVendedor[] {
   const { dias, turnos, jornadas, timezone, nowISO } = params;
   const faltas = faltasDeLosTurnos({
@@ -77,6 +88,7 @@ export function diasDelVendedor(params: {
     relojDesde: params.relojDesde ?? (() => undefined),
     ahoraISO: nowISO,
     timezone,
+    resoluciones: params.resoluciones,
   });
   const ahora = Date.parse(nowISO);
   const hoy = dateKeyOf(nowISO, timezone);
@@ -108,7 +120,12 @@ export function diasDelVendedor(params: {
         return primeraJornada.flags.includes('late_arrival') ? 'tarde' : 'aTiempo';
       }
       if (primerTurno === undefined) return 'libre';
-      if (faltas.some((falta) => falta.dia === dia)) return 'falta';
+      const faltasDelDia = faltas.filter((falta) => falta.dia === dia);
+      if (faltasDelDia.length > 0) {
+        return faltasDelDia.every((falta) => estadoDeFalta(falta) === 'justificada')
+          ? 'faltaJustificada'
+          : 'falta';
+      }
       if (Date.parse(primerTurno.ends_at) <= ahora) return 'sinMarca';
       return dia === hoy ? 'hoy' : 'porVenir';
     })();
@@ -121,6 +138,9 @@ export function diasDelVendedor(params: {
       minutosAntes,
       minutosNetos,
       faltas: faltas.filter((falta) => falta.dia === dia).map((falta) => falta.turno),
+      justificaciones: faltas.flatMap((falta) =>
+        falta.dia === dia && falta.resolucion !== null ? [falta.resolucion] : [],
+      ),
     };
   });
 }
@@ -134,6 +154,8 @@ export type ResumenDelMes = {
   tarde: number;
   /** Turnos que faltó: uno por turno, como los cuenta quien administra. */
   faltas: number;
+  /** De esas, las justificadas. */
+  faltasJustificadas: number;
   sinMarca: number;
 };
 
@@ -145,6 +167,10 @@ export function resumenDelMes(dias: readonly DiaDelVendedor[]): ResumenDelMes {
     antesDeHora: dias.filter((d) => d.estado === 'aTiempo' && d.minutosAntes !== null).length,
     tarde: dias.filter((d) => d.estado === 'tarde').length,
     faltas: dias.reduce((suma, d) => suma + d.faltas.length, 0),
+    faltasJustificadas: dias.reduce(
+      (suma, d) => suma + d.justificaciones.filter((j) => j.kind === 'justified').length,
+      0,
+    ),
     sinMarca: dias.filter((d) => d.estado === 'sinMarca').length,
   };
 }

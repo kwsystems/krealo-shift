@@ -46,6 +46,11 @@ import {
   weekRangeInstants,
 } from '@/features/schedules/week';
 import { fetchTimeEvents } from '@/features/timesheets/api';
+import {
+  useMisJustificaciones,
+  type ResolucionDeFalta,
+} from '@/features/timesheets/justificaciones';
+import { etiquetaDeFalta, motivoDeFalta } from '@/features/timesheets/textos-de-falta';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
@@ -189,6 +194,10 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   });
   const relojDesde = (locationId: string) => relojDesdeQuery.data?.get(locationId);
 
+  // Lo que dijo quien administra de sus faltas (2-oct): justificada o no, y por qué.
+  const misJustificaciones = useMisJustificaciones(base);
+  const resoluciones = misJustificaciones.data ?? [];
+
   const hoy = dateKeyOf(nowISO, tz);
   const miDisponibilidad = useMiDisponibilidad(base);
   const diasSemana = diasDelVendedor({
@@ -198,6 +207,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     timezone: tz,
     nowISO,
     relojDesde,
+    resoluciones,
   });
   const diaDeHoy = diasDelVendedor({
     dias: [hoy],
@@ -206,6 +216,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     timezone: tz,
     nowISO,
     relojDesde,
+    resoluciones,
   })[0];
   const diasMes = diasDelVendedor({
     dias: periodo.dias,
@@ -214,6 +225,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     timezone: tz,
     nowISO,
     relojDesde,
+    resoluciones,
   });
   const mes = resumenDelMes(diasMes);
   const diasConAlgo = diasMes.filter(
@@ -396,15 +408,30 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                 <StatTile
                   label={t('portal.statAbsences')}
                   value={String(mes.faltas)}
-                  tone={mes.faltas > 0 ? 'late' : undefined}
+                  detalle={
+                    mes.faltasJustificadas > 0
+                      ? t('absence.justifiedCount', { count: mes.faltasJustificadas })
+                      : undefined
+                  }
+                  tone={
+                    mes.faltas > mes.faltasJustificadas
+                      ? 'late'
+                      : mes.faltas > 0
+                        ? 'warning'
+                        : undefined
+                  }
                   icon="person-remove-outline"
                   testID="mi-horario-faltas"
                 />
               </View>
             </View>
-            {mes.faltas > 0 ? (
+            {mes.faltas > mes.faltasJustificadas ? (
               <AppText variant="help" tone="muted" testID="mi-horario-faltas-aviso">
-                {t('portal.absenceNotice', { count: mes.faltas })}
+                {t('portal.absenceNotice', { count: mes.faltas - mes.faltasJustificadas })}
+              </AppText>
+            ) : mes.faltas > 0 ? (
+              <AppText variant="help" tone="muted" testID="mi-horario-faltas-aviso">
+                {t('portal.absenceAllJustified', { count: mes.faltas })}
               </AppText>
             ) : mes.sinMarca > 0 ? (
               <AppText variant="help" tone="muted" testID="mi-horario-sin-marca">
@@ -507,11 +534,21 @@ function Hoy({
     if (turno === undefined) {
       return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
     }
+    if (dia.estado === 'faltaJustificada') {
+      return {
+        tono: 'warning',
+        titulo: t('portal.todayAbsentJustified', { range: rango ?? '' }),
+        detalle: dichoDeLaFalta(t, dia.justificaciones[0]),
+      };
+    }
     if (dia.estado === 'falta') {
       return {
         tono: 'late',
         titulo: t('portal.todayAbsent', { range: rango ?? '' }),
-        detalle: t('portal.todayAbsentDetail'),
+        detalle:
+          dia.justificaciones[0] === undefined
+            ? t('portal.todayAbsentDetail')
+            : dichoDeLaFalta(t, dia.justificaciones[0]),
       };
     }
     if (Date.parse(turno.ends_at) <= Date.parse(nowISO)) {
@@ -546,6 +583,13 @@ function Hoy({
   );
 }
 
+/** El motivo y el comentario de una falta, para la tarjeta de hoy. */
+function dichoDeLaFalta(t: TFunction, dicho: ResolucionDeFalta | undefined): string | null {
+  if (dicho === undefined) return null;
+  const motivo = motivoDeFalta(t, dicho.reason);
+  return dicho.note === null ? motivo : `${motivo}: «${dicho.note}»`;
+}
+
 const INSIGNIA: Partial<
   Record<
     EstadoDelDia,
@@ -556,7 +600,8 @@ const INSIGNIA: Partial<
         | 'alert-circle'
         | 'radio-button-on'
         | 'help-circle-outline'
-        | 'person-remove-outline';
+        | 'person-remove-outline'
+        | 'document-text-outline';
       clave: string;
     }
   >
@@ -565,6 +610,11 @@ const INSIGNIA: Partial<
   tarde: { tono: 'late', icono: 'alert-circle', clave: 'portal.badgeLate' },
   enCurso: { tono: 'working', icono: 'radio-button-on', clave: 'portal.badgeWorking' },
   falta: { tono: 'late', icono: 'person-remove-outline', clave: 'portal.badgeAbsent' },
+  faltaJustificada: {
+    tono: 'warning',
+    icono: 'document-text-outline',
+    clave: 'portal.badgeAbsentJustified',
+  },
   sinMarca: { tono: 'warning', icono: 'help-circle-outline', clave: 'portal.badgeNoMark' },
 };
 
@@ -588,6 +638,9 @@ function FilaDelDia({
   const { t } = useTranslation();
   const estilos = useEstilos();
   const insignia = INSIGNIA[dia.estado];
+  const faltasJustificadas = dia.faltas.every((tt) =>
+    dia.justificaciones.some((dicho) => dicho.shift_id === tt.id && dicho.kind === 'justified'),
+  );
   // EL RANGO DE HORAS NO SE PARTE: espacios que no se parten (U+00A0) y un WORD JOINER
   // (U+2060) tras el guion, porque el navegador corta DESPUÉS de un guion aunque el espacio
   // que sigue no se parta. En 390 px se leía «03:00 –» / «12:10», dos datos sueltos.
@@ -648,8 +701,13 @@ function FilaDelDia({
           </AppText>
         ))}
         {/* Vino a un turno y no al otro del mismo día: la falta se dice aunque marcara. */}
-        {dia.estado !== 'falta' && dia.faltas.length > 0 ? (
-          <AppText variant="help" tone="danger" testID={`mi-horario-falta-${dia.dia}`}>
+        {dia.estado !== 'falta' && dia.estado !== 'faltaJustificada' && dia.faltas.length > 0 ? (
+          <AppText
+            variant="help"
+            // Ámbar si está justificada: sigue siendo falta, pero ya no cuenta en contra.
+            tone={faltasJustificadas ? 'warning' : 'danger'}
+            testID={`mi-horario-falta-${dia.dia}`}
+          >
             {t('portal.missedShift', {
               range: dia.faltas
                 .map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`)
@@ -657,6 +715,18 @@ function FilaDelDia({
             })}
           </AppText>
         ) : null}
+        {/* Lo que dijo quien administra: «Justificada · Descanso médico: "trajo certificado"». */}
+        {dia.justificaciones.map((dicho) => (
+          <AppText
+            key={dicho.id}
+            variant="help"
+            tone={dicho.kind === 'justified' ? 'warning' : 'danger'}
+            testID={`mi-horario-motivo-${dia.dia}`}
+          >
+            {etiquetaDeFalta(t, { resolucion: dicho })}
+            {dicho.note === null ? '' : `: «${dicho.note}»`}
+          </AppText>
+        ))}
         {dia.estado === 'aTiempo' && dia.minutosAntes !== null ? (
           <AppText variant="help" tone="success">
             {t('portal.early', { count: dia.minutosAntes })}

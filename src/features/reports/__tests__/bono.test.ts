@@ -1,5 +1,6 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import type { WorkSession } from '@/features/timesheets/api';
+import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 import { bonoDeAsistencia, type EmpleadoDelBono } from '../bono';
 
 /**
@@ -70,6 +71,7 @@ function calcular(
   sesiones: WorkSession[],
   empleados: EmpleadoDelBono[],
   nowISO = TRAS_EL_MES,
+  resoluciones: ResolucionDeFalta[] = [],
 ) {
   return bonoDeAsistencia({
     turnos,
@@ -80,7 +82,23 @@ function calcular(
     nowISO,
     relojDesde: DESDE,
     timezone: LIMA,
+    resoluciones,
   }).resultados;
+}
+
+function resolucion(t: ShiftRow, kind: ResolucionDeFalta['kind']): ResolucionDeFalta {
+  return {
+    id: t.id,
+    organization_id: 'o1',
+    location_id: t.location_id,
+    employee_id: t.employee_id,
+    shift_id: t.id,
+    work_date: t.starts_at.slice(0, 10),
+    kind,
+    reason: kind === 'justified' ? 'medical' : 'no_notice',
+    note: null,
+    decided_at: null,
+  };
 }
 
 describe('bono de asistencia', () => {
@@ -105,6 +123,40 @@ describe('bono de asistencia', () => {
     expect(r.find((x) => x.employeeId === 'a')).toMatchObject({
       estado: 'pierde',
       faltas: ['2026-09-03'],
+    });
+  });
+
+  it('una falta JUSTIFICADA no lo quita: no cuenta ni a favor ni en contra (2-oct)', () => {
+    const turnos = [turno('a', '02'), turno('a', '03'), turno('b', '03')];
+    const r = calcular(
+      turnos,
+      [sesion(turnos[0]!), sesion(turnos[2]!)],
+      [activo('a'), activo('b')],
+      TRAS_EL_MES,
+      [resolucion(turnos[1]!, 'justified')],
+    );
+    expect(r.find((x) => x.employeeId === 'a')).toMatchObject({
+      estado: 'gana',
+      faltas: [],
+      justificadas: ['2026-09-03'],
+      turnosContados: 1,
+      cumplidos: 1,
+    });
+  });
+
+  it('una falta SIN JUSTIFICAR lo pierde igual que una sin revisar', () => {
+    const turnos = [turno('a', '02'), turno('a', '03'), turno('b', '03')];
+    const r = calcular(
+      turnos,
+      [sesion(turnos[0]!), sesion(turnos[2]!)],
+      [activo('a'), activo('b')],
+      TRAS_EL_MES,
+      [resolucion(turnos[1]!, 'unjustified')],
+    );
+    expect(r.find((x) => x.employeeId === 'a')).toMatchObject({
+      estado: 'pierde',
+      faltas: ['2026-09-03'],
+      justificadas: [],
     });
   });
 

@@ -21,6 +21,8 @@ export type LegendItem = {
   label: string;
   /** Muestra en contorno: lo que se esperaba, no lo que pasó (lo programado). */
   contorno?: boolean;
+  /** El color del contorno, si no es el de la regla: el tramo hueco de `RankingBars`. */
+  borde?: string;
 };
 
 export function ChartCard({
@@ -87,8 +89,8 @@ export function ChartCard({
                   item.contorno === true
                     ? {
                         backgroundColor: item.color,
-                        borderWidth: 1,
-                        borderColor: styles.contorno.borderColor,
+                        borderWidth: item.borde === undefined ? 1 : 1.5,
+                        borderColor: item.borde ?? styles.contorno.borderColor,
                       }
                     : { backgroundColor: item.color },
                 ]}

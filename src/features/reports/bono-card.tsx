@@ -62,46 +62,61 @@ export function BonoCard({
 }) {
   const { t } = useTranslation();
 
+  const perdida = (r: ResultadoDelBono): string => {
+    const partes: string[] = [];
+    const y = t('reports.bonusAnd');
+    if (r.faltas.length > 0) {
+      partes.push(
+        t('reports.bonusAbsent', {
+          days: dias(r.faltas, language, y, t('reports.bonusMore', { count: r.faltas.length - 3 })),
+        }),
+      );
+    }
+    if (r.tardanzas.length > 0) {
+      partes.push(
+        t('reports.bonusLate', {
+          days: dias(
+            r.tardanzas,
+            language,
+            y,
+            t('reports.bonusMore', { count: r.tardanzas.length - 3 }),
+          ),
+        }),
+      );
+    }
+    return partes.join(' · ');
+  };
+
   const detalle = (r: ResultadoDelBono): string => {
     if (r.estado === 'noAplica') {
       return t('reports.bonusJoinedMidMonth', {
         date: formatDateKeyShort(r.ingreso ?? '', language),
       });
     }
-    if (r.estado === 'pierde') {
-      const partes: string[] = [];
-      const y = t('reports.bonusAnd');
-      if (r.faltas.length > 0) {
-        partes.push(
-          t('reports.bonusAbsent', {
+    // Lo justificado se dice siempre al final: es por qué un día no cuenta.
+    const justificadas =
+      r.justificadas.length === 0
+        ? null
+        : t('reports.bonusJustified', {
             days: dias(
-              r.faltas,
+              r.justificadas,
               language,
-              y,
-              t('reports.bonusMore', { count: r.faltas.length - 3 }),
+              t('reports.bonusAnd'),
+              t('reports.bonusMore', { count: r.justificadas.length - 3 }),
             ),
-          }),
-        );
-      }
-      if (r.tardanzas.length > 0) {
-        partes.push(
-          t('reports.bonusLate', {
-            days: dias(
-              r.tardanzas,
-              language,
-              y,
-              t('reports.bonusMore', { count: r.tardanzas.length - 3 }),
-            ),
-          }),
-        );
-      }
-      return partes.join(' · ');
+          });
+    const conJustificadas = (texto: string) =>
+      justificadas === null ? texto : `${texto} · ${justificadas}`;
+    if (r.estado === 'pierde') return conJustificadas(perdida(r));
+    if (r.estado === 'gana') {
+      return conJustificadas(t('reports.bonusAllOnTime', { count: r.cumplidos }));
     }
-    if (r.estado === 'gana') return t('reports.bonusAllOnTime', { count: r.cumplidos });
     // El día 1 nadie lleva «0 turnos a tiempo»: es que todavía no terminó ninguno.
-    return r.turnosContados === 0
-      ? t('reports.bonusNothingYet')
-      : t('reports.bonusSoFar', { count: r.cumplidos });
+    return conJustificadas(
+      r.turnosContados === 0
+        ? t('reports.bonusNothingYet')
+        : t('reports.bonusSoFar', { count: r.cumplidos }),
+    );
   };
 
   const etiqueta: Record<EstadoDelBono, string> = {

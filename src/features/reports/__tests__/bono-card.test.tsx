@@ -12,6 +12,7 @@ const base = {
   turnosContados: 0,
   cumplidos: 0,
   faltas: [],
+  justificadas: [],
   tardanzas: [],
   motivoNoAplica: null,
   ingreso: null,
@@ -55,6 +56,29 @@ describe('apartado del bono de asistencia', () => {
     expect(screen.getByText('Entró el 10 sep: mes incompleto')).toBeTruthy();
     // Con el mes cerrado no hay aviso de provisional.
     expect(screen.queryByText(/esto es provisional/)).toBeNull();
+  });
+
+  it('dice qué falta justificada no le cuenta (2-oct)', async () => {
+    await renderWithProviders(
+      <BonoCard
+        resultados={[
+          {
+            ...base,
+            employeeId: 'a',
+            estado: 'gana',
+            turnosContados: 21,
+            cumplidos: 21,
+            justificadas: ['2026-09-08'],
+          },
+        ]}
+        mesTerminado
+        nombre={(id) => nombres[id] ?? id}
+        language="es-PE"
+      />,
+    );
+    expect(
+      screen.getByText('21 turnos, todos a tiempo · Falta justificada el 8 sep: no cuenta'),
+    ).toBeTruthy();
   });
 
   it('con el mes en curso, lo dice', async () => {

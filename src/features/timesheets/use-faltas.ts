@@ -6,11 +6,12 @@ import { weekEnd, weekRangeInstants, type DateKey } from '@/features/schedules/w
 
 import { faltasDeLosTurnos, faltasPorPersona, type Falta } from './faltas';
 import { useWorkSessions } from './hooks';
+import { useJustificaciones } from './justificaciones';
 
 export type FaltasDeLaSemana = {
   faltas: Falta[];
-  /** Ids de los turnos que son falta: para marcar la tarjeta en Horario. */
-  porTurno: ReadonlySet<string>;
+  /** Las faltas por id de turno: para marcar la tarjeta en Horario con su estado. */
+  porTurno: ReadonlyMap<string, Falta>;
   porPersona: ReadonlyMap<string, Falta[]>;
 };
 
@@ -45,6 +46,8 @@ export function useFaltasDeLaSemana(params: {
     timezone,
     enabled: true,
   }).data;
+  // Lo que se dijo de cada falta: la misma consulta en Horas, Horario, Equipo y Reportes.
+  const justificaciones = useJustificaciones(organizationId, locationId);
 
   return useMemo(() => {
     // Sin las jornadas no se sabe quién vino: no se afirma ninguna falta.
@@ -57,11 +60,12 @@ export function useFaltasDeLaSemana(params: {
             relojDesde: () => relojDesde,
             ahoraISO: nowISO,
             timezone,
+            resoluciones: justificaciones.data ?? [],
           });
     return {
       faltas,
-      porTurno: new Set(faltas.map((falta) => falta.id)),
+      porTurno: new Map(faltas.map((falta) => [falta.id, falta])),
       porPersona: faltasPorPersona(faltas),
     };
-  }, [turnos.data, jornadas.data, relojDesde, nowISO, timezone]);
+  }, [turnos.data, jornadas.data, relojDesde, nowISO, timezone, justificaciones.data]);
 }

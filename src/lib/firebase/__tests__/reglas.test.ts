@@ -695,6 +695,55 @@ describe('reglas de Firestore', () => {
       await assertFails(setDoc(doc(admin, 'availability', 'disp-ajena'), { type: 'note' }));
     });
 
+    /*
+     * POR QUÉ FALTÓ (2-oct): la persona lo ve en su celular —es sobre ella— y el personal en
+     * Horas y Reportes. Nadie lo escribe desde la app: cambia el bono.
+     */
+    it('ve por qué faltó, no lo de otra persona, y no puede escribirlo', async () => {
+      const resolucion = (id: string, empleado: string) =>
+        escribir(`absence_resolutions/${id}`, {
+          id,
+          organization_id: ORG,
+          location_id: SEDE,
+          employee_id: empleado,
+          shift_id: id,
+          work_date: '2026-10-01',
+          kind: 'justified',
+          reason: 'medical',
+        });
+      await resolucion('falta-mia', 'emp-yo');
+      await resolucion('falta-ajena', 'emp-otra');
+
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      const mias = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'absence_resolutions'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+          ),
+        ),
+      );
+      expect(mias.docs.map((d) => d.id)).toEqual(['falta-mia']);
+      await assertFails(getDoc(doc(db, 'absence_resolutions', 'falta-ajena')));
+      await assertFails(
+        setDoc(doc(db, 'absence_resolutions', 'falta-mia'), { kind: 'unjustified' }),
+      );
+
+      const admin = entorno.authenticatedContext(UID).firestore();
+      const deLaSede = await assertSucceeds(
+        getDocs(
+          query(
+            collection(admin, 'absence_resolutions'),
+            where('organization_id', '==', ORG),
+            where('location_id', '==', SEDE),
+          ),
+        ),
+      );
+      expect(deLaSede.size).toBe(2);
+      await assertFails(setDoc(doc(admin, 'absence_resolutions', 'falta-ajena'), { kind: 'x' }));
+    });
+
     it('quien administra sigue viéndolo todo', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
       await assertSucceeds(getDoc(doc(db, 'shifts', 'turno-ajeno')));

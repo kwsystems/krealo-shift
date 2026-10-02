@@ -64,6 +64,8 @@ export const TABLES = {
    */
   owedHours: 'owed_hours',
   availability: 'availability',
+  /** Por qué faltó alguien a un turno (2-oct). Solo la escribe el servidor. */
+  absenceResolutions: 'absence_resolutions',
   announcements: 'announcements',
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
@@ -233,6 +235,9 @@ export const RPC = {
   saveAvailability: 'save_availability',
   deleteAvailability: 'delete_availability',
   markAvailabilitySeen: 'mark_availability_seen',
+  /** Por qué faltó: justificada o no, y el motivo. Ver `functions/src/faltas.ts`. */
+  resolveAbsence: 'resolve_absence',
+  clearAbsenceResolution: 'clear_absence_resolution',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */

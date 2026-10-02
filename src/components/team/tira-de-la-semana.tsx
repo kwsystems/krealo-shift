@@ -37,8 +37,11 @@ export type DiaDeLaTira = {
    * es donde estaría su columna: la semana enseña el hueco Y dice que no es un día libre.
    * Su identificador es `…-semana-falta-<día>` y no `…-semana-<día>-falta`: el de la columna
    * es `…-semana-<día>`, y con el mismo comienzo los arneses contaban la cruz como columna.
+   *
+   * `'justificada'` (2-oct) si todas las de ese día lo están: la cruz pasa a ámbar, el
+   * mismo que en Horario y en Horas. Sigue siendo una falta; ya no cuenta en contra.
    */
-  falta?: boolean;
+  falta?: 'enContra' | 'justificada';
 };
 
 const ALTO = 24;
@@ -73,11 +76,15 @@ export function TiraDeLaSemana({
                   testID={testID === undefined ? undefined : `${testID}-${dia.dia}`}
                 />
               ) : null}
-              {dia.falta === true ? (
+              {dia.falta === undefined ? null : (
                 <View testID={testID === undefined ? undefined : `${testID}-falta-${dia.dia}`}>
-                  <Ionicons name="close" size={12} color={colors.danger600} />
+                  <Ionicons
+                    name="close"
+                    size={12}
+                    color={dia.falta === 'justificada' ? colors.warning600 : colors.danger600}
+                  />
                 </View>
-              ) : null}
+              )}
               {dia.futuro ? null : <View style={estilos.base} />}
             </View>
             <AppText

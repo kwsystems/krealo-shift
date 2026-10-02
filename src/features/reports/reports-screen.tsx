@@ -31,7 +31,9 @@ import { BotonDeDiasElegidos, ElegirDiasSheet } from './elegir-dias-sheet';
 import { etiquetaDeDias, etiquetaDelPeriodo } from './etiqueta-del-periodo';
 import { bonoDeAsistencia } from './bono';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
-import { faltasDeLosTurnos, faltasPorPersona } from '@/features/timesheets/faltas';
+import { contarFaltas, faltasDeLosTurnos, faltasPorPersona } from '@/features/timesheets/faltas';
+import { useJustificaciones } from '@/features/timesheets/justificaciones';
+import { detalleDeFaltas, tonoDelTotalDeFaltas } from '@/features/timesheets/textos-de-falta';
 import { BonoCard } from './bono-card';
 import { AsistenciaPorPersona, type FilaDeAsistencia } from './asistencia-por-persona';
 import { programadoDelPeriodo } from './programado';
@@ -246,6 +248,8 @@ export function ReportsScreen() {
    * terminó sin ninguna marca, desde que la sede usa el reloj. Solo de los días elegidos, y
    * solo de quien se tocó en el ranking, como el resto del tablero.
    */
+  // Con lo que se dijo de cada una (2-oct): la misma consulta que Horas, Horario y Equipo.
+  const justificaciones = useJustificaciones(organizationId, scope.locationId);
   const faltasDelPeriodo =
     sessions.data === undefined
       ? []
@@ -255,6 +259,7 @@ export function ReportsScreen() {
           relojDesde: () => relojDesde,
           ahoraISO: nowISO,
           timezone: scope.timezone,
+          resoluciones: justificaciones.data ?? [],
         }).filter((falta) => periodo.dias.includes(falta.dia));
   const faltasFiltradas =
     personaElegida === null
@@ -306,6 +311,7 @@ export function ReportsScreen() {
     nowISO,
     timezone: scope.timezone,
     relojDesde,
+    resoluciones: justificaciones.data ?? [],
   });
 
   const cargando = summaries.isPending || sessions.isPending;
@@ -339,6 +345,8 @@ export function ReportsScreen() {
         medidos: puntual?.measured ?? 0,
         tardanzas: puntual?.late ?? 0,
         faltas: faltasPorPersonaDelPeriodo.get(employeeId)?.length ?? 0,
+        faltasJustificadas: contarFaltas(faltasPorPersonaDelPeriodo.get(employeeId) ?? [])
+          .justificadas,
         extra: horas?.overtimeMinutes ?? 0,
       };
     })
@@ -391,23 +399,53 @@ export function ReportsScreen() {
   const maxTardanza = Math.max(...filasTardanza.map((f) => f.segments[0]?.value ?? 0), 0);
 
   // ---------------------------------------------------------------- faltas
+  /*
+   * DOS TRAMOS (2-oct): primero las que cuentan en contra —sin justificar o sin revisar—,
+   * macizas en rojo; después las justificadas, huecas en ámbar. Se ordena por las que
+   * cuentan en contra: es a quien hay que llamar.
+   */
   const filasFalta: RankingRow[] = [...faltasPorPersona(faltasFiltradas)]
-    .map(([employeeId, suyas]) => ({ employeeId, suyas }))
-    .sort((a, b) => b.suyas.length - a.suyas.length)
-    .map(({ employeeId, suyas }) => ({
+    .map(([employeeId, suyas]) => ({ employeeId, suyas, cuenta: contarFaltas(suyas) }))
+    .sort(
+      (a, b) => b.cuenta.sinJustificar - a.cuenta.sinJustificar || b.cuenta.total - a.cuenta.total,
+    )
+    .map(({ employeeId, suyas, cuenta }) => ({
       id: employeeId,
       label: nombre(employeeId),
       valueText: String(suyas.length),
       // Qué días: «lun 28, mié 30». Con más de tres, los tres primeros y cuántos más.
       hint: [
-        ...suyas.slice(0, 3).map((falta) => formatDateKeyShort(falta.dia, language)),
-        ...(suyas.length > 3 ? [t('reports.bonusMore', { count: suyas.length - 3 })] : []),
-      ].join(', '),
+        [
+          ...suyas.slice(0, 3).map((falta) => formatDateKeyShort(falta.dia, language)),
+          ...(suyas.length > 3 ? [t('reports.bonusMore', { count: suyas.length - 3 })] : []),
+        ].join(', '),
+        cuenta.justificadas > 0
+          ? t('absence.justifiedCount', { count: cuenta.justificadas })
+          : null,
+      ]
+        .filter((parte): parte is string => parte !== null)
+        .join(' · '),
       segments: [
-        { value: suyas.length, color: chart(colors).attention, label: t('reports.absences') },
+        {
+          value: cuenta.sinJustificar,
+          color: chart(colors).attention,
+          label: t('reports.absencesAgainst'),
+        },
+        {
+          value: cuenta.justificadas,
+          color: colors.warning50,
+          borde: colors.warning600,
+          label: t('reports.absencesJustified'),
+        },
       ],
     }));
-  const maxFalta = Math.max(...filasFalta.map((f) => f.segments[0]?.value ?? 0), 0);
+  const maxFalta = Math.max(
+    ...filasFalta.map((f) => f.segments.reduce((suma, tramo) => suma + tramo.value, 0)),
+    0,
+  );
+  const hayFaltasJustificadas = faltasFiltradas.some(
+    (falta) => falta.resolucion?.kind === 'justified',
+  );
 
   // --------------------------------------------------------------- motivos
   const totalPausas = motivos.reduce((suma, fila) => suma + fila.minutes, 0);
@@ -511,6 +549,12 @@ export function ReportsScreen() {
         absencesByEmployee: new Map(
           [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [employeeId, suyas.length]),
         ),
+        justifiedAbsencesByEmployee: new Map(
+          [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [
+            employeeId,
+            contarFaltas(suyas).justificadas,
+          ]),
+        ),
       });
 
       if (formato === 'csv') {
@@ -526,6 +570,7 @@ export function ReportsScreen() {
             shifts: t('reports.csvShifts'),
             lateArrivals: t('reports.csvLate'),
             absences: t('reports.csvAbsences'),
+            justifiedAbsences: t('reports.csvJustifiedAbsences'),
             breakMinutes: t('reports.csvBreakMinutes'),
           },
         });
@@ -562,6 +607,7 @@ export function ReportsScreen() {
         overtimeMinutes: extraMinutos,
         punctuality: punctuality(filasSesiones),
         absences: faltasDelPeriodo.length,
+        absencesDetail: detalleDeFaltas(t, faltasDelPeriodo),
         top:
           ranking[0] === undefined
             ? null
@@ -848,8 +894,8 @@ export function ReportsScreen() {
                 <StatTile
                   label={t('reports.absences')}
                   value={String(faltasFiltradas.length)}
-                  detalle={t('reports.absencesDetail')}
-                  tone={faltasFiltradas.length > 0 ? 'late' : undefined}
+                  detalle={detalleDeFaltas(t, faltasFiltradas) ?? t('reports.absencesDetail')}
+                  tone={tonoDelTotalDeFaltas(faltasFiltradas)}
                   icon="person-remove-outline"
                   testID="report-absences"
                 />
@@ -1019,6 +1065,22 @@ export function ReportsScreen() {
                   <ChartCard
                     title={t('reports.absencesTitle')}
                     subtitle={t('reports.absencesHint')}
+                    legend={
+                      hayFaltasJustificadas
+                        ? [
+                            {
+                              color: chart(colors).attention,
+                              label: t('reports.absencesAgainst'),
+                            },
+                            {
+                              color: colors.warning50,
+                              borde: colors.warning600,
+                              contorno: true,
+                              label: t('reports.absencesJustified'),
+                            },
+                          ]
+                        : undefined
+                    }
                     readout={lectura('faltas')}
                     estirar
                     testID="chart-absences"

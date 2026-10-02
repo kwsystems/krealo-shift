@@ -13,6 +13,7 @@ import { FormField } from '@/components/ui/form-field';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { MemberList, type SemanaDelMiembro } from '@/components/team/member-list';
 import type { DiaDeLaTira } from '@/components/team/tira-de-la-semana';
+import { contarFaltas } from '@/features/timesheets/faltas';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import {
   InlineNotice,
@@ -306,18 +307,26 @@ export function TeamScreen() {
     const resultado = new Map<string, SemanaDelMiembro>();
     for (const [employeeId, minutosPorDia] of porPersona) {
       const suyas = faltasDeLaSemana.porPersona.get(employeeId) ?? [];
-      const diasConFalta = new Set(suyas.map((falta) => falta.dia));
-      const tira: DiaDeLaTira[] = dias.map((dia) => ({
-        dia,
-        minutos: minutosPorDia.get(dia) ?? 0,
-        esHoy: dia === todayKey,
-        futuro: dia > todayKey,
-        falta: diasConFalta.has(dia),
-      }));
+      const tira: DiaDeLaTira[] = dias.map((dia) => {
+        const delDia = suyas.filter((falta) => falta.dia === dia);
+        return {
+          dia,
+          minutos: minutosPorDia.get(dia) ?? 0,
+          esHoy: dia === todayKey,
+          futuro: dia > todayKey,
+          falta:
+            delDia.length === 0
+              ? undefined
+              : contarFaltas(delDia).sinJustificar > 0
+                ? 'enContra'
+                : 'justificada',
+        };
+      });
       resultado.set(employeeId, {
         minutos: tira.reduce((suma, dia) => suma + dia.minutos, 0),
         dias: tira,
         faltas: suyas.length,
+        faltasJustificadas: contarFaltas(suyas).justificadas,
       });
     }
     return resultado;

@@ -17,6 +17,12 @@ import {
 } from '@/features/schedules/week';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
+import { estadoDeFalta } from '@/features/timesheets/faltas';
+import {
+  detalleDeFaltas,
+  etiquetaDeFalta,
+  tonoDelTotalDeFaltas,
+} from '@/features/timesheets/textos-de-falta';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
@@ -53,6 +59,8 @@ type Vista = 'dia' | 'semana';
 
 /** Una jornada entera de ocho horas no llena la barra: la llena una de diez. */
 const ESCALA_MINIMA = 600;
+
+type FaltaDelDia = { texto: string; enContra: boolean };
 
 export function HorasDeLaPersona({
   employeeId,
@@ -109,7 +117,8 @@ export function HorasDeLaPersona({
     timezone,
     nowISO,
   });
-  const faltasPorDia = new Map<DateKey, string>();
+  // Con lo que se dijo de cada una (2-oct): «… sin ninguna marca · Justificada · Descanso médico».
+  const faltasPorDia = new Map<DateKey, FaltaDelDia>();
   for (const falta of faltasDeLaSemana.porPersona.get(employeeId) ?? []) {
     const rango = formatShiftRange(
       falta.turno.starts_at,
@@ -117,12 +126,20 @@ export function HorasDeLaPersona({
       timezone,
       timeFormat,
     );
+    const texto = `${t('team.absentShift', { range: rango })} · ${etiquetaDeFalta(t, falta)}`;
     const antes = faltasPorDia.get(falta.dia);
-    faltasPorDia.set(falta.dia, antes === undefined ? rango : `${antes} · ${rango}`);
+    const enContra = estadoDeFalta(falta) !== 'justificada';
+    faltasPorDia.set(
+      falta.dia,
+      antes === undefined
+        ? { texto, enContra }
+        : { texto: `${antes.texto}\n${texto}`, enContra: antes.enContra || enContra },
+    );
   }
 
-  const cuantasFaltas =
-    vista === 'dia' ? (faltasDeLaSemana.porPersona.get(employeeId) ?? []).length : 0;
+  const susFaltas = vista === 'dia' ? (faltasDeLaSemana.porPersona.get(employeeId) ?? []) : [];
+  const cuantasFaltas = susFaltas.length;
+  const detalleDeSusFaltas = detalleDeFaltas(t, susFaltas);
   const diaEnCurso = enCurso === undefined ? null : dateKeyOf(enCurso.desde, timezone);
   const minutosPorDia = new Map<DateKey, number>();
   const porRevisar = new Set<DateKey>();
@@ -230,8 +247,14 @@ export function HorasDeLaPersona({
                 })}
           </AppText>
           {cuantasFaltas === 0 ? null : (
-            <AppText variant="help" tone="danger" testID="person-hours-faltas">
-              {t('schedule.absencesCount', { count: cuantasFaltas })}
+            <AppText
+              variant="help"
+              tone={tonoDelTotalDeFaltas(susFaltas) === 'warning' ? 'warning' : 'danger'}
+              testID="person-hours-faltas"
+            >
+              {detalleDeSusFaltas === undefined
+                ? t('schedule.absencesCount', { count: cuantasFaltas })
+                : `${t('schedule.absencesCount', { count: cuantasFaltas })} · ${detalleDeSusFaltas}`}
             </AppText>
           )}
         </View>
@@ -279,8 +302,8 @@ function TarjetaDeLaSemana({
   porRevisar: ReadonlySet<DateKey>;
   tramos: ReadonlyMap<DateKey, string>;
   diaEnCurso: DateKey | null;
-  /** El turno que faltó cada día, ya escrito: «18:00 – 21:00». */
-  faltas: ReadonlyMap<DateKey, string>;
+  /** Lo que faltó cada día, ya escrito, y si cuenta en contra (rojo) o está justificado. */
+  faltas: ReadonlyMap<DateKey, FaltaDelDia>;
   language: SupportedLanguage;
 }) {
   const { t } = useTranslation();
@@ -313,7 +336,7 @@ function TarjetaDeLaSemana({
               detalle,
               dia === diaEnCurso ? t('timesheet.live') : null,
               revisar ? t('timesheet.needsReviewBadge') : null,
-              falta === undefined ? null : t('team.absentShift', { range: falta }),
+              falta === undefined ? null : falta.texto,
             ]
               .filter((parte): parte is string => parte !== null)
               .join(', ')}
@@ -349,8 +372,13 @@ function TarjetaDeLaSemana({
                 </AppText>
               )}
               {falta === undefined ? null : (
-                <AppText variant="label" tone="danger" tabular testID={`person-day-${dia}-falta`}>
-                  {t('team.absentShift', { range: falta })}
+                <AppText
+                  variant="label"
+                  tone={falta.enContra ? 'danger' : 'warning'}
+                  tabular
+                  testID={`person-day-${dia}-falta`}
+                >
+                  {falta.texto}
                 </AppText>
               )}
               {/* Un día que no ha llegado no tiene pista: no es un día a cero, es un día por venir. */}

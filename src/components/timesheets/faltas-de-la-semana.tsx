@@ -3,18 +3,31 @@ import { View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
-import { AdminSheet } from '@/components/schedule/fields';
+import { AdminSheet, Chip, SegmentedControl } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
-import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
+import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { FormField } from '@/components/ui/form-field';
 import { Row, Stack } from '@/components/ui/layout';
+import { StatusBadge } from '@/components/ui/states';
+import {
+  motivosDe,
+  NOTA_MAXIMA_DE_FALTA,
+  type MotivoDeFalta,
+  type TipoDeFalta,
+} from '@/domain/motivos-de-falta';
 import {
   addDaysToKey,
   formatDateKeyShort,
   localDateTimeToInstant,
   localTimeOf,
 } from '@/features/schedules/week';
-import type { Falta } from '@/features/timesheets/faltas';
+import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
+import {
+  etiquetaDeFalta,
+  iconoDeFalta,
+  motivoDeFalta,
+  tonoDeFalta,
+} from '@/features/timesheets/textos-de-falta';
 import type { SupportedLanguage } from '@/i18n';
 import { useResponsive } from '@/hooks/use-responsive';
 import { formatShiftRange, type TimeFormatPreference } from '@/utils/time';
@@ -39,6 +52,12 @@ import { useTheme } from '@/theme/use-theme';
  * Es la misma decisión que tomó el servidor con «Registrar como cumplido»: después del día
  * en que la sede empezó a usar el reloj, marcar una falta como trabajada no puede ser un
  * clic.
+ *
+ * «¿POR QUÉ FALTÓ?» (2-oct) es la otra salida, para cuando de verdad faltó: justificada o
+ * no, y el motivo. No quita la falta —no hubo horas—, la explica, y lo explicado sale en
+ * Horario, Equipo, Reportes, el bono y su celular. Cada fila lleva su estado en una
+ * píldora con icono, y el título cuenta las que nadie ha revisado todavía: es lo que le
+ * queda por hacer a quien mira.
  */
 export function FaltasDeLaSemana({
   faltas,
@@ -47,6 +66,7 @@ export function FaltasDeLaSemana({
   timeFormat,
   language,
   onVino,
+  onPorQue,
 }: {
   faltas: readonly Falta[];
   nombres: ReadonlyMap<string, string>;
@@ -54,6 +74,7 @@ export function FaltasDeLaSemana({
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   onVino: (falta: Falta) => void;
+  onPorQue: (falta: Falta) => void;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -61,15 +82,45 @@ export function FaltasDeLaSemana({
   const { density } = useResponsive();
   const ancha = density === 'extraWide';
   if (faltas.length === 0) return null;
+  const cuenta = contarFaltas(faltas);
+  // Todas justificadas: ya no hay nada en contra, y el rojo diría lo contrario.
+  const todasJustificadas = cuenta.justificadas === cuenta.total;
 
   return (
-    <View style={estilos.caja} testID="faltas-de-la-semana">
+    <View
+      style={[estilos.caja, todasJustificadas ? estilos.cajaJustificada : null]}
+      testID="faltas-de-la-semana"
+    >
       <Stack gap={spacing.md}>
-        <Row gap={spacing.sm} align="center">
-          <Ionicons name="person-remove-outline" size={20} color={colors.danger600} />
+        <Row gap={spacing.sm} align="center" wrap>
+          <Ionicons
+            name="person-remove-outline"
+            size={20}
+            color={todasJustificadas ? colors.warning600 : colors.danger600}
+          />
           <AppText variant="bodyStrong" accessibilityRole="header" style={estilos.crece}>
             {t('timesheet.absences.title', { count: faltas.length })}
           </AppText>
+          {cuenta.sinRevisar > 0 ? (
+            <View testID="faltas-sin-revisar">
+              <StatusBadge
+                label={t('absence.pendingCount', { count: cuenta.sinRevisar })}
+                tone="late"
+                icon="help-circle-outline"
+                compact
+              />
+            </View>
+          ) : null}
+          {cuenta.justificadas > 0 ? (
+            <View testID="faltas-justificadas">
+              <StatusBadge
+                label={t('absence.justifiedCount', { count: cuenta.justificadas })}
+                tone="warning"
+                icon="document-text-outline"
+                compact
+              />
+            </View>
+          ) : null}
         </Row>
         <AppText variant="help" tone="muted">
           {t('timesheet.absences.body')}
@@ -94,6 +145,14 @@ export function FaltasDeLaSemana({
                   <AppText variant="label" tone="subtle" tabular>
                     {formatDateKeyShort(falta.dia, language)}
                   </AppText>
+                  <View testID={`falta-${falta.id}-estado`}>
+                    <StatusBadge
+                      label={etiquetaDeFalta(t, falta)}
+                      tone={tonoDeFalta(falta)}
+                      icon={iconoDeFalta(falta)}
+                      compact
+                    />
+                  </View>
                 </Row>
                 <AppText variant="body">
                   {t('timesheet.absences.what', {
@@ -105,9 +164,20 @@ export function FaltasDeLaSemana({
                     ),
                   })}
                 </AppText>
+                {falta.resolucion?.note ? (
+                  <AppText variant="help" tone="muted" testID={`falta-${falta.id}-nota`}>
+                    «{falta.resolucion.note}»
+                  </AppText>
+                ) : null}
               </Stack>
               <Row gap={spacing.sm} wrap align="center">
                 <SecondaryButton
+                  label={falta.resolucion === null ? t('absence.why') : t('absence.change')}
+                  onPress={() => onPorQue(falta)}
+                  fullWidth={false}
+                  testID={`falta-${falta.id}-porque`}
+                />
+                <GhostButton
                   label={t('timesheet.absences.cameAnyway')}
                   onPress={() => onVino(falta)}
                   fullWidth={false}
@@ -252,7 +322,161 @@ export function RegistrarQueVinoSheet({
   );
 }
 
+/**
+ * «¿POR QUÉ FALTÓ?»: justificada o no, el motivo y, si hace falta, un comentario. Primero
+ * lo que cambia algo —si le quita el bono o no—, después el porqué; al cambiar de tipo, el
+ * motivo se borra si no vale para el nuevo («No avisó» no puede ser justificada).
+ *
+ * «Otro motivo» pide el comentario: sin él, Reportes contaría una falta con un motivo que
+ * no dice nada. El servidor exige lo mismo (`functions/src/faltas.ts`).
+ */
+export function JustificarFaltaSheet({
+  falta,
+  nombre,
+  timezone,
+  timeFormat,
+  language,
+  guardando,
+  quitando,
+  onGuardar,
+  onQuitar,
+  onClose,
+}: {
+  falta: Falta;
+  nombre: string;
+  timezone: string;
+  timeFormat: TimeFormatPreference;
+  language: SupportedLanguage;
+  guardando: boolean;
+  quitando: boolean;
+  onGuardar: (params: {
+    kind: TipoDeFalta;
+    reason: MotivoDeFalta;
+    note: string | null;
+  }) => Promise<void>;
+  onQuitar: () => Promise<void>;
+  onClose: () => void;
+}) {
+  const { t } = useTranslation();
+  const [tipo, setTipo] = useState<TipoDeFalta>(falta.resolucion?.kind ?? 'justified');
+  const [motivo, setMotivo] = useState<MotivoDeFalta | null>(falta.resolucion?.reason ?? null);
+  const [nota, setNota] = useState(falta.resolucion?.note ?? '');
+  const [intentado, setIntentado] = useState(false);
+  const [fallo, setFallo] = useState(false);
+
+  const motivos = motivosDe(tipo);
+  const sinMotivo = motivo === null || !motivos.includes(motivo);
+  const faltaLaNota = motivo === 'other' && nota.trim().length === 0;
+  const valido = !sinMotivo && !faltaLaNota;
+
+  const cambiarTipo = (nuevo: TipoDeFalta) => {
+    setTipo(nuevo);
+    if (motivo !== null && !motivosDe(nuevo).includes(motivo)) setMotivo(null);
+  };
+
+  const guardar = () => {
+    setIntentado(true);
+    if (!valido || motivo === null) return;
+    setFallo(false);
+    const limpia = nota.trim();
+    onGuardar({ kind: tipo, reason: motivo, note: limpia.length > 0 ? limpia : null }).catch(() =>
+      setFallo(true),
+    );
+  };
+
+  const quitar = () => {
+    setFallo(false);
+    onQuitar().catch(() => setFallo(true));
+  };
+
+  return (
+    <AdminSheet
+      visible
+      title={t('absence.sheetTitle', { name: nombre })}
+      onClose={onClose}
+      testID="justificar-falta-hoja"
+      footer={
+        <Stack gap={spacing.sm}>
+          <PrimaryButton
+            label={t('absence.save')}
+            onPress={guardar}
+            loading={guardando}
+            disabled={intentado && !valido}
+            testID="justificar-falta-guardar"
+          />
+          {falta.resolucion !== null ? (
+            <GhostButton
+              label={t('absence.clear')}
+              onPress={quitar}
+              loading={quitando}
+              testID="justificar-falta-quitar"
+            />
+          ) : null}
+        </Stack>
+      }
+    >
+      <AppText variant="body">
+        {t('absence.sheetBody', {
+          day: formatDateKeyShort(falta.dia, language),
+          range: formatShiftRange(falta.turno.starts_at, falta.turno.ends_at, timezone, timeFormat),
+        })}
+      </AppText>
+      <SegmentedControl<TipoDeFalta>
+        label={t('absence.kind')}
+        rotuloVisible
+        value={tipo}
+        onChange={cambiarTipo}
+        options={[
+          { value: 'justified', label: t('absence.justified') },
+          { value: 'unjustified', label: t('absence.unjustified') },
+        ]}
+        testID="justificar-falta-tipo"
+      />
+      <Stack gap={spacing.sm}>
+        <AppText variant="label" tone="muted">
+          {t('absence.reasonLabel')}
+        </AppText>
+        <Row wrap gap={spacing.sm} align="flex-start">
+          {motivos.map((opcion) => (
+            <Chip
+              key={opcion}
+              label={motivoDeFalta(t, opcion)}
+              selected={motivo === opcion}
+              onPress={() => setMotivo(opcion)}
+              testID={`justificar-falta-${opcion}`}
+            />
+          ))}
+        </Row>
+        {intentado && sinMotivo ? (
+          <AppText variant="help" tone="danger" testID="justificar-falta-sin-motivo">
+            {t('absence.reasonMissing')}
+          </AppText>
+        ) : null}
+      </Stack>
+      <FormField
+        label={motivo === 'other' ? t('absence.noteRequired') : t('absence.note')}
+        value={nota}
+        onChangeText={setNota}
+        multiline
+        maxLength={NOTA_MAXIMA_DE_FALTA}
+        placeholder={t('absence.notePlaceholder')}
+        error={intentado && faltaLaNota ? t('absence.noteMissing') : undefined}
+        testID="justificar-falta-nota"
+      />
+      <AppText variant="help" tone="subtle">
+        {t('absence.bonusEffect')}
+      </AppText>
+      {fallo ? (
+        <AppText variant="help" tone="danger" testID="justificar-falta-error">
+          {t('absence.failed')}
+        </AppText>
+      ) : null}
+    </AdminSheet>
+  );
+}
+
 const useEstilos = estilosDelTema((colors) => ({
+  cajaJustificada: { borderColor: colors.warning600 },
   caja: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,

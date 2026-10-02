@@ -2,6 +2,7 @@ import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 
 import type { WorkSession } from './api';
+import type { ResolucionDeFalta } from './justificaciones';
 
 /**
  * LA FALTA, definida UNA vez para toda la app (1-oct).
@@ -36,8 +37,15 @@ import type { WorkSession } from './api';
  * siempre y no se guarda en ningún sitio. Por eso se corrige en una pantalla y se ve
  * corregida en todas.
  *
+ * POR QUÉ FALTÓ (2-oct): cada falta lleva lo que quien gestiona dijo de ella
+ * —justificada o no, y el motivo— si ya lo dijo. Se guarda aparte, por turno
+ * (`justificaciones.ts`), y se pega aquí: la falta sigue saliendo de los datos de siempre, y
+ * lo dicho deja de importar solo si deja de ser falta.
+ *
  * PURA, para poder probar cada caso sin pantalla delante.
  */
+
+export type EstadoDeFalta = 'sinRevisar' | 'justificada' | 'injustificada';
 
 export type Falta = {
   /** El id del turno: hay a lo sumo una falta por turno. */
@@ -46,6 +54,8 @@ export type Falta = {
   employeeId: string;
   /** El día de la sede en que empezaba el turno. */
   dia: DateKey;
+  /** Lo que se dijo de ella; `null` si nadie la ha revisado todavía. */
+  resolucion: ResolucionDeFalta | null;
 };
 
 export type JornadaParaFaltas = Pick<
@@ -81,8 +91,11 @@ export function faltasDeLosTurnos(params: {
   relojDesde: (locationId: string) => DateKey | null | undefined;
   ahoraISO: string;
   timezone: string;
+  /** Lo que se dijo de cada falta, por turno. */
+  resoluciones?: readonly ResolucionDeFalta[];
 }): Falta[] {
   const ahora = Date.parse(params.ahoraISO);
+  const resolucionDe = new Map((params.resoluciones ?? []).map((r) => [r.shift_id, r]));
   const faltas: Falta[] = [];
   for (const turno of params.turnos) {
     if (turno.status !== 'published') continue;
@@ -92,7 +105,13 @@ export function faltasDeLosTurnos(params: {
     const dia = dateKeyOf(turno.starts_at, params.timezone);
     if (dia < desde) continue;
     if (cubreElTurno(turno, params.jornadas, ahora)) continue;
-    faltas.push({ id: turno.id, turno, employeeId: turno.employee_id, dia });
+    faltas.push({
+      id: turno.id,
+      turno,
+      employeeId: turno.employee_id,
+      dia,
+      resolucion: resolucionDe.get(turno.id) ?? null,
+    });
   }
   return faltas.sort((a, b) => a.turno.starts_at.localeCompare(b.turno.starts_at));
 }
@@ -106,4 +125,27 @@ export function faltasPorPersona(faltas: readonly Falta[]): Map<string, Falta[]>
     porPersona.set(falta.employeeId, suyas);
   }
   return porPersona;
+}
+
+/** Sin revisar, justificada o sin justificar. */
+export function estadoDeFalta(falta: Pick<Falta, 'resolucion'>): EstadoDeFalta {
+  if (falta.resolucion === null) return 'sinRevisar';
+  return falta.resolucion.kind === 'justified' ? 'justificada' : 'injustificada';
+}
+
+/** Cuántas de cada clase: lo que dicen las casillas y las filas. */
+export function contarFaltas(faltas: readonly Pick<Falta, 'resolucion'>[]) {
+  let justificadas = 0;
+  let sinRevisar = 0;
+  for (const falta of faltas) {
+    const estado = estadoDeFalta(falta);
+    if (estado === 'justificada') justificadas += 1;
+    else if (estado === 'sinRevisar') sinRevisar += 1;
+  }
+  return {
+    total: faltas.length,
+    justificadas,
+    sinRevisar,
+    sinJustificar: faltas.length - justificadas,
+  };
 }

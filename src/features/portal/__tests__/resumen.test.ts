@@ -160,6 +160,7 @@ describe('el resumen del mes', () => {
       antesDeHora: 1,
       tarde: 1,
       faltas: 0,
+      faltasJustificadas: 0,
       sinMarca: 1,
     });
   });
@@ -167,5 +168,34 @@ describe('el resumen del mes', () => {
   it('las faltas se cuentan por turno, como las cuenta quien administra', () => {
     const lista = dias([turno('05'), turno('06')], [], ['05', '06'], '2026-10-01');
     expect(resumenDelMes(lista)).toMatchObject({ faltas: 2, sinMarca: 0 });
+  });
+
+  it('ve su falta justificada, con el motivo, y cuántas lo están (2-oct)', () => {
+    const [a, b] = [turno('05'), turno('06')];
+    const justificada = {
+      id: a.id,
+      organization_id: 'o',
+      location_id: 'sede',
+      employee_id: 'yo',
+      shift_id: a.id,
+      work_date: '2026-10-05',
+      kind: 'justified' as const,
+      reason: 'medical' as const,
+      note: 'Trajo certificado',
+      decided_at: null,
+    };
+    const lista = diasDelVendedor({
+      dias: ['2026-10-05', '2026-10-06'],
+      turnos: [a, b],
+      jornadas: [],
+      timezone: LIMA,
+      nowISO: AHORA,
+      relojDesde: () => '2026-10-01',
+      resoluciones: [justificada],
+    });
+    expect(lista.map((d) => d.estado)).toEqual(['faltaJustificada', 'falta']);
+    expect(lista[0]?.justificaciones).toEqual([justificada]);
+    expect(lista[1]?.justificaciones).toEqual([]);
+    expect(resumenDelMes(lista)).toMatchObject({ faltas: 2, faltasJustificadas: 1 });
   });
 });

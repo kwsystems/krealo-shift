@@ -1,7 +1,8 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 import type { WorkSession } from '@/features/timesheets/api';
-import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import { estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
+import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 
 /**
  * EL BONO DE ASISTENCIA DEL MES.
@@ -33,8 +34,14 @@ import { faltasDeLosTurnos } from '@/features/timesheets/faltas';
  * nadie fichó. Dos definiciones de falta acabarían dando el bono a quien Horario marca en
  * rojo.
  *
+ * UNA FALTA JUSTIFICADA NO LO QUITA (2-oct). Andree pidió decir por qué faltó alguien
+ * —médico, permiso avisado…—, y esa es justo la diferencia que el bono no veía: con un
+ * descanso médico, faltar no es «no cumplir». Se aparta como un día sin reloj —ni a favor
+ * ni en contra— y la tarjeta dice qué días. Sin justificar, o sin revisar todavía, cuenta
+ * como falta: es lo que es mientras nadie diga otra cosa.
+ *
  * Es UNA PROPUESTA para quien paga, no un pago: la pantalla lo dice. Quien decide el bono
- * puede tener en cuenta cosas que la app no ve —un permiso avisado, un médico—.
+ * puede tener en cuenta cosas que la app no ve.
  */
 
 export type EstadoDelBono = 'gana' | 'enCamino' | 'pierde' | 'noAplica';
@@ -46,8 +53,10 @@ export type ResultadoDelBono = {
   turnosContados: number;
   /** De esos, a los que fichó y llegó a tiempo. */
   cumplidos: number;
-  /** Días (de la sede) de los turnos a los que no fichó. */
+  /** Días (de la sede) de los turnos a los que no fichó, sin justificar. */
   faltas: DateKey[];
+  /** Días de las faltas justificadas: no cuentan ni a favor ni en contra. */
+  justificadas: DateKey[];
   /** Días de los turnos a los que llegó tarde. */
   tardanzas: DateKey[];
   /** Por qué no aplica, si no aplica. */
@@ -104,20 +113,23 @@ export function bonoDeAsistencia(params: {
   timezone: string;
   /** Desde qué día la sede usa el reloj; `null` si nunca, `undefined` si aún no se sabe. */
   relojDesde: DateKey | null | undefined;
+  /** Lo que se dijo de cada falta: las justificadas no cuentan. */
+  resoluciones?: readonly ResolucionDeFalta[];
 }): BonoDelMes {
   const { turnos, sesiones, empleados, desde, finISO, nowISO, timezone, relojDesde } = params;
   const ahora = Date.parse(nowISO);
   const mesTerminado = ahora >= Date.parse(finISO);
 
   const publicados = turnos.filter((t) => t.status === 'published');
-  const faltas = new Set(
+  const faltas = new Map(
     faltasDeLosTurnos({
       turnos: publicados,
       jornadas: sesiones,
       relojDesde: () => relojDesde,
       ahoraISO: nowISO,
       timezone,
-    }).map((falta) => falta.id),
+      resoluciones: params.resoluciones,
+    }).map((falta) => [falta.id, estadoDeFalta(falta) === 'justificada']),
   );
   const diasSinReloj = new Set<DateKey>();
   const resultados: ResultadoDelBono[] = [];
@@ -133,6 +145,7 @@ export function bonoDeAsistencia(params: {
     const base = {
       employeeId: empleado.id,
       faltas: [] as DateKey[],
+      justificadas: [] as DateKey[],
       tardanzas: [] as DateKey[],
       turnosContados: 0,
       cumplidos: 0,
@@ -158,8 +171,13 @@ export function bonoDeAsistencia(params: {
         diasSinReloj.add(dia); // de antes del reloj: ver arriba
         continue;
       }
+      const justificada = faltas.get(turno.id);
+      if (justificada === true) {
+        base.justificadas.push(dia); // ni a favor ni en contra: ver arriba
+        continue;
+      }
       base.turnosContados += 1;
-      if (faltas.has(turno.id)) {
+      if (justificada === false) {
         base.faltas.push(dia);
         continue;
       }

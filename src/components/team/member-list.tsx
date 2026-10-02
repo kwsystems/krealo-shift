@@ -39,6 +39,8 @@ export type SemanaDelMiembro = {
   dias: readonly DiaDeLaTira[];
   /** Sus faltas de la semana (1-oct): ver `features/timesheets/faltas.ts`. */
   faltas?: number;
+  /** De esas, las justificadas (2-oct). */
+  faltasJustificadas?: number;
 };
 
 export type MemberListProps = {
@@ -76,6 +78,7 @@ export function MemberList({
         weekMinutes={semanaPorMiembro.get(item.id)?.minutos ?? 0}
         semana={semanaPorMiembro.get(item.id)?.dias ?? semanaVacia}
         faltas={semanaPorMiembro.get(item.id)?.faltas ?? 0}
+        faltasJustificadas={semanaPorMiembro.get(item.id)?.faltasJustificadas ?? 0}
         escala={escala}
         dentro={dentroPorMiembro?.get(item.id)}
         jobRoleNames={jobRoleNames}

@@ -30,8 +30,9 @@
    * funciones. Habriamos cambiado un fallo de compilacion por uno de arranque en
    * produccion.
    *
-   * Lo que el servidor comparte de verdad son tres ficheros: la maquina de estados, los
-   * motivos de pausa y el PIN. Nombrandolos, un fichero nuevo de la app no puede volver a
+   * Lo que el servidor comparte de verdad son cuatro ficheros: la maquina de estados, los
+   * motivos de pausa, el PIN y los motivos de falta (2-oct: si la app ofreciera un motivo que
+   * el servidor no conoce, guardar la justificacion fallaria siempre). Nombrandolos, un fichero nuevo de la app no puede volver a
    * arrastrar al servidor, y si alguien necesita compartir un cuarto tiene que decirlo
    * aqui, que es exactamente el momento de preguntarse si debe.
    */
@@ -39,7 +40,8 @@
     "src/**/*.ts",
     "../src/domain/attendance-state-machine.ts",
     "../src/domain/break-reason.ts",
-    "../src/domain/pin.ts"
+    "../src/domain/pin.ts",
+    "../src/domain/motivos-de-falta.ts"
   ],
   // Las pruebas NO se compilan aqui, y por dos motivos: las corre el jest de la raiz
   // —con sus tipos, que este tsconfig no declara— y ademas lo que sale de `lib/` es lo

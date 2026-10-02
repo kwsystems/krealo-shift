@@ -48,6 +48,11 @@ export type MemberRowProps = {
   semana?: readonly DiaDeLaTira[];
   /** Cuántos turnos de esta semana faltó (1-oct). Sale en rojo debajo de su total. */
   faltas?: number;
+  /**
+   * De esas, cuántas están justificadas (2-oct). Se dice al lado —«2 faltas · 1
+   * justificada»— y si lo están todas, el rótulo pasa a ámbar: ya no cuentan en contra.
+   */
+  faltasJustificadas?: number;
   /** La escala común de todas las tiras de la lista, en minutos. */
   escala?: number;
   dentro?: DentroEnEquipo;
@@ -65,6 +70,7 @@ function MemberRowBase({
   weekMinutes,
   semana,
   faltas = 0,
+  faltasJustificadas = 0,
   escala = 600,
   dentro,
   jobRoleNames,
@@ -149,6 +155,13 @@ function MemberRowBase({
     />
   );
 
+  const textoDeFaltas = [
+    t('schedule.absencesCount', { count: faltas }),
+    faltasJustificadas > 0 ? t('absence.justifiedCount', { count: faltasJustificadas }) : null,
+  ]
+    .filter((parte): parte is string => parte !== null)
+    .join(' · ');
+
   return (
     <Pressable
       onPress={() => onPress(member.id)}
@@ -168,9 +181,7 @@ function MemberRowBase({
         dentro === undefined ? '' : `, ${t('timesheet.sinceTime', { time: dentro.desde })}`
       }. ${t('team.thisWeek')}: ${minutesToHHmm(weekMinutes)}${
         dentro === undefined ? '' : `, ${t('timesheet.live')}`
-      }${diasDichos === '' ? '' : `. ${diasDichos}`}${
-        faltas > 0 ? `. ${t('schedule.absencesCount', { count: faltas })}` : ''
-      }`}
+      }${diasDichos === '' ? '' : `. ${diasDichos}`}${faltas > 0 ? `. ${textoDeFaltas}` : ''}`}
       accessibilityHint={marcable ? t('team.markHint') : t('team.openEmployeeHint')}
       testID={`team-member-${member.id}`}
       {...respuesta.props}
@@ -316,11 +327,11 @@ function MemberRowBase({
                 {faltas > 0 ? (
                   <AppText
                     variant="label"
-                    tone="danger"
+                    tone={faltasJustificadas >= faltas ? 'warning' : 'danger'}
                     style={estilosDeColumna.derecha}
                     testID={`team-member-${member.id}-faltas`}
                   >
-                    {t('schedule.absencesCount', { count: faltas })}
+                    {textoDeFaltas}
                   </AppText>
                 ) : null}
               </Stack>

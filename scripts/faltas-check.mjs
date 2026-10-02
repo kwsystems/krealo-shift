@@ -14,6 +14,14 @@
  * 5. EQUIPO: las faltas de esta semana, en la fila de cada persona, suman lo que dice Horas.
  * 6. EL CELULAR DEL VENDEDOR: su mes cuenta sus faltas y el día lo dice con «Falta».
  *
+ * Y POR QUÉ FALTÓ (2-oct), que se dice en Horas y se ve en todas:
+ * 7. La falta sembrada de la semana pasada sale JUSTIFICADA, con su motivo, en Horas, en la
+ *    tarjeta de Horario y en Reportes (casilla y leyenda del gráfico).
+ * 8. CAMBIARLA a «Sin justificar · No avisó» cambia Horas, Horario y Reportes sin recargar;
+ *    «Otro motivo» sin comentario no se guarda.
+ * 9. JUSTIFICAR la de esta semana se ve en la fila de Equipo y en Horario.
+ * 10. El celular de la vendedora dice «Falta justificada» con el motivo.
+ *
  * Se mira la SEMANA ANTERIOR porque siempre está sembrada entera, con una falta a propósito
  * (ver la semilla); la actual depende del día en que se corra.
  *
@@ -58,14 +66,18 @@ const visible = (pagina, selector) =>
       .join(', '),
   );
 const cuenta = (pagina, selector) => visible(pagina, selector).count();
-/** El número de una casilla: su rótulo no lleva cifras, así que la primera es el valor. */
+/**
+ * El número de una casilla: el ÚLTIMO, porque el valor va abajo y el detalle —«1
+ * justificada»— encima, con el rótulo (ver `StatTile`). Con la primera cifra se leía el
+ * detalle en vez del valor.
+ */
 const numeroDe = async (pagina, testid) => {
   const texto = await visible(pagina, `[data-testid="${testid}"]`)
     .first()
     .innerText()
     .catch(() => '');
-  const cifra = /\d+/.exec(texto);
-  return cifra === null ? null : Number(cifra[0]);
+  const cifras = texto.match(/\d+/g);
+  return cifras === null ? null : Number(cifras[cifras.length - 1]);
 };
 
 async function entrar(pagina, quien = 'sign-in-demo') {
@@ -108,6 +120,29 @@ async function semanaActual(pagina) {
 
 const TARJETAS_CON_FALTA = '[data-testid^="shift-"][data-testid$="-falta"]';
 const FILAS_DE_FALTA = '[data-testid^="falta-"][data-testid$="-vino"]';
+const ESTADOS_DE_FALTA = '[data-testid^="falta-"][data-testid$="-estado"]';
+const BOTONES_POR_QUE = '[data-testid^="falta-"][data-testid$="-porque"]';
+const HOJA = '[data-testid="justificar-falta-hoja"]';
+
+/** Abre «¿Por qué faltó?» de la primera falta, elige tipo y motivo, y guarda. */
+async function justificar(pagina, { tipo, motivo, nota }) {
+  await visible(pagina, BOTONES_POR_QUE).first().click();
+  await pagina.locator(HOJA).waitFor({ timeout: 8000 });
+  await pagina.locator(`[data-testid="justificar-falta-tipo-${tipo}"]`).click();
+  await pagina.locator(`[data-testid="justificar-falta-${motivo}"]`).click();
+  if (nota !== undefined) await pagina.locator('[data-testid="justificar-falta-nota"]').fill(nota);
+  await pagina.locator('[data-testid="justificar-falta-guardar"]').click();
+  await pagina
+    .locator(HOJA)
+    .waitFor({ state: 'detached', timeout: 8000 })
+    .catch(() => problemas.push(`justificar (${tipo}, ${motivo}) no cierra la hoja`));
+  await esperar(pagina, 1200);
+}
+
+const textoDe = (pagina, selector) =>
+  visible(pagina, selector)
+    .allInnerTexts()
+    .then((textos) => textos.join(' | '));
 
 try {
   /* ------------------------------------------------- 1 a 5: quien gestiona */
@@ -158,6 +193,78 @@ try {
     await pagina
       .locator('[data-testid="chart-absences"]')
       .screenshot({ path: 'capturas/faltas-reportes.png' });
+
+    // --- 7. La falta sembrada de la semana pasada viene justificada.
+    await irPorElMenu(pagina, '/hours');
+    await semanaAnterior(pagina);
+    const estados = await textoDe(pagina, ESTADOS_DE_FALTA);
+    if (!/Justificada · Descanso médico/.test(estados)) {
+      problemas.push(`Horas no dice que la falta sembrada está justificada: «${estados}»`);
+    }
+    if ((await cuenta(pagina, '[data-testid^="falta-"][data-testid$="-nota"]')) === 0) {
+      problemas.push('Horas no enseña el comentario de la falta justificada');
+    }
+    await pagina.locator('[data-testid="faltas-de-la-semana"]').screenshot({
+      path: 'capturas/faltas-justificada-horas.png',
+    });
+    await irPorElMenu(pagina, '/schedule');
+    await semanaAnterior(pagina);
+    const tarjetas = await textoDe(pagina, TARJETAS_CON_FALTA);
+    if (!/Falta justificada · Descanso médico/.test(tarjetas)) {
+      problemas.push(`Horario no dice «Falta justificada»: «${tarjetas}»`);
+    }
+    await irPorElMenu(pagina, '/reports');
+    await semanaAnterior(pagina);
+    const casillaReportes = await textoDe(pagina, '[data-testid="report-absences"]');
+    if (!/justificada/.test(casillaReportes)) {
+      problemas.push(`la casilla de Reportes no cuenta la justificada: «${casillaReportes}»`);
+    }
+    const graficoFaltas = await textoDe(pagina, '[data-testid="chart-absences"]');
+    if (!/Justificadas/.test(graficoFaltas)) {
+      problemas.push('el gráfico de faltas de Reportes no tiene la leyenda de justificadas');
+    }
+    await pagina
+      .locator('[data-testid="chart-absences"]')
+      .screenshot({ path: 'capturas/faltas-justificada-reportes.png' });
+    console.log(`  justificada          Horas, Horario y Reportes la dicen`);
+
+    // --- 8. Cambiarla a «Sin justificar», y «Otro» sin comentario no se guarda.
+    await irPorElMenu(pagina, '/hours');
+    await semanaAnterior(pagina);
+    await visible(pagina, BOTONES_POR_QUE).first().click();
+    await pagina.locator(HOJA).waitFor({ timeout: 8000 });
+    await pagina.locator('[data-testid="justificar-falta-other"]').click();
+    await pagina.locator('[data-testid="justificar-falta-nota"]').fill('');
+    await pagina.locator('[data-testid="justificar-falta-guardar"]').click();
+    await esperar(pagina, 500);
+    if ((await cuenta(pagina, HOJA)) === 0) {
+      problemas.push('«Otro motivo» se guardó sin comentario');
+    }
+    await pagina.screenshot({ path: 'capturas/faltas-justificar-hoja.png' });
+    await pagina.keyboard.press('Escape');
+    await pagina
+      .locator(HOJA)
+      .waitFor({ state: 'detached', timeout: 4000 })
+      .catch(() => pagina.locator('[aria-label="Cerrar"]').first().click());
+    await esperar(pagina, 600);
+    await justificar(pagina, { tipo: 'unjustified', motivo: 'no_notice' });
+    const estadosTras = await textoDe(pagina, ESTADOS_DE_FALTA);
+    if (!/Sin justificar · No avisó/.test(estadosTras)) {
+      problemas.push(`tras cambiarla Horas no dice «Sin justificar»: «${estadosTras}»`);
+    }
+    await irPorElMenu(pagina, '/schedule');
+    await semanaAnterior(pagina);
+    const tarjetasTras = await textoDe(pagina, TARJETAS_CON_FALTA);
+    if (!/Falta sin justificar · No avisó/.test(tarjetasTras)) {
+      problemas.push(`tras cambiarla Horario no lo dice: «${tarjetasTras}»`);
+    }
+    await irPorElMenu(pagina, '/reports');
+    await semanaAnterior(pagina);
+    const casillaTrasCambio = await textoDe(pagina, '[data-testid="report-absences"]');
+    if (/justificada/.test(casillaTrasCambio)) {
+      problemas.push(`tras cambiarla Reportes sigue contándola justificada`);
+    }
+    console.log(`  cambiar              Horas, Horario y Reportes dicen «Sin justificar»`);
 
     // --- 4. Arreglarla: vino y no marcó.
     await irPorElMenu(pagina, '/hours');
@@ -232,6 +339,28 @@ try {
       `  equipo               ${enEquipo} esta semana (Horas ${estaSemana}), ${cruces} cruces`,
     );
     await pagina.screenshot({ path: 'capturas/faltas-equipo.png' });
+
+    // --- 9. Justificar la de esta semana y verla en Equipo y en Horario.
+    if (estaSemana > 0) {
+      await irPorElMenu(pagina, '/hours');
+      await semanaActual(pagina);
+      await justificar(pagina, { tipo: 'justified', motivo: 'permission' });
+      await irPorElMenu(pagina, '/team');
+      await esperar(pagina, 1200);
+      const filas = await textoDe(pagina, '[data-testid$="-faltas"][data-testid^="team-member-"]');
+      if (!/justificada/.test(filas)) {
+        problemas.push(`tras justificarla Equipo no lo dice: «${filas}»`);
+      }
+      await irPorElMenu(pagina, '/schedule');
+      await semanaActual(pagina);
+      const tarjetasHoy = await textoDe(pagina, TARJETAS_CON_FALTA);
+      if (!/Falta justificada · Permiso avisado/.test(tarjetasHoy)) {
+        problemas.push(`tras justificarla Horario no lo dice: «${tarjetasHoy}»`);
+      }
+      console.log(`  esta semana          Equipo «${filas}»`);
+    } else {
+      console.log('  esta semana          sin faltas todavía: no se justifica nada');
+    }
     await contexto.close();
   }
 
@@ -245,6 +374,7 @@ try {
     await esperar(pagina, 1500);
     let total = 0;
     let conInsignia = 0;
+    let justificadaEnElCelular = false;
     for (let mes = 0; mes < 2; mes += 1) {
       if (mes > 0) {
         await pagina.locator('[data-testid="month-previous"]').click();
@@ -257,12 +387,23 @@ try {
         .innerText()
         .catch(() => '');
       conInsignia += (lista.match(/Falta/g) ?? []).length;
+      // Un día entero justificado lleva la insignia «Falta justificada»; si vino a otro turno
+      // ese día, la línea «Justificada · motivo» bajo su turno.
+      if (/Falta justificada|Justificada · /.test(lista)) {
+        justificadaEnElCelular = true;
+        if (!/Descanso médico/.test(lista)) {
+          problemas.push('el celular dice que está justificada sin el motivo');
+        }
+      }
       if (delMes > 0 && (await cuenta(pagina, '[data-testid="mi-horario-faltas-aviso"]')) === 0) {
         problemas.push('su mes tiene faltas y no le dice qué hacer si vino');
       }
     }
     if (total === 0) problemas.push('el celular del vendedor no cuenta ninguna falta');
     if (total > 0 && conInsignia === 0) problemas.push('ningún día de su mes dice «Falta»');
+    if (!justificadaEnElCelular) {
+      problemas.push('el celular de la vendedora no enseña su falta justificada');
+    }
     await pagina.screenshot({ path: 'capturas/faltas-celular.png', fullPage: true });
     console.log(
       `  celular              ${total} faltas en dos meses, ${conInsignia} días con «Falta»`,

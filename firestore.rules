@@ -339,6 +339,15 @@ service cloud.firestore {
     // empresa —sale en Equipo y en el Horario de todas las sedes donde trabaja—. Se escribe
     // solo desde el servidor, que valida lo mismo venga de su celular o de quien gestiona:
     // ver functions/src/disponibilidad.ts.
+    // Por qué faltó alguien a un turno (2-oct): lo ve el personal —Horas, Horario, Reportes—
+    // y la propia persona en su celular. Lo escribe solo el servidor: cambia el bono de
+    // alguien. Ver functions/src/faltas.ts.
+    match /absence_resolutions/{shiftId} {
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
+      allow write: if false;
+    }
+
     match /availability/{availabilityId} {
       allow read: if isStaff(resource.data.organization_id)
         || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);

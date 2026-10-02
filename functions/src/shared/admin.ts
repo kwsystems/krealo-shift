@@ -73,6 +73,8 @@ export const COLLECTIONS = {
   /** Las horas que alguien debe a la tienda (1-oct): ver `functions/src/casos.ts`. */
   owedHours: 'owed_hours',
   availability: 'availability',
+  /** Por qué faltó alguien a un turno: ver `faltas.ts`. Una por turno. */
+  absenceResolutions: 'absence_resolutions',
   announcements: 'announcements',
   pushTokens: 'push_tokens',
   notificationPreferences: 'notification_preferences',

@@ -41,6 +41,8 @@ export type FilaDeAsistencia = {
   medidos: number;
   tardanzas: number;
   faltas: number;
+  /** De esas, las justificadas (2-oct): no cuentan en contra. */
+  faltasJustificadas: number;
   extra: number;
 };
 
@@ -149,6 +151,11 @@ function useTextos(fila: FilaDeAsistencia, diferencia: number, incluyeHoy: boole
             count: fila.medidos,
           }),
     faltas: String(fila.faltas),
+    faltasJustificadas:
+      fila.faltasJustificadas > 0
+        ? t('absence.justifiedCount', { count: fila.faltasJustificadas })
+        : null,
+    faltasEnContra: fila.faltas - fila.faltasJustificadas > 0,
     extra: fila.extra > 0 ? minutesToHHmm(fila.extra) : '—',
     medidor: t('reports.attendance.meterLabel', {
       name: fila.nombre,
@@ -232,15 +239,23 @@ function FilaAncha({
         <AppText variant="body" tabular style={estilos.columnaCifra}>
           {textos.aTiempo}
         </AppText>
-        <AppText
-          variant="body"
-          tone={fila.faltas > 0 ? 'danger' : 'muted'}
-          tabular
-          style={estilos.columnaCifra}
+        <View
+          style={[estilos.columnaCifra, estilos.derecha]}
           testID={`report-attendance-row-${fila.employeeId}-faltas`}
         >
-          {textos.faltas}
-        </AppText>
+          <AppText
+            variant="body"
+            tone={textos.faltasEnContra ? 'danger' : fila.faltas > 0 ? 'warning' : 'muted'}
+            tabular
+          >
+            {textos.faltas}
+          </AppText>
+          {textos.faltasJustificadas === null ? null : (
+            <AppText variant="label" tone="warning">
+              {textos.faltasJustificadas}
+            </AppText>
+          )}
+        </View>
         <AppText variant="body" tone="muted" tabular style={estilos.columnaCifra}>
           {textos.extra}
         </AppText>
@@ -274,7 +289,14 @@ function FichaEstrecha({
       peligro: textos.faltanMuchas,
     },
     { rotulo: t('reports.attendance.onTime'), valor: textos.aTiempo },
-    { rotulo: t('reports.attendance.absences'), valor: textos.faltas, peligro: fila.faltas > 0 },
+    {
+      rotulo: t('reports.attendance.absences'),
+      valor:
+        textos.faltasJustificadas === null
+          ? textos.faltas
+          : `${textos.faltas} · ${textos.faltasJustificadas}`,
+      peligro: textos.faltasEnContra,
+    },
   ];
   return (
     <Pressable

@@ -1,5 +1,12 @@
 import type { ShiftRow } from '@/features/schedules/api';
-import { cubreElTurno, faltasDeLosTurnos, type JornadaParaFaltas } from '../faltas';
+import {
+  contarFaltas,
+  cubreElTurno,
+  estadoDeFalta,
+  faltasDeLosTurnos,
+  type JornadaParaFaltas,
+} from '../faltas';
+import type { ResolucionDeFalta } from '../justificaciones';
 
 /**
  * La falta: un turno publicado y terminado, desde que la sede usa el reloj, sin ninguna
@@ -144,5 +151,51 @@ describe('la falta', () => {
       'lun',
       'mar',
     ]);
+  });
+});
+
+describe('por qué faltó (2-oct)', () => {
+  const dicho = (shiftId: string, kind: ResolucionDeFalta['kind']): ResolucionDeFalta => ({
+    id: shiftId,
+    organization_id: 'o',
+    location_id: 'l1',
+    employee_id: 'ana',
+    shift_id: shiftId,
+    work_date: '2026-09-30',
+    kind,
+    reason: kind === 'justified' ? 'medical' : 'no_notice',
+    note: null,
+    decided_at: null,
+  });
+
+  it('cada falta lleva lo que se dijo de ella, y sin decir nada es «sin revisar»', () => {
+    const conMotivo = faltasDeLosTurnos({
+      turnos: [turno({ id: 'a' }), turno({ id: 'b' }), turno({ id: 'c' })],
+      jornadas: [],
+      relojDesde: () => '2026-09-29',
+      ahoraISO: DESPUES,
+      timezone: LIMA,
+      resoluciones: [dicho('a', 'justified'), dicho('b', 'unjustified')],
+    });
+    expect(conMotivo.map(estadoDeFalta)).toEqual(['justificada', 'injustificada', 'sinRevisar']);
+    expect(contarFaltas(conMotivo)).toEqual({
+      total: 3,
+      justificadas: 1,
+      sinRevisar: 1,
+      sinJustificar: 2,
+    });
+  });
+
+  it('lo dicho de un turno que ya no es falta no inventa una falta', () => {
+    const t = turno({ id: 'a' });
+    const lista = faltasDeLosTurnos({
+      turnos: [t],
+      jornadas: [jornada({ shift_id: 'a' })],
+      relojDesde: () => '2026-09-29',
+      ahoraISO: DESPUES,
+      timezone: LIMA,
+      resoluciones: [dicho('a', 'justified')],
+    });
+    expect(lista).toEqual([]);
   });
 });

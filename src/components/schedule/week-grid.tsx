@@ -21,6 +21,7 @@ import { Row, Stack } from '@/components/ui/layout';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
+import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
 import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
 import { formatDateKeyShort, formatDayColumn, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
@@ -129,8 +130,8 @@ export type GridProps = {
   readOnly?: boolean;
   /** Lo que cada persona dijo de sus días (1-oct): sale en su celda y avisa en su turno. */
   disponibilidad?: readonly Disponibilidad[];
-  /** Los turnos que son falta (1-oct): ver `features/timesheets/faltas.ts`. */
-  faltas?: ReadonlySet<string>;
+  /** Los turnos que son falta (1-oct), con lo que se dijo de cada una: ver `faltas.ts`. */
+  faltas?: ReadonlyMap<string, Falta>;
 };
 
 /**
@@ -154,7 +155,7 @@ function avisoDeDisponibilidad(
     : null;
 }
 
-const SIN_FALTAS: ReadonlySet<string> = new Set();
+const SIN_FALTAS: ReadonlyMap<string, Falta> = new Map();
 
 export function WeekGrid({
   days,
@@ -264,10 +265,20 @@ export function WeekGrid({
               </AppText>
               {/* Sus faltas de la semana, contadas al lado de su nombre: se ven sin buscarlas. */}
               {(() => {
-                const cuantas = row.shifts.filter((shift) => faltas.has(shift.id)).length;
-                return cuantas === 0 ? null : (
-                  <AppText variant="label" tone="danger" testID={`grid-faltas-${row.employeeId}`}>
-                    {t('schedule.absencesCount', { count: cuantas })}
+                const suyas = row.shifts.flatMap((shift) => {
+                  const falta = faltas.get(shift.id);
+                  return falta === undefined ? [] : [falta];
+                });
+                if (suyas.length === 0) return null;
+                // Ámbar si todas están justificadas: ya no cuentan en contra.
+                const enContra = contarFaltas(suyas).sinJustificar > 0;
+                return (
+                  <AppText
+                    variant="label"
+                    tone={enContra ? 'danger' : 'warning'}
+                    testID={`grid-faltas-${row.employeeId}`}
+                  >
+                    {t('schedule.absencesCount', { count: suyas.length })}
                   </AppText>
                 );
               })()}
@@ -316,7 +327,7 @@ export function WeekGrid({
                         }
                         warnings={warningsFor(shift.id)}
                         enCurso={enCursoFor?.(shift) ?? null}
-                        falta={faltas.has(shift.id)}
+                        falta={faltas.get(shift.id) ?? null}
                         ventana={ventana}
                         tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
                         avisoDeDisponibilidad={avisoDeDisponibilidad(
@@ -375,7 +386,7 @@ export type DayListProps = {
   onSelectRestDay: (restDay: DatedRestDay) => void;
   readOnly?: boolean;
   disponibilidad?: readonly Disponibilidad[];
-  faltas?: ReadonlySet<string>;
+  faltas?: ReadonlyMap<string, Falta>;
 };
 
 export function DayList({
@@ -470,7 +481,7 @@ export function DayList({
                     timeFormat={timeFormat}
                     warnings={warningsFor(shift.id)}
                     enCurso={enCursoFor?.(shift) ?? null}
-                    falta={faltas.has(shift.id)}
+                    falta={faltas.get(shift.id) ?? null}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
                   />
