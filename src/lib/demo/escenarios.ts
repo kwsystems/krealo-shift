@@ -1,6 +1,6 @@
 import type { Almacen, Fila } from './postgrest';
 import { DEMO_EMPLEADOS_DENTRO, DEMO_LOCATION_1, TZ } from './seed';
-import { dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
+import { dateKeyOf, localDateTimeToInstant, weekStartOfKey } from '@/features/schedules/week';
 import { cubreElTurno } from '@/features/timesheets/faltas';
 
 /**
@@ -293,9 +293,11 @@ function dejarSinCubrir(almacen: Almacen, cuantos: number): number {
 function dejarSinLlegar(almacen: Almacen, cuantos: number): number {
   const ahoraMs = Date.now();
   const ahora = new Date(ahoraMs).toISOString();
-  const medianoche = localDateTimeToInstant(dateKeyOf(ahora, TZ), '00:00', TZ);
-  const inicioDelDia = medianoche === null ? ahoraMs : Date.parse(medianoche);
-  const desde = new Date(Math.max(inicioDelDia + 60_000, ahoraMs - 40 * 60_000)).toISOString();
+  // Hace cuarenta minutos, aunque eso caiga ayer: Inicio y Horario miran también el turno
+  // que sigue en curso desde ayer. Solo no se pasa del lunes, que es otra semana.
+  const lunes = localDateTimeToInstant(weekStartOfKey(dateKeyOf(ahora, TZ), 1), '00:00', TZ);
+  const inicioDeLaSemana = lunes === null ? ahoraMs : Date.parse(lunes);
+  const desde = new Date(Math.max(inicioDeLaSemana + 60_000, ahoraMs - 40 * 60_000)).toISOString();
   const hasta = new Date(ahoraMs + 3 * 60 * 60_000).toISOString();
 
   const dentro = new Set(

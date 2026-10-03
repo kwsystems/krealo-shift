@@ -135,6 +135,10 @@ try {
 
     // --- 1b. Horario: el total con su parte en borrador.
     await irPorElMenu(pagina, '/schedule');
+    // La nota para la vendedora se ve en su tarjeta, sin abrir el turno (3-oct).
+    if ((await delante(pagina, '[data-testid$="-nota-persona"]').count()) === 0) {
+      problemas.push('Horario no enseña en la tarjeta la nota para la persona');
+    }
     const resumen = await texto(pagina, '[data-testid="weekly-total-drafts"]');
     if (resumen !== '') {
       const publicadas = aMinutos(/y (\d+:\d\d) publicad/.exec(resumen)?.[1] ?? '');
@@ -280,6 +284,10 @@ try {
         `el celular suma ${suma} min esta semana y su fila de Equipo ${minutosDeLaVendedoraEnEquipo}`,
       );
     }
+    // La nota de su turno (3-oct): la que se escribe en Horario para ella.
+    if ((await pagina.locator('[data-testid^="mi-horario-nota-"]').count()) === 0) {
+      problemas.push('el celular de la vendedora no enseña la nota de su turno');
+    }
     console.log(
       `  celular              ${suma} min esta semana (Equipo ${minutosDeLaVendedoraEnEquipo}${esLaMisma ? '' : ', otra persona'})`,
     );
@@ -303,8 +311,30 @@ try {
     ).length;
     await irPorElMenu(pagina, '/schedule');
     const enHorario = await delante(pagina, '[data-testid$="-sin-llegar"]').count();
-    if (enInicio === 0)
+    /*
+     * El turno se coloca cuarenta minutos atrás, también si eso cae ayer; solo no puede
+     * cruzar al domingo, que es otra semana. El primer rato del lunes no hay dónde ponerlo
+     * y se dice, en vez de fallar o de dar por bueno un cero.
+     */
+    const partes = Object.fromEntries(
+      new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Lima',
+        weekday: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+        .formatToParts(new Date())
+        .map((p) => [p.type, p.value]),
+    );
+    const primerRatoDelLunes =
+      partes.weekday === 'Mon' && Number(partes.hour) * 60 + Number(partes.minute) < 50;
+    if (enInicio === 0 && !primerRatoDelLunes) {
       problemas.push('el escenario «sinllegar» no deja a nadie sin llegar en Inicio');
+    }
+    if (primerRatoDelLunes) {
+      console.log('  no ha llegado        sin comprobar: es el primer rato del lunes');
+    }
     if (enHorario !== enInicio || enLaLista !== enInicio) {
       problemas.push(
         `no ha llegado: Inicio ${enInicio} (lista ${enLaLista}), tarjetas de Horario ${enHorario}`,

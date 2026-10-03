@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -56,6 +57,7 @@ import { useLiveClock } from '@/hooks/use-live-clock';
 import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
 import { estilosDelTema } from '@/theme/estilos';
+import { useTheme } from '@/theme/use-theme';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 import { HorasQueDebes } from './horas-que-debes';
@@ -668,6 +670,7 @@ function FilaDelDia({
   loQueDije?: readonly Disponibilidad[];
 }) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const estilos = useEstilos();
   const insignia = INSIGNIA[dia.estado];
   const faltasJustificadas = dia.faltas.every((tt) =>
@@ -719,6 +722,25 @@ function FilaDelDia({
         <AppText variant="bodyStrong" tabular tone={dia.turnos.length === 0 ? 'subtle' : 'default'}>
           {rotuloDelTurno}
         </AppText>
+        {/*
+          LA NOTA DE SU TURNO (3-oct): «Nota para el empleado» se escribe en Horario para
+          ella, y solo se veía en el reloj de la tienda. La privada de quien gestiona, no.
+        */}
+        {dia.turnos
+          .filter((tt) => tt.employee_note !== null && tt.employee_note.trim() !== '')
+          .map((tt) => (
+            <Row
+              key={tt.id}
+              gap={spacing.xs}
+              align="flex-start"
+              testID={`mi-horario-nota-${dia.dia}`}
+            >
+              <Ionicons name="chatbubble-outline" size={13} color={colors.ink500} />
+              <AppText variant="help" tone="muted" style={estilos.centro}>
+                {tt.employee_note}
+              </AppText>
+            </Row>
+          ))}
         {loQueDije.map((fila) => (
           <ChipDeDisponibilidad
             key={fila.id}

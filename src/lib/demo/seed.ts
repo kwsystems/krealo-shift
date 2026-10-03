@@ -1044,6 +1044,18 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   almacen.set('job_roles', puestos);
   almacen.set('employee_location_assignments', asignaciones);
   almacen.set('employee_job_roles', puestosDeEmpleado);
+  /*
+   * UNA NOTA PARA LA VENDEDORA (3-oct) en su primer turno publicado de esta semana: la ve
+   * en su celular y en la tarjeta de Horario, que es lo que `vistas-check` comprueba.
+   */
+  const lunesISO = aISO(lunes);
+  const suTurno = turnosCoherentes.find(
+    (turno) =>
+      turno.employee_id === empleadoId(1) &&
+      turno.status === 'published' &&
+      String(turno.starts_at) >= lunesISO,
+  );
+  if (suTurno !== undefined) suTurno.employee_note = 'Trae la llave del almacén';
   almacen.set('shifts', turnosCoherentes);
   /*
    * POR QUÉ FALTÓ (2-oct): la falta de la semana pasada ya está justificada —un descanso

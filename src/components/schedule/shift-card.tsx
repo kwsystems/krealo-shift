@@ -154,6 +154,8 @@ export function ShiftCard({
     estadoAhora,
     falta === null ? null : rotuloDeFaltaEnTurno(t, falta),
     sinLlegar ? t('schedule.notArrived') : null,
+    shift.manager_note,
+    shift.employee_note,
     minutesToHHmm(netMinutes),
     statusLabel,
     avisoDeDisponibilidad,
@@ -364,6 +366,35 @@ export function ShiftCard({
           </AppText>
         </Row>
       )}
+
+      {/*
+        LOS COMENTARIOS DEL TURNO, A LA VISTA (3-oct). Solo se veían abriendo el turno, y
+        Andree no sabía si lo que escribió había quedado. El privado con un candado —solo lo
+        ve quien gestiona— y el de la persona con un globo: es el que ella ve en su celular.
+      */}
+      {[
+        { texto: shift.manager_note, icono: 'lock-closed-outline' as const, clave: 'privada' },
+        { texto: shift.employee_note, icono: 'chatbubble-outline' as const, clave: 'persona' },
+      ]
+        .filter((nota) => nota.texto !== null && nota.texto.trim() !== '')
+        .map((nota) => (
+          <Row
+            key={nota.clave}
+            gap={spacing.xs}
+            align="flex-start"
+            testID={testID === undefined ? undefined : `${testID}-nota-${nota.clave}`}
+          >
+            <Ionicons
+              name={nota.icono}
+              size={13}
+              color={colors.ink500}
+              style={styles.iconoDeNota}
+            />
+            <AppText variant="label" tone="muted" style={styles.textoDeFalta}>
+              {nota.texto}
+            </AppText>
+          </Row>
+        ))}
 
       {avisoDeDisponibilidad === null ? null : (
         <Row
@@ -625,6 +656,8 @@ const useEstilos = estilosDelTema((colors) => ({
   /* Justificada: sigue siendo falta, pero ya no cuenta en contra; el ámbar de los avisos. */
   faltaJustificada: { backgroundColor: colors.warning50, borderColor: colors.warning600 },
   textoDeFalta: { flexShrink: 1, minWidth: 0 },
+  // El icono a la altura de la primera línea del texto, que puede ser larga.
+  iconoDeNota: { marginTop: 1 },
   pressed: { opacity: 0.7 },
   /*
    * UN HUECO TIENE QUE VERSE COMO UN HUECO, y antes medía y pesaba igual que un turno:

@@ -558,7 +558,16 @@ export function ScheduleScreen({
       mutations.create.mutate(input, { onSuccess: done });
       return;
     }
-    mutations.update.mutate({ shiftId: editing.shift.id, input }, { onSuccess: done });
+    mutations.update.mutate(
+      { shiftId: editing.shift.id, input, actual: editing.shift },
+      {
+        // Solo las notas de un turno publicado: se guardan y no hay nada que publicar.
+        onSuccess: (resultado) => {
+          setEditing(null);
+          setFeedback(resultado === 'notas' ? t('schedule.notesSaved') : t('schedule.draftSaved'));
+        },
+      },
+    );
   };
 
   const locationOptions: Option<string>[] = scope.locations.map((location) => ({

@@ -295,6 +295,20 @@ export function useManagerDashboard(params: {
     const todaysShifts = shifts.filter(
       (shift) => shift.status === 'published' && dateKeyOf(shift.starts_at, timezone) === todayKey,
     );
+    /*
+     * LOS DE HOY Y EL QUE SIGUE EN CURSO DESDE AYER (3-oct): un turno de noche que empezó
+     * ayer y no ha terminado también puede tener a alguien que no llegó. Horario lo marca
+     * con «No ha llegado» (mira la semana); Inicio solo miraba los que empiezan hoy.
+     */
+    const enJuego = [
+      ...todaysShifts,
+      ...shifts.filter(
+        (shift) =>
+          shift.status === 'published' &&
+          dateKeyOf(shift.starts_at, timezone) < todayKey &&
+          shift.ends_at > nowISO,
+      ),
+    ];
 
     /*
      * LA FALTA, CON LA REGLA DE TODA LA APP (1-oct): ver `features/timesheets/faltas.ts`.
@@ -322,7 +336,7 @@ export function useManagerDashboard(params: {
         .map((falta) => falta.id),
     );
 
-    for (const shift of todaysShifts) {
+    for (const shift of enJuego) {
       if (activeByEmployee.has(shift.employee_id)) continue;
       if (cubreElTurno(shift, sessions, ahoraMs)) continue;
 

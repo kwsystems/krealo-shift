@@ -186,13 +186,14 @@ export function useScheduleMutations(params: {
   });
 
   const update = useMutation({
-    mutationFn: (variables: { shiftId: string; input: ShiftInput }) =>
+    mutationFn: (variables: { shiftId: string; input: ShiftInput; actual?: ShiftRow }) =>
       updateShift({
         shiftId: variables.shiftId,
         organizationId: organizationId ?? '',
         locationId: locationId ?? '',
         timezone,
         input: variables.input,
+        actual: variables.actual,
       }),
     onSuccess: invalidate,
   });

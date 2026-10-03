@@ -21,6 +21,9 @@
  *    «Otro motivo» sin comentario no se guarda.
  * 9. JUSTIFICAR la de esta semana se ve en la fila de Equipo y en Horario.
  * 10. El celular de la vendedora dice «Falta justificada» con el motivo.
+ * 11. UN COMENTARIO NO QUITA LA FALTA (3-oct): escribir una nota en el turno que es falta
+ *     la guarda, el turno sigue publicado —sin «Cambiado» ni nada que publicar—, la
+ *     falta sigue y la nota se ve en la tarjeta. Andree comentó dos faltas y desaparecieron.
  *
  * Se mira la SEMANA ANTERIOR porque siempre está sembrada entera, con una falta a propósito
  * (ver la semilla); la actual depende del día en que se corra.
@@ -227,6 +230,55 @@ try {
       .locator('[data-testid="chart-absences"]')
       .screenshot({ path: 'capturas/faltas-justificada-reportes.png' });
     console.log(`  justificada          Horas, Horario y Reportes la dicen`);
+
+    // --- 11. Un comentario en el turno que es falta no la quita ni pide publicar.
+    await irPorElMenu(pagina, '/schedule');
+    await semanaAnterior(pagina);
+    const pendientes = async () =>
+      Number(
+        /(\d+)\s+cambios? sin publicar/.exec(
+          await visible(pagina, 'body')
+            .first()
+            .innerText()
+            .catch(() => ''),
+        )?.[1] ?? 0,
+      );
+    const antesDelComentario = await pendientes();
+    const faltasAntesDeComentar = await cuenta(pagina, TARJETAS_CON_FALTA);
+    await visible(pagina, TARJETAS_CON_FALTA).first().click();
+    await pagina.locator('[data-testid="shift-manager-note"]').waitFor({ timeout: 8000 });
+    await pagina
+      .locator('[data-testid="shift-manager-note"]')
+      .fill('Avisó por WhatsApp a las 19:00');
+    await pagina.locator('[data-testid="shift-form-save"]').click();
+    await pagina
+      .locator('[data-testid="shift-form-sheet"]')
+      .waitFor({ state: 'detached', timeout: 8000 })
+      .catch(() => problemas.push('guardar el comentario no cierra la hoja'));
+    await esperar(pagina, 1200);
+    const faltasTrasComentar = await cuenta(pagina, TARJETAS_CON_FALTA);
+    if (faltasTrasComentar !== faltasAntesDeComentar) {
+      problemas.push(
+        `tras comentar, Horario marca ${faltasTrasComentar} faltas y antes ${faltasAntesDeComentar}`,
+      );
+    }
+    const trasElComentario = await pendientes();
+    if (trasElComentario !== antesDelComentario) {
+      problemas.push(
+        `un comentario dejó ${trasElComentario} cambios sin publicar (antes ${antesDelComentario})`,
+      );
+    }
+    if ((await cuenta(pagina, '[data-testid$="-nota-privada"]')) === 0) {
+      problemas.push('el comentario no se ve en la tarjeta del turno');
+    }
+    const aviso = await visible(pagina, 'body').first().innerText();
+    if (!/Comentario guardado/.test(aviso)) {
+      problemas.push('al guardar solo el comentario no dice que no hay nada que publicar');
+    }
+    await pagina.screenshot({ path: 'capturas/faltas-comentario.png' });
+    console.log(
+      `  comentario           faltas ${faltasAntesDeComentar} → ${faltasTrasComentar}, por publicar ${antesDelComentario} → ${trasElComentario}`,
+    );
 
     // --- 8. Cambiarla a «Sin justificar», y «Otro» sin comentario no se guarda.
     await irPorElMenu(pagina, '/hours');

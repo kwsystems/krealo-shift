@@ -90,7 +90,7 @@ export function PorResolver({
               ]}
               testID={`caso-${fila.id}`}
             >
-              <Stack gap={spacing.xs} style={ancha ? estilos.crece : undefined}>
+              <Stack gap={spacing.xs} style={ancha ? estilos.textoAncho : undefined}>
                 <Row gap={spacing.sm} align="center" wrap>
                   <AppText variant="bodyStrong">{fila.nombre}</AppText>
                   <AppText variant="label" tone="subtle" tabular>
@@ -304,6 +304,19 @@ const useEstilos = estilosDelTema((colors) => ({
   },
   crece: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   fila: { paddingVertical: spacing.md, gap: spacing.sm },
-  filaAncha: { flexDirection: 'row', alignItems: 'center', gap: spacing.base },
+  /*
+   * EN ANCHO, TEXTO Y BOTONES EN UNA FILA… SI CABEN (3-oct). Con la ventana a 1024 y el
+   * menú lateral, la fila mide unos 730 px y los botones se llevaban casi todo: el texto
+   * quedaba en 50 px y partía «refrigerio» por la mitad (`responsive:check`). El texto pide
+   * al menos 280 px; si no los tiene, los botones bajan a la línea siguiente.
+   */
+  filaAncha: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    columnGap: spacing.base,
+    rowGap: spacing.sm,
+  },
+  textoAncho: { flexGrow: 1, flexShrink: 1, flexBasis: 280, minWidth: 280 },
   conRegla: { borderTopWidth: borderWidth.hairline, borderTopColor: colors.border },
 }));

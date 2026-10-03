@@ -314,8 +314,41 @@ export async function createShifts(params: {
 }
 
 /**
+ * ¿SOLO CAMBIAN LAS NOTAS? Misma persona, mismo puesto, mismas horas y mismo refrigerio.
+ * Las horas se comparan como instantes y no como texto: el mismo momento puede venir
+ * escrito con o sin milisegundos.
+ */
+export function soloCambianLasNotas(
+  actual: Pick<
+    ShiftRow,
+    'employee_id' | 'job_role_id' | 'starts_at' | 'ends_at' | 'planned_unpaid_break_minutes'
+  >,
+  fila: Pick<
+    ReturnType<typeof buildRow>,
+    'employee_id' | 'job_role_id' | 'starts_at' | 'ends_at' | 'planned_unpaid_break_minutes'
+  >,
+): boolean {
+  return (
+    actual.employee_id === fila.employee_id &&
+    (actual.job_role_id ?? null) === (fila.job_role_id ?? null) &&
+    Date.parse(actual.starts_at) === Date.parse(fila.starts_at) &&
+    Date.parse(actual.ends_at) === Date.parse(fila.ends_at) &&
+    actual.planned_unpaid_break_minutes === fila.planned_unpaid_break_minutes
+  );
+}
+
+/** Lo que hizo la edición: solo guardar notas, o dejar un borrador por publicar. */
+export type ResultadoDeLaEdicion = 'notas' | 'borrador';
+
+/**
  * Editar deja el turno en borrador, incluso si estaba publicado (§11.3 paso 8).
  * Se conserva `publication_version` para saber que ya existió publicado antes.
+ *
+ * MENOS SI SOLO CAMBIAN LAS NOTAS (3-oct). Andree escribió un comentario en dos turnos que
+ * eran falta y los dos pasaron a «Cambiado»: un borrador por publicar, fuera de las faltas
+ * —que solo miran turnos publicados— y fuera del celular de la persona. Un comentario no
+ * cambia lo que se le dio a nadie: se guarda y el turno sigue publicado, sin nada que
+ * publicar. Cambiar la persona, el puesto, las horas o el refrigerio sí deja el borrador.
  */
 export async function updateShift(params: {
   shiftId: string;
@@ -323,8 +356,28 @@ export async function updateShift(params: {
   locationId: string;
   timezone: string;
   input: ShiftInput;
-}): Promise<void> {
+  /** El turno como estaba: sin él no se sabe si solo cambian las notas. */
+  actual?: ShiftRow;
+}): Promise<ResultadoDeLaEdicion> {
   const row = buildRow(params);
+
+  if (
+    params.actual !== undefined &&
+    params.actual.status === 'published' &&
+    soloCambianLasNotas(params.actual, row)
+  ) {
+    await execute((db) =>
+      db
+        .from(TABLES.shifts)
+        .update({
+          employee_note: row.employee_note,
+          manager_note: row.manager_note,
+          updated_by: actorId(),
+        })
+        .eq('id', params.shiftId),
+    );
+    return 'notas';
+  }
 
   await execute((db) =>
     db
@@ -332,6 +385,7 @@ export async function updateShift(params: {
       .update({ ...row, status: 'draft', updated_by: actorId() })
       .eq('id', params.shiftId),
   );
+  return 'borrador';
 }
 
 export async function duplicateShift(params: {

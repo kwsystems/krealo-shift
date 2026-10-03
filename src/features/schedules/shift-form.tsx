@@ -304,6 +304,14 @@ export function ShiftFormSheet({
             multiline
             testID="shift-manager-note"
           />
+          {/*
+            QUIÉN VE CADA NOTA, Y QUE NO HACE FALTA PUBLICARLAS (3-oct). Andree escribió un
+            comentario en un turno publicado y pensó que tenía que volver a publicar: antes
+            sí, porque guardar cualquier cosa lo volvía borrador. Ahora no, y se dice aquí.
+          */}
+          <AppText variant="help" tone="subtle" testID="shift-notes-help">
+            {t('schedule.notesHelp')}
+          </AppText>
         </>
       )}
     </AdminSheet>

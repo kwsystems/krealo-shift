@@ -1,4 +1,4 @@
-import { shiftRowSchema } from '../api';
+import { shiftRowSchema, soloCambianLasNotas } from '../api';
 
 /**
  * Que un turno recién creado se pueda VOLVER A LEER.
@@ -105,5 +105,36 @@ describe('el documento que produce crear un turno', () => {
     const resultado = shiftRowSchema.parse(sinPublicar);
     expect(resultado.publication_version).toBe(0);
     expect(resultado.published_at).toBeNull();
+  });
+});
+
+describe('editar solo las notas de un turno (3-oct)', () => {
+  const publicado = {
+    employee_id: 'alguien',
+    job_role_id: 'cajero',
+    starts_at: '2026-10-02T18:00:00.000Z',
+    ends_at: '2026-10-03T03:00:00.000Z',
+    planned_unpaid_break_minutes: 30,
+  };
+
+  it('mismas horas escritas con o sin milisegundos: solo cambian las notas', () => {
+    expect(
+      soloCambianLasNotas(publicado, {
+        ...publicado,
+        starts_at: '2026-10-02T18:00:00Z',
+        ends_at: '2026-10-03T03:00:00Z',
+      }),
+    ).toBe(true);
+  });
+
+  it('cambiar la persona, el puesto, las horas o el refrigerio ya no es solo una nota', () => {
+    expect(soloCambianLasNotas(publicado, { ...publicado, employee_id: 'otra' })).toBe(false);
+    expect(soloCambianLasNotas(publicado, { ...publicado, job_role_id: null })).toBe(false);
+    expect(
+      soloCambianLasNotas(publicado, { ...publicado, ends_at: '2026-10-03T02:00:00.000Z' }),
+    ).toBe(false);
+    expect(soloCambianLasNotas(publicado, { ...publicado, planned_unpaid_break_minutes: 0 })).toBe(
+      false,
+    );
   });
 });
