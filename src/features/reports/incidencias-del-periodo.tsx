@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ChartCard } from '@/components/charts/chart-frame';
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton } from '@/components/ui/buttons';
+import { SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { formatDateKeyShort, formatWeekdayShort, type DateKey } from '@/features/schedules/week';
@@ -213,7 +213,7 @@ export function IncidenciasDelPeriodo({
             </Stack>
           )}
 
-          <GhostButton
+          <SecondaryButton
             label={
               diaPorDia
                 ? t('reports.incidents.hideDays')

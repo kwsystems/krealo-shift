@@ -232,7 +232,9 @@ try {
 
     // --- 4. Los números del menú.
     await irPorElMenu(pagina, '/requests');
-    const bandeja = await texto(pagina, 'body');
+    // SOLO LA PANTALLA DE BANDEJA, no `body` (4-oct): las pantallas ya visitadas siguen
+    // montadas, y «Ver día por día (15)» de Reportes se sumaba como 15 solicitudes.
+    const bandeja = await texto(pagina, '[data-testid="manager-requests"]');
     const pendientes = [...bandeja.matchAll(/\((\d+)\)/g)].reduce((s, m) => s + Number(m[1]), 0);
     if (insigniaBandeja !== pendientes || pendientes !== solicitudesInicio) {
       problemas.push(
