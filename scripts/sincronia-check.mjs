@@ -156,6 +156,67 @@ try {
   await pagina.locator('[data-testid="manual-entry-sheet"]').screenshot({
     path: 'capturas/sincronia-manual.png',
   });
+
+  // --- 3b. LA TIENDA ABRIÓ TARDE (4-oct). Andree: «la tienda abre a las 2 pm pero quiero
+  // que la gente que tenía que entrar a las 10 salga como si hubiera marcado; ya quiero que
+  // corra su horario». Se hace con este mismo fichaje: su entrada, hoy, a una hora que ya
+  // pasó. Desde ese momento tiene que estar EN TURNO en Horario y en «Ahora mismo» de Inicio,
+  // desde esa hora. En la demostración no salía en Horario: la entrada abría la jornada pero
+  // no la ponía en «quién está dentro».
+  const dentroAntes = await enTurnoAhora(pagina).catch(() => []);
+  const personas = await pagina
+    .locator('[data-testid^="manual-entry-employee-"]')
+    .evaluateAll((nodos) =>
+      nodos.map((n) => n.getAttribute('data-testid').slice('manual-entry-employee-'.length)),
+    );
+  const fuera = personas.find((id) => !antes.includes(id) && !dentroAntes.includes(id));
+  if (fuera === undefined) {
+    problemas.push('no hay nadie fuera a quien poner la entrada de hoy');
+  } else {
+    const minutosDeHoy = (() => {
+      const [h, m] = new Intl.DateTimeFormat('en-GB', {
+        timeZone: 'America/Lima',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      })
+        .format(new Date())
+        .split(':')
+        .map(Number);
+      return h * 60 + m;
+    })();
+    const minuto = Math.max(0, minutosDeHoy - 90);
+    const hora = `${String(Math.floor(minuto / 60)).padStart(2, '0')}:${String(minuto % 60).padStart(2, '0')}`;
+    await pagina.locator(`[data-testid="manual-entry-employee-${fuera}"]`).click();
+    await pagina.locator('[data-testid="manual-entry-time"]').fill(hora);
+    await pagina
+      .locator('[data-testid="manual-entry-reason"]')
+      .fill('La tienda abrió a las 2 pm: horario especial');
+    await pagina.locator('[data-testid="manual-entry-submit"]').click();
+    await pagina
+      .locator('[data-testid="manual-entry-sheet"]')
+      .waitFor({ state: 'detached', timeout: 8000 })
+      .catch(() => problemas.push('la entrada de hoy no se guardó: la hoja sigue abierta'));
+    await esperar(pagina, 1000);
+
+    await irPorElMenu(pagina, '/schedule');
+    await esperar(pagina, 1200);
+    const enHorario = (await enTurnoAhora(pagina)).includes(fuera);
+    if (!enHorario) problemas.push(`con su entrada de las ${hora}, Horario no la pone en turno`);
+    await irPorElMenu(pagina, '/');
+    await esperar(pagina, 1000);
+    const ahoraMismo = await pagina
+      .locator('[data-testid="right-now-list"]')
+      .innerText()
+      .catch(() => '');
+    const enInicio = ahoraMismo.includes(`Desde las ${hora}`);
+    if (!enInicio) {
+      problemas.push(`con su entrada de las ${hora}, Inicio no dice «Desde las ${hora}»`);
+    }
+    console.log(
+      `  entrada a las ${hora}   Horario ${enHorario ? 'en turno' : 'NO'}, Inicio ${enInicio ? `«Desde las ${hora}»` : 'NO'}`,
+    );
+  }
   const cerrarManual = pagina
     .locator('[data-testid="manual-entry-sheet"]')
     .getByText('Cerrar', { exact: true });

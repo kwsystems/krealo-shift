@@ -626,6 +626,33 @@ function crearRpc(almacen: Almacen) {
                 updated_at: new Date().toISOString(),
               },
             ]);
+            /*
+             * Y DESDE ESA HORA ESTÁ DENTRO (4-oct), como en el servidor, donde «quién está
+             * dentro» son las jornadas abiertas. Sin esto la entrada puesta a la hora del turno
+             * —la tienda abrió tarde— no la ponía «Trabajando» en Inicio ni en Horario. La
+             * salida de abajo la vuelve a quitar.
+             */
+            const empleado = filas('employees').find(
+              (fila) => fila.id === argumentos.p_employee_id,
+            );
+            almacen.set('employees_working_now', [
+              ...filas('employees_working_now').filter(
+                (fila) => fila.employee_id !== argumentos.p_employee_id,
+              ),
+              {
+                organization_id: DEMO_ORG_ID,
+                location_id: argumentos.p_location_id,
+                work_session_id: idSesion,
+                employee_id: argumentos.p_employee_id,
+                full_name: empleado?.full_name ?? 'Empleado',
+                preferred_name: empleado?.preferred_name ?? null,
+                starts_at: entrada,
+                shift_id: suTurno?.id ?? null,
+                break_started_at: null,
+                break_reason: null,
+                attendance_state: 'WORKING',
+              },
+            ]);
             return sinError([{ event_id: idEvento, work_session_id: idSesion }]);
           }
         }
