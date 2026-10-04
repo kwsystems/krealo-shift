@@ -165,8 +165,10 @@ try {
           .innerText()
       ).replace(/\s+/g, ' ');
       if (/\bLibre\b/.test(fila)) fallar(casoCambiado, `el ${dia} dice «Libre»: ${fila}`);
-      else if (!/Por confirmar/.test(fila))
-        fallar(casoCambiado, `el ${dia} no lleva la insignia «Por confirmar»: ${fila}`);
+      // Solo ese turno: la insignia. Con otro publicado el mismo día manda el publicado y el
+      // que cambia se dice aparte, «Además, por confirmar: …».
+      else if (!/Por confirmar|por confirmar:/.test(fila))
+        fallar(casoCambiado, `el ${dia} no dice que su turno está por confirmar: ${fila}`);
       else pasa(casoCambiado, `${dia}: ${fila.slice(0, 90)}`);
       await p.screenshot({ path: join(CAPTURAS, '2b-por-confirmar-390.png'), fullPage: true });
     }

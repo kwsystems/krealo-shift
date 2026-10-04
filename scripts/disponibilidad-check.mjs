@@ -244,7 +244,12 @@ try {
       await fila.waitFor({ timeout: 15000 }).catch(() => undefined);
       const texto =
         (await fila.count()) === 0 ? null : (await fila.innerText()).replace(/\s+/g, ' ');
-      await pagina.keyboard.press('Escape');
+      // Con su botón «Cerrar»: la hoja no se cierra con Escape en web.
+      await pagina
+        .locator('[data-testid="employee-detail-sheet"]')
+        .getByRole('button', { name: 'Cerrar', exact: true })
+        .first()
+        .click();
       await pagina
         .locator('[data-testid="employee-detail-sheet"]')
         .waitFor({ state: 'detached', timeout: 10000 })
