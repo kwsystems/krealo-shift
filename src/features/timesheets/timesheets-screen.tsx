@@ -927,19 +927,13 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
           timezone={scope.timezone}
           language={language}
           ahoraISO={nowISO}
-          guardando={mutations.addEvent.isPending}
+          guardando={mutations.vino.isPending}
           onGuardar={async ({ entradaISO, salidaISO, motivo }) => {
-            // Dos fichajes manuales, con el mismo motivo: los mismos que se pondrían a mano.
-            await mutations.addEvent.mutateAsync({
-              employeeId: faltaElegida.employeeId,
-              eventType: 'clock_in',
-              occurredAt: entradaISO,
-              reason: motivo,
-            });
-            await mutations.addEvent.mutateAsync({
-              employeeId: faltaElegida.employeeId,
-              eventType: 'clock_out',
-              occurredAt: salidaISO,
+            // Entrada y salida de una vez: ver `registrarQueVino`. La falta es del turno.
+            await mutations.vino.mutateAsync({
+              shiftId: faltaElegida.id,
+              startsAt: entradaISO,
+              endsAt: salidaISO,
               reason: motivo,
             });
             setFaltaElegida(null);

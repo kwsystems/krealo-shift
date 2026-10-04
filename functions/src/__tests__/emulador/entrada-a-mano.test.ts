@@ -53,6 +53,11 @@ beforeEach(async () => {
     organization_id: ORG,
     timezone: 'America/Lima',
   });
+  // Asignada a su sede: el fichaje manual lo comprueba (4-oct).
+  await db
+    .collection(COLLECTIONS.employeeLocations)
+    .doc(`${PERSONA}_${SEDE}`)
+    .set({ employee_id: PERSONA, location_id: SEDE, organization_id: ORG });
   await db.collection(COLLECTIONS.employees).doc(PERSONA).set({
     id: PERSONA,
     organization_id: ORG,

@@ -64,6 +64,7 @@ export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './me
 export { deleteEmployee } from './eliminar-empleado';
 export { dischargeEmployee } from './baja-de-empleado';
 export { creditShiftAsWorked, undoShiftCredit } from './cumplido-especial';
+export { registerMissedAttendance } from './vino-y-no-marco';
 
 /*
  * Resolver una solicitud de la Bandeja (30-sep). Aprobar un «olvidé marcar» registra el

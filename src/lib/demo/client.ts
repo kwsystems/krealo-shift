@@ -1404,6 +1404,97 @@ function crearRpc(almacen: Almacen) {
       }
 
       /*
+       * «VINO Y NO MARCÓ» DE UNA VEZ (4-oct), como `registerMissedAttendance`: entrada y
+       * salida juntas, con ids fijos por turno, y repetirlo no duplica nada.
+       */
+      case 'register_missed_attendance': {
+        const turno = filas('shifts').find((fila) => fila.id === argumentos.p_shift_id);
+        if (turno === undefined) return conError('Ese turno ya no existe.');
+        const entrada = String(argumentos.p_starts_at);
+        const salida = String(argumentos.p_ends_at);
+        if (Date.parse(salida) <= Date.parse(entrada)) {
+          return conError('La salida tiene que ser después de la entrada.');
+        }
+        const idEntrada = `vino-${String(turno.id)}-entrada`;
+        if (filas('time_events').some((fila) => fila.id === idEntrada)) {
+          return sinError({
+            eventIds: [idEntrada, `vino-${String(turno.id)}-salida`],
+            repetido: true,
+          });
+        }
+        const pisa = filas('work_sessions').some(
+          (sesion) =>
+            sesion.employee_id === turno.employee_id &&
+            Date.parse(String(sesion.starts_at)) < Date.parse(salida) &&
+            Date.parse(String(sesion.ends_at ?? '9999-12-31')) > Date.parse(entrada),
+        );
+        if (pisa) {
+          return {
+            data: null,
+            error: {
+              code: 'failed-precondition',
+              message: 'Entre esa entrada y esa salida ya hay marcas: corrígelas en Horas.',
+              details: { motivo: 'CON_MARCAS' },
+            },
+          };
+        }
+        const ahora = new Date().toISOString();
+        const eventos = (['clock_in', 'clock_out'] as const).map((tipo) => ({
+          id: tipo === 'clock_in' ? idEntrada : `vino-${String(turno.id)}-salida`,
+          organization_id: DEMO_ORG_ID,
+          employee_id: turno.employee_id,
+          location_id: turno.location_id,
+          shift_id: turno.id,
+          event_type: tipo,
+          break_type: null,
+          occurred_at: tipo === 'clock_in' ? entrada : salida,
+          source: 'manager',
+          is_offline: false,
+        }));
+        almacen.set('time_events', [...filas('time_events'), ...eventos]);
+        const brutos = minutosEntre(entrada, salida);
+        almacen.set('work_sessions', [
+          ...filas('work_sessions'),
+          {
+            id: `vino-${String(turno.id)}`,
+            organization_id: DEMO_ORG_ID,
+            employee_id: turno.employee_id,
+            location_id: turno.location_id,
+            shift_id: turno.id,
+            starts_at: entrada,
+            ends_at: salida,
+            gross_minutes: brutos,
+            paid_break_minutes: 0,
+            unpaid_break_minutes: 0,
+            net_minutes: brutos,
+            status: 'complete',
+            flags: [],
+            source: 'manager',
+            updated_at: ahora,
+          },
+        ]);
+        almacen.set('time_adjustments', [
+          ...filas('time_adjustments'),
+          ...eventos.map((evento) => ({
+            id: `ajuste-${evento.id}`,
+            organization_id: DEMO_ORG_ID,
+            location_id: turno.location_id,
+            employee_id: turno.employee_id,
+            work_session_id: null,
+            target_type: 'time_event',
+            target_id: evento.id,
+            before_value: null,
+            after_value: { event_type: evento.event_type, occurred_at: evento.occurred_at },
+            reason: String(argumentos.p_reason ?? ''),
+            created_at: ahora,
+            channel: 'manager_app',
+            author_name: 'Andree (demostración)',
+          })),
+        ]);
+        return sinError({ eventIds: eventos.map((evento) => evento.id), repetido: false });
+      }
+
+      /*
        * DAR UN TURNO POR CUMPLIDO POR UN MOTIVO ESPECIAL (4-oct), con las reglas de
        * `functions/src/cumplido-especial.ts`: publicado, terminado, sin marcas cerca; crea la
        * jornada a la hora del turno con el motivo, y lo que se dijo de su falta sobra.

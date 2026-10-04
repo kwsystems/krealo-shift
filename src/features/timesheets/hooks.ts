@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   addManualTimeEvent,
+  registrarQueVino,
   adjustWorkSession,
   reclassifyDeparture,
   approvePeriod,
@@ -294,5 +295,10 @@ export function useTimesheetMutations(params: {
     onSuccess: invalidate,
   });
 
-  return { adjust, manualEntry, addEvent, approve, reopen, reclassify };
+  const vino = useMutation({
+    mutationFn: registrarQueVino,
+    onSuccess: invalidate,
+  });
+
+  return { adjust, manualEntry, addEvent, vino, approve, reopen, reclassify };
 }

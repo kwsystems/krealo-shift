@@ -89,6 +89,11 @@ beforeEach(async () => {
     .collection(COLLECTIONS.employeeLocations)
     .doc(`${PERSONA}_${SEDE}`)
     .set({ employee_id: PERSONA, location_id: SEDE, organization_id: ORG });
+  // La ficha: el fichaje manual comprueba que la persona sea de la empresa (4-oct).
+  await db
+    .collection(COLLECTIONS.employees)
+    .doc(PERSONA)
+    .set({ id: PERSONA, organization_id: ORG, full_name: 'Persona', status: 'active' });
 });
 
 describe('las correcciones de un periodo', () => {

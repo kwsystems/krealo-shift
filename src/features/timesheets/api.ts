@@ -493,6 +493,31 @@ export async function addManualTimeEvent(params: {
 }
 
 /**
+ * «VINO Y NO MARCÓ»: entrada y salida en UNA llamada (4-oct). Eran dos fichajes manuales
+ * seguidos, y si fallaba el segundo quedaba la entrada sola, sin forma de terminarlo desde
+ * la pantalla. Repetirla no duplica nada. Ver `functions/src/vino-y-no-marco.ts`.
+ */
+export async function registrarQueVino(params: {
+  shiftId: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string;
+}): Promise<void> {
+  const db = requireClient();
+  try {
+    const { error } = await db.rpc(RPC.registerMissedAttendance, {
+      p_shift_id: params.shiftId,
+      p_starts_at: params.startsAt,
+      p_ends_at: params.endsAt,
+      p_reason: params.reason.trim(),
+    });
+    if (error !== null) throw toAdminError(error);
+  } catch (error) {
+    throw toAdminError(error);
+  }
+}
+
+/**
  * «Esa salida no fue fin de jornada: se fue al almacén y volvió.»
  *
  * Convierte la salida y la entrada siguiente en una pausa con motivo. El servidor hace

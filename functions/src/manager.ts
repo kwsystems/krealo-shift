@@ -25,6 +25,7 @@ import { instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
 import { corregirSalidaConFichaje, noEnElFuturo } from './shared/salida-a-mano';
+import { exigirQueSeaDeLaSede } from './shared/persona-de-la-sede';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
 const DESCANSO_MINIMO_POR_DEFECTO = 660;
@@ -691,6 +692,7 @@ export const managerAddTimeEvent = onCall(async (request) => {
 
   const membership = await membershipOf(uid, location.organization_id as string);
   requireManagesLocation(membership, locationId);
+  await exigirQueSeaDeLaSede(employeeId, location.organization_id as string, locationId);
 
   const estado = await attendanceStateAt(employeeId, occurredAt);
   const resultado = transition(estado, eventType);

@@ -564,13 +564,7 @@ async function buildEmployeeContext(
       changedSinceLastPublication: false,
     }));
 
-  const abierta = await db
-    .collection(COLLECTIONS.workSessions)
-    .where('employee_id', '==', employeeId)
-    .where('status', '==', 'open')
-    .limit(1)
-    .get();
-  const sesion = abierta.docs[0]?.data();
+  const sesion = await jornadaAbiertaMasReciente(employeeId);
 
   const resueltas = await db
     .collection(COLLECTIONS.timeEditRequests)
@@ -731,13 +725,7 @@ export const submitTimeEvent = onCall(OPCIONES_CON_SECRETO, async (request) => {
     source: 'kiosk',
   });
 
-  const abierta = await db
-    .collection(COLLECTIONS.workSessions)
-    .where('employee_id', '==', employeeId)
-    .where('status', '==', 'open')
-    .limit(1)
-    .get();
-  const sesion = abierta.docs[0]?.data();
+  const sesion = await jornadaAbiertaMasReciente(employeeId);
 
   /*
    * A que hora termina la jornada. Es lo unico que la pantalla de confirmacion enseña
@@ -1081,3 +1069,21 @@ export const attendancePhotoUrl = onCall(async (request) => {
 
   return { url };
 });
+
+/**
+ * LA JORNADA ABIERTA MÁS RECIENTE de una persona (4-oct). Era «una cualquiera» —`limit(1)`
+ * sin orden—, así que con una jornada olvidada de días antes el reloj podía enseñar
+ * «Trabajando desde vie» a quien entró hoy. Normalmente hay una sola.
+ */
+async function jornadaAbiertaMasReciente(
+  employeeId: string,
+): Promise<Record<string, unknown> | undefined> {
+  const abiertas = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('employee_id', '==', employeeId)
+    .where('status', '==', 'open')
+    .get();
+  return abiertas.docs
+    .map((doc) => doc.data())
+    .sort((a, b) => String(b.starts_at).localeCompare(String(a.starts_at)))[0];
+}

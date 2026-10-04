@@ -235,7 +235,23 @@ export async function rebuildJornadaDe(
   locationId: string,
   instante: string,
 ): Promise<void> {
-  const desde = new Date(Date.parse(instante) - HORAS_36_MS).toISOString();
+  /*
+   * Y SI TIENE UNA JORNADA ABIERTA DE ANTES, DESDE ELLA (4-oct). Quien olvida la salida antes
+   * de su día libre y marca salida dos días después: su entrada quedaba fuera de las 36 h,
+   * la salida no encontraba jornada y la del viernes seguía abierta para siempre, con
+   * «Trabajando desde vie» en el reloj y dos jornadas abiertas en cuanto volvía a entrar.
+   */
+  const abiertas = await db
+    .collection(COLLECTIONS.workSessions)
+    .where('employee_id', '==', employeeId)
+    .where('status', '==', 'open')
+    .get();
+  const desde = [
+    new Date(Date.parse(instante) - HORAS_36_MS).toISOString(),
+    ...abiertas.docs
+      .map((doc) => String(doc.data().starts_at))
+      .filter((inicio) => inicio <= instante),
+  ].sort()[0] as string;
   const snapshot = await db
     .collection(COLLECTIONS.timeEvents)
     .where('employee_id', '==', employeeId)
@@ -291,7 +307,9 @@ export async function rebuildWorkSession(
    * medias —la que queda cuando se aprueba un «olvidé marcar la entrada» anterior— no
    * abre otra jornada. Ver `shared/secuencia.ts`.
    */
-  const vigente = jornadaVigente(enOrden(snapshot.docs.map((doc) => doc.data())));
+  const ordenados = enOrden(snapshot.docs.map((doc) => doc.data()));
+  await borrarJornadasDeEntradasQueYaNoCuentan(employeeId, ordenados);
+  const vigente = jornadaVigente(ordenados);
   if (vigente === undefined) return;
   const inicio = vigente.entrada;
   const desdeUltimaEntrada = vigente.desdeLaEntrada;
@@ -317,8 +335,20 @@ export async function rebuildWorkSession(
     }
   }
 
-  const startsAt = String(inicio.occurred_at);
-  const endsAt = salida === undefined ? null : String(salida.occurred_at);
+  const sessionId = `${employeeId}_${String(inicio.occurred_at)}`;
+  /*
+   * LO QUE CORRIGIÓ QUIEN GESTIONA SE CONSERVA AL RECONSTRUIR (4-oct). Una corrección de la
+   * entrada de una jornada abierta solo vivía en la jornada: en cuanto la persona marcaba su
+   * refrigerio o su salida, esto la rehacía desde el fichaje y la corrección desaparecía
+   * —08:31 corregida a 08:00 volvía a 08:31 y se pagaba de menos— mientras el historial
+   * seguía diciendo que se corrigió. Ver `correccionesDeLaJornada`.
+   */
+  const corregida = await correccionesDeLaJornada(sessionId, {
+    startsAt: String(inicio.occurred_at),
+    endsAt: salida === undefined ? null : String(salida.occurred_at),
+  });
+  const startsAt = corregida.startsAt;
+  const endsAt = corregida.endsAt;
   /**
    * LOS SEGUNDOS SE TRUNCAN, NO SE REDONDEAN, y esto se paga en dinero. SQL
    * redondeaba y TypeScript truncaba, asi que las dos mitades del producto discrepaban
@@ -366,7 +396,6 @@ export async function rebuildWorkSession(
     politicas: politicasDe(sedeDoc ?? {}),
   });
 
-  const sessionId = `${employeeId}_${startsAt}`;
   await db
     .collection(COLLECTIONS.workSessions)
     .doc(sessionId)
@@ -424,6 +453,77 @@ export async function rebuildWorkSession(
       },
       { merge: true },
     );
+}
+
+/**
+ * LAS JORNADAS DE ENTRADAS QUE YA NO CUENTAN DESAPARECEN (4-oct).
+ *
+ * Una entrada añadida antes de la que marcó la persona —«Olvidó marcar entrada» a las
+ * 08:00 cuando el reloj tiene una de las 11:00— deja la de las 11:00 sin contar: la
+ * jornada ahora empieza a las 08:00. Pero la jornada de las 11:00 seguía guardada, así que
+ * el día sumaba las dos (17 h en vez de 10), o la de las 11:00 quedaba abierta para
+ * siempre: «Trabajando» en Inicio y «Aprobar» bloqueado. La Bandeja ya lo resolvía al
+ * aprobar un «olvidé marcar»; aquí lo hacen todos los caminos que escriben fichajes.
+ *
+ * Seguro de hacer con la lista desde cualquier punto: una entrada que no cuenta suponiendo
+ * a la persona fuera tampoco cuenta si en realidad estaba dentro.
+ */
+async function borrarJornadasDeEntradasQueYaNoCuentan(
+  employeeId: string,
+  ordenados: Record<string, unknown>[],
+): Promise<void> {
+  const sobrantes = recorrer(ordenados).filter((paso) => paso.tipo === 'clock_in' && !paso.cuenta);
+  for (const paso of sobrantes) {
+    const ref = db
+      .collection(COLLECTIONS.workSessions)
+      .doc(`${employeeId}_${String(paso.evento.occurred_at)}`);
+    const sesion = (await ref.get()).data();
+    if (sesion !== undefined && sesion.clock_in_event_id === paso.evento.id) await ref.delete();
+  }
+}
+
+/**
+ * La entrada y la salida de una jornada con lo que corrigió quien gestiona.
+ *
+ * Las correcciones se guardan como filas de `time_adjustments` sobre la jornada, con el
+ * antes y el después. Se aplican EN CADENA y solo si su «antes» es lo que hay: así una
+ * corrección hecha sobre un fichaje que luego cambió —otra entrada más temprana, otra
+ * salida— no se aplica a algo que no corrigió.
+ */
+export async function correccionesDeLaJornada(
+  sessionId: string,
+  segunFichajes: { startsAt: string; endsAt: string | null },
+): Promise<{ startsAt: string; endsAt: string | null }> {
+  const filas = await db
+    .collection(COLLECTIONS.timeAdjustments)
+    .where('target_id', '==', sessionId)
+    .get();
+  const ajustes = filas.docs
+    .map((doc) => doc.data())
+    .filter((fila) => fila.target_type === 'work_session')
+    .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+
+  let { startsAt, endsAt } = segunFichajes;
+  for (const ajuste of ajustes) {
+    const antes = (ajuste.before_value ?? {}) as Record<string, unknown>;
+    const despues = (ajuste.after_value ?? {}) as Record<string, unknown>;
+    if (
+      typeof despues.starts_at === 'string' &&
+      antes.starts_at === startsAt &&
+      despues.starts_at !== startsAt
+    ) {
+      startsAt = despues.starts_at;
+    }
+    if (
+      typeof despues.ends_at === 'string' &&
+      endsAt !== null &&
+      antes.ends_at === endsAt &&
+      despues.ends_at !== endsAt
+    ) {
+      endsAt = despues.ends_at;
+    }
+  }
+  return { startsAt, endsAt };
 }
 
 /**

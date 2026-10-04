@@ -240,6 +240,8 @@ export const RPC = {
   clearAbsenceResolution: 'clear_absence_resolution',
   /** Dar un turno por cumplido por un motivo especial, y deshacerlo (4-oct). */
   creditShiftAsWorked: 'credit_shift_as_worked',
+  /** «Vino y no marcó»: su entrada y su salida de una vez (4-oct). */
+  registerMissedAttendance: 'register_missed_attendance',
   undoShiftCredit: 'undo_shift_credit',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
