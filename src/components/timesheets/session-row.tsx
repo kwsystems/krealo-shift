@@ -14,7 +14,7 @@ import {
   ICONO_DE_ESTADO,
   estadoDeFila,
   estadoVisible,
-  minutosEnCurso,
+  minutosVisibles,
   type EnCurso,
 } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
@@ -121,11 +121,8 @@ export function SessionRow({
    * para quien mira. Y una jornada olvidada no enseña ninguna cifra —una raya—, porque la
    * suya no se puede saber hasta que alguien diga a qué hora salió de verdad.
    */
-  const net = dentro
-    ? minutesToHHmm(minutosEnCurso(session, enCurso, nowISO))
-    : estado === 'sinSalida'
-      ? '–'
-      : minutesToHHmm(session.net_minutes ?? 0);
+  const visibles = minutosVisibles(session, alerts, enCurso, nowISO);
+  const net = visibles.minutos === null ? '–' : minutesToHHmm(visibles.minutos);
 
   // «A tiempo» solo tiene sentido si había un turno contra el que medir y no llegó tarde.
   const aTiempo = dentro && session.shift_id !== null && !alerts.includes('lateArrival');

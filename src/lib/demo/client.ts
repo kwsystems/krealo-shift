@@ -1648,6 +1648,11 @@ function crearRpc(almacen: Almacen) {
           'daily_time_summary',
           filas('daily_time_summary').filter((f) => f.cumplido_de !== argumentos.p_shift_id),
         );
+        // Y su corrección, como el servidor: si no, Reportes la seguía contando.
+        almacen.set(
+          'time_adjustments',
+          filas('time_adjustments').filter((f) => f.target_id !== id),
+        );
         return sinError({ id: argumentos.p_shift_id });
       }
 

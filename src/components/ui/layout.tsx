@@ -334,6 +334,18 @@ export function BarraDeControl({
  * mejor por la misma razón por la que una tabla se lee mejor que quince fichas: el ojo
  * recorre una columna en vez de saltar entre objetos.
  */
+/**
+ * MEDIA FILA, para dos campos lado a lado —entrada y salida— (auditoría, 4-oct). Sueltos
+ * en una `Row`, cada campo mide lo que pide su contenido: a 390 px el segundo se salía de
+ * la hoja y en escritorio no llegaban al borde. `minWidth: 0` además de `flex`: en la web
+ * un elemento flexible no encoge por debajo de su contenido sin él.
+ */
+export function Mitad({ children }: { children: ReactNode }) {
+  return <View style={ESTILO_DE_MITAD}>{children}</View>;
+}
+
+const ESTILO_DE_MITAD: ViewStyle = { flex: 1, minWidth: 0 };
+
 export function SeparadorDeRegistro() {
   const styles = useEstilos();
   return <View style={styles.separadorDeRegistro} testID="separador-de-registro" />;

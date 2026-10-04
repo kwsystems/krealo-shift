@@ -287,10 +287,25 @@ export const undoShiftCredit = onCall(async (request) => {
   const lote = db.batch();
   for (const doc of existentes) lote.delete(doc.ref);
   if (entrada !== undefined) {
-    const sesion = db
-      .collection(COLLECTIONS.workSessions)
-      .doc(`${turno.employee_id}_${String(entrada.data()?.occurred_at)}`);
+    const sesionId = `${turno.employee_id}_${String(entrada.data()?.occurred_at)}`;
+    const sesion = db.collection(COLLECTIONS.workSessions).doc(sesionId);
     if ((await sesion.get()).data()?.clock_in_event_id === entrada.id) lote.delete(sesion);
+    /*
+     * Y SU CORRECCION TAMBIEN (auditoría, 4-oct). Se quedaba: dar por cumplido y deshacer
+     * dejaba «1 cumplido especial» en las correcciones de Reportes, y volver a darlo sumaba
+     * 2. Además la reconstrucción de jornadas reaplica las correcciones guardadas
+     * (`correccionesDeLaJornada`), y una huérfana podría caer sobre una jornada de verdad
+     * con el mismo id. Solo las de este cumplido: las demás de esa jornada no son suyas. Lo
+     * que pasó queda en la auditoría.
+     */
+    const correcciones = await db
+      .collection(COLLECTIONS.timeAdjustments)
+      .where('target_id', '==', sesionId)
+      .get();
+    for (const doc of correcciones.docs) {
+      const despues = (doc.data().after_value ?? {}) as Record<string, unknown>;
+      if (despues.origen === 'especial') lote.delete(doc.ref);
+    }
   }
   await lote.commit();
 

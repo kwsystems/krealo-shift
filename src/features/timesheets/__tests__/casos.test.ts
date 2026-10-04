@@ -168,3 +168,58 @@ describe('por resolver', () => {
     expect(lista.map((c) => c.tipo)).toEqual(['sin_salida', 'faltan_horas']);
   });
 });
+
+describe('un turno con varias jornadas (auditoría, 4-oct)', () => {
+  // Salió a almorzar marcando salida a las 14:00 y volvió a las 15:00: trabajó sus 8 h.
+  const manana = jornada({
+    id: 's-manana',
+    starts_at: H(10),
+    ends_at: H(14),
+    gross_minutes: 240,
+    unpaid_break_minutes: 0,
+    net_minutes: 240,
+  });
+  const tarde = jornada({
+    id: 's-tarde',
+    starts_at: H(15),
+    ends_at: H(19),
+    gross_minutes: 240,
+    unpaid_break_minutes: 0,
+    net_minutes: 240,
+  });
+
+  it('salir a almorzar marcando salida no es «faltan horas» ni «sin refrigerio»', () => {
+    expect(casos([manana, tarde])).toEqual([]);
+  });
+
+  it('si se fue antes por la tarde, debe UNA vez y lo que de verdad falta', () => {
+    const temprano = { ...tarde, ends_at: H(17), gross_minutes: 120, net_minutes: 120 };
+    const lista = casos([manana, temprano]);
+    expect(lista).toHaveLength(1);
+    expect(lista[0]).toMatchObject({
+      tipo: 'faltan_horas',
+      id: 's-tarde:faltan_horas',
+      faltan: 120,
+      salioAntes: 120,
+      llegoTarde: 0,
+    });
+  });
+
+  it('resuelto en una de sus jornadas, resuelto en el turno', () => {
+    const temprano = { ...tarde, ends_at: H(17), gross_minutes: 120, net_minutes: 120 };
+    expect(casos([{ ...manana, casos_resueltos: ['faltan_horas'] }, temprano])).toEqual([]);
+  });
+
+  it('un turno en borrador no se usa para medir', () => {
+    const borrador = { ...TURNO, status: 'draft' } as ShiftRow;
+    const temprano = jornada({ ends_at: H(12), gross_minutes: 120, net_minutes: 120 });
+    expect(
+      casosPorResolver({
+        sesiones: [temprano],
+        turnos: [borrador],
+        ahoraISO: H(23),
+        timezone: TZ,
+      }),
+    ).toEqual([]);
+  });
+});

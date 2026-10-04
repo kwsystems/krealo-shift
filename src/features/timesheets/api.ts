@@ -190,6 +190,28 @@ export async function fetchWorkSessions(params: {
   );
 }
 
+/**
+ * LAS JORNADAS ABIERTAS DE LA SEDE, DE CUALQUIER SEMANA (auditoría, 4-oct). Una jornada sin
+ * salida del sábado dejaba de salir el lunes en «Por resolver» y en Inicio —las dos leen
+ * la semana— aunque el reloj seguía viendo a la persona dentro. Son pocas: las de quien
+ * está dentro ahora y las olvidadas. Ver `jornadas-abiertas.ts`.
+ */
+export async function fetchOpenWorkSessions(params: {
+  organizationId: string;
+  locationId: string;
+}): Promise<WorkSession[]> {
+  return selectRows(z.array(workSessionSchema), (db) =>
+    db
+      .from(TABLES.workSessions)
+      .select(
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, avisos_vistos, casos_resueltos, updated_at',
+      )
+      .eq('organization_id', params.organizationId)
+      .eq('location_id', params.locationId)
+      .eq('status', 'open'),
+  );
+}
+
 export async function fetchTimeEvents(params: {
   organizationId: string;
   employeeId: string;

@@ -178,6 +178,11 @@ describe('cumplido por motivo especial', () => {
     await correr(undoShiftCredit, GERENTE, { p_shift_id: 't-elecciones' });
     expect(await fichajes()).toHaveLength(0);
     expect(await jornadas()).toHaveLength(0);
+    // Ni su corrección: Reportes la seguía contando (auditoría, 4-oct).
+    const correcciones = await db.collection(COLLECTIONS.timeAdjustments).get();
+    expect(
+      correcciones.docs.filter((doc) => doc.data().after_value?.origen === 'especial'),
+    ).toHaveLength(0);
 
     const otraVez = await fallo(correr(undoShiftCredit, GERENTE, { p_shift_id: 't-elecciones' }));
     expect(otraVez.details).toEqual({ motivo: 'NO_CUMPLIDO' });

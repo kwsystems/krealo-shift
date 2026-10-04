@@ -1,10 +1,16 @@
-import { useCallback, type ReactElement } from 'react';
+import { useCallback, useMemo, type ReactElement } from 'react';
 import { FlatList, StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { SessionRow, type HoraExtraDeLaFila } from './session-row';
 import { AppText } from '@/components/ui/app-text';
-import type { EnCurso } from '@/features/timesheets/en-curso';
+import { estadoDeFila, type EnCurso } from '@/features/timesheets/en-curso';
+import {
+  dateKeyOf,
+  formatDateKeyShort,
+  formatWeekdayShort,
+  type DateKey,
+} from '@/features/schedules/week';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { WorkSession } from '@/features/timesheets/api';
 import type { SupportedLanguage } from '@/i18n';
@@ -54,6 +60,16 @@ export type SessionListProps = {
   testID?: string;
 };
 
+/**
+ * UNA FILA DE LA LISTA: una jornada, o la cabecera de su día (auditoría, 4-oct). En la
+ * semana una persona salía siete veces con «08:00 – 17:10» y nada decía de qué día era
+ * cada una. Ahora las jornadas van bajo su día («sáb 3 oct»), y las de quien está dentro
+ * —que van arriba, ver `dentroPrimero`— bajo «Dentro ahora».
+ */
+type Elemento =
+  | { tipo: 'dia'; clave: string; dia: DateKey | null }
+  | { tipo: 'sesion'; clave: string; sesion: WorkSession };
+
 export function SessionList({
   sessions,
   employeeNames,
@@ -70,23 +86,56 @@ export function SessionList({
   empty,
   testID = 'timesheet-session-list',
 }: SessionListProps) {
+  const { t } = useTranslation();
+  const elementos = useMemo<Elemento[]>(() => {
+    const lista: Elemento[] = [];
+    let anterior: string | null = null;
+    for (const sesion of sessions) {
+      const estado = estadoDeFila(
+        sesion,
+        alertsBySession.get(sesion.id) ?? [],
+        enCursoPorSesion?.get(sesion.id),
+      );
+      const dentro = estado === 'trabajando' || estado === 'descanso';
+      const dia = dateKeyOf(sesion.starts_at, timezone);
+      const grupo = dentro ? 'dentro' : dia;
+      if (grupo !== anterior) {
+        lista.push({ tipo: 'dia', clave: `dia-${grupo}`, dia: dentro ? null : dia });
+        anterior = grupo;
+      }
+      lista.push({ tipo: 'sesion', clave: sesion.id, sesion });
+    }
+    return lista;
+  }, [sessions, alertsBySession, enCursoPorSesion, timezone]);
+
   const renderItem = useCallback(
-    ({ item }: { item: WorkSession }) => (
-      <SessionRow
-        session={item}
-        employeeName={employeeNames.get(item.employee_id) ?? unknownEmployeeLabel}
-        alerts={alertsBySession.get(item.id) ?? []}
-        enCurso={enCursoPorSesion?.get(item.id)}
-        horaExtra={horaExtraPorSesion?.get(item.id)}
-        nowISO={nowISO}
-        timezone={timezone}
-        timeFormat={timeFormat}
-        language={language}
-        onPress={onSelect}
-        testID={`session-${item.id}`}
-      />
-    ),
+    ({ item }: { item: Elemento }) =>
+      item.tipo === 'dia' ? (
+        <CabeceraDelDia
+          texto={
+            item.dia === null
+              ? t('timesheet.liveTile')
+              : `${formatWeekdayShort(item.dia, language)} ${formatDateKeyShort(item.dia, language)}`
+          }
+          testID={`timesheet-day-${item.dia ?? 'dentro'}`}
+        />
+      ) : (
+        <SessionRow
+          session={item.sesion}
+          employeeName={employeeNames.get(item.sesion.employee_id) ?? unknownEmployeeLabel}
+          alerts={alertsBySession.get(item.sesion.id) ?? []}
+          enCurso={enCursoPorSesion?.get(item.sesion.id)}
+          horaExtra={horaExtraPorSesion?.get(item.sesion.id)}
+          nowISO={nowISO}
+          timezone={timezone}
+          timeFormat={timeFormat}
+          language={language}
+          onPress={onSelect}
+          testID={`session-${item.sesion.id}`}
+        />
+      ),
     [
+      t,
       employeeNames,
       alertsBySession,
       enCursoPorSesion,
@@ -102,7 +151,7 @@ export function SessionList({
 
   return (
     <FlatList
-      data={sessions}
+      data={elementos}
       keyExtractor={keyExtractor}
       renderItem={renderItem}
       /*
@@ -118,7 +167,7 @@ export function SessionList({
         </>
       }
       ListEmptyComponent={empty}
-      ItemSeparatorComponent={SeparadorDeRegistro}
+      ItemSeparatorComponent={SeparadorEntreFilas}
       style={styles.lista}
       contentContainerStyle={styles.contenido}
       testID={testID}
@@ -127,7 +176,23 @@ export function SessionList({
   );
 }
 
-const keyExtractor = (session: WorkSession) => session.id;
+const keyExtractor = (elemento: Elemento) => elemento.clave;
+
+/** Entre dos jornadas, la regla de siempre; bajo la cabecera de un día, ninguna. */
+function SeparadorEntreFilas({ leadingItem }: { leadingItem?: Elemento }) {
+  return leadingItem?.tipo === 'dia' ? null : <SeparadorDeRegistro />;
+}
+
+function CabeceraDelDia({ texto, testID }: { texto: string; testID: string }) {
+  const estilos = useEstilosDeCabecera();
+  return (
+    <View style={estilos.dia} testID={testID}>
+      <AppText variant="label" tone="muted" accessibilityRole="header">
+        {texto}
+      </AppText>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
   lista: { flex: 1 },
@@ -169,6 +234,12 @@ const useEstilosDeCabecera = estilosDelTema((colors) => ({
     paddingTop: spacing.md,
     paddingHorizontal: spacing.lg,
     paddingBottom: spacing.sm,
+  },
+  dia: {
+    backgroundColor: colors.canvas,
+    paddingTop: spacing.sm,
+    paddingHorizontal: spacing.lg,
+    paddingBottom: spacing.xs,
   },
   hueco: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   netas: { width: 80, textAlign: 'right', flexShrink: 0 },

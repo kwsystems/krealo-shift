@@ -14,14 +14,21 @@ import {
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
-import { Row, Stack } from '@/components/ui/layout';
+import { Mitad, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { BREAK_REASONS, type BreakReason } from '@/domain/break-reason';
 import { breakReasonLabels, departureReasonLabelKey } from '@/i18n/break-reason-labels';
-import { dateKeyOf, localTimeOf, shiftInstants } from '@/features/schedules/week';
+import {
+  dateKeyOf,
+  formatDateKeyShort,
+  formatWeekdayShort,
+  localTimeOf,
+  shiftInstants,
+} from '@/features/schedules/week';
 import { readAdjustmentSide, type AdjustmentSide } from '@/features/timesheets/adjustment-summary';
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
+import { minutosVisibles, type EnCurso } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
 import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 import { spacing } from '@/theme/tokens';
@@ -61,6 +68,8 @@ export function SessionDetailSheet({
   seccionHoraExtra,
   onUndoCredit,
   undoingCredit = false,
+  enCurso,
+  nowISO,
   onClose,
 }: {
   session: WorkSession;
@@ -96,15 +105,20 @@ export function SessionDetailSheet({
    */
   onUndoCredit?: () => void;
   undoingCredit?: boolean;
+  /** Si la persona sigue dentro: para contar sus horas en vivo, como la fila. */
+  enCurso?: EnCurso;
+  nowISO: string;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
 
   const startDateKey = dateKeyOf(session.starts_at, timezone);
-  const [startTime, setStartTime] = useState(localTimeOf(session.starts_at, timezone));
-  const [endTime, setEndTime] = useState(
-    session.ends_at === null ? '' : localTimeOf(session.ends_at, timezone),
-  );
+  const entradaComoEstaba = localTimeOf(session.starts_at, timezone);
+  const salidaComoEstaba = session.ends_at === null ? '' : localTimeOf(session.ends_at, timezone);
+  const [startTime, setStartTime] = useState(entradaComoEstaba);
+  const [endTime, setEndTime] = useState(salidaComoEstaba);
+  /** Ni la entrada ni la salida cambiaron: no hay nada que corregir. */
+  const [sinCambios, setSinCambios] = useState(false);
   const [reason, setReason] = useState('');
   const [submitted, setSubmitted] = useState(false);
   /*
@@ -122,6 +136,19 @@ export function SessionDetailSheet({
     setSubmitted(true);
     if (!reasonValid) return;
 
+    /*
+     * SOLO SE MANDA LO QUE SE TOCO (auditoría, 4-oct). La hoja enseña las horas sin segundos
+     * y mandaba siempre la entrada: poner solo la salida reenviaba 09:58:41 como 09:58:00.
+     * Eso pagaba hasta un minuto de más, dejaba en el historial y en Reportes una
+     * corrección de entrada que nadie hizo, y «Descontar refrigerio» dejaba de funcionar en
+     * esa jornada, porque ya estaba «ajustada». `null` es «como estaba», también para el
+     * servidor.
+     */
+    const tocoLaEntrada = startTime.trim() !== entradaComoEstaba;
+    const tocoLaSalida = endTime.trim() !== '' && endTime.trim() !== salidaComoEstaba;
+    setSinCambios(!tocoLaEntrada && !tocoLaSalida);
+    if (!tocoLaEntrada && !tocoLaSalida) return;
+
     const instants = shiftInstants({
       dateKey: startDateKey,
       startTime,
@@ -129,24 +156,26 @@ export function SessionDetailSheet({
       timezone,
     });
     if (instants === null) return;
-    const limite = Date.now() + MARGEN_FUTURO_MS;
-    const fin = endTime.trim() === '' ? null : instants.endsAt;
+    // El minuto de la pantalla, no `Date.now()`: lo mismo con cinco minutos de margen.
+    const limite = Date.parse(nowISO) + MARGEN_FUTURO_MS;
+    const inicio = tocoLaEntrada ? instants.startsAt : null;
+    const fin = tocoLaSalida ? instants.endsAt : null;
     const esFutura =
-      Date.parse(instants.startsAt) > limite || (fin !== null && Date.parse(fin) > limite);
+      (inicio !== null && Date.parse(inicio) > limite) ||
+      (fin !== null && Date.parse(fin) > limite);
     setFutura(esFutura);
     if (esFutura) return;
 
-    onSubmitCorrection({
-      newStartsAt: instants.startsAt,
-      newEndsAt: endTime.trim() === '' ? null : instants.endsAt,
-      reason: reason.trim(),
-    });
+    onSubmitCorrection({ newStartsAt: inicio, newEndsAt: fin, reason: reason.trim() });
   };
 
   return (
     <AdminSheet
       visible
-      title={t('timesheet.dailyDetail')}
+      title={t('timesheet.sessionTitle', {
+        name: employeeName,
+        day: `${formatWeekdayShort(startDateKey, language)} ${formatDateKeyShort(startDateKey, language)}`,
+      })}
       onClose={onClose}
       testID="session-detail-sheet"
       footer={
@@ -170,7 +199,14 @@ export function SessionDetailSheet({
       />
       <KeyValueRow
         label={t('timesheet.netHours')}
-        value={minutesToHHmm(session.net_minutes ?? 0)}
+        value={(() => {
+          // La misma cifra que su fila: ver `minutosVisibles`.
+          const visibles = minutosVisibles(session, alerts, enCurso, nowISO);
+          if (visibles.minutos === null) return '–';
+          const horas = minutesToHHmm(visibles.minutos);
+          return visibles.enVivo ? `${horas} · ${t('timesheet.live')}` : horas;
+        })()}
+        testID="session-detail-net"
       />
       <KeyValueRow
         label={t('timesheet.breaks')}
@@ -361,32 +397,46 @@ export function SessionDetailSheet({
       ) : null}
 
       <AppText variant="bodyStrong">{t('timesheet.correctEntry')}</AppText>
+      {/* En mitades: ver `Mitad`. */}
       <Row gap={spacing.md} align="flex-start">
-        <FormField
-          label={t('timesheet.newStart')}
-          value={startTime}
-          onChangeText={setStartTime}
-          keyboardType="numbers-and-punctuation"
-          placeholder="09:00"
-          testID="session-correct-start"
-        />
-        <FormField
-          label={t('timesheet.newEnd')}
-          value={endTime}
-          onChangeText={(texto) => {
-            setFutura(false);
-            setEndTime(texto);
-          }}
-          keyboardType="numbers-and-punctuation"
-          placeholder="17:00"
-          error={futura ? t('timesheet.futureTimeShort') : undefined}
-          testID="session-correct-end"
-        />
+        <Mitad>
+          <FormField
+            label={t('timesheet.newStart')}
+            value={startTime}
+            onChangeText={(texto) => {
+              setSinCambios(false);
+              setStartTime(texto);
+            }}
+            keyboardType="numbers-and-punctuation"
+            placeholder="09:00"
+            testID="session-correct-start"
+          />
+        </Mitad>
+        <Mitad>
+          <FormField
+            label={t('timesheet.newEnd')}
+            value={endTime}
+            onChangeText={(texto) => {
+              setFutura(false);
+              setSinCambios(false);
+              setEndTime(texto);
+            }}
+            keyboardType="numbers-and-punctuation"
+            placeholder="17:00"
+            error={futura ? t('timesheet.futureTimeShort') : undefined}
+            testID="session-correct-end"
+          />
+        </Mitad>
       </Row>
       {/* El porqué, a todo el ancho: bajo un campo de media hoja no cabe. */}
       {futura ? (
         <AppText variant="help" tone="danger" testID="session-correct-future">
           {t('timesheet.futureTime')}
+        </AppText>
+      ) : null}
+      {sinCambios ? (
+        <AppText variant="help" tone="danger" testID="session-correct-unchanged">
+          {t('timesheet.nothingChanged')}
         </AppText>
       ) : null}
       {session.ends_at === null ? (

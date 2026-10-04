@@ -97,8 +97,16 @@ export function casosPorResolver(params: {
   ahoraISO: string;
   timezone: string;
 }): CasoPorResolver[] {
-  const turnoPorId = new Map(params.turnos.map((turno) => [turno.id, turno]));
+  /*
+   * SOLO TURNOS PUBLICADOS (auditoría, 4-oct). Un borrador no se le dio a nadie: medir una
+   * jornada contra él pedía horas de un turno que la persona nunca vio.
+   */
+  const turnoPorId = new Map(
+    params.turnos.filter((turno) => turno.status === 'published').map((turno) => [turno.id, turno]),
+  );
   const casos: CasoPorResolver[] = [];
+  /** Las jornadas cerradas y con turno, por persona y turno: se miden juntas, abajo. */
+  const porTurno = new Map<string, { turno: ShiftRow; sesiones: WorkSession[] }>();
 
   for (const sesion of params.sesiones) {
     const turno = sesion.shift_id === null ? null : (turnoPorId.get(sesion.shift_id) ?? null);
@@ -140,10 +148,48 @@ export function casosPorResolver(params: {
       continue;
     }
     if (turno === null) continue;
+    const clave = `${sesion.employee_id}|${turno.id}`;
+    const grupo = porTurno.get(clave) ?? { turno, sesiones: [] };
+    grupo.sesiones.push(sesion);
+    porTurno.set(clave, grupo);
+  }
+
+  /*
+   * UN TURNO, AUNQUE TENGA VARIAS JORNADAS (auditoría, 4-oct). Quien sale a almorzar
+   * marcando salida y vuelve tiene dos jornadas del mismo turno, y «Por resolver» medía
+   * cada una contra el turno entero: «le debe 4 h» y «le debe 3 h» de alguien que trabajó
+   * sus 7 h. Ahora se suman las jornadas del turno, la tardanza se mide en la primera
+   * entrada, la salida anticipada en la última salida, y el rato entre una y otra cuenta
+   * como su refrigerio. El caso cuelga de la última jornada; resuelto en cualquiera de
+   * ellas, resuelto en el turno.
+   */
+  for (const { turno, sesiones } of porTurno.values()) {
+    const ordenadas = [...sesiones].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const primera = ordenadas[0]!;
+    const ultima = ordenadas[ordenadas.length - 1]!;
+    const dia = dateKeyOf(primera.starts_at, params.timezone);
+    const resuelto = (caso: string) =>
+      ordenadas.some((sesion) => sesion.casos_resueltos.includes(caso));
+    const finDe = (sesion: WorkSession) => sesion.ends_at ?? sesion.starts_at;
 
     const refrigerio = Math.max(0, turno.planned_unpaid_break_minutes);
-    const pausas = sesion.paid_break_minutes + sesion.unpaid_break_minutes;
-    const brutos = sesion.gross_minutes ?? minutos(sesion.starts_at, sesion.ends_at);
+    const huecos = ordenadas
+      .slice(1)
+      .reduce(
+        (suma, sesion, indice) =>
+          suma + Math.max(0, minutos(finDe(ordenadas[indice]!), sesion.starts_at)),
+        0,
+      );
+    const pausas =
+      huecos +
+      ordenadas.reduce(
+        (suma, sesion) => suma + sesion.paid_break_minutes + sesion.unpaid_break_minutes,
+        0,
+      );
+    const brutos = ordenadas.reduce(
+      (suma, sesion) => suma + (sesion.gross_minutes ?? minutos(sesion.starts_at, finDe(sesion))),
+      0,
+    );
     // Lo bastante larga para haberlo tomado: más del doble del refrigerio y más de 4 h.
     if (
       refrigerio > 0 &&
@@ -151,10 +197,14 @@ export function casosPorResolver(params: {
       brutos > Math.max(refrigerio * 2, 240) &&
       !resuelto('sin_refrigerio')
     ) {
+      // La más larga: es la que se descuenta.
+      const larga = ordenadas.reduce((a, b) =>
+        minutos(b.starts_at, finDe(b)) > minutos(a.starts_at, finDe(a)) ? b : a,
+      );
       casos.push({
         tipo: 'sin_refrigerio',
-        id: `${sesion.id}:sin_refrigerio`,
-        sesion,
+        id: `${larga.id}:sin_refrigerio`,
+        sesion: larga,
         turno,
         dia,
         refrigerio,
@@ -162,10 +212,17 @@ export function casosPorResolver(params: {
     }
 
     const planificado = minutos(turno.starts_at, turno.ends_at) - refrigerio;
-    const trabajado = sesion.net_minutes ?? brutos - sesion.unpaid_break_minutes;
+    const trabajado = ordenadas.reduce(
+      (suma, sesion) =>
+        suma +
+        (sesion.net_minutes ??
+          (sesion.gross_minutes ?? minutos(sesion.starts_at, finDe(sesion))) -
+            sesion.unpaid_break_minutes),
+      0,
+    );
     const faltan = planificado - trabajado;
-    const salioAntes = Math.max(0, minutos(sesion.ends_at, turno.ends_at));
-    const llegoTarde = Math.max(0, minutos(turno.starts_at, sesion.starts_at));
+    const salioAntes = Math.max(0, minutos(finDe(ultima), turno.ends_at));
+    const llegoTarde = Math.max(0, minutos(turno.starts_at, primera.starts_at));
     if (
       faltan >= MINUTOS_MINIMOS_DE_UN_CASO &&
       (salioAntes >= MINUTOS_MINIMOS_DE_UN_CASO || llegoTarde >= MINUTOS_MINIMOS_DE_UN_CASO) &&
@@ -173,8 +230,8 @@ export function casosPorResolver(params: {
     ) {
       casos.push({
         tipo: 'faltan_horas',
-        id: `${sesion.id}:faltan_horas`,
-        sesion,
+        id: `${ultima.id}:faltan_horas`,
+        sesion: ultima,
         turno,
         dia,
         faltan,

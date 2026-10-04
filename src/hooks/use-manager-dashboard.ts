@@ -10,6 +10,7 @@ import { currentWeekStart, dateKeyOf, weekRangeInstants } from '@/features/sched
 import { shiftScheduledMinutes } from '@/features/schedules/conflicts';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
+import { conLasAbiertas, useJornadasAbiertas } from '@/features/timesheets/jornadas-abiertas';
 import { fetchWorkSessions } from '@/features/timesheets/api';
 import { minutosEnCurso } from '@/features/timesheets/en-curso';
 import {
@@ -234,6 +235,12 @@ export function useManagerDashboard(params: {
   const justificaciones = useJustificaciones(organizationId, locationId);
 
   const pendingRequests = usePendingRequestCount(organizationId, locationId);
+  // Las abiertas de semanas anteriores también son «sin cerrar»: ver `jornadas-abiertas.ts`.
+  const abiertas = useJornadasAbiertas({
+    organizationId,
+    locationId,
+    refetchInterval: DASHBOARD_POLL_MS,
+  });
 
   // Pendientes de este dispositivo. Los pendientes de cada kiosco requieren leer
   // `kiosk_devices`, que hoy no está expuesta al rol autenticado.
@@ -502,7 +509,7 @@ export function useManagerDashboard(params: {
      * un estado que el servidor no escribe: en la demostración lo llevaban las tardanzas, y
      * Inicio llamaba «fichajes sin cerrar» a jornadas cerradas y bien.
      */
-    const incompleteCount = sessions.filter(
+    const incompleteCount = conLasAbiertas(sessions, abiertas.data, nowISO).filter(
       (session) =>
         session.ends_at === null &&
         minutesBetween(session.starts_at, nowISO) > OPEN_SESSION_ALERT_MINUTES,
@@ -555,6 +562,7 @@ export function useManagerDashboard(params: {
       franjas,
     };
   }, [
+    abiertas.data,
     justificaciones.data,
     workingNow,
     weekShifts,

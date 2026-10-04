@@ -14,6 +14,7 @@ import {
 } from './alerts';
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
 import { dentroPrimero, enCursoPorSesionDe, totalEnCurso } from './en-curso';
+import { conLasAbiertas, useJornadasAbiertas } from './jornadas-abiertas';
 import {
   useAdjustments,
   useDailySummaries,
@@ -223,6 +224,12 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   const adjustments = useAdjustments(selected === null ? [] : [selected.id]);
 
   const allSessions = useMemo(() => sessions.data ?? [], [sessions.data]);
+  // Las abiertas de semanas anteriores también se resuelven aquí: ver `jornadas-abiertas.ts`.
+  const abiertas = useJornadasAbiertas({ organizationId, locationId: scope.locationId });
+  const paraResolver = useMemo(
+    () => conLasAbiertas(allSessions, abiertas.data, range.toISO),
+    [allSessions, abiertas.data, range.toISO],
+  );
 
   // El fichaje manual elige día: ver `dias-del-fichaje-manual.ts`.
   const { diasDelFichajeManual, diaDeLaJornadaAbierta } = useDiasDelFichajeManual({
@@ -324,8 +331,14 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     }
     return mapa;
   }, [allSessions, aprobadas, netosPorDia, planificado, umbralDeAviso, scope.timezone]);
-  const diasPorRevisar = [...horaExtraPorSesion.values()].filter(
-    (fila) => fila.tipo === 'posible',
+  /*
+   * CON EL FILTRO DE PERSONA, como todo lo demás de la hoja (auditoría, 4-oct): con una
+   * persona elegida, «3 días por revisar» contaba los de todo el equipo.
+   */
+  const diasPorRevisar = allSessions.filter(
+    (sesion) =>
+      horaExtraPorSesion.get(sesion.id)?.tipo === 'posible' &&
+      (employeeFilter === null || sesion.employee_id === employeeFilter),
   ).length;
 
   const totals = useTimesheetTotals(visibleSummaries, aprobadas);
@@ -569,7 +582,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     `por-resolver-de-la-semana.tsx`.
                   */}
                   <PorResolverDeLaSemana
-                    sesiones={allSessions}
+                    sesiones={paraResolver}
                     turnos={turnosDeLaSemana.data ?? []}
                     nombres={names}
                     personaFiltrada={employeeFilter}
@@ -846,6 +859,8 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
           events={events.data ?? []}
           adjustments={adjustments.data ?? []}
           alerts={alertsBySession.get(selected.id) ?? []}
+          enCurso={enCursoPorSesion.get(selected.id)}
+          nowISO={nowISO}
           timezone={scope.timezone}
           timeFormat={scope.timeFormat}
           language={language}
@@ -913,6 +928,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                       employeeId: selected.employee_id,
                       workDate: dateKeyOf(selected.starts_at, scope.timezone),
                       minutes: minutos,
+                      yaHabia: aprobadas.has(claveSeleccionada),
                     },
                     {
                       onSuccess: () => {

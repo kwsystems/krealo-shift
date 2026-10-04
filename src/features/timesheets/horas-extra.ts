@@ -122,9 +122,17 @@ export async function guardarHoraExtra(params: {
   employeeId: string;
   workDate: string;
   minutes: number;
+  /** Si ese día ya tenía una aprobación: quitar una que no existe no es nada que hacer. */
+  yaHabia: boolean;
 }): Promise<void> {
   const id = idDeLaAprobacion(params);
   if (params.minutes <= 0) {
+    /*
+     * CERO SIN NADA APROBADO NO ES UN ERROR (auditoría, 4-oct). Borrar un documento que no
+     * existe lo niega la regla —mira la sede del documento, y no hay documento—, y la hoja
+     * decía «no se pudo guardar» a quien solo confirmaba que ese día no hubo horas extra.
+     */
+    if (!params.yaHabia) return;
     await execute((db) => db.from(TABLES.overtimeApprovals).delete().eq('id', id));
     return;
   }
@@ -173,7 +181,12 @@ export function useGuardarHoraExtra(params: {
 }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: { employeeId: string; workDate: string; minutes: number }) =>
+    mutationFn: (variables: {
+      employeeId: string;
+      workDate: string;
+      minutes: number;
+      yaHabia: boolean;
+    }) =>
       guardarHoraExtra({
         organizationId: params.organizationId ?? '',
         locationId: params.locationId ?? '',

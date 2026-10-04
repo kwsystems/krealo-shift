@@ -7,7 +7,7 @@ import { AdminSheet, Chip, SegmentedControl } from '@/components/schedule/fields
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { FormField } from '@/components/ui/form-field';
-import { Row, Stack } from '@/components/ui/layout';
+import { Mitad, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import {
   motivosDe,
@@ -282,22 +282,26 @@ export function RegistrarQueVinoSheet({
         })}
       </AppText>
       <Row gap={spacing.md} align="flex-start">
-        <FormField
-          label={t('timesheet.absences.clockIn')}
-          value={entrada}
-          onChangeText={setEntrada}
-          keyboardType="numbers-and-punctuation"
-          placeholder="18:00"
-          testID="falta-vino-entrada"
-        />
-        <FormField
-          label={t('timesheet.absences.clockOut')}
-          value={salida}
-          onChangeText={setSalida}
-          keyboardType="numbers-and-punctuation"
-          placeholder="21:00"
-          testID="falta-vino-salida"
-        />
+        <Mitad>
+          <FormField
+            label={t('timesheet.absences.clockIn')}
+            value={entrada}
+            onChangeText={setEntrada}
+            keyboardType="numbers-and-punctuation"
+            placeholder="18:00"
+            testID="falta-vino-entrada"
+          />
+        </Mitad>
+        <Mitad>
+          <FormField
+            label={t('timesheet.absences.clockOut')}
+            value={salida}
+            onChangeText={setSalida}
+            keyboardType="numbers-and-punctuation"
+            placeholder="21:00"
+            testID="falta-vino-salida"
+          />
+        </Mitad>
       </Row>
       {intentado && horasMal ? (
         <AppText variant="help" tone="danger">

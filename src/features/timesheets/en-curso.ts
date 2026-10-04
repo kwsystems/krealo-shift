@@ -104,6 +104,28 @@ export function minutosEnCurso(
   return Math.max(0, minutesBetween(session.starts_at, hasta) - session.unpaid_break_minutes);
 }
 
+/**
+ * LAS HORAS QUE ENSEÑA UNA JORNADA, en la fila de Horas y en su detalle (auditoría, 4-oct).
+ *
+ * La fila decía «03:05 en curso» y el detalle de la misma jornada «Horas netas 00:00»: el
+ * detalle leía `net_minutes`, que vale cero hasta que la jornada se cierra. Una cifra que
+ * se dice en dos sitios sale de aquí: en vivo si sigue dentro, `null` —una raya— si es una
+ * salida olvidada, cuyas horas nadie sabe, y la del servidor si ya cerró.
+ */
+export function minutosVisibles(
+  session: WorkSession,
+  alerts: TimesheetAlert[],
+  enCurso: EnCurso | undefined,
+  nowISO: string,
+): { minutos: number | null; enVivo: boolean } {
+  const estado = estadoDeFila(session, alerts, enCurso);
+  if (estado === 'trabajando' || estado === 'descanso') {
+    return { minutos: minutosEnCurso(session, enCurso, nowISO), enVivo: true };
+  }
+  if (estado === 'sinSalida') return { minutos: null, enVivo: false };
+  return { minutos: session.net_minutes ?? 0, enVivo: false };
+}
+
 function estaDentro(
   session: WorkSession,
   alertsBySession: Map<string, TimesheetAlert[]>,
