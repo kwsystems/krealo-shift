@@ -318,57 +318,11 @@ try {
     }
     console.log(`  cambiar              Horas, Horario y Reportes dicen «Sin justificar»`);
 
-    // --- 4. Arreglarla: vino y no marcó.
-    await irPorElMenu(pagina, '/hours');
-    await semanaAnterior(pagina);
-    if (enHoras > 0) {
-      await visible(pagina, FILAS_DE_FALTA).first().click();
-      await pagina.locator('[data-testid="falta-vino-hoja"]').waitFor({ timeout: 8000 });
-      const entrada = await pagina.locator('[data-testid="falta-vino-entrada"]').inputValue();
-      if (!/^\d\d:\d\d$/.test(entrada)) problemas.push(`la entrada no viene puesta: «${entrada}»`);
-      // Sin motivo no se guarda: es un fichaje manual.
-      await pagina.locator('[data-testid="falta-vino-guardar"]').click();
-      await esperar(pagina, 500);
-      if ((await cuenta(pagina, '[data-testid="falta-vino-hoja"]')) === 0) {
-        problemas.push('«Vino y no marcó» se guardó sin motivo');
-      }
-      await pagina.locator('[data-testid="falta-vino-motivo"]').fill('El reloj no tenía batería');
-      await pagina.screenshot({ path: 'capturas/faltas-vino.png' });
-      await pagina.locator('[data-testid="falta-vino-guardar"]').click();
-      await pagina
-        .locator('[data-testid="falta-vino-hoja"]')
-        .waitFor({ state: 'detached', timeout: 8000 })
-        .catch(() => problemas.push('registrar entrada y salida no cierra la hoja'));
-      await esperar(pagina, 1500);
-      const tras = await cuenta(pagina, FILAS_DE_FALTA);
-      if (tras !== enHoras - 1)
-        problemas.push(`tras arreglarla Horas lista ${tras}, no ${enHoras - 1}`);
-      const casillaTras = await numeroDe(pagina, 'total-faltas');
-      if (casillaTras !== enHoras - 1) {
-        problemas.push(`tras arreglarla la casilla de Horas dice ${casillaTras}`);
-      }
-      console.log(`  arreglar             Horas pasa de ${enHoras} a ${tras}`);
-
-      await irPorElMenu(pagina, '/schedule');
-      await semanaAnterior(pagina);
-      const horarioTras = await cuenta(pagina, TARJETAS_CON_FALTA);
-      if (horarioTras !== enHorario - 1) {
-        problemas.push(
-          `tras arreglarla Horario sigue con ${horarioTras} faltas, no ${enHorario - 1}`,
-        );
-      }
-      await irPorElMenu(pagina, '/reports');
-      await semanaAnterior(pagina);
-      const reportesTras = await numeroDe(pagina, 'report-absences');
-      if (reportesTras !== enHoras - 1) {
-        problemas.push(`tras arreglarla Reportes sigue con ${reportesTras} faltas`);
-      }
-      console.log(`  sincronía            Horario ${horarioTras}, Reportes ${reportesTras}`);
-    }
-
-    // --- 4b. CUMPLIÓ SU HORARIO, MIEMBRO DE MESA (4-oct). Andree: «quiero poner que sí
+    // --- 3b. CUMPLIÓ SU HORARIO, MIEMBRO DE MESA (4-oct). Andree: «quiero poner que sí
     // cumplió su horario y que es especial», y que se vea en todas las vistas. Se da por
-    // cumplida una falta y se mira en Horas, Horario y Reportes; luego se deshace.
+    // cumplida una falta y se mira en Horas, Horario y Reportes; luego se deshace. Va ANTES de
+    // «vino y no marcó», que arregla la falta de la semana pasada: después ya no quedaría
+    // ninguna y esto se saltaría sin probar nada (pasó en la primera vuelta).
     await irPorElMenu(pagina, '/hours');
     await semanaAnterior(pagina);
     const antesDelCumplido = await cuenta(pagina, FILAS_DE_FALTA);
@@ -419,7 +373,55 @@ try {
       }
       console.log(`  deshacer             vuelve a ${trasDeshacer} faltas`);
     } else {
-      console.log('  miembro de mesa      sin faltas que dar por cumplidas en la semana');
+      problemas.push('no hay ninguna falta en la semana pasada para dar por cumplida');
+    }
+
+    // --- 4. Arreglarla: vino y no marcó.
+    await irPorElMenu(pagina, '/hours');
+    await semanaAnterior(pagina);
+    if (enHoras > 0) {
+      await visible(pagina, FILAS_DE_FALTA).first().click();
+      await pagina.locator('[data-testid="falta-vino-hoja"]').waitFor({ timeout: 8000 });
+      const entrada = await pagina.locator('[data-testid="falta-vino-entrada"]').inputValue();
+      if (!/^\d\d:\d\d$/.test(entrada)) problemas.push(`la entrada no viene puesta: «${entrada}»`);
+      // Sin motivo no se guarda: es un fichaje manual.
+      await pagina.locator('[data-testid="falta-vino-guardar"]').click();
+      await esperar(pagina, 500);
+      if ((await cuenta(pagina, '[data-testid="falta-vino-hoja"]')) === 0) {
+        problemas.push('«Vino y no marcó» se guardó sin motivo');
+      }
+      await pagina.locator('[data-testid="falta-vino-motivo"]').fill('El reloj no tenía batería');
+      await pagina.screenshot({ path: 'capturas/faltas-vino.png' });
+      await pagina.locator('[data-testid="falta-vino-guardar"]').click();
+      await pagina
+        .locator('[data-testid="falta-vino-hoja"]')
+        .waitFor({ state: 'detached', timeout: 8000 })
+        .catch(() => problemas.push('registrar entrada y salida no cierra la hoja'));
+      await esperar(pagina, 1500);
+      const tras = await cuenta(pagina, FILAS_DE_FALTA);
+      if (tras !== enHoras - 1)
+        problemas.push(`tras arreglarla Horas lista ${tras}, no ${enHoras - 1}`);
+      const casillaTras = await numeroDe(pagina, 'total-faltas');
+      if (casillaTras !== enHoras - 1) {
+        problemas.push(`tras arreglarla la casilla de Horas dice ${casillaTras}`);
+      }
+      console.log(`  arreglar             Horas pasa de ${enHoras} a ${tras}`);
+
+      await irPorElMenu(pagina, '/schedule');
+      await semanaAnterior(pagina);
+      const horarioTras = await cuenta(pagina, TARJETAS_CON_FALTA);
+      if (horarioTras !== enHorario - 1) {
+        problemas.push(
+          `tras arreglarla Horario sigue con ${horarioTras} faltas, no ${enHorario - 1}`,
+        );
+      }
+      await irPorElMenu(pagina, '/reports');
+      await semanaAnterior(pagina);
+      const reportesTras = await numeroDe(pagina, 'report-absences');
+      if (reportesTras !== enHoras - 1) {
+        problemas.push(`tras arreglarla Reportes sigue con ${reportesTras} faltas`);
+      }
+      console.log(`  sincronía            Horario ${horarioTras}, Reportes ${reportesTras}`);
     }
 
     // --- 5. Equipo, esta semana, contra Horas de esta semana.

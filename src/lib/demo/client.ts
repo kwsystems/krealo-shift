@@ -1394,13 +1394,14 @@ function crearRpc(almacen: Almacen) {
             ? argumentos.p_note.trim().slice(0, NOTA_MAXIMA_DE_CUMPLIDO)
             : null;
         if (argumentos.p_reason === 'other' && nota === null) return conError('Escribe qué pasó.');
-        const hora = 3600_000;
+        // Solo DENTRO de las horas del turno, como `marcasDentroDelTurno` en el servidor:
+        // quien trabajó la mañana y faltó al cierre se puede dar por cumplido.
         const pisa = filas('work_sessions').some(
           (sesion) =>
             sesion.employee_id === turno.employee_id &&
-            Date.parse(String(sesion.starts_at)) < Date.parse(String(turno.ends_at)) + hora &&
+            Date.parse(String(sesion.starts_at)) < Date.parse(String(turno.ends_at)) &&
             Date.parse(String(sesion.ends_at ?? '9999-12-31')) >
-              Date.parse(String(turno.starts_at)) - hora,
+              Date.parse(String(turno.starts_at)),
         );
         if (pisa) {
           return {

@@ -20,8 +20,8 @@ const PERSONA = 'emp-especial';
 
 // Lima, UTC-5. Ayer de 10:00 a 19:00, con 1 h de refrigerio: 8 h netas.
 const ayer = new Date(Date.now() - 24 * 3600_000).toISOString().slice(0, 10);
-const lima = (hora: number) =>
-  new Date(Date.parse(`${ayer}T00:00:00Z`) + (hora + 5) * 3600_000).toISOString();
+const lima = (hora: number, minuto = 0) =>
+  new Date(Date.parse(`${ayer}T00:00:00Z`) + (hora + 5) * 3600_000 + minuto * 60_000).toISOString();
 
 const correr = (fn: unknown, uid: string, data: Record<string, unknown>): Promise<unknown> =>
   (fn as { run: (r: unknown) => Promise<unknown> }).run({
@@ -224,6 +224,36 @@ describe('cumplido por motivo especial', () => {
     );
     expect(resultado.details).toEqual({ motivo: 'CON_MARCAS' });
     expect(await fichajes()).toHaveLength(2);
+  });
+
+  /*
+   * EL TURNO PARTIDO: trabajó por la mañana y no vino al cierre. Una salida a menos de una hora
+   * del turno no puede impedir darlo por cumplido: es de otra jornada. Lo encontró el arnés.
+   */
+  it('trabajó la mañana y faltó al cierre: el cierre se puede dar por cumplido', async () => {
+    await turno('t-cierre', lima(19, 30), lima(22, 0));
+    for (const [tipo, hora, clave] of [
+      ['clock_in', lima(9, 0), 'manana-entra'],
+      ['clock_out', lima(19, 0), 'manana-sale'],
+    ] as const) {
+      await recordTimeEvent({
+        organizationId: ORG,
+        employeeId: PERSONA,
+        locationId: SEDE,
+        eventType: tipo,
+        occurredAt: hora,
+        idempotencyKey: clave,
+      });
+    }
+    await db.collection(COLLECTIONS.shifts).doc('t-elecciones').delete();
+    const respuesta = (await correr(creditShiftAsWorked, GERENTE, {
+      p_shift_id: 't-cierre',
+      p_reason: 'election_duty',
+    })) as { minutos: number };
+    // 2 h 30 del turno menos la hora de refrigerio que lleva todo turno de esta prueba.
+    expect(respuesta.minutos).toBe(90);
+    const cierre = (await jornadas()).find((d) => d.data().starts_at === lima(19, 30));
+    expect(cierre?.data().credit_reason).toBe('election_duty');
   });
 
   it('«Otro» pide escribir qué pasó, y un motivo inventado no vale', async () => {

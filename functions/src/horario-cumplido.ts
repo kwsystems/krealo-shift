@@ -161,7 +161,7 @@ export const viewClockStart = onCall(async (request) => {
   return filas;
 });
 
-export async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
+async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
   const cerca = await db
     .collection(COLLECTIONS.timeEvents)
     .where('employee_id', '==', turno.employee_id)

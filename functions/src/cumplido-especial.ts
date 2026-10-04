@@ -5,13 +5,7 @@ import {
   cumplidoPideNota,
   motivoDeCumplidoValido,
 } from '../../src/domain/motivos-de-cumplido';
-import {
-  diaLocal,
-  minutosNetos,
-  refrigerioCentrado,
-  tieneMarcasCerca,
-  type Turno,
-} from './horario-cumplido';
+import { diaLocal, minutosNetos, refrigerioCentrado, type Turno } from './horario-cumplido';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import {
   attendanceStateAt,
@@ -68,6 +62,34 @@ function idDelFichaje(organizationId: string, shiftId: string, tipo: string): st
   return `${organizationId}_especial_${shiftId}_${tipo}`;
 }
 
+/**
+ * ¿MARCÓ ALGO DENTRO DE LAS HORAS DEL TURNO? Entonces vino, al menos un rato, y eso se corrige
+ * en Horas, no se da por cumplido.
+ *
+ * SIN MARGEN, y no con la hora de `tieneMarcasCerca` de «Registrar como cumplido». Ese margen
+ * rechazaba el caso más común: el turno partido. Quien trabajó de 10:00 a 17:10 y no vino al
+ * cierre de 18:00 —miembro de mesa por la tarde— tenía una salida a 50 minutos del turno, y no
+ * se podía dar por cumplido. Lo encontró el arnés de faltas con la falta sembrada de la demo,
+ * que es exactamente eso.
+ *
+ * La salida de la jornada anterior justo a la hora de empezar —turnos pegados— no cuenta, ni la
+ * entrada de la siguiente justo al acabar: son de otras jornadas.
+ */
+async function marcasDentroDelTurno(turno: Turno): Promise<boolean> {
+  const dentro = await db
+    .collection(COLLECTIONS.timeEvents)
+    .where('employee_id', '==', turno.employee_id)
+    .where('occurred_at', '>=', turno.starts_at)
+    .where('occurred_at', '<=', turno.ends_at)
+    .get();
+  return dentro.docs.some((doc) => {
+    const evento = doc.data();
+    if (evento.occurred_at === turno.starts_at && evento.event_type === 'clock_out') return false;
+    if (evento.occurred_at === turno.ends_at && evento.event_type === 'clock_in') return false;
+    return true;
+  });
+}
+
 async function turnoQueSeGestiona(uid: string, shiftId: string) {
   const doc = await db.collection(COLLECTIONS.shifts).doc(shiftId).get();
   const datos = doc.data();
@@ -122,7 +144,7 @@ export const creditShiftAsWorked = onCall(async (request) => {
       motivo: 'YA_CUMPLIDO',
     });
   }
-  if (await tieneMarcasCerca(turno)) {
+  if (await marcasDentroDelTurno(turno)) {
     throw new HttpsError(
       'failed-precondition',
       'Ese día ya tiene marcas: corrige sus horas en Horas.',
