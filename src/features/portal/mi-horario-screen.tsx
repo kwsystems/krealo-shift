@@ -25,6 +25,7 @@ import { AdminErrorState } from '@/components/schedule/data-states';
 import { SegmentedControl, StatTile } from '@/components/schedule/fields';
 import { MonthNavigator } from '@/components/schedule/week-tools';
 import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
+import { feriadoDe } from '@/domain/feriados-peru';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
@@ -351,14 +352,31 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                   siete filas «Libre» y debajo, en pequeño, que el horario no estaba publicado:
                   lo primero que se lee dice lo contrario de lo que pasa.
                 */
-                <EmptyState
-                  icon="calendar-outline"
-                  title={
-                    semana === 'proxima' ? t('portal.nextWeekEmpty') : t('portal.thisWeekEmpty')
-                  }
-                  body={t('portal.weekEmptyBody')}
-                  testID="mi-horario-semana-sin-publicar"
-                />
+                <Stack gap={spacing.sm}>
+                  <EmptyState
+                    icon="calendar-outline"
+                    title={
+                      semana === 'proxima' ? t('portal.nextWeekEmpty') : t('portal.thisWeekEmpty')
+                    }
+                    body={t('portal.weekEmptyBody')}
+                    testID="mi-horario-semana-sin-publicar"
+                  />
+                  {/*
+                    LOS FERIADOS DE ESA SEMANA SIGUEN DICHOS aunque no haya turnos: iban en la
+                    fila de su día, y sin filas se perdían. Es justo lo que alguien mira cuando
+                    piensa en la semana que viene.
+                  */}
+                  {diasSemana
+                    .filter((d) => feriadoDe(d.dia, tz) !== null)
+                    .map((d) => (
+                      <Row key={d.dia} gap={spacing.sm} align="center">
+                        <AppText variant="label" tone="muted" tabular>
+                          {`${formatWeekdayShort(d.dia, language)} ${formatDateKeyShort(d.dia, language)}`}
+                        </AppText>
+                        <EtiquetaDeFeriado dateKey={d.dia} timezone={tz} />
+                      </Row>
+                    ))}
+                </Stack>
               ) : (
                 diasSemana.map((dia, i) => (
                   <View key={dia.dia}>

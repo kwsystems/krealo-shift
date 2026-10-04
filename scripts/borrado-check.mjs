@@ -103,13 +103,13 @@ try {
     const resumen = pagina.locator('[data-testid="dar-de-baja-resumen"]');
     await resumen.waitFor({ timeout: 15000 });
     if (i === 0) {
-      const texto = (await resumen.innerText()).replace(/\s+/g, ' ');
+      const texto = (await resumen.innerText()).replace(/\s+/g, ' ').trim();
       const calendario = await pagina.locator('[data-testid="dar-de-baja-calendario"]').count();
       const ultimaMarca = (
         await pagina.locator('[data-testid="dar-de-baja-ultima-marca"]').innerText()
       ).trim();
       if (calendario === 0) fallar(casoBaja, 'la hoja no trae calendario para el último día');
-      else if (!/^Último día: /.test(texto) || !/turno/.test(texto))
+      else if (!/Último día: /.test(texto) || !/turno/.test(texto))
         fallar(casoBaja, `la hoja no dice el día ni los turnos: «${texto}»`);
       else pasa(casoBaja, `${ultimaMarca} ${texto}`);
       await pagina.screenshot({ path: join(CAPTURAS, '0-dar-de-baja.png'), fullPage: true });

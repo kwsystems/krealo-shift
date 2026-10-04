@@ -75,11 +75,17 @@ function MemberRowBase({
   faltas = 0,
   faltasJustificadas = 0,
   escala = 600,
-  dentro,
+  dentro: dentroAhora,
   jobRoleNames,
   onPress,
   marcado,
 }: MemberRowProps) {
+  /*
+   * DE BAJA MANDA SOBRE «DENTRO» (4-oct). Alguien dado de baja con una jornada abierta —una
+   * salida olvidada— salía como «Trabajando», en verde, en la lista de Inactivo: lo que hay
+   * que leer ahí es que se fue y cuándo. La jornada abierta sigue en Horas, en «Por resolver».
+   */
+  const dentro = member.status === 'inactive' ? undefined : dentroAhora;
   const marcable = marcado !== undefined;
   const { t } = useTranslation();
   const styles = useEstilos();

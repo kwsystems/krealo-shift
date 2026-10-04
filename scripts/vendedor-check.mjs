@@ -158,10 +158,12 @@ try {
         'mi-horario-por-confirmar-',
         '',
       );
-      const fila = (await p.locator(`[data-testid="mi-horario-dia-${dia}"]`).innerText()).replace(
-        /\s+/g,
-        ' ',
-      );
+      // La de la SEMANA: el mismo día puede salir también en la lista del mes.
+      const fila = (
+        await p
+          .locator(`[data-testid="mi-horario-dias"] [data-testid="mi-horario-dia-${dia}"]`)
+          .innerText()
+      ).replace(/\s+/g, ' ');
       if (/\bLibre\b/.test(fila)) fallar(casoCambiado, `el ${dia} dice «Libre»: ${fila}`);
       else if (!/Por confirmar/.test(fila))
         fallar(casoCambiado, `el ${dia} no lleva la insignia «Por confirmar»: ${fila}`);
