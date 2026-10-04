@@ -178,6 +178,30 @@ describe('registrar como cumplido', () => {
     expect((await sesiones()).map((s) => s.shift_id).sort()).toEqual(['t-manana', 't-tarde']);
   });
 
+  it('un turno partido con UNA hora entre medio también registra las dos (auditoría, 4-oct)', async () => {
+    // 10:00–14:00 y 15:00–19:00: la salida recién escrita de la primera cae en el margen
+    // de una hora de la segunda, y antes la segunda se saltaba como «ya tiene marcas».
+    await turno('t-manana', `${LUNES}T15:00:00.000Z`, `${LUNES}T19:00:00.000Z`, {
+      planned_unpaid_break_minutes: 0,
+    });
+    await turno('t-tarde', `${LUNES}T20:00:00.000Z`, '2026-09-08T00:00:00.000Z', {
+      planned_unpaid_break_minutes: 0,
+    });
+    expect(await llamar({ p_dias: [LUNES], p_simular: true })).toMatchObject({ turnos: 2 });
+    expect(await llamar({ p_dias: [LUNES] })).toMatchObject({ registrados: 2, minutos: 480 });
+    expect((await sesiones()).map((s) => s.shift_id).sort()).toEqual(['t-manana', 't-tarde']);
+  });
+
+  it('dos turnos de la misma persona que se pisan siguen sin registrarse los dos', async () => {
+    await turno('t-uno', `${LUNES}T15:00:00.000Z`, `${LUNES}T20:00:00.000Z`, {
+      planned_unpaid_break_minutes: 0,
+    });
+    await turno('t-otro', `${LUNES}T18:00:00.000Z`, `${LUNES}T23:00:00.000Z`, {
+      planned_unpaid_break_minutes: 0,
+    });
+    expect(await llamar({ p_dias: [LUNES] })).toMatchObject({ registrados: 1 });
+  });
+
   it('simular dice cuánto haría por día y no escribe nada', async () => {
     await turno('t-lunes', `${LUNES}T15:00:00.000Z`, '2026-09-08T00:00:00.000Z');
     await turno('t-martes', `${MARTES}T15:00:00.000Z`, '2026-09-09T00:00:00.000Z');

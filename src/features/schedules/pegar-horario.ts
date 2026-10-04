@@ -1,4 +1,4 @@
-import { detectOverlaps, type ScheduledShift } from './conflicts';
+import { detectOverlaps, JORNADA_MAXIMA_MINUTOS, type ScheduledShift } from './conflicts';
 import { localTimeToMinutes, minutesToLocalTime, shiftInstants, type DateKey } from './week';
 
 /**
@@ -96,6 +96,9 @@ export type ProblemaPegado =
   | { clave: 'celdaIlegible'; nombre: string; dia: DateKey; texto: string }
   | { clave: 'semanaDistinta'; dias: string; cabecera: string }
   | { clave: 'solape'; nombre: string }
+  | { clave: 'personaRepetida'; nombre: string; filas: string[] }
+  | { clave: 'turnoImposible'; nombre: string; dia: DateKey; texto: string; minutos: number }
+  | { clave: 'nocheLarga'; nombre: string; dia: DateKey; texto: string; minutos: number }
   | { clave: 'totalDiscrepa'; nombre: string; leido: number; declarado: number };
 
 export type ResumenPegado = {
@@ -120,13 +123,21 @@ export type HorarioPegado = {
  *
  * Bloquea lo que produciría un horario EQUIVOCADO sin que nadie se entere: un nombre que
  * no se pudo resolver, una celda que no se entendió, la semana cambiada, dos turnos
- * encima. Avisa —sin bloquear— cuando los totales de la tabla no cuadran con lo leído:
- * ahí el equivocado puede ser cualquiera de los dos lados, y la suma la calculó una
- * persona. Decidir eso no es del programa.
+ * encima, la misma persona en dos filas, un turno que ninguna tienda tiene. Avisa —sin
+ * bloquear— cuando los totales de la tabla no cuadran con lo leído: ahí el equivocado
+ * puede ser cualquiera de los dos lados, y la suma la calculó una persona. Decidir eso no
+ * es del programa. Y avisa de un turno de noche largo, que existe pero casi siempre es
+ * una hora de salida mal escrita.
  */
 export function problemaBloquea(problema: ProblemaPegado): boolean {
-  return problema.clave !== 'totalDiscrepa';
+  return problema.clave !== 'totalDiscrepa' && problema.clave !== 'nocheLarga';
 }
+
+/**
+ * Un turno que pasa la medianoche y dura más que esto se avisa. «18:00–02:00» es un cierre
+ * de verdad; «13:00–03:00» casi siempre es «13:00–23:00» escrito con prisa.
+ */
+export const NOCHE_LARGA_MINUTOS = 12 * 60;
 
 /** Dice «este día lo tiene libre», y eso se guarda. */
 const PALABRAS_DE_DESCANSO = new Set([
@@ -172,6 +183,10 @@ const PALABRAS_DE_CABECERA = new Set([
 function suenaADia(celda: string): boolean {
   const texto = normalizar(celda);
   if (/^[lmxjvsd]$/.test(texto)) return true;
+  // Una fecha sola también es un día: «2026-09-28», «28/09», «28/09/2026».
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(texto) || /^\d{1,2}\/\d{1,2}(\/\d{2,4})?$/.test(texto)) {
+    return true;
+  }
   return /^(lun|mar|mie|jue|vie|sab|dom|mon|tue|wed|thu|fri|sat|sun)/.test(texto);
 }
 
@@ -189,8 +204,15 @@ function unGuion(texto: string): string {
  * Las celdas de una línea.
  *
  * El camino normal es el tabulador: una tabla copiada de una hoja de cálculo, de un
- * documento o de un mensaje llega así. Dos espacios o más también separan, porque una
- * tabla escrita a mano se alinea con espacios.
+ * documento o de un mensaje llega así. La barra y el punto y coma también separan. Dos
+ * espacios o más también, porque una tabla escrita a mano se alinea con espacios.
+ *
+ * CON TABULADOR, BARRA O PUNTO Y COMA, UNA CELDA VACIA ES UNA CELDA (4-oct). Antes se
+ * partía por «uno o más» separadores y los huecos se tiraban, así que el martes vacío de
+ * una fila desaparecía y el miércoles caía en martes, el jueves en miércoles…: los mismos
+ * turnos y las mismas horas —la vista previa decía «cuadra con tu tabla»— en días que la
+ * tabla no decía. Con espacios no se puede saber dónde estaba el hueco, y ahí se sigue
+ * como antes.
  *
  * Y HAY UN CAMINO DE RESERVA para la línea escrita con UN espacio —«Ana DESCANSO
  * 10:00-19:00 …»—, que con las reglas de arriba sería una sola celda. Ahí se parte por
@@ -198,11 +220,15 @@ function unGuion(texto: string): string {
  * siguiente es un día. Sin esto, escribir el horario a mano en el propio cuadro de texto
  * —lo más natural del mundo— no funcionaría.
  */
-function celdasDeLinea(linea: string): string[] {
-  const porSeparador = linea
-    .split(/\t+|\s{2,}|\s*\|\s*|\s*;\s*/)
-    .map((celda) => celda.trim())
-    .filter((celda) => celda !== '');
+function celdasDeLinea(linea: string): { celdas: string[]; conHuecos: boolean } {
+  const conHuecos = celdasConHuecos(linea);
+  const porSeparador =
+    conHuecos ??
+    linea
+      .split(/\s{2,}/)
+      .map((celda) => celda.trim())
+      .filter((celda) => celda !== '');
+  const llenas = porSeparador.filter((celda) => celda !== '');
 
   /*
    * DOS CELDAS TAMBIEN VALEN si la segunda es un día reconocible, y no es un detalle:
@@ -211,10 +237,14 @@ function celdasDeLinea(linea: string): string[] {
    * el número de turnos correcto y las horas correctas —por eso la prueba lo dejó pasar
    * al principio— con los turnos en días que la tabla no decía.
    */
-  if (porSeparador.length >= 3) return porSeparador;
-  if (porSeparador.length === 2 && esCeldaDeDia(porSeparador[1] ?? '')) return porSeparador;
+  if (porSeparador.length >= 3 && llenas.length >= 2) {
+    return { celdas: porSeparador, conHuecos: conHuecos !== null };
+  }
+  if (porSeparador.length === 2 && esCeldaDeDia(porSeparador[1] ?? '')) {
+    return { celdas: porSeparador, conHuecos: conHuecos !== null };
+  }
 
-  const fichas = unGuion(linea)
+  const fichas = unGuion(linea.replace(/[\t|;]/g, ' '))
     .replace(/\s*-\s*/g, '-')
     .replace(/\s*\/\s*/g, '/')
     .split(/\s+/)
@@ -231,7 +261,42 @@ function celdasDeLinea(linea: string): string[] {
     celdas.push(ficha);
   }
   if (celdas.length === 0 && nombre.length > 0) celdas.push(nombre.join(' '));
-  return celdas.length >= 2 ? celdas : porSeparador;
+  return celdas.length >= 2 ? { celdas, conHuecos: false } : { celdas: llenas, conHuecos: false };
+}
+
+/**
+ * Las celdas de una línea con separador explícito, CONSERVANDO LAS VACIAS; `null` si la
+ * línea no lo tiene. Lo de la derecha que está vacío se quita: es la cola de la hoja de
+ * cálculo, no un día. La barra de los bordes de una tabla «| Ana | … |» tampoco es celda.
+ */
+function celdasConHuecos(linea: string): string[] | null {
+  let celdas: string[];
+  if (linea.includes('\t')) {
+    celdas = linea.split('\t');
+  } else if (linea.includes('|')) {
+    const sinBordes = linea.trim().replace(/^\|/, '').replace(/\|$/, '');
+    celdas = sinBordes.split('|');
+  } else if (linea.includes(';')) {
+    celdas = linea.split(';');
+  } else {
+    return null;
+  }
+  const limpias = celdas.map((celda) => celda.trim());
+  while (limpias.length > 0 && limpias[limpias.length - 1] === '') limpias.pop();
+  return limpias;
+}
+
+/**
+ * Cuántas columnas vacías hay a la izquierda de TODA la tabla: una hoja con la primera
+ * columna en blanco se pega así, y entonces el nombre está en la segunda. Se mira el
+ * mínimo de todas las filas, no cada fila por su cuenta, porque la cabecera tiene una más
+ * —la esquina vacía encima de los nombres— y quitársela corría los días un puesto.
+ */
+function columnasVaciasDelante(filas: { celdas: string[]; conHuecos: boolean }[]): number {
+  const cuentas = filas
+    .filter((fila) => fila.conHuecos && fila.celdas.some((celda) => celda !== ''))
+    .map((fila) => fila.celdas.findIndex((celda) => celda !== ''));
+  return cuentas.length === 0 ? 0 : Math.min(...cuentas);
 }
 
 const RANGO = /^(\d{1,2})[:.h](\d{2})-(\d{1,2})[:.h](\d{2})$/;
@@ -309,7 +374,9 @@ function diaDelMes(dia: DateKey): number {
  * Devuelve los números de día que anuncia, en orden, para poder compararlos.
  */
 function numerosDeCabecera(celdas: string[]): number[] | null {
-  const candidatas = celdas.slice(1).filter((celda) => totalDeclarado(celda) === null);
+  const candidatas = celdas
+    .slice(1)
+    .filter((celda) => celda !== '' && totalDeclarado(celda) === null);
   if (candidatas.length < 3) return null;
   /*
    * HORAS O DESCANSO ⇒ ES UNA FILA DE HORARIO, NO UNA CABECERA. Lo segundo importa tanto
@@ -333,10 +400,29 @@ function numerosDeCabecera(celdas: string[]): number[] | null {
 
   const numeros: number[] = [];
   for (const celda of candidatas) {
-    const encontrado = /\b(\d{1,2})\b/.exec(celda);
-    if (encontrado !== null) numeros.push(Number(encontrado[1]));
+    const numero = diaDeLaCabecera(celda);
+    if (numero !== null) numeros.push(numero);
   }
   return numeros;
+}
+
+/**
+ * El día del mes que dice una celda de cabecera. «2026-09-28» es el 28, no el 9: el primer
+ * número suelto de esa fecha es el MES, y leerlo así hacía decir «esa tabla es de otra
+ * semana» a una tabla que era de esta. «28/09» es el 28 (día y mes, como se escribe aquí);
+ * «09/28» también, porque no hay mes 28.
+ */
+function diaDeLaCabecera(celda: string): number | null {
+  const iso = /(\d{4})-(\d{1,2})-(\d{1,2})/.exec(celda);
+  if (iso !== null) return Number(iso[3]);
+  const barra = /\b(\d{1,2})\/(\d{1,2})\b/.exec(celda);
+  if (barra !== null) {
+    const primero = Number(barra[1]);
+    const segundo = Number(barra[2]);
+    return primero <= 12 && segundo > 12 ? segundo : primero;
+  }
+  const suelto = /\b(\d{1,2})\b/.exec(celda);
+  return suelto === null ? null : Number(suelto[1]);
 }
 
 function empleadoDelTexto(
@@ -361,10 +447,24 @@ function empleadoDelTexto(
   if (resueltoPrefijo !== null) return resueltoPrefijo;
   if (porPrefijo.length > 1) return { encontrado: null, candidatos: porPrefijo };
 
-  const primerNombre = buscado.split(' ')[0] ?? buscado;
-  const porPrimerNombre = empleados.filter(
-    (empleado) => normalizar(empleado.nombre).split(' ')[0] === primerNombre,
-  );
+  /*
+   * EL NOMBRE DE PILA SOLO SI EL RESTO NO DICE OTRA COSA (4-oct). Antes bastaba el primer
+   * nombre: «Ana Torres», que no está en el equipo, se le asignaba a «Ana Rivas» sin un
+   * aviso, y la semana de una persona acababa en la ficha de otra. Ahora el resto de lo
+   * escrito tiene que casar: «Ana R.» es Ana Rivas, «Ana María Rivas» también (el apellido
+   * registrado está), «Ana Torres» no es nadie y se dice.
+   */
+  const [primerNombre = buscado, ...restoEscrito] = buscado.replace(/\./g, '').split(' ');
+  const porPrimerNombre = empleados.filter((empleado) => {
+    const [suPrimero, ...suResto] = normalizar(empleado.nombre).split(' ');
+    if (suPrimero !== primerNombre) return false;
+    const escritoCasa = restoEscrito.every((palabra) =>
+      suResto.some((suya) => suya.startsWith(palabra)),
+    );
+    const registradoEsta =
+      suResto.length > 0 && suResto.every((suya) => restoEscrito.includes(suya));
+    return escritoCasa || registradoEsta;
+  });
   return unico(porPrimerNombre) ?? { encontrado: null, candidatos: porPrimerNombre };
 }
 
@@ -382,13 +482,21 @@ export function parsearHorarioPegado(params: {
   const declarados = new Map<string, number>();
   const nombresLeidos: string[] = [];
 
-  const lineas = texto
+  /*
+   * LA LINEA NO SE RECORTA ANTES DE PARTIRLA: el tabulador del principio es la esquina vacía
+   * de la cabecera, y quitarlo corría los días un puesto («Esa tabla es de otra semana» de
+   * una tabla que era de esta).
+   */
+  const filas = texto
     .split(/\r?\n/)
-    .map((linea) => linea.trim())
-    .filter((linea) => linea !== '');
+    .filter((linea) => linea.trim() !== '')
+    .map(celdasDeLinea);
+  const sobran = columnasVaciasDelante(filas);
+  /** Las filas de cada persona, con el nombre como se escribió: para decir cuáles chocan. */
+  const filasDe = new Map<string, string[]>();
 
-  for (const linea of lineas) {
-    const celdas = celdasDeLinea(linea);
+  for (const fila of filas) {
+    const celdas = fila.conHuecos ? fila.celdas.slice(sobran) : fila.celdas;
     if (celdas.length < 2) continue;
 
     const cabecera = numerosDeCabecera(celdas);
@@ -437,6 +545,18 @@ export function parsearHorarioPegado(params: {
       continue;
     }
 
+    /*
+     * LA MISMA PERSONA EN DOS FILAS BLOQUEA (4-oct). Dos filas «Ana» se fundían en una sola
+     * persona: los turnos de las dos, en la semana de una. Si son dos personas, el nombre
+     * completo las separa; si es la misma, una de las filas sobra.
+     */
+    const yaLeidas = filasDe.get(encontrado.id);
+    if (yaLeidas !== undefined) {
+      yaLeidas.push(textoDelNombre);
+      continue;
+    }
+    filasDe.set(encontrado.id, [textoDelNombre]);
+
     nombresLeidos.push(encontrado.id);
     if (total !== null) declarados.set(encontrado.id, total);
 
@@ -481,6 +601,31 @@ export function parsearHorarioPegado(params: {
         const brutos = Math.round(
           (Date.parse(instantes.endsAt) - Date.parse(instantes.startsAt)) / 60000,
         );
+        /*
+         * UN TURNO QUE NINGUNA TIENDA TIENE NO SE CREA (4-oct). «9:00-6:00» se leía como 21 h
+         * que cruzan la medianoche, sin una palabra: la hora de salida escrita al revés
+         * acababa en el horario y en las horas que se pagan. El tope es el de la jornada
+         * —el mismo que separa un turno partido de dos jornadas—, no uno propio.
+         */
+        if (brutos > JORNADA_MAXIMA_MINUTOS) {
+          problemas.push({
+            clave: 'turnoImposible',
+            nombre: encontrado.nombre,
+            dia,
+            texto: celda,
+            minutos: brutos,
+          });
+          continue;
+        }
+        if (instantes.crossesMidnight && brutos > NOCHE_LARGA_MINUTOS) {
+          problemas.push({
+            clave: 'nocheLarga',
+            nombre: encontrado.nombre,
+            dia,
+            texto: celda,
+            minutos: brutos,
+          });
+        }
         const refrigerio = refrigerioDeUnTurno(brutos);
         turnos.push({
           employeeId: encontrado.id,
@@ -495,6 +640,12 @@ export function parsearHorarioPegado(params: {
         });
       }
     });
+  }
+
+  for (const [employeeId, suyas] of filasDe) {
+    if (suyas.length < 2) continue;
+    const nombre = empleados.find((empleado) => empleado.id === employeeId)?.nombre ?? '';
+    problemas.push({ clave: 'personaRepetida', nombre, filas: suyas });
   }
 
   if (turnos.length === 0 && descansos.length === 0 && problemas.length === 0) {

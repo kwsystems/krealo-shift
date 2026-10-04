@@ -809,7 +809,17 @@ export function ScheduleScreen({
                 />
               ) : null}
 
-              <ScheduleWarnings warnings={analysis.warnings} />
+              <ScheduleWarnings
+                warnings={analysis.warnings}
+                shifts={rows.map((row) => ({
+                  id: row.id,
+                  startsAt: row.starts_at,
+                  endsAt: row.ends_at,
+                }))}
+                timezone={scope.timezone}
+                language={language}
+                minimumRestMinutes={scope.settings.minimumRestMinutes}
+              />
 
               <MarcasFueraDelTurno
                 filas={filasFueraDelTurno}
@@ -1212,8 +1222,9 @@ export function ScheduleScreen({
               startsAt: row.starts_at,
               endsAt: row.ends_at,
             }))}
+          descansosExistentes={descansos}
           onClose={() => setPasteOpen(false)}
-          onSubmit={({ turnos, descansos }) => {
+          onSubmit={({ turnos, descansos: descansosPegados, descansosQueQuitar }) => {
             /*
              * LOS DESCANSOS SE MARCAN ANTES DE CREAR LOS TURNOS, y el orden importa si
              * algo falla: quedarse con los días libres marcados y sin turnos se ve al
@@ -1221,20 +1232,28 @@ export function ScheduleScreen({
              * se arregla volviendo a pegar. Al revés, el fallo sería invisible: la semana
              * parecería completa y solo faltaría lo que no se ve.
              */
-            const marcar =
-              descansos.length === 0
-                ? Promise.resolve(0)
+            // El descanso viejo de un día en que la tabla pone turno se va primero: ver
+            // «DESCANSO Y TURNO EL MISMO DIA» en la hoja.
+            const quitar = Promise.all(
+              descansosQueQuitar.map((restDayId) =>
+                mutations.unmarkRestDay.mutateAsync({ restDayId }),
+              ),
+            );
+            const marcar = quitar.then(() =>
+              descansosPegados.length === 0
+                ? 0
                 : mutations.markRestDays.mutateAsync(
-                    descansos.map((descanso) => ({
+                    descansosPegados.map((descanso) => ({
                       employeeId: descanso.employeeId,
                       dateKey: descanso.dateKey,
                     })),
-                  );
+                  ),
+            );
 
             void marcar.then(() => {
               if (turnos.length === 0) {
                 setPasteOpen(false);
-                setFeedback(t('schedule.restDaysMarked', { count: descansos.length }));
+                setFeedback(t('schedule.restDaysMarked', { count: descansosPegados.length }));
                 return;
               }
               mutations.createMany.mutate(
@@ -1252,10 +1271,10 @@ export function ScheduleScreen({
                   onSuccess: (count) => {
                     setPasteOpen(false);
                     setFeedback(
-                      descansos.length === 0
+                      descansosPegados.length === 0
                         ? t('schedule.pasted', { count })
                         : `${t('schedule.pasted', { count })} ${t('schedule.restDaysMarked', {
-                            count: descansos.length,
+                            count: descansosPegados.length,
                           })}`,
                     );
                   },
@@ -1287,15 +1306,16 @@ export function ScheduleScreen({
                    * `unknown` en la interpolación es el precio de que traducir acepte
                    * cualquier valor; aquí se paga mirándolo.
                    */
-                  onSuccess: ({ turnos, descansos }) => {
+                  onSuccess: ({ turnos, descansos, omitidos }) => {
                     setCopyOpen(false);
                     setFeedback(
-                      descansos === 0
-                        ? t('schedule.copied', { count: turnos })
-                        : `${t('schedule.copied', { count: turnos })} ${t(
-                            'schedule.copiedRestDays',
-                            { count: descansos },
-                          )}`,
+                      [
+                        t('schedule.copied', { count: turnos }),
+                        descansos === 0 ? null : t('schedule.copiedRestDays', { count: descansos }),
+                        omitidos === 0 ? null : t('schedule.copiedSkipped', { count: omitidos }),
+                      ]
+                        .filter((parte) => parte !== null)
+                        .join(' '),
                     );
                   },
                 },

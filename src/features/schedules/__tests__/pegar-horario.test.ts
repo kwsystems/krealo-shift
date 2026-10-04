@@ -419,3 +419,116 @@ describe('con el contrato DELANTE del nombre, como la tabla de la tienda', () =>
     expect(horario.problemas).toEqual([{ clave: 'nombreDesconocido', texto: 'Nadie' }]);
   });
 });
+
+describe('una celda vacía es un día, no un hueco que se cierra (auditoría, 4-oct)', () => {
+  it('el martes vacío no corre el miércoles al martes', () => {
+    const horario = pegar('Ana Rivas\t10:00-19:00\t\t11:00-20:00\t48h');
+    expect(horario.turnos.map((turno) => turno.dateKey)).toEqual([DIAS[0], DIAS[2]]);
+  });
+
+  it('lo mismo con una tabla de barras y bordes', () => {
+    const horario = pegar('| Ana Rivas | 10:00-19:00 | | 11:00-20:00 |');
+    expect(horario.problemas).toEqual([]);
+    expect(horario.turnos.map((turno) => turno.dateKey)).toEqual([DIAS[0], DIAS[2]]);
+  });
+
+  it('la esquina vacía de la cabecera no corre los días', () => {
+    const conEsquina = ['', ...TABLA_REAL.split('\n')[0]!.split('\t').slice(1)].join('\t');
+    const texto = [conEsquina, ...TABLA_REAL.split('\n').slice(1)].join('\n');
+    expect(pegar(texto).problemas).toEqual([]);
+    const otraSemana = parsearHorarioPegado({
+      texto,
+      dias: weekDays('2026-10-05'),
+      empleados: EQUIPO,
+      timezone: TZ,
+    });
+    expect(otraSemana.problemas.some((uno) => uno.clave === 'semanaDistinta')).toBe(true);
+  });
+
+  it('una primera columna en blanco en toda la tabla se salta', () => {
+    const texto = TABLA_REAL.split('\n')
+      .map((linea) => `\t${linea}`)
+      .join('\n');
+    const horario = pegar(texto);
+    expect(horario.problemas).toEqual([]);
+    expect(horario.turnos).toHaveLength(25);
+  });
+
+  it('lee el día de una cabecera con fechas 2026-09-28, no el mes', () => {
+    const cabecera = ['Personal', ...DIAS, 'Horas'].join('\t');
+    const texto = [cabecera, ...TABLA_REAL.split('\n').slice(1)].join('\n');
+    expect(pegar(texto).problemas).toEqual([]);
+    const otraSemana = parsearHorarioPegado({
+      texto,
+      dias: weekDays('2026-10-05'),
+      empleados: EQUIPO,
+      timezone: TZ,
+    });
+    expect(otraSemana.problemas.find((uno) => uno.clave === 'semanaDistinta')).toEqual({
+      clave: 'semanaDistinta',
+      dias: '5, 6, 7, 8, 9, 10, 11',
+      cabecera: '28, 29, 30, 1, 2, 3, 4',
+    });
+  });
+
+  it('y con fechas 28/09 sin nombre de día ni esquina', () => {
+    const cabecera = ['', '28/09', '29/09', '30/09', '01/10', '02/10', '03/10', '04/10'].join('\t');
+    const texto = [cabecera, ...TABLA_REAL.split('\n').slice(1)].join('\n');
+    expect(pegar(texto).problemas).toEqual([]);
+  });
+});
+
+describe('el nombre de pila no basta si el resto dice otra cosa (auditoría, 4-oct)', () => {
+  it('«Ana Torres» no es Ana Rivas', () => {
+    const horario = pegar('Ana Torres\t10:00-19:00');
+    expect(horario.turnos).toEqual([]);
+    expect(horario.problemas).toEqual([{ clave: 'nombreDesconocido', texto: 'Ana Torres' }]);
+  });
+
+  it('«Ana R.» y «Ana María Rivas» sí lo son', () => {
+    expect(pegar('Ana R.\t10:00-19:00').turnos[0]?.employeeId).toBe('e-ana');
+    expect(pegar('Ana María Rivas\t10:00-19:00').turnos[0]?.employeeId).toBe('e-ana');
+  });
+
+  it('la misma persona en dos filas bloquea y dice cuáles', () => {
+    const horario = pegar(['Ana\t10:00-19:00', 'Ana Rivas\tDESCANSO\t10:00-19:00'].join('\n'));
+    const problema = horario.problemas.find((uno) => uno.clave === 'personaRepetida');
+    expect(problema).toEqual({
+      clave: 'personaRepetida',
+      nombre: 'Ana Rivas',
+      filas: ['Ana', 'Ana Rivas'],
+    });
+    expect(problemaBloquea(problema!)).toBe(true);
+  });
+});
+
+describe('turnos que ninguna tienda tiene (auditoría, 4-oct)', () => {
+  it('«9:00-6:00» no son 21 horas: bloquea y no crea el turno', () => {
+    const horario = pegar('Ana Rivas\t9:00-6:00');
+    expect(horario.turnos).toEqual([]);
+    expect(horario.problemas).toEqual([
+      {
+        clave: 'turnoImposible',
+        nombre: 'Ana Rivas',
+        dia: DIAS[0],
+        texto: '9:00-6:00',
+        minutos: 21 * 60,
+      },
+    ]);
+    expect(problemaBloquea(horario.problemas[0]!)).toBe(true);
+  });
+
+  it('una noche de más de 12 horas avisa sin bloquear', () => {
+    const horario = pegar('Ana Rivas\t13:00-03:00');
+    expect(horario.turnos).toHaveLength(1);
+    const aviso = horario.problemas.find((uno) => uno.clave === 'nocheLarga');
+    expect(aviso).toBeDefined();
+    expect(problemaBloquea(aviso!)).toBe(false);
+  });
+
+  it('un cierre normal que pasa la medianoche no dice nada', () => {
+    const horario = pegar('Ana Rivas\t18:00-02:00');
+    expect(horario.problemas).toEqual([]);
+    expect(horario.turnos[0]?.cruzaMedianoche).toBe(true);
+  });
+});

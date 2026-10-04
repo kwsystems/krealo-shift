@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, View, type LayoutChangeEvent, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -219,8 +219,28 @@ export function WeekGrid({
           Math.floor((anchoVisible - NAME_COLUMN_WIDTH) / Math.max(1, days.length)),
         );
 
+  /*
+   * HOY SE VE AL ABRIR (auditoría, 4-oct). A 1280 px caben cinco días y medio: un sábado o un
+   * domingo, el día de hoy quedaba fuera de la rejilla sin ninguna señal, y lo primero que
+   * se mira —quién viene hoy— pedía arrastrar. Si hoy no cabe, la rejilla se corre hasta
+   * dejarlo pegado a la columna de nombres. Una vez por semana: después manda quien arrastra.
+   */
+  const rejilla = useRef<ScrollView>(null);
+  const yaCorrida = useRef<string | null>(null);
+  const indiceDeHoy = days.indexOf(todayKey);
+  useEffect(() => {
+    if (anchoVisible === 0 || indiceDeHoy < 0) return;
+    const semana = days[0] ?? '';
+    if (yaCorrida.current === semana) return;
+    yaCorrida.current = semana;
+    const finDeHoy = NAME_COLUMN_WIDTH + (indiceDeHoy + 1) * anchoDeDia;
+    if (finDeHoy <= anchoVisible) return;
+    rejilla.current?.scrollTo({ x: indiceDeHoy * anchoDeDia, animated: false });
+  }, [anchoVisible, anchoDeDia, indiceDeHoy, days]);
+
   return (
     <ScrollView
+      ref={rejilla}
       horizontal
       showsHorizontalScrollIndicator
       contentContainerStyle={styles.grid}

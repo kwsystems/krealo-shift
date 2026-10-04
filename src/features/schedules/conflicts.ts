@@ -6,10 +6,12 @@ import { dateKeyOf } from './week';
  * Detección de conflictos del editor de horarios (§11.3).
  *
  * Son advertencias, no bloqueos: el administrador puede tener una razón para
- * programar dos turnos seguidos. Lo que no puede es publicar sin verlos. El
- * solapamiento de turnos publicados además está protegido por un trigger en la
- * base, porque dos personas editando la misma semana pueden crear uno que
- * ninguna pantalla vio.
+ * programar dos turnos seguidos. Lo que no puede es publicar sin verlos.
+ *
+ * LA BASE NO IMPIDE DOS TURNOS ENCIMA (corregido el 4-oct). Aquí se decía que un trigger
+ * lo protegía; eso era de la base anterior, y en Firestore no hay nada parecido: copiar la
+ * semana dos veces creaba cada turno dos veces y «Publicar» los publicaba. Lo que crea
+ * turnos en lote —pegar y copiar— se protege con `pisaAOtro`, abajo.
  */
 
 export type ShiftStatus = 'draft' | 'published' | 'cancelled';
@@ -119,7 +121,7 @@ export function detectOverlaps(shifts: ScheduledShift[]): ScheduleWarning[] {
 }
 
 /** Ninguna jornada de tienda dura más que esto, con su pausa: lo mismo que «Salida dudosa». */
-const JORNADA_MAXIMA_MINUTOS = 16 * 60;
+export const JORNADA_MAXIMA_MINUTOS = 16 * 60;
 
 /**
  * Dos turnos de UNA jornada: empiezan el mismo día de la sede y, de la primera entrada a la
@@ -223,5 +225,23 @@ export function collectScheduleWarnings(
 export function warningsForShift(warnings: ScheduleWarning[], shiftId: string): ScheduleWarning[] {
   return warnings.filter(
     (warning) => warning.kind !== 'weeklyExcess' && warning.shiftIds.includes(shiftId),
+  );
+}
+
+export type TurnoEnElTiempo = { employeeId: string; startsAt: string; endsAt: string };
+
+/**
+ * ¿Se pisa este turno con alguno que esa persona ya tiene? Lo usan pegar el horario y
+ * copiar la semana anterior —las dos formas de crear muchos turnos de una vez—, con el
+ * MISMO criterio: un relevo (uno acaba cuando el otro empieza) no se pisa.
+ */
+export function pisaAOtro(turno: TurnoEnElTiempo, existentes: readonly TurnoEnElTiempo[]): boolean {
+  const desde = Date.parse(turno.startsAt);
+  const hasta = Date.parse(turno.endsAt);
+  return existentes.some(
+    (otro) =>
+      otro.employeeId === turno.employeeId &&
+      Date.parse(otro.startsAt) < hasta &&
+      Date.parse(otro.endsAt) > desde,
   );
 }

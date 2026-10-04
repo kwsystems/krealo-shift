@@ -32,7 +32,8 @@ import { audit, membershipOf, requireRole, requireUid } from './shared/caller';
  *      persona. Si esto sirviera también para esos días, marcar una falta como trabajada
  *      sería un clic.
  *   2. NO PISA NADA. Un turno con cualquier fichaje cerca —1 h antes o después— se salta,
- *      y lo mismo si la persona tenía una jornada abierta a esa hora. Los ids de los
+ *      y lo mismo si la persona tenía una jornada abierta a esa hora. Lo que esta función
+ *      escribió para otro turno solo cuenta si cae dentro de este (`marcaQueEstorba`). Los ids de los
  *      fichajes salen del turno, así que dos pulsaciones no duplican nada.
  *   3. SOLO LO PUBLICADO: un borrador no existe para el reloj, tampoco aquí.
  *   4. Solo dueño o administrador, y queda escrito: los fichajes llevan `source: 'import'`
@@ -167,9 +168,31 @@ async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
     .where('employee_id', '==', turno.employee_id)
     .where('occurred_at', '>=', new Date(Date.parse(turno.starts_at) - MARGEN_MS).toISOString())
     .where('occurred_at', '<=', new Date(Date.parse(turno.ends_at) + MARGEN_MS).toISOString())
-    .limit(1)
     .get();
-  return !cerca.empty;
+  return cerca.docs.some((doc) => marcaQueEstorba(doc.data(), turno));
+}
+
+/**
+ * ¿Esta marca impide registrar el turno? Casi siempre sí: cualquier fichaje cerca dice que
+ * ese día ya tiene algo y no se pisa.
+ *
+ * MENOS LO QUE ESTA MISMA FUNCION ESCRIBIO PARA OTRO TURNO, si cae fuera de este (4-oct).
+ * Con 10:00–14:00 y 15:00–19:00 la vista previa prometía dos turnos y se registraba uno: la
+ * salida de las 14:00 que se acababa de escribir para el primero caía en la hora de margen
+ * del segundo, y el segundo se saltaba como «ya tiene marcas». Esa salida no es de nadie que
+ * fichara: es la otra mitad del mismo horario. Si cae DENTRO del turno sí estorba, porque
+ * entonces los dos turnos se pisan y registrarlos los dos daría horas dobles.
+ */
+export function marcaQueEstorba(
+  evento: Record<string, unknown>,
+  turno: Pick<Turno, 'id' | 'starts_at' | 'ends_at'>,
+): boolean {
+  const metadata = (evento.metadata ?? {}) as Record<string, unknown>;
+  const delHorarioDeOtroTurno =
+    evento.source === 'import' && metadata.origen === 'horario' && evento.shift_id !== turno.id;
+  if (!delHorarioDeOtroTurno) return true;
+  const instante = Date.parse(String(evento.occurred_at));
+  return instante > Date.parse(turno.starts_at) && instante < Date.parse(turno.ends_at);
 }
 
 function esDiaValido(dia: unknown): dia is string {

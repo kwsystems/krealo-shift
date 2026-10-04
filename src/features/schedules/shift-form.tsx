@@ -3,6 +3,8 @@ import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import type { ShiftInput } from './api';
+import { JORNADA_MAXIMA_MINUTOS } from './conflicts';
+import { minutosDeRefrigerio } from './refrigerio';
 import { isValidLocalTime, localTimeToMinutes, type DateKey } from './week';
 import { formatDateKeyShort } from './week';
 import { FormField } from '@/components/ui/form-field';
@@ -18,6 +20,7 @@ import { DangerButton, PrimaryButton, SecondaryButton } from '@/components/ui/bu
 import { Row, Stack } from '@/components/ui/layout';
 import type { SupportedLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
+import { minutesToHHmm } from '@/utils/time';
 
 /**
  * Formulario de turno (§11.3).
@@ -101,16 +104,24 @@ export function ShiftFormSheet({
 
   const startValid = isValidLocalTime(values.startTime);
   const endValid = isValidLocalTime(values.endTime);
-  const breakMinutes = Number(values.breakMinutes.replace(/[^0-9]/g, ''));
-  const breakValid = Number.isFinite(breakMinutes) && breakMinutes >= 0;
   const employeeValid = values.employeeId !== null;
 
   const startMinutes = localTimeToMinutes(values.startTime);
   const endMinutes = localTimeToMinutes(values.endTime);
   const crossesMidnight =
     startMinutes !== null && endMinutes !== null && endMinutes <= startMinutes;
+  const duracion =
+    startMinutes === null || endMinutes === null
+      ? null
+      : endMinutes - startMinutes + (crossesMidnight ? 24 * 60 : 0);
+  // El mismo tope que al pegar el horario: ninguna jornada de tienda pasa de 16 h.
+  const tooLong = duracion !== null && duracion > JORNADA_MAXIMA_MINUTOS;
 
-  const canSubmit = startValid && endValid && breakValid && employeeValid;
+  // Ver `refrigerio.ts`: «1:00» es una hora, no cien minutos.
+  const breakMinutes = minutosDeRefrigerio(values.breakMinutes);
+  const breakValid = breakMinutes !== null && (duracion === null || breakMinutes < duracion);
+
+  const canSubmit = startValid && endValid && !tooLong && breakValid && employeeValid;
 
   const handleSubmit = () => {
     setSubmitted(true);
@@ -129,7 +140,7 @@ export function ShiftFormSheet({
       dateKey: values.dateKey,
       startTime: values.startTime.trim(),
       endTime: values.endTime.trim(),
-      plannedUnpaidBreakMinutes: breakMinutes,
+      plannedUnpaidBreakMinutes: breakMinutes ?? 0,
       employeeNote: values.employeeNote.trim() === '' ? null : values.employeeNote.trim(),
       managerNote: values.managerNote.trim() === '' ? null : values.managerNote.trim(),
     });
@@ -269,7 +280,16 @@ export function ShiftFormSheet({
             </Stack>
           </Row>
 
-          {crossesMidnight ? (
+          {tooLong ? (
+            <InlineNotice
+              tone="late"
+              icon="alert-circle-outline"
+              body={t('schedule.shiftTooLong', {
+                hours: minutesToHHmm(duracion ?? 0),
+              })}
+              testID="shift-too-long"
+            />
+          ) : crossesMidnight ? (
             <InlineNotice
               tone="info"
               icon="moon-outline"
@@ -284,7 +304,8 @@ export function ShiftFormSheet({
             onChangeText={(breakValue) =>
               setValues((current) => ({ ...current, breakMinutes: breakValue }))
             }
-            keyboardType="number-pad"
+            placeholder="60"
+            keyboardType="numbers-and-punctuation"
             error={submitted && !breakValid ? t('schedule.invalidBreak') : undefined}
             testID="shift-break"
           />

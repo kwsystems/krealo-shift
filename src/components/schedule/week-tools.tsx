@@ -10,10 +10,12 @@ import type { ShiftPublication } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import {
   addDaysToKey,
+  dateKeyOf,
   formatDateKeyLong,
   formatDateKeyShort,
   formatDayLong,
   formatMonthLong,
+  localTimeOf,
   type DateKey,
 } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
@@ -290,25 +292,61 @@ const useEstilosDeFlecha = estilosDelTema((colors) => ({
   flechaPulsada: { backgroundColor: colors.primary50 },
 }));
 
-export function ScheduleWarnings({ warnings }: { warnings: ScheduleWarning[] }) {
+/**
+ * LOS AVISOS DICEN QUIÉN, CUÁNDO Y CUÁNTO (auditoría, 4-oct). «Descanso insuficiente entre
+ * turnos: 9:00» no decía de quién ni qué noche, y «supera el límite semanal» no decía por
+ * cuánto: para arreglarlo había que buscar el turno en la rejilla. Ahora cada aviso trae el
+ * nombre, el día y las horas de los turnos de los que habla.
+ */
+export function ScheduleWarnings({
+  warnings,
+  shifts,
+  timezone,
+  language,
+  minimumRestMinutes,
+}: {
+  warnings: ScheduleWarning[];
+  /** Los turnos de la semana, para decir de cuáles habla cada aviso. */
+  shifts: { id: string; startsAt: string; endsAt: string }[];
+  timezone: string;
+  language: SupportedLanguage;
+  minimumRestMinutes: number;
+}) {
   const { t } = useTranslation();
   if (warnings.length === 0) return null;
+
+  const porId = new Map(shifts.map((shift) => [shift.id, shift]));
+  const dia = (instante: string) => formatDateKeyShort(dateKeyOf(instante, timezone), language);
+  const hora = (instante: string) => localTimeOf(instante, timezone);
+  const tramo = (id: string) => {
+    const turno = porId.get(id);
+    return turno === undefined ? '' : `${hora(turno.startsAt)}–${hora(turno.endsAt)}`;
+  };
 
   return (
     <Stack gap={spacing.sm}>
       {warnings.map((warning, index) => {
         if (warning.kind === 'overlap') {
+          const primero = porId.get(warning.shiftIds[0]);
           return (
             <InlineNotice
               key={`overlap-${warning.shiftIds.join('-')}-${index}`}
               tone="late"
               icon="alert-circle"
               title={t('schedule.overlapTitle')}
-              body={t('schedule.overlapWarning', { name: warning.employeeName })}
+              body={t('schedule.overlapWarning', {
+                name: warning.employeeName,
+                day: primero === undefined ? '' : dia(primero.startsAt),
+                first: tramo(warning.shiftIds[0]),
+                second: tramo(warning.shiftIds[1]),
+              })}
+              testID="schedule-warning-overlap"
             />
           );
         }
         if (warning.kind === 'shortRest') {
+          const antes = porId.get(warning.shiftIds[0]);
+          const despues = porId.get(warning.shiftIds[1]);
           return (
             <InlineNotice
               key={`rest-${warning.shiftIds.join('-')}-${index}`}
@@ -316,8 +354,15 @@ export function ScheduleWarnings({ warnings }: { warnings: ScheduleWarning[] }) 
               icon="time-outline"
               title={t('schedule.shortRestTitle')}
               body={t('schedule.shortRestWarning', {
+                name: warning.employeeName,
+                fromDay: antes === undefined ? '' : dia(antes.endsAt),
+                fromTime: antes === undefined ? '' : hora(antes.endsAt),
+                toDay: despues === undefined ? '' : dia(despues.startsAt),
+                toTime: despues === undefined ? '' : hora(despues.startsAt),
                 hours: minutesToHHmm(warning.restMinutes),
+                minimum: minutesToHHmm(minimumRestMinutes),
               })}
+              testID="schedule-warning-rest"
             />
           );
         }
@@ -327,7 +372,12 @@ export function ScheduleWarnings({ warnings }: { warnings: ScheduleWarning[] }) 
             tone="onBreak"
             icon="trending-up-outline"
             title={t('schedule.weeklyLimitTitle')}
-            body={t('schedule.weeklyLimitWarning', { name: warning.employeeName })}
+            body={t('schedule.weeklyLimitWarning', {
+              name: warning.employeeName,
+              hours: minutesToHHmm(warning.minutes),
+              limit: minutesToHHmm(warning.limitMinutes),
+            })}
+            testID="schedule-warning-weekly"
           />
         );
       })}

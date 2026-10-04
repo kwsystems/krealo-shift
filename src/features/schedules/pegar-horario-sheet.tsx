@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View } from 'react-native';
 
+import { pisaAOtro } from './conflicts';
 import {
   parsearHorarioPegado,
   problemaBloquea,
@@ -10,7 +11,7 @@ import {
   type ProblemaPegado,
   type TurnoPegado,
 } from './pegar-horario';
-import { formatDateKeyShort, shiftInstants, type DateKey } from './week';
+import { dateKeyOf, formatDateKeyShort, shiftInstants, type DateKey } from './week';
 import { AdminSheet, InlineNotice } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton } from '@/components/ui/buttons';
@@ -41,6 +42,7 @@ export function PegarHorarioSheet({
   saving,
   turnosExistentes,
   existentes,
+  descansosExistentes,
   onClose,
   onSubmit,
 }: {
@@ -53,8 +55,15 @@ export function PegarHorarioSheet({
   turnosExistentes: number;
   /** Esos turnos, para no crear encima de ellos: ver «PEGAR DOS VECES», abajo. */
   existentes: { employeeId: string; startsAt: string; endsAt: string }[];
+  /** Los descansos que ya hay en la semana: ver «DESCANSO Y TURNO EL MISMO DIA», abajo. */
+  descansosExistentes: { id: string; employeeId: string; dateKey: DateKey }[];
   onClose: () => void;
-  onSubmit: (datos: { turnos: TurnoPegado[]; descansos: DescansoPegado[] }) => void;
+  onSubmit: (datos: {
+    turnos: TurnoPegado[];
+    descansos: DescansoPegado[];
+    /** Descansos ya marcados que la tabla cambia por un turno: se quitan antes de crear. */
+    descansosQueQuitar: string[];
+  }) => void;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -87,20 +96,47 @@ export function PegarHorarioSheet({
             timezone,
           });
           if (instantes === null) return false;
-          const desde = Date.parse(instantes.startsAt);
-          const hasta = Date.parse(instantes.endsAt);
-          return existentes.some(
-            (otro) =>
-              otro.employeeId === turno.employeeId &&
-              Date.parse(otro.startsAt) < hasta &&
-              Date.parse(otro.endsAt) > desde,
+          return pisaAOtro(
+            {
+              employeeId: turno.employeeId,
+              startsAt: instantes.startsAt,
+              endsAt: instantes.endsAt,
+            },
+            existentes,
           );
         })
         .map((turno) => turno.nombre),
     ),
   ];
+  /*
+   * DESCANSO Y TURNO EL MISMO DIA (4-oct). Descartar los borradores quita los turnos pero no
+   * los descansos, así que al volver a pegar otra versión de la tabla un día podía quedar
+   * con «Descanso» y un turno a la vez. La tabla nueva manda: el descanso viejo de un día en
+   * que ahora hay turno se quita, y se dice cuál. Lo contrario —la tabla pone descanso en un
+   * día que YA tiene turno— no se arregla solo, porque borrar un turno es otra decisión:
+   * bloquea y dice quién y cuándo.
+   */
+  const nombreDe = (employeeId: string) =>
+    empleados.find((empleado) => empleado.id === employeeId)?.nombre ?? '';
+  const quien = (nombre: string, dia: DateKey) =>
+    `${nombre} (${formatDateKeyShort(dia, language)})`;
+  const descansosQueSobran = descansosExistentes.filter((descanso) =>
+    turnos.some(
+      (turno) => turno.employeeId === descanso.employeeId && turno.dateKey === descanso.dateKey,
+    ),
+  );
+  const descansosSobreTurno = descansos.filter((descanso) =>
+    existentes.some(
+      (otro) =>
+        otro.employeeId === descanso.employeeId &&
+        dateKeyOf(otro.startsAt, timezone) === descanso.dateKey,
+    ),
+  );
   const puedeCrear =
-    turnos.length + descansos.length > 0 && bloqueantes.length === 0 && pisados.length === 0;
+    turnos.length + descansos.length > 0 &&
+    bloqueantes.length === 0 &&
+    pisados.length === 0 &&
+    descansosSobreTurno.length === 0;
 
   return (
     <AdminSheet
@@ -117,7 +153,13 @@ export function PegarHorarioSheet({
                 ? t('schedule.pasteMarkRest', { count: descansos.length })
                 : t('schedule.pasteCreateEmpty')
           }
-          onPress={() => onSubmit({ turnos, descansos })}
+          onPress={() =>
+            onSubmit({
+              turnos,
+              descansos,
+              descansosQueQuitar: descansosQueSobran.map((descanso) => descanso.id),
+            })
+          }
           disabled={!puedeCrear}
           loading={saving}
           testID="paste-week-confirm"
@@ -165,6 +207,33 @@ export function PegarHorarioSheet({
           icon="copy-outline"
           body={t('schedule.pasteOverlapsExisting', { names: pisados.join(', ') })}
           testID="paste-week-overlap"
+        />
+      ) : null}
+
+      {descansosSobreTurno.length > 0 ? (
+        <InlineNotice
+          tone="late"
+          icon="bed-outline"
+          body={t('schedule.pasteRestOnShift', {
+            list: descansosSobreTurno
+              .map((descanso) => quien(descanso.nombre, descanso.dateKey))
+              .join(', '),
+          })}
+          testID="paste-week-rest-on-shift"
+        />
+      ) : null}
+
+      {descansosQueSobran.length > 0 ? (
+        <InlineNotice
+          tone="warning"
+          icon="bed-outline"
+          body={t('schedule.pasteRestReplaced', {
+            count: descansosQueSobran.length,
+            list: descansosQueSobran
+              .map((descanso) => quien(nombreDe(descanso.employeeId), descanso.dateKey))
+              .join(', '),
+          })}
+          testID="paste-week-rest-replaced"
         />
       ) : null}
 
@@ -259,6 +328,25 @@ function textoDelProblema(
       return t('schedule.pasteWrongWeek', { days: problema.dias, header: problema.cabecera });
     case 'solape':
       return t('schedule.pasteOverlap', { name: problema.nombre });
+    case 'personaRepetida':
+      return t('schedule.pasteSamePersonTwice', {
+        name: problema.nombre,
+        rows: problema.filas.map((fila) => `«${fila}»`).join(', '),
+      });
+    case 'turnoImposible':
+      return t('schedule.pasteTooLong', {
+        name: problema.nombre,
+        day: formatDateKeyShort(problema.dia, language),
+        text: problema.texto,
+        hours: minutesToHHmm(problema.minutos),
+      });
+    case 'nocheLarga':
+      return t('schedule.pasteLongNight', {
+        name: problema.nombre,
+        day: formatDateKeyShort(problema.dia, language),
+        text: problema.texto,
+        hours: minutesToHHmm(problema.minutos),
+      });
     case 'totalDiscrepa':
       return t('schedule.pasteTotalMismatch', {
         name: problema.nombre,

@@ -866,7 +866,22 @@ function crearRpc(almacen: Almacen) {
           return sinError({ relojDesde, porDia, saltados, turnos: aptos.length, minutos });
         }
 
-        const nuevas = aptos.map((turno) => {
+        /*
+         * COMO EL SERVIDOR (`marcaQueEstorba`): las dos mitades de un turno partido se
+         * registran las dos, pero dos turnos de la misma persona que se pisan, no.
+         */
+        const aceptados: Fila[] = [];
+        for (const turno of aptos) {
+          const pisaOtro = aceptados.some(
+            (otro) =>
+              otro.employee_id === turno.employee_id &&
+              String(otro.starts_at) < String(turno.ends_at) &&
+              String(otro.ends_at) > String(turno.starts_at),
+          );
+          if (pisaOtro) saltados.yaTieneMarcas += 1;
+          else aceptados.push(turno);
+        }
+        const nuevas = aceptados.map((turno) => {
           const brutos = minutosEntre(String(turno.starts_at), String(turno.ends_at));
           const pausa = Number(turno.planned_unpaid_break_minutes ?? 0);
           return {
@@ -905,7 +920,12 @@ function crearRpc(almacen: Almacen) {
             flags: [],
           })),
         ]);
-        return sinError({ relojDesde, registrados: nuevas.length, minutos, saltados });
+        return sinError({
+          relojDesde,
+          registrados: nuevas.length,
+          minutos: aceptados.reduce((suma, turno) => suma + netos(turno), 0),
+          saltados,
+        });
       }
 
       /*
