@@ -637,6 +637,94 @@ function soloHoras(texto) {
   await contexto.close();
 }
 
+/*
+ * --- FALTAS, TARDANZAS Y SALIDAS ANTES (4-oct). Andree: «tiene que haber un resumen en
+ * Reportes de todo esto, de las faltas, llegadas tarde y todo eso». Lo que tiene que ser
+ * cierto: que cuente LO MISMO que el resto del tablero —las faltas de la casilla, las
+ * tardanzas de «A tiempo»—, que el día por día tenga tantas líneas como dice su botón, y que
+ * tocar a alguien lo deje solo a él, como en «Asistencia por persona».
+ */
+{
+  const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+  const pagina = await contexto.newPage();
+  await entrar(pagina);
+  await irA(pagina, base, '/reports', { asentar: 800 });
+  await pagina.locator('[data-testid="report-period-mes"]').click();
+  await pagina.waitForTimeout(2500);
+  const tarjeta = pagina.locator('[data-testid="report-incidents"]');
+  if ((await tarjeta.count()) === 0) {
+    problemas.push('Reportes no tiene el resumen de faltas, tardanzas y salidas antes');
+  } else {
+    const numero = async (selector) => {
+      const texto = await pagina.locator(selector).first().innerText();
+      const m = texto.replace(/[-]/g, '').match(/(\d+)/);
+      return m === null ? null : Number(m[1]);
+    };
+    const faltasResumen = await numero('[data-testid="report-incidents-absences"]');
+    const faltasCasilla = await numero('[data-testid="report-absences"]');
+    if (faltasResumen !== faltasCasilla) {
+      problemas.push(
+        `el resumen cuenta ${faltasResumen} faltas y la casilla de Faltas ${faltasCasilla}`,
+      );
+    }
+    const tardanzasResumen = await numero('[data-testid="report-incidents-late"]');
+    const filas = pagina.locator(
+      '[data-testid^="report-attendance-row-"]:not([data-testid$="-diferencia"]):not([data-testid$="-faltas"])',
+    );
+    let tardanzasAsistencia = 0;
+    for (const texto of await filas.allInnerTexts()) {
+      const m = texto.match(/(\d+) de (\d+)/);
+      if (m !== null) tardanzasAsistencia += Number(m[2]) - Number(m[1]);
+    }
+    if (tardanzasResumen !== tardanzasAsistencia) {
+      problemas.push(
+        `el resumen cuenta ${tardanzasResumen} tardanzas y «A tiempo» ${tardanzasAsistencia}`,
+      );
+    }
+
+    const boton = pagina.locator('[data-testid="report-incidents-toggle"]');
+    let lineas = null;
+    if ((await boton.count()) > 0) {
+      const dice = Number(((await boton.innerText()).match(/\((\d+)\)/) ?? [])[1]);
+      await boton.click();
+      await pagina.waitForTimeout(600);
+      lineas = await pagina.locator('[data-testid^="report-incident-"]').count();
+      if (lineas !== dice) problemas.push(`«Ver día por día (${dice})» enseña ${lineas} líneas`);
+    } else if ((faltasResumen ?? 0) + (tardanzasResumen ?? 0) > 0) {
+      problemas.push('hay faltas o tardanzas y el resumen no ofrece el día por día');
+    }
+
+    const personas = pagina.locator('[data-testid^="report-incidents-row-"]');
+    const antes = await personas.count();
+    if (antes > 1) {
+      const id = (await personas.first().getAttribute('data-testid')).slice(
+        'report-incidents-row-'.length,
+      );
+      await personas.first().click();
+      await pagina.waitForTimeout(800);
+      const despues = await personas.count();
+      const ajenas = await pagina
+        .locator('[data-testid^="report-incident-"]')
+        .evaluateAll(
+          (nodos, suyo) =>
+            nodos.filter((n) => !n.getAttribute('data-testid').includes(`-${suyo}-`)).length,
+          id,
+        );
+      if (despues !== 1 || ajenas > 0) {
+        problemas.push(
+          `tocar a una persona deja ${despues} filas y ${ajenas} líneas de otras personas`,
+        );
+      }
+    }
+    console.log(
+      `  incidencias         faltas ${faltasResumen} = casilla ${faltasCasilla}, ` +
+        `tardanzas ${tardanzasResumen} = «A tiempo» ${tardanzasAsistencia}, ` +
+        `${lineas ?? 0} líneas día por día, ${antes} personas`,
+    );
+  }
+  await contexto.close();
+}
+
 await navegador.close();
 await cerrar();
 
@@ -647,5 +735,5 @@ if (problemas.length > 0) {
 }
 
 console.log(
-  '\nOK: Reportes cuadra con Horas y por mes consigo mismo, los gráficos tienen escala, las siete pestañas caben y cuenta las correcciones.',
+  '\nOK: Reportes cuadra con Horas y por mes consigo mismo, los gráficos tienen escala, las siete pestañas caben, cuenta las correcciones y resume faltas y tardanzas.',
 );

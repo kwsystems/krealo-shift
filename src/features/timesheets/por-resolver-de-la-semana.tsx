@@ -23,6 +23,7 @@ import { formatClockTime, type TimeFormatPreference } from '@/utils/time';
 
 import type { WorkSession } from './api';
 import { casosPorResolver, type CasoPorResolver } from './casos';
+import { duracion } from './duracion';
 import { CasoRechazado, useArreglarCaso } from './horas-debidas';
 
 /**
@@ -314,15 +315,6 @@ export function PorResolverDeLaSemana({
       ) : null}
     </>
   );
-}
-
-/** «4 h 49 min», «1 h», «45 min». */
-function duracion(t: TFunction, minutos: number): string {
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  if (h === 0) return t('schedule.unusual.minutes', { m });
-  if (m === 0) return t('schedule.unusual.hours', { h });
-  return t('schedule.unusual.hoursMinutes', { h, m });
 }
 
 function mensajeDelError(t: TFunction, error: unknown): string {

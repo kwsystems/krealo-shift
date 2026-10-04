@@ -32,10 +32,13 @@ import { etiquetaDeDias, etiquetaDelPeriodo } from './etiqueta-del-periodo';
 import { bonoDeAsistencia } from './bono';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { contarFaltas, faltasDeLosTurnos, faltasPorPersona } from '@/features/timesheets/faltas';
+import { useHorasDebidasDeLaSede } from '@/features/timesheets/horas-debidas';
 import { useJustificaciones } from '@/features/timesheets/justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from '@/features/timesheets/textos-de-falta';
 import { BonoCard } from './bono-card';
 import { AsistenciaPorPersona, type FilaDeAsistencia } from './asistencia-por-persona';
+import { incidenciasDelPeriodo } from './incidencias';
+import { IncidenciasDelPeriodo } from './incidencias-del-periodo';
 import { programadoDelPeriodo } from './programado';
 import { ResumenDelPeriodo } from './resumen-del-periodo';
 import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
@@ -270,6 +273,25 @@ export function ReportsScreen() {
       ? faltasDelPeriodo
       : faltasDelPeriodo.filter((falta) => falta.employeeId === personaElegida);
   const faltasPorPersonaDelPeriodo = faltasPorPersona(faltasDelPeriodo);
+
+  /*
+   * TODO LO QUE PASÓ, Y CÓMO QUEDÓ (4-oct): faltas, tardanzas, salidas antes, horas que debe
+   * y cumplidos especiales. Las mismas faltas y las mismas jornadas que el resto del tablero
+   * —así «Llegó tarde» y «A tiempo» cuentan lo mismo—; las horas que debe, las de la sede.
+   */
+  const debidasDeLaSede = useHorasDebidasDeLaSede({ organizationId, locationId: scope.locationId });
+  const incidencias = incidenciasDelPeriodo({
+    faltas: faltasDelPeriodo,
+    sesiones: filasSesiones,
+    turnos: turnosDelMes.data ?? [],
+    debidas: debidasDeLaSede.data ?? [],
+    dias: periodo.dias,
+    timezone: scope.timezone,
+  });
+  const incidenciasFiltradas =
+    personaElegida === null
+      ? incidencias
+      : incidencias.filter((incidencia) => incidencia.employeeId === personaElegida);
 
   /*
    * LO PROGRAMADO Y LO QUE VA EN CURSO (2-oct): lo que dice «Cómo va». Lo programado son
@@ -934,6 +956,16 @@ export function ReportsScreen() {
               <AsistenciaPorPersona
                 filas={filasAsistencia}
                 incluyeHoy={incluyeHoy}
+                elegida={personaElegida}
+                onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}
+              />
+
+              <IncidenciasDelPeriodo
+                incidencias={incidenciasFiltradas}
+                nombre={nombre}
+                timezone={scope.timezone}
+                timeFormat={scope.timeFormat}
+                language={language}
                 elegida={personaElegida}
                 onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}
               />

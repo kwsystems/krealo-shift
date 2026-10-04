@@ -75,6 +75,43 @@ export async function fetchMisHorasDebidas(params: {
   return ordenar(filas);
 }
 
+/**
+ * LAS DE TODA LA SEDE (4-oct), para el resumen de Reportes: las que se deben, las que se
+ * compensaron y las que se perdonaron. Las mismas filas que la ficha de cada persona; aquí
+ * sin la persona, y el periodo se filtra en el cliente —son pocas, y acotarlas por fecha
+ * pediría un índice compuesto—.
+ */
+export async function fetchHorasDebidasDeLaSede(params: {
+  organizationId: string;
+  locationId: string;
+}): Promise<HoraDebida[]> {
+  const filas = await selectRows(z.array(horaDebidaSchema), (db) =>
+    db
+      .from(TABLES.owedHours)
+      .select('*')
+      .eq('organization_id', params.organizationId)
+      .eq('location_id', params.locationId),
+  );
+  return ordenar(filas);
+}
+
+export function useHorasDebidasDeLaSede(params: {
+  organizationId: string | null;
+  locationId: string | null;
+}) {
+  return useQuery({
+    // Bajo 'timesheet': saldar o anotar una hora debida refresca esto con lo demás.
+    queryKey: ['timesheet', 'horas-debidas', params.locationId ?? 'none', 'sede'],
+    queryFn: () =>
+      fetchHorasDebidasDeLaSede({
+        organizationId: params.organizationId ?? '',
+        locationId: params.locationId ?? '',
+      }),
+    enabled: params.organizationId !== null && params.locationId !== null,
+    staleTime: ADMIN_LIST_STALE_MS,
+  });
+}
+
 export const pendientes = (filas: readonly HoraDebida[]) =>
   filas.filter((fila) => fila.status === 'pending');
 export const minutosPendientes = (filas: readonly HoraDebida[]) =>
