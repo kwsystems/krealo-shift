@@ -73,6 +73,7 @@ describe('análisis de la semana', () => {
       shifts,
       minimumRestMinutes: 660,
       weeklyLimitMinutes: 2400,
+      timezone: 'America/Lima',
     });
 
     expect(analysis.pendingShiftIds).toEqual(['a']);
@@ -102,6 +103,7 @@ describe('análisis de la semana', () => {
       shifts,
       minimumRestMinutes: 0,
       weeklyLimitMinutes: 0,
+      timezone: 'America/Lima',
     });
 
     expect(analysis.minutesByEmployee.get('e1')).toBe(480);
@@ -126,6 +128,7 @@ describe('análisis de la semana', () => {
       shifts,
       minimumRestMinutes: 660,
       weeklyLimitMinutes: 2400,
+      timezone: 'America/Lima',
     });
 
     expect(analysis.warnings).toHaveLength(1);

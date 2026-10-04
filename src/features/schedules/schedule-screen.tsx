@@ -392,8 +392,15 @@ export function ScheduleScreen({
         shifts: toScheduledShifts(rows, names),
         minimumRestMinutes: scope.settings.minimumRestMinutes,
         weeklyLimitMinutes: scope.settings.weeklyOvertimeThresholdMinutes,
+        timezone: scope.timezone,
       }),
-    [rows, names, scope.settings.minimumRestMinutes, scope.settings.weeklyOvertimeThresholdMinutes],
+    [
+      rows,
+      names,
+      scope.settings.minimumRestMinutes,
+      scope.settings.weeklyOvertimeThresholdMinutes,
+      scope.timezone,
+    ],
   );
 
   const locationMembers = useMemo(

@@ -94,7 +94,51 @@ describe('solapamientos', () => {
   });
 });
 
+const LIMA = 'America/Lima';
+
 describe('descanso insuficiente', () => {
+  it('un turno partido no es poco descanso: la pausa del medio no es descanso entre días', () => {
+    const warnings = detectShortRest(
+      [
+        // 10:00–13:30 y 17:30–22:00 en Lima.
+        shift({
+          id: 'manana',
+          startsAt: '2026-10-08T15:00:00.000Z',
+          endsAt: '2026-10-08T18:30:00.000Z',
+        }),
+        shift({
+          id: 'tarde',
+          startsAt: '2026-10-08T22:30:00.000Z',
+          endsAt: '2026-10-09T03:00:00.000Z',
+        }),
+      ],
+      660,
+      LIMA,
+    );
+    expect(warnings).toEqual([]);
+  });
+
+  it('del turno partido al día siguiente se sigue midiendo el descanso', () => {
+    const warnings = detectShortRest(
+      [
+        shift({
+          id: 'tarde',
+          startsAt: '2026-10-08T22:30:00.000Z',
+          endsAt: '2026-10-09T03:00:00.000Z',
+        }),
+        // Viernes a las 06:00 de Lima: ocho horas después de salir a las 22:00.
+        shift({
+          id: 'viernes',
+          startsAt: '2026-10-09T11:00:00.000Z',
+          endsAt: '2026-10-09T19:00:00.000Z',
+        }),
+      ],
+      660,
+      LIMA,
+    );
+    expect(warnings).toMatchObject([{ kind: 'shortRest', restMinutes: 480 }]);
+  });
+
   it('advierte cuando entre dos turnos queda menos del mínimo', () => {
     const warnings = detectShortRest(
       [
@@ -107,6 +151,7 @@ describe('descanso insuficiente', () => {
       ],
       // 11 horas de descanso mínimo.
       660,
+      LIMA,
     );
 
     expect(warnings).toHaveLength(1);
@@ -124,6 +169,7 @@ describe('descanso insuficiente', () => {
         }),
       ],
       660,
+      LIMA,
     );
 
     expect(warnings).toEqual([]);
@@ -140,6 +186,7 @@ describe('descanso insuficiente', () => {
         }),
       ],
       0,
+      LIMA,
     );
 
     expect(warnings).toEqual([]);
@@ -180,6 +227,7 @@ describe('advertencias combinadas', () => {
     const warnings = collectScheduleWarnings(shifts, {
       minimumRestMinutes: 660,
       weeklyLimitMinutes: 600,
+      timezone: LIMA,
     });
 
     expect(warnings.map((warning) => warning.kind)).toContain('overlap');

@@ -1,5 +1,7 @@
 import { minutesBetween } from '@/utils/time';
 
+import { dateKeyOf } from './week';
+
 /**
  * Detección de conflictos del editor de horarios (§11.3).
  *
@@ -116,10 +118,35 @@ export function detectOverlaps(shifts: ScheduledShift[]): ScheduleWarning[] {
   return warnings;
 }
 
-/** Advierte cuando entre dos turnos consecutivos queda menos descanso del mínimo. */
+/** Ninguna jornada de tienda dura más que esto, con su pausa: lo mismo que «Salida dudosa». */
+const JORNADA_MAXIMA_MINUTOS = 16 * 60;
+
+/**
+ * Dos turnos de UNA jornada: empiezan el mismo día de la sede y, de la primera entrada a la
+ * última salida, caben en una jornada. 10:00–13:30 y 17:30–22:00 lo son; 09:00–17:00 y
+ * 23:00–07:00 no, aunque empiecen el mismo día: son dos jornadas con seis horas entre medio.
+ */
+function esTurnoPartido(antes: ScheduledShift, despues: ScheduledShift, timezone: string): boolean {
+  return (
+    dateKeyOf(antes.startsAt, timezone) === dateKeyOf(despues.startsAt, timezone) &&
+    minutesBetween(antes.startsAt, despues.endsAt) <= JORNADA_MAXIMA_MINUTOS
+  );
+}
+
+/**
+ * Advierte cuando entre dos turnos consecutivos queda menos descanso del mínimo.
+ *
+ * EL DESCANSO ES ENTRE JORNADAS, NO DENTRO DE UNA (4-oct). Dos turnos que empiezan el mismo
+ * día de la sede son un turno partido —10:00–13:30 y 17:30–22:00—, y las cuatro horas del
+ * medio son su pausa, no su descanso entre un día y otro. Se marcaban «Poco descanso» y el
+ * horario de la semana enseñaba «Descanso insuficiente entre turnos: 04:00» por un turno que
+ * está bien; lo vio Andree al pegar la semana. Entre días distintos se sigue avisando igual,
+ * también si el de la noche cruza la medianoche.
+ */
 export function detectShortRest(
   shifts: ScheduledShift[],
   minimumRestMinutes: number,
+  timezone: string,
 ): ScheduleWarning[] {
   if (minimumRestMinutes <= 0) return [];
   const warnings: ScheduleWarning[] = [];
@@ -131,6 +158,7 @@ export function detectShortRest(
       if (previous === undefined || next === undefined) continue;
       if (overlaps(previous, next)) continue;
       if (next.startsAt < previous.endsAt) continue;
+      if (esTurnoPartido(previous, next, timezone)) continue;
 
       const restMinutes = minutesBetween(previous.endsAt, next.startsAt);
       if (restMinutes >= minimumRestMinutes) continue;
@@ -175,6 +203,8 @@ export function detectWeeklyExcess(
 export type ScheduleRules = {
   minimumRestMinutes: number;
   weeklyLimitMinutes: number;
+  /** La zona de la sede: decide qué turnos son del mismo día. */
+  timezone: string;
 };
 
 /** Todas las advertencias de la semana, en el orden en que importan. */
@@ -184,7 +214,7 @@ export function collectScheduleWarnings(
 ): ScheduleWarning[] {
   return [
     ...detectOverlaps(shifts),
-    ...detectShortRest(shifts, rules.minimumRestMinutes),
+    ...detectShortRest(shifts, rules.minimumRestMinutes, rules.timezone),
     ...detectWeeklyExcess(shifts, rules.weeklyLimitMinutes),
   ];
 }

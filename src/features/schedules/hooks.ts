@@ -132,15 +132,16 @@ export function analyzeWeek(params: {
   shifts: ScheduledShift[];
   minimumRestMinutes: number;
   weeklyLimitMinutes: number;
+  timezone: string;
 }): WeekAnalysis {
-  const { shifts, minimumRestMinutes, weeklyLimitMinutes } = params;
+  const { shifts, minimumRestMinutes, weeklyLimitMinutes, timezone } = params;
   const minutesByEmployee = scheduledMinutesByEmployee(shifts);
 
   let totalMinutes = 0;
   for (const minutes of minutesByEmployee.values()) totalMinutes += minutes;
 
   return {
-    warnings: collectScheduleWarnings(shifts, { minimumRestMinutes, weeklyLimitMinutes }),
+    warnings: collectScheduleWarnings(shifts, { minimumRestMinutes, weeklyLimitMinutes, timezone }),
     minutesByEmployee,
     totalMinutes,
     draftMinutes: shifts
