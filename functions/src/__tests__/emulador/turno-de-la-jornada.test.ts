@@ -119,6 +119,30 @@ describe('el turno de la jornada', () => {
     expect(sesion.flags).toEqual([]);
   });
 
+  /*
+   * El reloj ofrecía el turno de hoy y el de mañana sin decir el día (4-oct), y con uno
+   * solo —el de mañana— lo elegía por la persona. Esto es lo que impide que una entrada de
+   * hoy quede atada al turno de mañana aunque el aparato lo mande.
+   */
+  it('si eligió el turno de MAÑANA, la entrada de hoy se queda con el de hoy', async () => {
+    const manana = (hora: number) => new Date(Date.parse(H(hora)) + 24 * 3600_000).toISOString();
+    await turno('t-hoy', H(10), H(22));
+    await turno('t-manana', manana(10), manana(21));
+    await fichar('clock_in', H(9, 48), 't-manana');
+    const sesion = await jornada();
+    expect(sesion.shift_id).toBe('t-hoy');
+    expect(sesion.flags).toEqual([]);
+  });
+
+  it('si eligió el de mañana y hoy no tiene turno, queda sin turno, no con el de mañana', async () => {
+    const manana = (hora: number) => new Date(Date.parse(H(hora)) + 24 * 3600_000).toISOString();
+    await turno('t-manana', manana(10), manana(21));
+    await fichar('clock_in', H(9, 48), 't-manana');
+    const sesion = await jornada();
+    expect(sesion.shift_id).toBeNull();
+    expect(sesion.flags).toEqual(['unscheduled']);
+  });
+
   it('fichó antes de que su turno existiera: al publicarlo, deja de decir «sin turno»', async () => {
     await fichar('clock_in', H(10));
     expect((await jornada()).flags).toEqual(['unscheduled']);

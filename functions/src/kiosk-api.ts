@@ -19,6 +19,7 @@ import { instanteLocal, zonaSegura } from './shared/zonas';
 import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
 import {
+  ACTION_TOKEN_TTL_SECONDS,
   authenticateKiosk,
   issueActionToken,
   KIOSK_TOKEN_SECRET,
@@ -33,7 +34,7 @@ import {
  * NINGUNA EXIGE SESION DE FIREBASE, y es deliberado: un iPad compartido en el
  * mostrador con una cuenta de Google dentro seria una cuenta que cualquiera del
  * local puede usar para entrar al panel. Lo que las defiende es la credencial del
- * dispositivo, y para escribir un fichaje ademas el token de accion de 90 segundos
+ * dispositivo, y para escribir un fichaje ademas el token de accion de 5 minutos
  * que emite `verifyPin`. Con una sola de las dos, conocer la credencial del iPad
  * bastaria para fichar por cualquiera.
  */
@@ -608,6 +609,13 @@ async function buildEmployeeContext(
   return {
     actionToken: token,
     expiresAt,
+    /*
+     * CUÁNTO DURA, ADEMÁS DE HASTA CUÁNDO. `expiresAt` es una hora del servidor y el reloj
+     * la compararía con la suya, que en una tableta puede ir minutos adelantada o
+     * atrasada. Con la duración, el reloj cuenta desde que recibió la respuesta y sabe sin
+     * adivinar cuándo tiene que pedir el PIN otra vez.
+     */
+    expiresInSeconds: ACTION_TOKEN_TTL_SECONDS,
     employee: {
       opaqueId: employeeId,
       displayName: (empleado.preferred_name as string | null) ?? (empleado.full_name as string),
@@ -623,6 +631,13 @@ async function buildEmployeeContext(
         ? null
         : {
             startedAt: sesion.starts_at,
+            /*
+             * EL TURNO DE LA JORNADA EN CURSO, entero y no solo su final (4-oct). Sin esto el
+             * reloj no sabía cuál era y a quien venía a marcar la salida le pedía «Elige tu
+             * turno» entre el de hoy y el de mañana, sin decir de qué día era cada uno.
+             */
+            shiftId: turnoDeLaSesion === undefined ? null : String(sesion.shift_id),
+            shiftStartsAt: (turnoDeLaSesion?.starts_at as string | undefined) ?? null,
             shiftEndsAt: (turnoDeLaSesion?.ends_at as string | undefined) ?? null,
             takenBreakMinutes:
               ((sesion.paid_break_minutes as number) ?? 0) +
@@ -652,14 +667,25 @@ async function buildEmployeeContext(
 // Fichajes
 // ---------------------------------------------------------------------------
 
+/**
+ * El empleado del token de acción, o un error que el reloj SABE LEER.
+ *
+ * LLEVA `code: 'action_expired'` EN LOS DETALLES, y sin él el reloj decía lo contrario de
+ * lo que había que hacer. El motivo viajaba solo en el mensaje, que el reloj no lee: caía
+ * en «No pudimos completar la acción. Inténtalo otra vez.», la persona lo intentaba otra
+ * vez con el MISMO token vencido y fallaba igual, siempre. Con el código, el reloj le pide
+ * el PIN de nuevo, que es lo único que lo arregla.
+ */
 function exigirTokenDeAccion(data: unknown, kiosk: KioskContext): string {
   const token = (data as { actionToken?: unknown } | null)?.actionToken;
   if (typeof token !== 'string') {
-    throw new HttpsError('unauthenticated', 'Vuelve a marcar tu PIN.');
+    throw new HttpsError('unauthenticated', 'Vuelve a marcar tu PIN.', { code: 'action_expired' });
   }
   const payload = verifyActionToken(token, kiosk);
   if (payload === null) {
-    throw new HttpsError('unauthenticated', 'Ese permiso caducó. Vuelve a marcar tu PIN.');
+    throw new HttpsError('unauthenticated', 'Ese permiso caducó. Vuelve a marcar tu PIN.', {
+      code: 'action_expired',
+    });
   }
   return payload.employeeId;
 }

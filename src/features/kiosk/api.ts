@@ -33,6 +33,11 @@ export type KioskApiError =
    */
   | { kind: 'device_credential' }
   | { kind: 'revoked' }
+  /**
+   * El permiso del PIN venció: hay que volver a marcarlo. Antes caía en `server` y la
+   * pantalla decía «Inténtalo otra vez», que con el mismo permiso vencido fallaba siempre.
+   */
+  | { kind: 'action_expired' }
   | { kind: 'invalid_pin'; remainingAttempts: number | null }
   | { kind: 'locked'; lockedUntil: string }
   | { kind: 'wrong_location' }
@@ -154,6 +159,8 @@ const requestUpdateSchema = z.object({
 const verifyPinResponseSchema = z.object({
   actionToken: z.string().min(20),
   expiresAt: z.string(),
+  /** Cuánto dura el permiso. Opcional: un servidor de antes no lo manda. */
+  expiresInSeconds: z.number().int().positive().optional(),
   employee: z.object({
     opaqueId: z.string().min(1),
     displayName: z.string().min(1),
@@ -178,6 +185,10 @@ const verifyPinResponseSchema = z.object({
   openSession: z
     .object({
       startedAt: z.string(),
+      // El turno de la jornada en curso. Con valor por defecto: un servidor de antes no
+      // los manda, y el reloj tiene que seguir funcionando con él.
+      shiftId: docId().nullable().default(null),
+      shiftStartsAt: z.string().nullable().default(null),
       shiftEndsAt: z.string().nullable(),
       // Minutos de descanso ya tomados y minutos obligatorios de la ubicacion:
       // con estos dos el kiosco sabe si al salir falta el descanso, sin tener
@@ -314,6 +325,7 @@ export function mapInvokeError(error: unknown, payload: unknown): KioskApiError 
       code: z
         .enum([
           'revoked',
+          'action_expired',
           'invalid_pin',
           'locked',
           'wrong_location',
@@ -330,6 +342,8 @@ export function mapInvokeError(error: unknown, payload: unknown): KioskApiError 
     switch (shape.data.code) {
       case 'revoked':
         return { kind: 'revoked' };
+      case 'action_expired':
+        return { kind: 'action_expired' };
       case 'invalid_pin':
         return { kind: 'invalid_pin', remainingAttempts: shape.data.remainingAttempts ?? null };
       case 'locked':

@@ -15,9 +15,11 @@ import {
   DEMO_USER_ID,
   DEMO_VENDEDOR_EMAIL,
   DEMO_VENDEDOR_USER_ID,
+  TZ,
   crearAlmacen,
 } from './seed';
 import { registrarFichajeDemo } from './reconstruir';
+import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 import type { DataClient } from '@/lib/firebase/query';
 import {
   esMarcaFueraDelTurno,
@@ -1552,6 +1554,41 @@ function estadoDeAsistenciaDemo(almacen: Almacen): 'OFF_SHIFT' | 'WORKING' | 'ON
   return valor === 'WORKING' || valor === 'ON_BREAK' ? valor : 'OFF_SHIFT';
 }
 
+/**
+ * Cuándo entró, si entró en esta demostración. Hace falta para que el reloj diga «desde
+ * ayer» cuando de verdad es desde ayer: con una hora siempre relativa a ahora, una jornada
+ * olvidada no se podía enseñar nunca.
+ */
+function entradaDemo(almacen: Almacen): string | null {
+  const desde = (almacen.get('demo_estado_kiosco') ?? [])[0]?.desde;
+  return typeof desde === 'string' ? desde : null;
+}
+
+/**
+ * Los turnos de la demostración a horas FIJAS del día de la tienda: hoy un turno partido
+ * (10–14 y 17–21) y mañana uno entero (10–21). A horas fijas y no relativas a ahora porque
+ * lo que se prueba es justo el día: que el reloj diga «hoy» y «mañana», que al entrar solo
+ * ofrezca los de hoy, y que con la jornada abierta no pida elegir nada.
+ */
+function turnosDelDiaDemo(ahora: Date) {
+  const hoy = dateKeyOf(ahora, TZ);
+  const manana = addDaysToKey(hoy, 1);
+  const turno = (id: string, dia: string, desde: string, hasta: string) => ({
+    id,
+    startsAt: localDateTimeToInstant(dia, desde, TZ) ?? ahora.toISOString(),
+    endsAt: localDateTimeToInstant(dia, hasta, TZ) ?? ahora.toISOString(),
+    jobRoleName: 'Cajero',
+    employeeNote: null,
+    plannedUnpaidBreakMinutes: 0,
+    changedSinceLastPublication: false,
+  });
+  return [
+    turno('demo-turno-hoy-manana', hoy, '10:00', '14:00'),
+    turno('demo-turno-hoy-tarde', hoy, '17:00', '21:00'),
+    turno('demo-turno-de-manana', manana, '10:00', '21:00'),
+  ];
+}
+
 function accionesPermitidasDemo(estado: 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK') {
   if (estado === 'OFF_SHIFT') return ['clock_in'] as const;
   if (estado === 'ON_BREAK') return ['break_end', 'clock_out'] as const;
@@ -1570,7 +1607,18 @@ function registrarEventoDemo(
   motivo: unknown,
   nota?: unknown,
 ): void {
-  almacen.set('demo_estado_kiosco', [{ estado: estadoTrasEventoDemo(tipo) }]);
+  almacen.set('demo_estado_kiosco', [
+    {
+      estado: estadoTrasEventoDemo(tipo),
+      // La hora de la entrada se guarda y sobrevive a las pausas; la salida la borra.
+      desde:
+        tipo === 'clock_in'
+          ? new Date().toISOString()
+          : tipo === 'clock_out'
+            ? null
+            : entradaDemo(almacen),
+    },
+  ]);
   // El motivo se guarda para que la demostración pueda enseñarlo en los reportes.
   if (tipo === 'break_start' && typeof motivo === 'string') {
     almacen.set('demo_pausas', [
@@ -1665,9 +1713,32 @@ function crearFunctions(almacen: Almacen) {
          */
         case 'verify-pin': {
           const estado = estadoDeAsistenciaDemo(almacen);
+          const ahora = Date.now();
+          /*
+           * LA JORNADA ABIERTA: desde la entrada que se marcó en la demostración, con un
+           * turno de ocho horas que empieza con ella. Sin entrada guardada —un estado de
+           * antes de este cambio— Ana lleva tres horas de un turno que acaba en cinco.
+           */
+          const desde = entradaDemo(almacen);
+          const inicio = desde ?? new Date(ahora - 3 * 3600_000).toISOString();
+          const turnoAbierto = {
+            id: 'demo-turno-abierto',
+            startsAt: inicio,
+            endsAt:
+              desde === null
+                ? new Date(ahora + 5 * 3600_000).toISOString()
+                : new Date(Date.parse(desde) + 8 * 3600_000).toISOString(),
+            jobRoleName: 'Cajero',
+            employeeNote: null,
+            plannedUnpaidBreakMinutes: 60,
+            changedSinceLastPublication: false,
+          };
+          const deManana = turnosDelDiaDemo(new Date(ahora)).slice(-1);
           return sinError({
             actionToken: 'demo-action-token-suficientemente-largo',
-            expiresAt: new Date(Date.now() + 90_000).toISOString(),
+            // Cinco minutos, como el servidor de verdad. Ver `ACTION_TOKEN_TTL_SECONDS`.
+            expiresAt: new Date(ahora + 300_000).toISOString(),
+            expiresInSeconds: 300,
             employee: {
               opaqueId: 'demo-empleado-1',
               displayName: 'Ana Quispe Lara',
@@ -1688,27 +1759,21 @@ function crearFunctions(almacen: Almacen) {
              * contradecían, que es peor que no enseñar ninguna de las dos: quien mira la
              * demostración no sabe cuál de las dos miente.
              *
-             * Fuera de turno se queda vacía, que ahí sí es verdad.
+             * Y EL DE MAÑANA DETRÁS, como manda el servidor de verdad (4-oct): es lo que
+             * tenía el reloj de la tienda cuando una vendedora no pudo salir, y el reloj
+             * no debe pedir elegir entre los dos. Fuera de turno, los de hoy y mañana.
              */
             eligibleShifts:
               estado === 'OFF_SHIFT'
-                ? []
-                : [
-                    {
-                      id: 'demo-turno-abierto',
-                      startsAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
-                      endsAt: new Date(Date.now() + 5 * 3600_000).toISOString(),
-                      jobRoleName: 'Cajero',
-                      employeeNote: null,
-                      plannedUnpaidBreakMinutes: 60,
-                      changedSinceLastPublication: false,
-                    },
-                  ],
+                ? turnosDelDiaDemo(new Date(ahora))
+                : [turnoAbierto, ...deManana],
             openSession:
               estado === 'OFF_SHIFT'
                 ? null
                 : {
-                    startedAt: new Date(Date.now() - 3 * 3600_000).toISOString(),
+                    startedAt: inicio,
+                    shiftId: turnoAbierto.id,
+                    shiftStartsAt: turnoAbierto.startsAt,
                     /*
                      * A QUE HORA TERMINA EL TURNO, y no `null` como estaba.
                      *
@@ -1723,7 +1788,7 @@ function crearFunctions(almacen: Almacen) {
                      * ocho, que es una jornada creíble y además deja la salida
                      * claramente por encima del umbral de media hora.
                      */
-                    shiftEndsAt: new Date(Date.now() + 5 * 3600_000).toISOString(),
+                    shiftEndsAt: turnoAbierto.endsAt,
                     takenBreakMinutes: 0,
                     requiredBreakMinutes: 0,
                     openBreak:

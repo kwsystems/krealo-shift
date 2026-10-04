@@ -123,7 +123,7 @@ export default function KioskIdleScreen() {
 
       if (result.ok) {
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setFromOnline(result.data);
+        setFromOnline(result.data, undefined, binding.timezone);
         // Se cachea el estado que confirmo el servidor: es de donde parte la
         // reconstruccion si despues se cae la red (§9.7).
         //
@@ -199,6 +199,7 @@ export default function KioskIdleScreen() {
                 employeeOpaqueId: offline.employeeOpaqueId,
                 pinVersion: offline.pinVersion,
                 session,
+                timezone: binding.timezone,
               });
               // Mismo motivo que arriba: `replace` para que la pila no crezca.
               router.replace('/kiosk/actions');

@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import type { EligibleShift, RequestUpdate, VerifyPinResponse } from './api';
 import type { OfflineSessionResult } from './offline-session';
+import { permisoVigenteHasta, turnoInicial } from './turnos-del-reloj';
 import type { AttendanceState, TimeEventType } from '@/domain/attendance-state-machine';
 
 /**
@@ -17,12 +18,20 @@ import type { AttendanceState, TimeEventType } from '@/domain/attendance-state-m
  * una sesión offline NO tiene token de acción del servidor —el token vive 90
  * segundos y el iPad pudo estar horas sin red— así que su fichaje va a la cola
  * local y se marca como validado por el dispositivo.
+ *
+ * (El token vive 5 minutos desde el 4-oct; antes 90 segundos. Ver `ACTION_TOKEN_TTL_SECONDS`
+ * en el servidor.)
  */
 
 export type KioskSession = {
   mode: 'online' | 'offline';
   /** `null` en modo offline: no hay token del servidor que consumir. */
   actionToken: string | null;
+  /**
+   * Hasta cuándo vale `actionToken`, en milisegundos de ESTE aparato. `null` sin conexión.
+   * Pasada esta hora el reloj pide el PIN otra vez en vez de mandar algo que va a fallar.
+   */
+  vigenteHasta: number | null;
   /** Versión del PIN con la que se validó. Viaja con el evento offline. */
   pinVersion: number;
   employee: {
@@ -37,6 +46,9 @@ export type KioskSession = {
   eligibleShifts: EligibleShift[];
   openSession: {
     startedAt: string;
+    /** El turno de la jornada en curso, si tiene. Con jornada abierta no se elige turno. */
+    shiftId: string | null;
+    shiftStartsAt: string | null;
     shiftEndsAt: string | null;
     takenBreakMinutes: number;
     requiredBreakMinutes: number;
@@ -64,11 +76,12 @@ type VerificationState = {
   /** Turno elegido cuando hay más de uno elegible (§9.3). */
   selectedShiftId: string | null;
 
-  setFromOnline: (response: VerifyPinResponse, pinVersion?: number) => void;
+  setFromOnline: (response: VerifyPinResponse, pinVersion?: number, timezone?: string) => void;
   setFromOffline: (params: {
     employeeOpaqueId: string;
     pinVersion: number;
     session: Extract<OfflineSessionResult, { status: 'ready' }>;
+    timezone?: string;
   }) => void;
   selectShift: (shiftId: string | null) => void;
   clear: () => void;
@@ -82,20 +95,33 @@ function initialsFrom(displayName: string): string {
   return (first + second).toUpperCase() || '?';
 }
 
-function firstShiftId(shifts: readonly EligibleShift[]): string | null {
-  // Con un solo turno elegible queda seleccionado sin que el empleado elija (§9.3).
-  return shifts.length === 1 ? (shifts[0]?.id ?? null) : null;
+/**
+ * El turno que queda elegido al abrir el reloj. Antes era «el único, si hay uno», y ese
+ * único podía ser el de MAÑANA: una entrada de hoy quedaba atada a él. Ver
+ * `turnos-del-reloj.ts`.
+ */
+function turnoElegidoAlEntrar(
+  shifts: readonly EligibleShift[],
+  turnoDeLaJornada: string | null,
+  zona: string,
+): string | null {
+  return turnoInicial({ turnos: shifts, turnoDeLaJornada, ahora: new Date(), zona });
 }
 
 export const useKioskVerificationStore = create<VerificationState>((set) => ({
   verification: null,
   selectedShiftId: null,
 
-  setFromOnline: (response, pinVersion = 1) =>
+  setFromOnline: (response, pinVersion = 1, timezone = 'America/Lima') =>
     set({
       verification: {
         mode: 'online',
         actionToken: response.actionToken,
+        vigenteHasta: permisoVigenteHasta({
+          recibidoEn: Date.now(),
+          expiresInSeconds: response.expiresInSeconds,
+          expiresAt: response.expiresAt,
+        }),
         pinVersion,
         employee: response.employee,
         attendanceState: response.attendanceState,
@@ -105,10 +131,14 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
         earliestClockInAt: response.earliestClockInAt,
         requestUpdates: response.requestUpdates,
       },
-      selectedShiftId: firstShiftId(response.eligibleShifts),
+      selectedShiftId: turnoElegidoAlEntrar(
+        response.eligibleShifts,
+        response.openSession?.shiftId ?? null,
+        timezone,
+      ),
     }),
 
-  setFromOffline: ({ employeeOpaqueId, pinVersion, session }) => {
+  setFromOffline: ({ employeeOpaqueId, pinVersion, session, timezone = 'America/Lima' }) => {
     const shifts: EligibleShift[] =
       session.shift === null
         ? []
@@ -128,6 +158,7 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
       verification: {
         mode: 'offline',
         actionToken: null,
+        vigenteHasta: null,
         pinVersion,
         employee: {
           opaqueId: employeeOpaqueId,
@@ -147,6 +178,8 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
             ? null
             : {
                 startedAt: session.sessionStartedAt,
+                shiftId: session.shift?.id ?? null,
+                shiftStartsAt: session.shift?.startsAt ?? null,
                 shiftEndsAt: session.shift?.endsAt ?? null,
                 takenBreakMinutes: session.takenBreakMinutes,
                 requiredBreakMinutes: session.requiredBreakMinutes,
@@ -158,7 +191,11 @@ export const useKioskVerificationStore = create<VerificationState>((set) => ({
         // `KioskSession.requestUpdates`.
         requestUpdates: [],
       },
-      selectedShiftId: firstShiftId(shifts),
+      selectedShiftId: turnoElegidoAlEntrar(
+        shifts,
+        session.sessionStartedAt === null ? null : (session.shift?.id ?? null),
+        timezone,
+      ),
     });
   },
 

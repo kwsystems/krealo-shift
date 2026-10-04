@@ -51,6 +51,23 @@ export function formatLongDate(
   return format(zoned, pattern, { locale: localeFor(language) });
 }
 
+/**
+ * El día en corto, para ponerlo junto a unas horas: «sáb 3 oct» o «Sat, Oct 3».
+ *
+ * Existe por el reloj (4-oct): ofrecía «10:00 – 22:00» y «10:00 – 21:00» para elegir, y
+ * uno era de hoy y el otro de mañana sin que nada lo dijera.
+ */
+export function formatShortDay(
+  instant: Date | string,
+  timezone: string,
+  language: SupportedLanguage = 'es-PE',
+): string {
+  const zoned = inZone(instant, timezone);
+  if (!isValid(zoned)) return '';
+  const pattern = language === 'es-PE' ? 'EEE d MMM' : 'EEE, MMM d';
+  return format(zoned, pattern, { locale: localeFor(language) }).replace(/\./g, '');
+}
+
 export function formatShiftRange(
   startsAt: Date | string,
   endsAt: Date | string,

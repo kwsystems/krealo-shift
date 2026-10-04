@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 
 import { submitTimeEvent, verifyPin } from '../../kiosk-api';
 import { COLLECTIONS, db } from '../../shared/admin';
+import { ACTION_TOKEN_TTL_SECONDS, issueActionToken } from '../../shared/kiosk';
 
 /**
  * `submitTimeEvent`, que es el unico motivo por el que la aplicacion existe (§8, §11).
@@ -45,6 +46,28 @@ const kioskAuth = { devicePublicId: PUBLICO, credential: CREDENCIAL };
 async function tokenDeAccion(): Promise<string> {
   const contexto = (await correr(verifyPin, { pin: PIN, kioskAuth })) as { actionToken: string };
   return contexto.actionToken;
+}
+
+/** El código y los detalles de un fallo: lo que el reloj lee para saber qué decir. */
+async function fallo(promesa: Promise<unknown>): Promise<{ code: string; details: unknown }> {
+  try {
+    await promesa;
+    return { code: '(no fallo)', details: null };
+  } catch (error) {
+    const e = error as { code?: string; details?: unknown };
+    return { code: e.code ?? String(error), details: e.details ?? null };
+  }
+}
+
+/** Un token emitido hace `minutos` minutos, como el de quien se quedó mirando la pantalla. */
+function tokenDeHace(minutos: number): string {
+  const ahora = Date.now();
+  const espia = jest.spyOn(Date, 'now').mockReturnValue(ahora - minutos * 60_000);
+  try {
+    return issueActionToken({ employeeId: PERSONA, deviceId: APARATO, locationId: SEDE }).token;
+  } finally {
+    espia.mockRestore();
+  }
 }
 
 async function codigoDelFallo(promesa: Promise<unknown>): Promise<string> {
@@ -203,6 +226,50 @@ describe('submitTimeEvent', () => {
       ),
     ).toBe('failed-precondition');
     expect(await eventos()).toBe(0);
+  });
+
+  /*
+   * EL 3-OCT UNA VENDEDORA NO PUDO MARCAR SU SALIDA. El token del PIN duraba 90 s; quien se
+   * entretenía con el motivo, la nota o la foto se pasaba, y el reloj decía «Inténtalo otra
+   * vez» y reenviaba el mismo token vencido. Dos cosas lo arreglan, y las dos se miran aquí:
+   * que el permiso dure lo que dura el recorrido, y que el fallo diga qué hay que hacer.
+   */
+  it('el permiso del PIN dura 5 minutos: a los 4 todavía ficha', async () => {
+    expect(ACTION_TOKEN_TTL_SECONDS).toBe(300);
+    const respuesta = (await correr(submitTimeEvent, {
+      kioskAuth,
+      actionToken: tokenDeHace(4),
+      eventType: 'clock_in',
+      idempotencyKey: 'clave-a-los-4',
+    })) as Record<string, unknown>;
+    expect(respuesta.status).toBe('accepted');
+  });
+
+  it('vencido, el fallo dice «vuelve a marcar tu PIN» con un código que el reloj lee', async () => {
+    const resultado = await fallo(
+      correr(submitTimeEvent, {
+        kioskAuth,
+        actionToken: tokenDeHace(6),
+        eventType: 'clock_in',
+        idempotencyKey: 'clave-vencida',
+      }),
+    );
+    expect(resultado.code).toBe('unauthenticated');
+    expect(resultado.details).toEqual({ code: 'action_expired' });
+    expect(await eventos()).toBe(0);
+  });
+
+  it('una transición imposible lleva el código que el reloj sabe explicar', async () => {
+    const resultado = await fallo(
+      correr(submitTimeEvent, {
+        kioskAuth,
+        actionToken: await tokenDeAccion(),
+        eventType: 'clock_out',
+        idempotencyKey: 'clave-salida-sin-entrada',
+      }),
+    );
+    expect(resultado.code).toBe('failed-precondition');
+    expect(resultado.details).toEqual({ code: 'invalid_transition', state: 'OFF_SHIFT' });
   });
 
   it('sin clave de idempotencia no se ficha', async () => {

@@ -63,7 +63,19 @@ export async function turnoDeLaJornada(params: {
 }): Promise<TurnoDeJornada | null> {
   if (params.turnoElegido !== null) {
     const elegido = (await db.collection(COLLECTIONS.shifts).doc(params.turnoElegido).get()).data();
-    if (elegido !== undefined && elegido.status !== 'cancelled') {
+    /*
+     * Y QUE SEA DE ESA JORNADA (4-oct). El reloj ofrecía el turno de hoy y el de mañana sin
+     * decir el día, y si había uno solo —el de mañana— lo elegía por la persona. Una
+     * entrada de hoy quedaba atada al turno de mañana: hoy salía como falta, mañana como
+     * cubierto, y las marcas medían una tardanza de un día entero. El elegido vale si
+     * empieza dentro de la misma ventana en la que se buscan los candidatos; si no, se
+     * busca el que le toca, como cuando no se elige ninguno.
+     */
+    const cerca =
+      elegido !== undefined &&
+      Math.abs(Date.parse(String(elegido.starts_at)) - Date.parse(params.entrada)) <=
+        VENTANA_DE_BUSQUEDA_MS;
+    if (elegido !== undefined && elegido.status !== 'cancelled' && cerca) {
       return {
         id: params.turnoElegido,
         starts_at: String(elegido.starts_at),

@@ -39,9 +39,9 @@ describe('el motivo de un fallo del reloj', () => {
   });
 
   it('un bloqueo sin fecha no revienta: cae a cadena vacía', () => {
-    expect(mapInvokeError(comoLlegaDelServidor({ code: 'locked', lockedUntil: null }), null)).toEqual(
-      { kind: 'locked', lockedUntil: '' },
-    );
+    expect(
+      mapInvokeError(comoLlegaDelServidor({ code: 'locked', lockedUntil: null }), null),
+    ).toEqual({ kind: 'locked', lockedUntil: '' });
   });
 
   it('un reloj desactivado se reconoce', () => {
@@ -51,9 +51,29 @@ describe('el motivo de un fallo del reloj', () => {
   });
 
   it('un código de activación vencido se distingue de una avería', () => {
+    expect(mapInvokeError(comoLlegaDelServidor({ code: 'activation_code_invalid' }), null)).toEqual(
+      { kind: 'activation_code_invalid' },
+    );
+  });
+
+  /*
+   * EL FALLO DEL 3-OCT: una vendedora no pudo marcar su salida. El permiso del PIN había
+   * vencido, el reloj lo tomaba por avería —«Inténtalo otra vez»— y reintentar con el
+   * mismo permiso fallaba siempre. Las dos formas son las que lanza el servidor.
+   */
+  it('un permiso vencido se reconoce, para pedir el PIN otra vez y no «inténtalo otra vez»', () => {
+    expect(mapInvokeError(comoLlegaDelServidor({ code: 'action_expired' }), null)).toEqual({
+      kind: 'action_expired',
+    });
+  });
+
+  it('una transición imposible se reconoce aunque traiga el estado en los detalles', () => {
     expect(
-      mapInvokeError(comoLlegaDelServidor({ code: 'activation_code_invalid' }), null),
-    ).toEqual({ kind: 'activation_code_invalid' });
+      mapInvokeError(
+        comoLlegaDelServidor({ code: 'invalid_transition', state: 'OFF_SHIFT' }),
+        null,
+      ),
+    ).toEqual({ kind: 'invalid_transition' });
   });
 
   it('lo que no se reconoce sigue siendo un fallo del servidor, con su mensaje', () => {

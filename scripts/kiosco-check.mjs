@@ -624,6 +624,150 @@ for (const { tema, marca } of VUELTAS) {
   await ctx.close();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * EL TURNO CON SU DÍA, Y EL PIN OTRA VEZ CUANDO PASÓ MUCHO RATO (4-oct)
+ * ---------------------------------------------------------------------------
+ *
+ * POR QUÉ EXISTE. El 3-oct una vendedora no pudo marcar su salida. El reloj le enseñaba
+ * «Elige tu turno» con «10:00 – 22:00» y «10:00 – 21:00» —el de hoy y el de mañana, sin el
+ * día— y, cuando por fin confirmó, «No pudimos completar la acción. Inténtalo otra vez.»:
+ * el permiso del PIN había vencido y reintentar con él fallaba siempre.
+ *
+ * Se recorre con el RELOJ DEL NAVEGADOR FIJADO a las 09:50 de Lima, porque lo que se
+ * prueba es el día y la hora: la demo tiene hoy un turno partido (10–14 y 17–21) y mañana
+ * uno entero. Con la hora real, a las 22:00 el turno de la mañana ya habría terminado y la
+ * prueba diría otra cosa cada vez.
+ *
+ *   1. Al entrar se elige entre los dos de HOY, cada uno con su día; el de mañana no sale.
+ *   2. Con la jornada abierta no se pide elegir nada: «Tu turno: hoy, …».
+ *   3. Si pasan seis minutos con una hoja abierta, el reloj lo dice y solo ofrece volver
+ *      a marcar el PIN; no deja confirmar algo que el servidor va a rechazar.
+ *   4. Veinte horas después, la jornada sigue abierta: «desde ayer» y el aviso.
+ */
+{
+  const caso = 'turnos con su día';
+  /*
+   * CON LA ZONA DEL NAVEGADOR EN LIMA, y no por adorno. El reloj falso de Playwright
+   * sustituye `Date`, y `TZDate` —que hereda de `Date`— deja de aplicar la zona de la
+   * tienda: pinta la hora del sistema. En el contenedor eso es UTC, y la primera pasada
+   * enseñaba el turno de 10:00 como «15:00». En el aparato de verdad no pasa (no hay
+   * reloj falso); con el navegador en Lima, lo que se mide es lo que vería la tienda.
+   */
+  const ctx = await navegador.newContext({
+    viewport: { width: 834, height: 1112 },
+    timezoneId: 'America/Lima',
+    ...CON_CAMARA,
+  });
+  const pag = await ctx.newPage();
+  const hoyEnLima = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(
+    new Date(),
+  );
+  await pag.clock.install({ time: new Date(`${hoyEnLima}T09:50:00-05:00`) });
+  await sembrarKiosco(pag);
+  await irA(pag, base, '/kiosk', { asentar: 700 });
+
+  const tecleaPin = async () => {
+    await pag.waitForSelector('[data-testid="keypad-1"]:visible', { timeout: 20000 });
+    for (const digito of ['1', '2', '3', '4', '5', '6']) {
+      await pag.locator(`[data-testid="keypad-${digito}"]:visible`).first().click();
+      await pag.waitForTimeout(160);
+    }
+    await pag.waitForSelector('[data-testid="kiosk-actions"]', { timeout: 20000 }).catch(() => {});
+    await pag.waitForTimeout(1200);
+  };
+  const textoDe = async (selector) =>
+    (await pag.locator(selector).count()) === 0
+      ? null
+      : (await pag.locator(selector).first().innerText()).replace(/\s+/g, ' ').trim();
+
+  // 1. Al entrar.
+  await tecleaPin();
+  const opciones = await pag
+    .locator('[data-testid^="kiosk-shift-"]:not([data-testid="kiosk-shift-line"])')
+    .allInnerTexts();
+  const linea = await textoDe('[data-testid="kiosk-shift-line"]');
+  if (opciones.length !== 2) {
+    problemas.push(
+      `${caso}: al entrar debería elegir entre los 2 turnos de hoy y hay ${opciones.length}`,
+    );
+  } else if (!opciones.every((o) => /^Hoy, /.test(o.trim()))) {
+    problemas.push(`${caso}: las opciones no dicen el día: ${opciones.join(' | ')}`);
+  }
+  if (opciones.some((o) => /mañana/i.test(o))) {
+    problemas.push(`${caso}: al entrar se ofrece el turno de mañana: ${opciones.join(' | ')}`);
+  }
+  if (linea === null || !linea.startsWith('Próximo turno: hoy, ')) {
+    problemas.push(`${caso}: antes de entrar no dice de qué día es el turno: «${linea}»`);
+  }
+  console.log(`  al entrar        ${opciones.map((o) => o.trim()).join(' | ')}`);
+
+  // 2. Entra, y vuelve con la jornada abierta.
+  const entro = (await marcarEntrada(pag, caso)) && (await esperarResultado(pag, caso));
+  if (entro) {
+    await pag.locator('[data-testid="kiosk-result-done"]').click();
+    await pag.waitForTimeout(1200);
+    await tecleaPin();
+    const elige = await pag.locator('[data-testid="kiosk-choose-shift"]').count();
+    const suTurno = await textoDe('[data-testid="kiosk-shift-line"]');
+    if (elige > 0)
+      problemas.push(`${caso}: con la jornada abierta sigue pidiendo «Elige tu turno»`);
+    if (suTurno === null || !suTurno.startsWith('Tu turno: hoy, ')) {
+      problemas.push(`${caso}: con la jornada abierta no dice su turno con el día: «${suTurno}»`);
+    }
+    console.log(
+      `  dentro           «${suTurno}», ${elige === 0 ? 'sin elegir turno' : 'PIDE ELEGIR'}`,
+    );
+
+    // 3. Seis minutos con la hoja del descanso abierta.
+    await pag.locator('[data-testid="kiosk-action-break_start"]').click();
+    await pag.waitForTimeout(800);
+    await pag.clock.fastForward('06:00');
+    await pag.waitForTimeout(1200);
+    const aviso = await pag.locator('[data-testid="kiosk-repetir-pin"]').count();
+    const acciones = await pag.locator('[data-testid^="kiosk-action-"]').count();
+    const hoja = await pag.locator('[data-testid="break-reason-meal"]:visible').count();
+    if (aviso === 0) problemas.push(`${caso}: pasados 6 min no pide volver a marcar el PIN`);
+    if (acciones > 0) problemas.push(`${caso}: con el permiso vencido sigue ofreciendo fichar`);
+    if (hoja > 0)
+      problemas.push(`${caso}: con el permiso vencido la hoja del descanso sigue abierta`);
+    const volver = pag.locator('[data-testid="kiosk-pin-again"]');
+    if ((await volver.count()) > 0) {
+      await volver.click();
+      await pag.waitForTimeout(1200);
+      if ((await pag.locator('[data-testid="keypad-1"]:visible').count()) === 0) {
+        problemas.push(`${caso}: «Volver a marcar mi PIN» no lleva al teclado`);
+      }
+    }
+    console.log(
+      `  6 min después    ${aviso > 0 ? 'pide el PIN otra vez' : 'NO LO PIDE'}, ${acciones} botones de fichar`,
+    );
+
+    // 4. Veinte horas después: la jornada de ayer sigue abierta.
+    await pag.clock.fastForward('20:00:00');
+    await pag.waitForTimeout(800);
+    await tecleaPin();
+    const cuerpo = (await pag.innerText('body')).replace(/\s+/g, ' ');
+    const olvidada = await pag.locator('[data-testid="kiosk-jornada-olvidada"]').count();
+    if (!cuerpo.includes('Trabajando desde ayer, ')) {
+      problemas.push(`${caso}: una jornada de ayer no dice «desde ayer»`);
+    }
+    if (olvidada === 0) problemas.push(`${caso}: una jornada abierta desde ayer no avisa`);
+    const descanso = await pag.locator('[data-testid="kiosk-action-break_start"]').count();
+    const olvide = await pag.locator('[data-testid="kiosk-forgot-primary"]').count();
+    if (descanso > 0 || olvide === 0) {
+      problemas.push(
+        `${caso}: con la jornada de ayer abierta, lo primero debería ser «Olvidé marcar» y no «Iniciar descanso»`,
+      );
+    }
+    console.log(
+      `  20 h después     ${cuerpo.includes('Trabajando desde ayer, ') ? '«desde ayer»' : 'SIN EL DÍA'}, ` +
+        `${olvidada > 0 ? 'con aviso' : 'SIN AVISO'}`,
+    );
+  }
+  await ctx.close();
+}
+
 console.log(
   '  nota: el estado «ese PIN no es correcto» NO se visita aquí — en demostración\n' +
     '        cualquier PIN entra. Ese contraste lo cubre src/theme/__tests__/tema.test.ts.',

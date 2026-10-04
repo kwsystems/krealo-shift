@@ -186,9 +186,15 @@ export async function recordTimeEvent(input: TimeEventInput): Promise<{
   const stateBefore = await attendanceStateAt(input.employeeId, input.occurredAt);
   const result = transition(stateBefore, input.eventType);
   if (!result.allowed) {
+    /*
+     * Con `code` en los detalles, que es lo que lee el reloj: sin él esto llegaba como
+     * «No pudimos completar la acción» y la persona reintentaba algo que ya no cabía —casi
+     * siempre porque su fichaje SÍ había quedado y lo que se perdió fue la respuesta—.
+     */
     throw new HttpsError(
       'failed-precondition',
       `No se puede registrar «${input.eventType}» estando en «${stateBefore}».`,
+      { code: 'invalid_transition', state: stateBefore },
     );
   }
 

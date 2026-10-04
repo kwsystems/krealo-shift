@@ -35,6 +35,8 @@ import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/com
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { submitTimeEvent, type TimeEventType } from '@/features/kiosk/api';
+import { diaRelativo, proximoTurno, turnosParaEntrar } from '@/features/kiosk/turnos-del-reloj';
+import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { fotoDeVerificacionObligatoria, permiteFicharSinRed } from '@/lib/kiosk/disponibilidad';
 import { track } from '@/lib/analytics';
 import { enqueueEvent, enqueuePhotoForEvent } from '@/lib/offline/outbox';
@@ -53,7 +55,13 @@ import { usePreferencesStore } from '@/stores/preferences-store';
 import { durations, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
-import { formatClockTime, formatShiftRange, minutesToHHmm } from '@/utils/time';
+import {
+  formatClockTime,
+  formatShiftRange,
+  formatShortDay,
+  minutesBetween,
+  minutesToHHmm,
+} from '@/utils/time';
 
 /**
  * Flujo del empleado tras validar el PIN (§9.2 a §9.5).
@@ -125,6 +133,18 @@ type Step =
  */
 const ESPERA_MAXIMA_DE_FOTO_MS = 12_000;
 
+/**
+ * Cuánto se queda el aviso de «vuelve a marcar tu PIN» antes de que el reloj vuelva solo
+ * al teclado. Es un aparato compartido: el nombre de alguien no puede quedarse en pantalla
+ * indefinidamente porque se fue sin pulsar nada.
+ */
+const ESPERA_TRAS_VENCER_MS = 60_000;
+
+/** Primera letra en mayúscula, para un día que empieza una etiqueta: «Hoy, sáb 3 oct». */
+function conMayuscula(texto: string): string {
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
 export default function KioskActionsScreen() {
   const { colors } = useTheme();
   const styles = useEstilos();
@@ -154,6 +174,17 @@ export default function KioskActionsScreen() {
     'OFF_SHIFT' | 'WORKING' | 'ON_BREAK' | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * HAY QUE VOLVER A MARCAR EL PIN, y por qué (4-oct).
+   *
+   * `vencido`: el permiso del PIN se acabó. `estado`: el servidor dice que la persona ya no
+   * está en el estado con el que se abrió la pantalla —casi siempre porque su fichaje SÍ
+   * quedó y se perdió la respuesta—. En los dos casos reintentar con el mismo permiso no
+   * sirve de nada, y antes eso es lo que la pantalla pedía: «Inténtalo otra vez». Así se
+   * quedó sin salida una vendedora el 3-oct. Ahora se dice qué pasó y el único botón que
+   * queda es el que lo arregla.
+   */
+  const [repetirPin, setRepetirPin] = useState<'vencido' | 'estado' | null>(null);
   /*
    * `null` significa que todavia no hay resultado, y 'skipped' que no se pudo tomar.
    *
@@ -218,6 +249,35 @@ export default function KioskActionsScreen() {
     return () => clearTimeout(timer);
   }, [step, returnToIdle]);
 
+  /*
+   * EL PERMISO DEL PIN SE ACABA, Y EL RELOJ LO DICE ANTES DE FALLAR. A su hora se cierran
+   * las hojas y se pide el PIN otra vez: mejor eso que dejar a alguien escribir el motivo,
+   * sacarse la foto y esperar la cuenta atrás para recibir un error al final. No corre
+   * mientras se envía un fichaje —el permiso era bueno al salir— ni sobre el resultado.
+   */
+  const vigenteHasta = verification?.vigenteHasta ?? null;
+  useEffect(() => {
+    if (vigenteHasta === null || repetirPin !== null || submitting || step.name === 'result') {
+      return;
+    }
+    const timer = setTimeout(
+      () => {
+        setSheet({ name: 'none' });
+        setStep({ name: 'identify' });
+        setError(null);
+        setRepetirPin('vencido');
+      },
+      Math.max(0, vigenteHasta - Date.now()),
+    );
+    return () => clearTimeout(timer);
+  }, [vigenteHasta, repetirPin, submitting, step.name]);
+
+  useEffect(() => {
+    if (repetirPin === null) return;
+    const timer = setTimeout(returnToIdle, ESPERA_TRAS_VENCER_MS);
+    return () => clearTimeout(timer);
+  }, [repetirPin, returnToIdle]);
+
   const selectedShift = useMemo(
     () => verification?.eligibleShifts.find((shift) => shift.id === selectedShiftId) ?? null,
     [verification, selectedShiftId],
@@ -251,6 +311,66 @@ export default function KioskActionsScreen() {
    * rara y Horario se lo dice a quien gestiona. Ver `src/domain/fuera-del-turno.ts`.
    */
   const openSession = verification.openSession;
+
+  /*
+   * EL TURNO, CON SU DÍA (4-oct). «10:00 – 22:00» a secas no dice si es hoy o mañana, y el
+   * reloj ofrecía los dos para elegir. Con la jornada abierta el turno es el de la jornada
+   * y no se elige nada; al entrar solo se ofrecen los de hoy. Ver `turnos-del-reloj.ts`.
+   */
+  const enJornada = state !== 'OFF_SHIFT';
+  const paraEntrar = turnosParaEntrar(verification.eligibleShifts, now, timezone);
+  const turnoDeLaJornada =
+    enJornada &&
+    openSession !== null &&
+    openSession.shiftStartsAt !== null &&
+    openSession.shiftEndsAt !== null
+      ? { startsAt: openSession.shiftStartsAt, endsAt: openSession.shiftEndsAt }
+      : null;
+  const turnoAnunciado = selectedShift ?? proximoTurno(verification.eligibleShifts, now);
+  /** El turno que viaja con el fichaje: el de la jornada si está dentro, el elegido si entra. */
+  const turnoQueSeManda = enJornada ? (openSession?.shiftId ?? null) : (selectedShift?.id ?? null);
+  /** El que se enseña al confirmar y al terminar. */
+  const turnoMostrado = turnoDeLaJornada ?? selectedShift;
+
+  const diaDe = (instante: string): string => {
+    const fecha = formatShortDay(instante, timezone, language);
+    switch (diaRelativo(instante, timezone, now)) {
+      case 'today':
+        return t('kiosk.dayRelative', { relative: t('kiosk.dayToday'), date: fecha });
+      case 'tomorrow':
+        return t('kiosk.dayRelative', { relative: t('kiosk.dayTomorrow'), date: fecha });
+      case 'yesterday':
+        return t('kiosk.dayRelative', { relative: t('kiosk.dayYesterday'), date: fecha });
+      case 'other':
+        return fecha;
+    }
+  };
+  const turnoConDia = (turno: { startsAt: string; endsAt: string }): string =>
+    t('kiosk.shiftWithDay', {
+      day: diaDe(turno.startsAt),
+      range: formatShiftRange(
+        turno.startsAt,
+        turno.endsAt,
+        timezone,
+        policies.timeFormat,
+        language,
+      ),
+    });
+
+  /*
+   * UNA JORNADA DE OTRO DÍA QUE SIGUE ABIERTA: no se marcó la salida. El reloj decía
+   * «Trabajando desde 09:48» sin decir que eran las 09:48 de AYER, y ofrecía «Iniciar
+   * descanso» como si nada. Mismo umbral que Horas, Inicio y Horario: 16 horas.
+   */
+  const jornadaOlvidada =
+    enJornada &&
+    openSession !== null &&
+    minutesBetween(openSession.startedAt, now) > OPEN_SESSION_ALERT_MINUTES;
+  const desdeOtroDia = (instante: string) => diaRelativo(instante, timezone, now) !== 'today';
+
+  const permisoVencido = () =>
+    verification.vigenteHasta !== null && Date.now() >= verification.vigenteHasta;
+
   const requiredBreakMinutes = openSession?.requiredBreakMinutes ?? 0;
   const takenBreakMinutes = openSession?.takenBreakMinutes ?? 0;
   const missingRequiredBreak = requiredBreakMinutes > 0 && takenBreakMinutes < requiredBreakMinutes;
@@ -289,6 +409,11 @@ export default function KioskActionsScreen() {
   };
 
   const startAction = (event: TimeEventType) => {
+    if (permisoVencido()) {
+      setError(null);
+      setRepetirPin('vencido');
+      return;
+    }
     const result = transition(state, event);
     if (!result.allowed) {
       setError(t('errors.invalidTransition'));
@@ -351,7 +476,7 @@ export default function KioskActionsScreen() {
         breakNote: step.name === 'confirm' ? step.breakNote : undefined,
         departureReason: step.name === 'confirm' ? step.departureReason : undefined,
         departureNote: step.name === 'confirm' ? step.departureNote : undefined,
-        shiftId: selectedShift?.id ?? null,
+        shiftId: turnoQueSeManda,
         locationId: binding.locationId,
         pinVersion: verification.pinVersion,
         photoLocalUri: photo?.status === 'captured' ? photo.uri : null,
@@ -404,7 +529,7 @@ export default function KioskActionsScreen() {
         // duplicado. Si lo fuera, la cola lo descubre al sincronizar y ahí se resuelve
         // como éxito, que es lo correcto: el evento ya estaba registrado.
         duplicate: false,
-        shiftEndsAt: selectedShift?.endsAt ?? null,
+        shiftEndsAt: turnoMostrado?.endsAt ?? null,
       });
     } catch {
       // No se pudo guardar ni localmente. Decirle que fichó seria mentirle.
@@ -454,6 +579,15 @@ export default function KioskActionsScreen() {
       return;
     }
 
+    // Con el permiso vencido no se envía: el servidor lo rechazaría y la persona leería
+    // un error en vez de lo que tiene que hacer.
+    if (permisoVencido()) {
+      setSubmitting(false);
+      setStep({ name: 'identify' });
+      setRepetirPin('vencido');
+      return;
+    }
+
     // La clave de idempotencia se genera antes de enviar, para que un reintento o
     // un doble toque produzcan el mismo evento y no dos (§12, §17).
     const idempotencyKey = Crypto.randomUUID();
@@ -466,7 +600,7 @@ export default function KioskActionsScreen() {
       breakNote: step.name === 'confirm' ? step.breakNote : undefined,
       departureReason: step.name === 'confirm' ? step.departureReason : undefined,
       departureNote: step.name === 'confirm' ? step.departureNote : undefined,
-      shiftId: selectedShift?.id ?? null,
+      shiftId: turnoQueSeManda,
       idempotencyKey,
       occurredAtDevice: new Date().toISOString(),
       deviceSequence: Date.now(),
@@ -536,6 +670,16 @@ export default function KioskActionsScreen() {
       return;
     }
 
+    /*
+     * PERMISO VENCIDO O ESTADO CAMBIADO: reintentar no sirve, hay que volver a marcar el
+     * PIN. Antes los dos caían en «Inténtalo otra vez». Ver `repetirPin`.
+     */
+    if (result.error.kind === 'action_expired' || result.error.kind === 'invalid_transition') {
+      setStep({ name: 'identify' });
+      setRepetirPin(result.error.kind === 'action_expired' ? 'vencido' : 'estado');
+      return;
+    }
+
     if (result.error.kind === 'revoked') {
       // Igual que en la pantalla de reposo: el estado se marca para que el iPad
       // muestre que fue desactivado en vez de seguir pidiendo PIN.
@@ -543,13 +687,11 @@ export default function KioskActionsScreen() {
     }
 
     setError(
-      result.error.kind === 'invalid_transition'
-        ? t('errors.invalidTransition')
-        : result.error.kind === 'revoked'
-          ? t('errors.kioskRevoked')
-          : result.error.kind === 'wrong_location'
-            ? t('errors.kioskWrongLocation')
-            : t('errors.generic'),
+      result.error.kind === 'revoked'
+        ? t('errors.kioskRevoked')
+        : result.error.kind === 'wrong_location'
+          ? t('errors.kioskWrongLocation')
+          : t('errors.generic'),
     );
     setStep({ name: 'identify' });
   };
@@ -601,34 +743,45 @@ export default function KioskActionsScreen() {
                         language,
                       ),
                     })
-                  : t('kiosk.workingSince', {
-                      time: formatClockTime(
-                        verification.openSession.startedAt,
-                        timezone,
-                        policies.timeFormat,
-                        language,
-                      ),
-                    })}
+                  : desdeOtroDia(verification.openSession.startedAt)
+                    ? t('kiosk.workingSinceDay', {
+                        day: diaDe(verification.openSession.startedAt),
+                        time: formatClockTime(
+                          verification.openSession.startedAt,
+                          timezone,
+                          policies.timeFormat,
+                          language,
+                        ),
+                      })
+                    : t('kiosk.workingSince', {
+                        time: formatClockTime(
+                          verification.openSession.startedAt,
+                          timezone,
+                          policies.timeFormat,
+                          language,
+                        ),
+                      })}
               </AppText>
             ) : null}
 
-            {selectedShift !== null ? (
+            {turnoDeLaJornada !== null ? (
               <Stack gap={spacing.xs}>
-                <AppText variant="help" tone="subtle">
-                  {t('kiosk.nextShift', {
-                    range: formatShiftRange(
-                      selectedShift.startsAt,
-                      selectedShift.endsAt,
-                      timezone,
-                      policies.timeFormat,
-                      language,
-                    ),
-                  })}
+                <AppText variant="help" tone="subtle" tabular testID="kiosk-shift-line">
+                  {t('kiosk.yourShift', { range: turnoConDia(turnoDeLaJornada) })}
                 </AppText>
-                {selectedShift.employeeNote !== null ? (
+                {selectedShift !== null && selectedShift.employeeNote !== null ? (
                   <AppText variant="help">{selectedShift.employeeNote}</AppText>
                 ) : null}
-                {selectedShift.changedSinceLastPublication ? (
+              </Stack>
+            ) : turnoAnunciado !== null ? (
+              <Stack gap={spacing.xs}>
+                <AppText variant="help" tone="subtle" tabular testID="kiosk-shift-line">
+                  {t('kiosk.nextShift', { range: turnoConDia(turnoAnunciado) })}
+                </AppText>
+                {selectedShift !== null && selectedShift.employeeNote !== null ? (
+                  <AppText variant="help">{selectedShift.employeeNote}</AppText>
+                ) : null}
+                {selectedShift?.changedSinceLastPublication === true ? (
                   <StatusBadge label={t('schedule.changedBadge')} tone="info" compact />
                 ) : null}
               </Stack>
@@ -652,26 +805,58 @@ export default function KioskActionsScreen() {
             language={language}
           />
 
-          {/* Varios turnos elegibles: el empleado elige (§9.3) */}
-          {verification.eligibleShifts.length > 1 && step.name === 'identify' ? (
-            <Card>
+          {jornadaOlvidada && openSession !== null && repetirPin === null ? (
+            <InlineNotice
+              tone="late"
+              icon="alert-circle-outline"
+              title={t('kiosk.forgottenTitle', { day: diaDe(openSession.startedAt) })}
+              body={t('kiosk.forgottenBody')}
+              testID="kiosk-jornada-olvidada"
+            />
+          ) : null}
+
+          {/*
+            Varios turnos HOY y viene a entrar: elige (§9.3). Con la jornada abierta no se
+            elige nada —el turno es el de la entrada— y el de mañana no se ofrece.
+          */}
+          {!enJornada &&
+          paraEntrar.length > 1 &&
+          step.name === 'identify' &&
+          repetirPin === null ? (
+            <Card testID="kiosk-choose-shift">
               <AppText variant="bodyStrong">{t('kiosk.chooseShift')}</AppText>
-              {verification.eligibleShifts.map((shift) => (
+              {paraEntrar.map((shift) => (
                 <SecondaryButton
                   key={shift.id}
-                  label={formatShiftRange(
-                    shift.startsAt,
-                    shift.endsAt,
-                    timezone,
-                    policies.timeFormat,
-                    language,
-                  )}
+                  label={conMayuscula(turnoConDia(shift))}
                   hint={shift.jobRoleName ?? undefined}
                   onPress={() => selectShift(shift.id)}
                   style={shift.id === selectedShiftId ? styles.selected : undefined}
+                  testID={`kiosk-shift-${shift.id}`}
                 />
               ))}
             </Card>
+          ) : null}
+
+          {repetirPin !== null ? (
+            <InlineNotice
+              tone="warning"
+              icon="keypad-outline"
+              title={
+                repetirPin === 'vencido' ? t('kiosk.pinExpiredTitle') : t('kiosk.stateChangedTitle')
+              }
+              body={
+                repetirPin === 'vencido' ? t('kiosk.pinExpiredBody') : t('kiosk.stateChangedBody')
+              }
+              action={
+                <PrimaryButton
+                  label={t('kiosk.pinAgain')}
+                  onPress={returnToIdle}
+                  testID="kiosk-pin-again"
+                />
+              }
+              testID="kiosk-repetir-pin"
+            />
           ) : null}
 
           {error !== null ? (
@@ -691,15 +876,29 @@ export default function KioskActionsScreen() {
           ) : null}
 
           {/* §9.3 Acciones según estado, §9.4 confirmación, §9.5 resultado */}
-          {step.name === 'identify' ? (
+          {step.name === 'identify' && repetirPin === null ? (
             <Stack gap={spacing.md}>
-              <PrimaryButton
-                label={t(`kiosk.${eventLabelKey(primary)}`)}
-                onPress={() => startAction(primary)}
-                size="kiosk"
-                loading={submitting}
-                testID={`kiosk-action-${primary}`}
-              />
+              {/*
+                Con la jornada de otro día abierta, lo primero es decir a qué hora se fue:
+                «Iniciar descanso» sobre una jornada de ayer no es nunca lo que toca. «Marcar
+                salida» se queda debajo para quien de verdad se va ahora.
+              */}
+              {jornadaOlvidada ? (
+                <PrimaryButton
+                  label={t('kiosk.forgotToClock')}
+                  onPress={() => router.push('/kiosk/forgot')}
+                  size="kiosk"
+                  testID="kiosk-forgot-primary"
+                />
+              ) : (
+                <PrimaryButton
+                  label={t(`kiosk.${eventLabelKey(primary)}`)}
+                  onPress={() => startAction(primary)}
+                  size="kiosk"
+                  loading={submitting}
+                  testID={`kiosk-action-${primary}`}
+                />
+              )}
 
               {secondary !== null ? (
                 <DangerButton
@@ -712,11 +911,13 @@ export default function KioskActionsScreen() {
                 />
               ) : null}
 
-              <GhostButton
-                label={t('kiosk.forgotToClock')}
-                onPress={() => router.push('/kiosk/forgot')}
-                testID="kiosk-forgot"
-              />
+              {jornadaOlvidada ? null : (
+                <GhostButton
+                  label={t('kiosk.forgotToClock')}
+                  onPress={() => router.push('/kiosk/forgot')}
+                  testID="kiosk-forgot"
+                />
+              )}
               <GhostButton label={t('common.cancel')} onPress={returnToIdle} />
             </Stack>
           ) : null}
@@ -733,17 +934,8 @@ export default function KioskActionsScreen() {
                 value={formatClockTime(now, timezone, policies.timeFormat, language)}
               />
               <SummaryRow label={t('kiosk.confirmLocation')} value={binding?.locationName ?? ''} />
-              {selectedShift !== null ? (
-                <SummaryRow
-                  label={t('kiosk.confirmShift')}
-                  value={formatShiftRange(
-                    selectedShift.startsAt,
-                    selectedShift.endsAt,
-                    timezone,
-                    policies.timeFormat,
-                    language,
-                  )}
-                />
+              {turnoMostrado !== null ? (
+                <SummaryRow label={t('kiosk.confirmShift')} value={turnoConDia(turnoMostrado)} />
               ) : null}
 
               {closesOpenBreak(state, step.event) ? (
@@ -965,12 +1157,16 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
       <AppText variant="help" tone="subtle">
         {label}
       </AppText>
-      <AppText variant="bodyStrong" tabular>
+      {/* Encoge y se alinea a la derecha: el turno ahora lleva su día y en un teléfono
+          de 320 no cabe en una línea junto a la etiqueta. */}
+      <AppText variant="bodyStrong" tabular style={valorDelResumen}>
         {value}
       </AppText>
     </Row>
   );
 }
+
+const valorDelResumen = { flexShrink: 1, textAlign: 'right' } as const;
 
 function statusKey(
   state: 'OFF_SHIFT' | 'WORKING' | 'ON_BREAK',

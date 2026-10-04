@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 
 import { verifyPin } from '../../kiosk-api';
 import { COLLECTIONS, db } from '../../shared/admin';
+import { recordTimeEvent } from '../../shared/attendance';
 import { MAX_INTENTOS } from '../../shared/bloqueo';
 
 /**
@@ -136,6 +137,61 @@ describe('verifyPin', () => {
     expect(typeof contexto.actionToken).toBe('string');
     expect((contexto.actionToken ?? '').length).toBeGreaterThan(20);
     expect(new Date(contexto.expiresAt ?? 0).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  /*
+   * QUIEN VIENE A SALIR, CON SU TURNO DE HOY (4-oct). El reloj solo sabía a qué hora
+   * terminaba la jornada abierta, no cuál era su turno, así que a quien marcaba la salida
+   * le pedía «Elige tu turno» entre el de hoy y el de mañana. Y cuánto dura el permiso,
+   * para que el reloj pida el PIN de nuevo antes de mandar algo que va a fallar.
+   */
+  it('con la jornada abierta devuelve SU turno entero y cuánto dura el permiso', async () => {
+    const ahora = Date.now();
+    const iso = (ms: number) => new Date(ms).toISOString();
+    for (const [id, desde, hasta] of [
+      ['turno-de-hoy', ahora - 2 * 3600_000, ahora + 6 * 3600_000],
+      ['turno-de-manana', ahora + 22 * 3600_000, ahora + 30 * 3600_000],
+    ] as const) {
+      await db
+        .collection(COLLECTIONS.shifts)
+        .doc(id)
+        .set({
+          id,
+          organization_id: ORG,
+          location_id: SEDE,
+          employee_id: 'persona-activa',
+          starts_at: iso(desde),
+          ends_at: iso(hasta),
+          status: 'published',
+          publication_version: 1,
+        });
+    }
+    await recordTimeEvent({
+      organizationId: ORG,
+      employeeId: 'persona-activa',
+      locationId: SEDE,
+      eventType: 'clock_in',
+      shiftId: 'turno-de-hoy',
+      occurredAt: iso(ahora - 3600_000),
+      idempotencyKey: 'entrada-de-hoy',
+    });
+
+    const contexto = (await llamar(conAparato(PIN_ACTIVO))) as {
+      expiresInSeconds?: number;
+      eligibleShifts?: { id: string }[];
+      openSession?: {
+        shiftId: string | null;
+        shiftStartsAt: string | null;
+        shiftEndsAt: string | null;
+      };
+    };
+    expect(contexto.expiresInSeconds).toBe(300);
+    expect(contexto.eligibleShifts?.map((t) => t.id)).toEqual(['turno-de-hoy', 'turno-de-manana']);
+    expect(contexto.openSession).toMatchObject({
+      shiftId: 'turno-de-hoy',
+      shiftStartsAt: iso(ahora - 2 * 3600_000),
+      shiftEndsAt: iso(ahora + 6 * 3600_000),
+    });
   });
 
   /**

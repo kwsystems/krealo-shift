@@ -16,13 +16,13 @@ import { COLLECTIONS, db, nowISO } from './admin';
  *      Se valida contra el hash bcrypt de `kiosk_device_secrets`, una coleccion que
  *      las reglas cierran a todo el mundo.
  *
- *   2. TOKEN DE ACCION — vida de 90 segundos, ligado a empleado + kiosco +
+ *   2. TOKEN DE ACCION — vida de 5 minutos, ligado a empleado + kiosco +
  *      ubicacion. Lo emite `verifyPin` y lo consume `submitTimeEvent`. Es lo que
  *      evita que alguien registre un fichaje ajeno conociendo solo la credencial
  *      del iPad.
  *
- * El token es un HMAC firmado, sin estado en la base: uno robado caduca en 90
- * segundos y no hay tabla que limpiar.
+ * El token es un HMAC firmado, sin estado en la base: uno robado caduca en 5
+ * minutos y no hay tabla que limpiar.
  *
  * EL KIOSCO NO TIENE SESION DE FIREBASE y no debe tenerla. Un iPad compartido en el
  * mostrador con una cuenta de Google dentro seria una cuenta que cualquiera puede
@@ -30,7 +30,23 @@ import { COLLECTIONS, db, nowISO } from './admin';
  * autenticacion y se defienden con la credencial del dispositivo.
  */
 
-const ACTION_TOKEN_TTL_SECONDS = 90;
+/**
+ * CINCO MINUTOS, Y ANTES ERAN NOVENTA SEGUNDOS (4-oct).
+ *
+ * Noventa segundos alcanzan para teclear el PIN y pulsar un botón, no para el recorrido
+ * entero de una salida: elegir turno, decir por qué se va antes, escribir la nota de
+ * «Otro», dar permiso a la cámara y esperar la foto —que en web es obligatoria y tiene su
+ * propio plazo de 12 s, más el reintento—. Quien se pasaba recibía «No pudimos completar
+ * la acción. Inténtalo otra vez.», y volver a intentarlo era inútil: el reloj reenviaba
+ * el mismo token vencido y fallaba igual cada vez. Así se quedó sin salida una vendedora
+ * el 3-oct, con el mensaje en pantalla y el botón delante.
+ *
+ * Cinco minutos cubren ese recorrido con holgura y siguen siendo un permiso corto: lo
+ * emite un PIN, sirve para UNA persona en UN aparato, y la pantalla se limpia en cuanto
+ * termina el fichaje. El reloj además sabe cuánto le queda (`expiresInSeconds`) y, si
+ * se acaba, pide el PIN otra vez en vez de enviar algo que va a fallar.
+ */
+export const ACTION_TOKEN_TTL_SECONDS = 5 * 60;
 
 /**
  * El secreto que firma los tokens de accion.

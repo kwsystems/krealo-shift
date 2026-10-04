@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
+import { InlineNotice } from '@/components/schedule/fields';
 import { FormField } from '@/components/ui/form-field';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
@@ -39,6 +40,12 @@ export default function KioskForgotScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  /**
+   * El permiso del PIN se acabó mientras escribía (4-oct). Antes esto salía como «No
+   * pudimos completar la acción» y reenviar fallaba igual, siempre: el permiso vencido no
+   * se renueva reintentando. Ahora se dice y se ofrece volver a marcar el PIN.
+   */
+  const [vencido, setVencido] = useState(false);
 
   /*
    * SIN SESIÓN VALIDADA ESTA PANTALLA ERA UN CALLEJÓN SIN SALIDA.
@@ -76,6 +83,11 @@ export default function KioskForgotScreen() {
       return;
     }
 
+    if (verification.vigenteHasta !== null && Date.now() >= verification.vigenteHasta) {
+      setVencido(true);
+      return;
+    }
+
     const proposedAt = horaPropuestaComoInstante(time, timezone);
     if (proposedAt === null) {
       setError(t('schedule.invalidTime'));
@@ -96,6 +108,10 @@ export default function KioskForgotScreen() {
 
     if (result.ok) {
       setSent(true);
+      return;
+    }
+    if (result.error.kind === 'action_expired') {
+      setVencido(true);
       return;
     }
     setError(result.error.kind === 'offline' ? t('errors.network') : t('errors.generic'));
@@ -175,13 +191,30 @@ export default function KioskForgotScreen() {
                 </AppText>
               ) : null}
 
-              <PrimaryButton
-                label={t('common.save')}
-                onPress={() => void submit()}
-                loading={submitting}
-                disabled={reason.trim().length === 0 || time.trim().length === 0}
-                testID="forgot-submit"
-              />
+              {vencido ? (
+                <InlineNotice
+                  tone="warning"
+                  icon="keypad-outline"
+                  title={t('kiosk.pinExpiredTitle')}
+                  body={t('kiosk.pinExpiredBody')}
+                  action={
+                    <PrimaryButton
+                      label={t('kiosk.pinAgain')}
+                      onPress={returnToIdle}
+                      testID="kiosk-pin-again"
+                    />
+                  }
+                  testID="kiosk-repetir-pin"
+                />
+              ) : (
+                <PrimaryButton
+                  label={t('common.save')}
+                  onPress={() => void submit()}
+                  loading={submitting}
+                  disabled={reason.trim().length === 0 || time.trim().length === 0}
+                  testID="forgot-submit"
+                />
+              )}
             </Card>
           ) : null}
 
