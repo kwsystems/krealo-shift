@@ -58,7 +58,7 @@ const MOTIVO_DE_LA_CORRECCION =
 
 export type Salto = 'sinPublicar' | 'noTermino' | 'conReloj' | 'yaTieneMarcas' | 'jornadaAbierta';
 
-type Turno = {
+export type Turno = {
   id: string;
   organization_id: string;
   location_id: string;
@@ -161,7 +161,7 @@ export const viewClockStart = onCall(async (request) => {
   return filas;
 });
 
-async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
+export async function tieneMarcasCerca(turno: Turno): Promise<boolean> {
   const cerca = await db
     .collection(COLLECTIONS.timeEvents)
     .where('employee_id', '==', turno.employee_id)
@@ -176,7 +176,7 @@ function esDiaValido(dia: unknown): dia is string {
   return typeof dia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dia);
 }
 
-function minutosNetos(turno: Turno): number {
+export function minutosNetos(turno: Turno): number {
   const brutos = Math.floor((Date.parse(turno.ends_at) - Date.parse(turno.starts_at)) / 60000);
   return brutos - Math.max(0, turno.planned_unpaid_break_minutes);
 }

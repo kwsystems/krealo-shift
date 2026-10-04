@@ -28,6 +28,7 @@ export const ESCENARIOS = [
   'solicitudes',
   'sinllegar',
   'cambiado',
+  'cumplido',
 ] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
@@ -360,12 +361,33 @@ function cambiarUnTurnoDeLaVendedora(almacen: Almacen): void {
   turno.ends_at = new Date(Date.parse(String(turno.ends_at)) + hora).toISOString();
 }
 
+/**
+ * UN DÍA DE LA VENDEDORA CUMPLIDO COMO MIEMBRO DE MESA (4-oct): su última jornada terminada,
+ * con el motivo, como la deja `creditShiftAsWorked`. Para comprobar que su celular lo dice.
+ */
+function cumplidoEspecialDeLaVendedora(almacen: Almacen): void {
+  const vendedora = DEMO_EMPLEADOS_DENTRO[0];
+  const suya = (almacen.get('work_sessions') ?? [])
+    .filter((j) => j.employee_id === vendedora && j.ends_at !== null)
+    .sort((a, b) => String(b.starts_at).localeCompare(String(a.starts_at)))[0];
+  if (suya === undefined) return;
+  suya.source = 'import';
+  suya.credit_reason = 'election_duty';
+  suya.credit_note = null;
+  suya.flags = [];
+}
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
   if (escenario === 'normal') return almacen;
 
   // Solo toca un turno: el resto del día se queda como en la semilla.
   if (escenario === 'cambiado') {
     cambiarUnTurnoDeLaVendedora(almacen);
+    return almacen;
+  }
+
+  if (escenario === 'cumplido') {
+    cumplidoEspecialDeLaVendedora(almacen);
     return almacen;
   }
 

@@ -172,7 +172,7 @@ export async function fetchMisJornadas(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)

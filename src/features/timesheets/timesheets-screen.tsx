@@ -838,6 +838,18 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
            * propias, así que el caso de alguien que ve el botón y no puede usarlo no
            * existe por la ruta normal.
            */
+          onUndoCredit={
+            selected.shift_id === null
+              ? undefined
+              : () =>
+                  mutacionesDeFaltas.deshacerCumplido.mutate(selected.shift_id ?? '', {
+                    onSuccess: () => {
+                      cerrarDetalle();
+                      setFeedback(t('credit.undone'));
+                    },
+                  })
+          }
+          undoingCredit={mutacionesDeFaltas.deshacerCumplido.isPending}
           onReclassifyDeparture={({ eventId, breakReason }) =>
             mutations.reclassify.mutate(
               { eventId, breakReason, reason: t('timesheet.reclassifyDefaultReason') },
@@ -939,14 +951,26 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
           timezone={scope.timezone}
           timeFormat={scope.timeFormat}
           language={language}
-          guardando={mutacionesDeFaltas.justificar.isPending}
+          guardando={
+            mutacionesDeFaltas.justificar.isPending || mutacionesDeFaltas.darPorCumplido.isPending
+          }
           quitando={mutacionesDeFaltas.quitar.isPending}
-          onGuardar={async ({ kind, reason, note }) => {
+          onGuardar={async (respuesta) => {
+            if (respuesta.kind === 'credit') {
+              await mutacionesDeFaltas.darPorCumplido.mutateAsync({
+                shiftId: faltaAExplicar.id,
+                reason: respuesta.reason,
+                note: respuesta.note,
+              });
+              setFaltaAExplicar(null);
+              setFeedback(t('absence.creditSaved'));
+              return;
+            }
             await mutacionesDeFaltas.justificar.mutateAsync({
               shiftId: faltaAExplicar.id,
-              kind,
-              reason,
-              note,
+              kind: respuesta.kind,
+              reason: respuesta.reason,
+              note: respuesta.note,
             });
             setFaltaAExplicar(null);
             setFeedback(t('absence.saved'));

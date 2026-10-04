@@ -238,6 +238,9 @@ export const RPC = {
   /** Por qué faltó: justificada o no, y el motivo. Ver `functions/src/faltas.ts`. */
   resolveAbsence: 'resolve_absence',
   clearAbsenceResolution: 'clear_absence_resolution',
+  /** Dar un turno por cumplido por un motivo especial, y deshacerlo (4-oct). */
+  creditShiftAsWorked: 'credit_shift_as_worked',
+  undoShiftCredit: 'undo_shift_credit',
   attendanceStateAt: 'attendance_state_at',
   approveTimesheetPeriod: 'approve_timesheet_period',
   /** Reabrir un periodo aprobado: también sella horas, así que va por función (30-sep). */

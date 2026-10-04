@@ -3,6 +3,31 @@
 Aplicación desarrollada para Krealo. El código vive en este repositorio
 (`kwsystems/krealo-shift`); la gestión de tareas se hace en **Krealo Publisher**.
 
+## Regla: lo que se hace se ve en TODAS las vistas (2026-10-04)
+
+Andree, textual: «si hacemos algo, debe verse en todas las vistas, sea de filtro o sea en
+Inicio, Horario, Horas, Reporte y en todo lo que debería aparecer (si aparece). También en
+vistas personales de cada uno de los empleados. Esto no puede fallar, debe ser regla».
+
+Antes de dar por terminado un cambio que toque turnos, marcas, jornadas, faltas, personas o
+permisos, se repasa esta lista y el cierre de la tarea dice qué se miró en cada una:
+
+- **Inicio**: cifras del día, listas de quién está o falta, banda de asistencia.
+- **Horario**: rejilla, lista del teléfono, tarjeta del turno, totales, filtros.
+- **Horas**: filas, «Por resolver», faltas de la semana, filtros, detalle de la jornada,
+  exportación CSV.
+- **Equipo**: lista con su semana, filtro Activo/Inactivo, ficha con horas por día.
+- **Reportes**: mes, días, por persona, bono, correcciones.
+- **Bandeja y Disponibilidad**, con los contadores del menú.
+- **Reloj** de la tienda.
+- **Celular de cada empleado** («Mi horario»: Hoy, la semana, el mes).
+- **Demo** (`src/lib/demo`) y **arneses**: si una vista cambia, su arnés lo comprueba;
+  `vistas-check` compara las cifras que se repiten entre pantallas.
+
+Un dato que se dice en varias pantallas sale de UN módulo compartido (`textos-de-falta.ts`,
+`textos-de-cumplido.ts`, `en-curso.ts`…), nunca de una copia por pantalla: con copias, una
+acaba diciendo otra cosa.
+
 ## Reglas de gestión de tareas (obligatorias)
 
 Toda tarea creada o actualizada por un agente debe llevar:

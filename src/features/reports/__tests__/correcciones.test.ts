@@ -19,6 +19,7 @@ const filas = [
   fila('solicitud_aprobada', 'b'),
   fila('segun_horario', 'a'),
   fila('segun_horario', 'a'),
+  fila('cumplido_especial', 'b'),
 ];
 
 describe('resumen de correcciones', () => {
@@ -27,6 +28,8 @@ describe('resumen de correcciones', () => {
       total: 4,
       porTipo: { fichaje_anadido: 2, hora_corregida: 1, salida_a_pausa: 0, solicitud_aprobada: 1 },
       segunHorario: 2,
+      // Miembro de mesa (4-oct): aparte, ni corrección ni «según horario».
+      cumplidosEspeciales: 1,
     });
   });
 

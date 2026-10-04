@@ -19,6 +19,7 @@ export const TIPOS_DE_CORRECCION = [
   'salida_a_pausa',
   'solicitud_aprobada',
   'segun_horario',
+  'cumplido_especial',
 ] as const;
 export type TipoDeCorreccion = (typeof TIPOS_DE_CORRECCION)[number];
 
@@ -68,12 +69,19 @@ export function useCorrecciones(params: { locationId: string | null; from: strin
 export type ResumenDeCorrecciones = {
   /** Las correcciones de verdad: sin lo registrado desde el horario. */
   total: number;
-  porTipo: Readonly<Record<Exclude<TipoDeCorreccion, 'segun_horario'>, number>>;
+  porTipo: Readonly<
+    Record<Exclude<TipoDeCorreccion, 'segun_horario' | 'cumplido_especial'>, number>
+  >;
   /**
    * Las jornadas registradas desde el horario, APARTE. No son un fichaje que el reloj no
    * recogió —son días de antes del reloj—, y sumarlas convertiría la cifra en ruido.
    */
   segunHorario: number;
+  /**
+   * Los turnos dados por cumplidos por un motivo especial (4-oct), también APARTE: no son un
+   * fichaje corregido sino un día que contó como trabajado sin marcar —miembro de mesa—.
+   */
+  cumplidosEspeciales: number;
 };
 
 export function resumirCorrecciones(
@@ -87,11 +95,13 @@ export function resumirCorrecciones(
     solicitud_aprobada: 0,
   };
   let segunHorario = 0;
+  let cumplidosEspeciales = 0;
   for (const fila of filas) {
     if (personaId !== null && fila.employee_id !== personaId) continue;
     if (fila.tipo === 'segun_horario') segunHorario += 1;
+    else if (fila.tipo === 'cumplido_especial') cumplidosEspeciales += 1;
     else porTipo[fila.tipo] += 1;
   }
   const total = Object.values(porTipo).reduce((suma, n) => suma + n, 0);
-  return { total, porTipo, segunHorario };
+  return { total, porTipo, segunHorario, cumplidosEspeciales };
 }

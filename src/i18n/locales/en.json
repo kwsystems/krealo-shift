@@ -429,6 +429,8 @@
     "correctionsUnavailable": "They couldn't be counted. Try again.",
     "correctionsFromSchedule_one": "Separately, {{count}} shift recorded from the schedule.",
     "correctionsFromSchedule_other": "Separately, {{count}} shifts recorded from the schedule.",
+    "correctionsCredited_one": "Separately, {{count}} day credited for a special reason.",
+    "correctionsCredited_other": "Separately, {{count}} days credited for a special reason.",
     "correctionsType": {
       "fichaje_anadido_one": "{{count}} punch added",
       "fichaje_anadido_other": "{{count}} punches added",
@@ -1601,6 +1603,19 @@
     "durationHoursMinutes": "{{h}} h {{m}} min",
     "noShift": "No shift"
   },
+  "credit": {
+    "label": "Credited · {{reason}}",
+    "reason": {
+      "election_duty": "Election duty",
+      "offsite_work": "Off-site work",
+      "training": "Training",
+      "other": "Other reason"
+    },
+    "reasonUnknown": "Special reason",
+    "detailBody": "This day counts as worked without clocking in: the record was created at the shift times. It shows like this on Schedule, Hours, Team, Reports and their phone.",
+    "undo": "Remove “credited”",
+    "undone": "“Credited” removed. If they didn’t clock in that day, it shows as an absence again."
+  },
   "absence": {
     "state": {
       "sinRevisar": "Not reviewed",
@@ -1633,6 +1648,12 @@
     "failed": "It couldn't be saved. Try again.",
     "saved": "Saved: it now shows on every screen.",
     "bonusEffect": "An excused absence doesn't cost the attendance bonus; an unexcused one does.",
+    "creditOption": "Worked their shift",
+    "creditSave": "Mark as worked",
+    "creditSaved": "Done: the shift counts as worked, with its reason, on every screen.",
+    "creditEffect": "Counts as worked: a record from {{range}} is created with the shift’s break. It adds hours in Hours, Reports and the bonus, stops being an absence, and every screen, their phone included, says “Credited” with the reason. You can undo it from Hours.",
+    "creditHasMarks": "That day already has clock records: fix their hours in Hours with “Correct entry”.",
+    "creditOpenSession": "They had an open record at that time: close it first in Hours.",
     "pendingCount_one": "{{count}} not reviewed",
     "pendingCount_other": "{{count}} not reviewed",
     "justifiedCount_one": "{{count}} excused",

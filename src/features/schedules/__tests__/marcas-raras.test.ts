@@ -46,6 +46,8 @@ function jornada(extra: Partial<WorkSession> = {}): WorkSession {
     flags: ['early_arrival'],
     departure_reason: null,
     departure_note: null,
+    credit_reason: null,
+    credit_note: null,
     source: 'kiosk',
     avisos_vistos: [],
     casos_resueltos: [],

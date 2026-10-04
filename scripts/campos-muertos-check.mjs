@@ -90,6 +90,10 @@ const FIJOS_A_PROPOSITO = new Map([
     'la jornada se CREA desde el horario: no había nada antes, como en un fichaje añadido',
   ],
   [
+    'creditShiftAsWorked.before_value',
+    'el cumplido especial CREA la jornada (solo si el día no tenía marcas): no había nada antes',
+  ],
+  [
     'reopenTimesheetPeriod.approved_at',
     'reabrir ES borrar la aprobación: el valor fijo es el trabajo',
   ],

@@ -23,6 +23,12 @@ import {
 } from '@/features/schedules/week';
 import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
 import {
+  MOTIVOS_DE_CUMPLIDO,
+  NOTA_MAXIMA_DE_CUMPLIDO,
+  type MotivoDeCumplido,
+} from '@/domain/motivos-de-cumplido';
+import { motivoDeCumplido } from '@/features/timesheets/textos-de-cumplido';
+import {
   etiquetaDeFalta,
   iconoDeFalta,
   motivoDeFalta,
@@ -349,44 +355,66 @@ export function JustificarFaltaSheet({
   language: SupportedLanguage;
   guardando: boolean;
   quitando: boolean;
-  onGuardar: (params: {
-    kind: TipoDeFalta;
-    reason: MotivoDeFalta;
-    note: string | null;
-  }) => Promise<void>;
+  onGuardar: (
+    params:
+      | { kind: TipoDeFalta; reason: MotivoDeFalta; note: string | null }
+      /** Cumplió su horario por un motivo especial: cuenta como trabajado. Ver `creditShiftAsWorked`. */
+      | { kind: 'credit'; reason: MotivoDeCumplido; note: string | null },
+  ) => Promise<void>;
   onQuitar: () => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
-  const [tipo, setTipo] = useState<TipoDeFalta>(falta.resolucion?.kind ?? 'justified');
-  const [motivo, setMotivo] = useState<MotivoDeFalta | null>(falta.resolucion?.reason ?? null);
+  /*
+   * TRES RESPUESTAS Y NO DOS (4-oct). «Justificada» y «No justificada» siguen siendo faltas:
+   * no hubo horas. La tercera, «Cumplió su horario», es otra cosa: el día cuenta como
+   * trabajado —miembro de mesa en elecciones, trabajo fuera de la tienda— y por eso va aquí,
+   * en el sitio donde se mira una falta, y no escondida en otra pantalla.
+   */
+  const [tipo, setTipo] = useState<TipoDeFalta | 'credit'>(falta.resolucion?.kind ?? 'justified');
+  const [motivo, setMotivo] = useState<string | null>(falta.resolucion?.reason ?? null);
   const [nota, setNota] = useState(falta.resolucion?.note ?? '');
   const [intentado, setIntentado] = useState(false);
-  const [fallo, setFallo] = useState(false);
+  const [fallo, setFallo] = useState<string | null>(null);
 
-  const motivos = motivosDe(tipo);
+  const motivos: readonly string[] = tipo === 'credit' ? MOTIVOS_DE_CUMPLIDO : motivosDe(tipo);
   const sinMotivo = motivo === null || !motivos.includes(motivo);
   const faltaLaNota = motivo === 'other' && nota.trim().length === 0;
   const valido = !sinMotivo && !faltaLaNota;
+  const notaMaxima = tipo === 'credit' ? NOTA_MAXIMA_DE_CUMPLIDO : NOTA_MAXIMA_DE_FALTA;
 
-  const cambiarTipo = (nuevo: TipoDeFalta) => {
+  const cambiarTipo = (nuevo: TipoDeFalta | 'credit') => {
     setTipo(nuevo);
-    if (motivo !== null && !motivosDe(nuevo).includes(motivo)) setMotivo(null);
+    const deNuevo: readonly string[] = nuevo === 'credit' ? MOTIVOS_DE_CUMPLIDO : motivosDe(nuevo);
+    if (motivo !== null && !deNuevo.includes(motivo)) setMotivo(null);
   };
 
   const guardar = () => {
     setIntentado(true);
     if (!valido || motivo === null) return;
-    setFallo(false);
+    setFallo(null);
     const limpia = nota.trim();
-    onGuardar({ kind: tipo, reason: motivo, note: limpia.length > 0 ? limpia : null }).catch(() =>
-      setFallo(true),
-    );
+    const comentario = limpia.length > 0 ? limpia : null;
+    const enviado =
+      tipo === 'credit'
+        ? onGuardar({ kind: 'credit', reason: motivo as MotivoDeCumplido, note: comentario })
+        : onGuardar({ kind: tipo, reason: motivo as MotivoDeFalta, note: comentario });
+    enviado.catch((error: unknown) => {
+      // El servidor dice por qué, con un código: «ya marcó ese día», «no terminó».
+      const codigo = (error as { motivo?: unknown } | null)?.motivo;
+      setFallo(
+        codigo === 'CON_MARCAS'
+          ? t('absence.creditHasMarks')
+          : codigo === 'JORNADA_ABIERTA'
+            ? t('absence.creditOpenSession')
+            : t('absence.failed'),
+      );
+    });
   };
 
   const quitar = () => {
-    setFallo(false);
-    onQuitar().catch(() => setFallo(true));
+    setFallo(null);
+    onQuitar().catch(() => setFallo(t('absence.failed')));
   };
 
   return (
@@ -398,13 +426,13 @@ export function JustificarFaltaSheet({
       footer={
         <Stack gap={spacing.sm}>
           <PrimaryButton
-            label={t('absence.save')}
+            label={tipo === 'credit' ? t('absence.creditSave') : t('absence.save')}
             onPress={guardar}
             loading={guardando}
             disabled={intentado && !valido}
             testID="justificar-falta-guardar"
           />
-          {falta.resolucion !== null ? (
+          {falta.resolucion !== null && tipo !== 'credit' ? (
             <GhostButton
               label={t('absence.clear')}
               onPress={quitar}
@@ -421,7 +449,7 @@ export function JustificarFaltaSheet({
           range: formatShiftRange(falta.turno.starts_at, falta.turno.ends_at, timezone, timeFormat),
         })}
       </AppText>
-      <SegmentedControl<TipoDeFalta>
+      <SegmentedControl<TipoDeFalta | 'credit'>
         label={t('absence.kind')}
         rotuloVisible
         value={tipo}
@@ -429,6 +457,7 @@ export function JustificarFaltaSheet({
         options={[
           { value: 'justified', label: t('absence.justified') },
           { value: 'unjustified', label: t('absence.unjustified') },
+          { value: 'credit', label: t('absence.creditOption') },
         ]}
         testID="justificar-falta-tipo"
       />
@@ -440,7 +469,11 @@ export function JustificarFaltaSheet({
           {motivos.map((opcion) => (
             <Chip
               key={opcion}
-              label={motivoDeFalta(t, opcion)}
+              label={
+                tipo === 'credit'
+                  ? motivoDeCumplido(t, opcion)
+                  : motivoDeFalta(t, opcion as MotivoDeFalta)
+              }
               selected={motivo === opcion}
               onPress={() => setMotivo(opcion)}
               testID={`justificar-falta-${opcion}`}
@@ -458,17 +491,26 @@ export function JustificarFaltaSheet({
         value={nota}
         onChangeText={setNota}
         multiline
-        maxLength={NOTA_MAXIMA_DE_FALTA}
+        maxLength={notaMaxima}
         placeholder={t('absence.notePlaceholder')}
         error={intentado && faltaLaNota ? t('absence.noteMissing') : undefined}
         testID="justificar-falta-nota"
       />
-      <AppText variant="help" tone="subtle">
-        {t('absence.bonusEffect')}
+      <AppText variant="help" tone="subtle" testID="justificar-falta-efecto">
+        {tipo === 'credit'
+          ? t('absence.creditEffect', {
+              range: formatShiftRange(
+                falta.turno.starts_at,
+                falta.turno.ends_at,
+                timezone,
+                timeFormat,
+              ),
+            })
+          : t('absence.bonusEffect')}
       </AppText>
-      {fallo ? (
+      {fallo !== null ? (
         <AppText variant="help" tone="danger" testID="justificar-falta-error">
-          {t('absence.failed')}
+          {fallo}
         </AppText>
       ) : null}
     </AdminSheet>

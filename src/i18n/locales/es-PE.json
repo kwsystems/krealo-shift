@@ -429,6 +429,8 @@
     "correctionsUnavailable": "No se pudieron contar. Vuelve a intentarlo.",
     "correctionsFromSchedule_one": "Aparte, {{count}} jornada registrada desde el horario.",
     "correctionsFromSchedule_other": "Aparte, {{count}} jornadas registradas desde el horario.",
+    "correctionsCredited_one": "Aparte, {{count}} día cumplido por motivo especial.",
+    "correctionsCredited_other": "Aparte, {{count}} días cumplidos por motivo especial.",
     "correctionsType": {
       "fichaje_anadido_one": "{{count}} fichaje añadido",
       "fichaje_anadido_other": "{{count}} fichajes añadidos",
@@ -1601,6 +1603,19 @@
     "durationHoursMinutes": "{{h}} h {{m}} min",
     "noShift": "Sin turno"
   },
+  "credit": {
+    "label": "Cumplido · {{reason}}",
+    "reason": {
+      "election_duty": "Miembro de mesa",
+      "offsite_work": "Trabajo fuera de la tienda",
+      "training": "Capacitación",
+      "other": "Otro motivo"
+    },
+    "reasonUnknown": "Motivo especial",
+    "detailBody": "Este día cuenta como trabajado sin marcar en el reloj: la jornada se creó a la hora de su turno. Sale así en Horario, Horas, Equipo, Reportes y su celular.",
+    "undo": "Quitar «cumplido»",
+    "undone": "Se quitó el «cumplido». Si no marcó ese día, vuelve a salir como falta."
+  },
   "absence": {
     "state": {
       "sinRevisar": "Sin revisar",
@@ -1633,6 +1648,12 @@
     "failed": "No se pudo guardar. Vuelve a intentarlo.",
     "saved": "Guardado: ya sale en todas las pantallas.",
     "bonusEffect": "Una falta justificada no le quita el bono de asistencia; sin justificar, sí.",
+    "creditOption": "Cumplió su horario",
+    "creditSave": "Dar por cumplido",
+    "creditSaved": "Listo: el turno cuenta como trabajado, con su motivo, en todas las pantallas.",
+    "creditEffect": "Cuenta como trabajado: se crea su jornada de {{range}} con el refrigerio del turno. Suma horas en Horas, Reportes y el bono, deja de ser falta y en todas las pantallas, también en su celular, dirá «Cumplido» con el motivo. Se puede deshacer desde Horas.",
+    "creditHasMarks": "Ese día ya tiene marcas en el reloj: corrige sus horas en Horas con «Corregir fichaje».",
+    "creditOpenSession": "Tenía una jornada abierta a esa hora: ciérrala primero en Horas.",
     "pendingCount_one": "{{count}} sin revisar",
     "pendingCount_other": "{{count}} sin revisar",
     "justifiedCount_one": "{{count}} justificada",

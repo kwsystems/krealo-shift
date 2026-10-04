@@ -1,5 +1,6 @@
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { motivoValido, NOTA_MAXIMA_DE_FALTA } from '@/domain/motivos-de-falta';
+import { motivoDeCumplidoValido, NOTA_MAXIMA_DE_CUMPLIDO } from '@/domain/motivos-de-cumplido';
 import { crearFrom, type Almacen, type Fila } from './postgrest';
 import {
   aplicarEscenario,
@@ -1374,6 +1375,142 @@ function crearRpc(almacen: Almacen) {
         return sinError({ id: fila.id });
       }
 
+      /*
+       * DAR UN TURNO POR CUMPLIDO POR UN MOTIVO ESPECIAL (4-oct), con las reglas de
+       * `functions/src/cumplido-especial.ts`: publicado, terminado, sin marcas cerca; crea la
+       * jornada a la hora del turno con el motivo, y lo que se dijo de su falta sobra.
+       */
+      case 'credit_shift_as_worked': {
+        const turno = filas('shifts').find((fila) => fila.id === argumentos.p_shift_id);
+        if (turno === undefined || turno.status !== 'published') {
+          return conError('Ese turno no está publicado.');
+        }
+        if (Date.parse(String(turno.ends_at)) > Date.now()) {
+          return conError('Ese turno todavía no terminó.');
+        }
+        if (!motivoDeCumplidoValido(argumentos.p_reason)) return conError('Elige el motivo.');
+        const nota =
+          typeof argumentos.p_note === 'string' && argumentos.p_note.trim() !== ''
+            ? argumentos.p_note.trim().slice(0, NOTA_MAXIMA_DE_CUMPLIDO)
+            : null;
+        if (argumentos.p_reason === 'other' && nota === null) return conError('Escribe qué pasó.');
+        const hora = 3600_000;
+        const pisa = filas('work_sessions').some(
+          (sesion) =>
+            sesion.employee_id === turno.employee_id &&
+            Date.parse(String(sesion.starts_at)) < Date.parse(String(turno.ends_at)) + hora &&
+            Date.parse(String(sesion.ends_at ?? '9999-12-31')) >
+              Date.parse(String(turno.starts_at)) - hora,
+        );
+        if (pisa) {
+          return {
+            data: null,
+            error: {
+              code: 'failed-precondition',
+              message: 'Ese día ya tiene marcas: corrige sus horas en Horas.',
+              details: { motivo: 'CON_MARCAS' },
+            },
+          };
+        }
+        const brutos = minutosEntre(String(turno.starts_at), String(turno.ends_at));
+        const pausa = Number(turno.planned_unpaid_break_minutes ?? 0);
+        const ahora = new Date().toISOString();
+        almacen.set('work_sessions', [
+          ...filas('work_sessions'),
+          {
+            id: `especial-${String(turno.id)}`,
+            organization_id: DEMO_ORG_ID,
+            employee_id: turno.employee_id,
+            location_id: turno.location_id,
+            shift_id: turno.id,
+            starts_at: turno.starts_at,
+            ends_at: turno.ends_at,
+            gross_minutes: brutos,
+            paid_break_minutes: 0,
+            unpaid_break_minutes: pausa,
+            net_minutes: brutos - pausa,
+            status: 'complete',
+            flags: [],
+            departure_reason: null,
+            departure_note: null,
+            source: 'import',
+            credit_reason: argumentos.p_reason,
+            credit_note: nota,
+            updated_at: ahora,
+          },
+        ]);
+        almacen.set('time_adjustments', [
+          ...filas('time_adjustments'),
+          {
+            id: `especial-ajuste-${String(turno.id)}`,
+            organization_id: DEMO_ORG_ID,
+            location_id: turno.location_id,
+            employee_id: turno.employee_id,
+            work_session_id: `especial-${String(turno.id)}`,
+            target_type: 'work_session',
+            target_id: `especial-${String(turno.id)}`,
+            before_value: null,
+            after_value: {
+              starts_at: turno.starts_at,
+              ends_at: turno.ends_at,
+              origen: 'especial',
+              motivo_especial: argumentos.p_reason,
+            },
+            reason: `Cumplido por motivo especial (${String(argumentos.p_reason)})`,
+            created_by: DEMO_USER_ID,
+            created_at: ahora,
+          },
+        ]);
+        almacen.set(
+          'absence_resolutions',
+          filas('absence_resolutions').filter((f) => f.id !== turno.id),
+        );
+        // El resumen del día, que en la demo es una tabla y en el servidor se calcula de las
+        // jornadas: sin esta fila, Equipo no sumaría el día.
+        const zona = String(
+          filas('locations').find((fila) => fila.id === turno.location_id)?.timezone ??
+            'America/Lima',
+        );
+        almacen.set('daily_time_summary', [
+          ...filas('daily_time_summary'),
+          {
+            employee_id: turno.employee_id,
+            location_id: turno.location_id,
+            work_date: new Intl.DateTimeFormat('en-CA', {
+              timeZone: zona,
+              year: 'numeric',
+              month: '2-digit',
+              day: '2-digit',
+            }).format(new Date(String(turno.starts_at))),
+            sessions: 1,
+            gross_minutes: brutos,
+            paid_break_minutes: 0,
+            unpaid_break_minutes: pausa,
+            net_minutes: brutos - pausa,
+            needs_review: false,
+            flags: [],
+            cumplido_de: turno.id,
+          },
+        ]);
+        return sinError({ id: turno.id, minutos: brutos - pausa });
+      }
+
+      case 'undo_shift_credit': {
+        const id = `especial-${String(argumentos.p_shift_id)}`;
+        if (!filas('work_sessions').some((f) => f.id === id)) {
+          return conError('Ese turno no está dado por cumplido.');
+        }
+        almacen.set(
+          'work_sessions',
+          filas('work_sessions').filter((f) => f.id !== id),
+        );
+        almacen.set(
+          'daily_time_summary',
+          filas('daily_time_summary').filter((f) => f.cumplido_de !== argumentos.p_shift_id),
+        );
+        return sinError({ id: argumentos.p_shift_id });
+      }
+
       case 'clear_absence_resolution': {
         almacen.set(
           'absence_resolutions',
@@ -1451,11 +1588,13 @@ function crearRpc(almacen: Almacen) {
               ? 'solicitud_aprobada'
               : despues.origen === 'horario'
                 ? 'segun_horario'
-                : typeof despues.reclassified_as === 'string'
-                  ? 'salida_a_pausa'
-                  : fila.target_type === 'time_event'
-                    ? 'fichaje_anadido'
-                    : 'hora_corregida';
+                : despues.origen === 'especial'
+                  ? 'cumplido_especial'
+                  : typeof despues.reclassified_as === 'string'
+                    ? 'salida_a_pausa'
+                    : fila.target_type === 'time_event'
+                      ? 'fichaje_anadido'
+                      : 'hora_corregida';
           resultado.push({
             tipo,
             employee_id: fila.employee_id ?? sesion?.employee_id ?? null,

@@ -65,6 +65,8 @@ function sesion(
     status: 'complete',
     departure_reason: null,
     departure_note: null,
+    credit_reason: null,
+    credit_note: null,
     source: null,
     avisos_vistos: [],
     casos_resueltos: [],

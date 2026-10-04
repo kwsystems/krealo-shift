@@ -10,6 +10,7 @@ import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
 import { estadoDeFalta, type Falta } from '@/features/timesheets/faltas';
 import { iconoDeFalta, rotuloDeFaltaEnTurno } from '@/features/timesheets/textos-de-falta';
+import { etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTonos, type Tono } from '@/theme/tonos';
@@ -80,6 +81,7 @@ export function ShiftCard({
   avisoDeDisponibilidad = null,
   falta = null,
   sinLlegar = false,
+  cumplido = null,
   tonoDelPuesto = null,
   onPress,
   testID,
@@ -114,6 +116,12 @@ export function ShiftCard({
    * `falta`. Andree miraba el turno de las 13:00 a las 15:27 y la tarjeta no decía nada.
    */
   sinLlegar?: boolean;
+  /**
+   * La jornada que lo dio por cumplido por un motivo especial (4-oct), si la hay: el turno lo
+   * dice —«Cumplido · Miembro de mesa»— en vez de quedarse callado, igual que Horas, Equipo,
+   * Reportes y el celular. Ver `creditShiftAsWorked`.
+   */
+  cumplido?: { credit_reason: string | null; credit_note?: string | null } | null;
   /**
    * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
    * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
@@ -154,6 +162,7 @@ export function ShiftCard({
     estadoAhora,
     falta === null ? null : rotuloDeFaltaEnTurno(t, falta),
     sinLlegar ? t('schedule.notArrived') : null,
+    cumplido === null ? null : etiquetaDeCumplido(t, cumplido),
     shift.manager_note,
     shift.employee_note,
     minutesToHHmm(netMinutes),
@@ -345,6 +354,19 @@ export function ShiftCard({
           </AppText>
         </Row>
       ) : null}
+
+      {cumplido === null ? null : (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-cumplido`}
+        >
+          <Ionicons name="ribbon-outline" size={14} color={colors.success600} />
+          <AppText variant="label" tone="success" style={styles.textoDeFalta}>
+            {etiquetaDeCumplido(t, cumplido)}
+          </AppText>
+        </Row>
+      )}
 
       {falta === null ? null : (
         <Row

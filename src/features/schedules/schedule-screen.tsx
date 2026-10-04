@@ -17,6 +17,7 @@ import { EnTurnoAhora, type PersonaEnTurno } from '@/components/schedule/en-turn
 import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useSesionesAlDiaCon, useWorkSessions } from '@/features/timesheets/hooks';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
+import { esCumplidoEspecial } from '@/features/timesheets/textos-de-cumplido';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { acknowledgeUnusualClock } from '@/features/timesheets/api';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
@@ -308,6 +309,17 @@ export function ScheduleScreen({
     cacheKey: { from: weekStart, to: weekEnd(weekStart) },
   });
   const conJornada = new Set((jornadasDeLaSemana.data ?? []).map((jornada) => jornada.shift_id));
+  /*
+   * LOS TURNOS CUMPLIDOS POR UN MOTIVO ESPECIAL (4-oct): su jornada lleva el motivo y la
+   * tarjeta lo dice, «Cumplido · Miembro de mesa». Ver `creditShiftAsWorked`.
+   */
+  const cumplidos = new Map(
+    (jornadasDeLaSemana.data ?? []).flatMap((jornada) =>
+      jornada.shift_id !== null && esCumplidoEspecial(jornada)
+        ? [[jornada.shift_id, jornada] as const]
+        : [],
+    ),
+  );
   const turnosSinMarcas =
     !antesDelReloj || jornadasDeLaSemana.data === undefined
       ? 0
@@ -854,6 +866,7 @@ export function ScheduleScreen({
                     disponibilidad={disponibilidad.data ?? []}
                     faltas={faltasDeLaSemana.porTurno}
                     sinLlegar={sinLlegar}
+                    cumplidos={cumplidos}
                   />
                 ) : view === 'week' ? (
                   <DayList
@@ -875,6 +888,7 @@ export function ScheduleScreen({
                     disponibilidad={disponibilidad.data ?? []}
                     faltas={faltasDeLaSemana.porTurno}
                     sinLlegar={sinLlegar}
+                    cumplidos={cumplidos}
                   />
                 ) : (
                   <Stack gap={spacing.base}>
@@ -908,6 +922,7 @@ export function ScheduleScreen({
                       disponibilidad={disponibilidad.data ?? []}
                       faltas={faltasDeLaSemana.porTurno}
                       sinLlegar={sinLlegar}
+                      cumplidos={cumplidos}
                     />
                   </Stack>
                 )}

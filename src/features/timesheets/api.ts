@@ -74,6 +74,13 @@ export const workSessionSchema = z.object({
    */
   source: z.string().nullable().default(null),
   /*
+   * CUMPLIDO POR UN MOTIVO ESPECIAL (4-oct): el turno se dio por trabajado sin marcar —ver
+   * `creditShiftAsWorked`— y este es el porqué (`election_duty`, …) con su comentario. Las
+   * pantallas lo dicen en vez de «Según horario». `null` en todo lo demás.
+   */
+  credit_reason: z.string().nullable().default(null),
+  credit_note: z.string().nullable().default(null),
+  /*
    * LAS MARCAS RARAS QUE QUIEN GESTIONA YA DIO POR VISTAS (1-oct), una por marca: ver
    * `acknowledgeUnusualClock`. Las jornadas de antes no lo traen.
    */
@@ -173,7 +180,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, avisos_vistos, casos_resueltos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, avisos_vistos, casos_resueltos, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)

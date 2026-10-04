@@ -1,3 +1,4 @@
+import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
@@ -35,6 +36,7 @@ import {
   minutesToHHmm,
   type TimeFormatPreference,
 } from '@/utils/time';
+import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 
 /**
  * LAS HORAS DE UNA PERSONA, DÍA POR DÍA Y SEMANA POR SEMANA, en su ficha de Equipo.
@@ -225,6 +227,7 @@ export function HorasDeLaPersona({
               timezone,
               timeFormat,
               language,
+              t,
             )}
             diaEnCurso={diaEnCurso}
             faltas={faltasPorDia}
@@ -275,14 +278,24 @@ export function HorasDeLaPersona({
   );
 }
 
-type Jornada = { employee_id: string; starts_at: string; ends_at: string | null };
+type Jornada = {
+  employee_id: string;
+  starts_at: string;
+  ends_at: string | null;
+  credit_reason?: string | null;
+};
 
-/** «09:58 – 19:02», por día de entrada; varias jornadas el mismo día van seguidas. */
+/**
+ * «09:58 – 19:02», por día de entrada; varias jornadas el mismo día van seguidas. Un día
+ * cumplido por un motivo especial lo dice al lado: «10:00 – 19:00 · Cumplido · Miembro de
+ * mesa» (4-oct).
+ */
 function tramosPorDia(
   jornadas: readonly Jornada[],
   timezone: string,
   timeFormat: TimeFormatPreference,
   language: SupportedLanguage,
+  t: TFunction,
 ): Map<DateKey, string> {
   const porDia = new Map<DateKey, string[]>();
   const ordenadas = [...jornadas].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -293,7 +306,10 @@ function tramosPorDia(
       jornada.ends_at === null
         ? '…'
         : formatClockTime(jornada.ends_at, timezone, timeFormat, language);
-    porDia.set(dia, [...(porDia.get(dia) ?? []), `${entrada} – ${salida}`]);
+    const tramo = esCumplidoEspecial(jornada)
+      ? `${entrada} – ${salida} · ${etiquetaDeCumplido(t, { credit_reason: jornada.credit_reason ?? null })}`
+      : `${entrada} – ${salida}`;
+    porDia.set(dia, [...(porDia.get(dia) ?? []), tramo]);
   }
   return new Map([...porDia].map(([dia, tramos]) => [dia, tramos.join(' · ')]));
 }

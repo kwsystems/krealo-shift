@@ -176,6 +176,25 @@ try {
   }
 
   /* ------------------------------------------------------------------ */
+  /*
+   * UN DÍA CUMPLIDO POR MOTIVO ESPECIAL (4-oct): miembro de mesa. Su celular tiene que
+   * decirlo, igual que Horario, Horas y Reportes. El escenario `cumplido` de la demo deja así
+   * su última jornada terminada.
+   */
+  const casoCumplido = 'un día cumplido como miembro de mesa lo dice en su celular';
+  {
+    const c = await navegador.newContext({ viewport: { width: 390, height: 844 } });
+    const p = await c.newPage();
+    await entrarComoVendedor(p, '?escenario=cumplido');
+    const visto = await p.getByText(/Cumplido · Miembro de mesa/).count();
+    if (visto === 0)
+      fallar(casoCumplido, 'ni su semana ni su mes dicen «Cumplido · Miembro de mesa»');
+    else pasa(casoCumplido, `${visto} vez/veces`);
+    await p.screenshot({ path: join(CAPTURAS, '2c-cumplido-390.png'), fullPage: true });
+    await c.close();
+  }
+
+  /* ------------------------------------------------------------------ */
   const caso3 = 'no aparece nadie más del equipo';
   const texto = await pagina.locator('[data-testid="mi-horario"]').innerText();
   const vistos = OTROS.filter((nombre) => texto.includes(nombre));

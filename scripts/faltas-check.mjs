@@ -366,6 +366,62 @@ try {
       console.log(`  sincronía            Horario ${horarioTras}, Reportes ${reportesTras}`);
     }
 
+    // --- 4b. CUMPLIÓ SU HORARIO, MIEMBRO DE MESA (4-oct). Andree: «quiero poner que sí
+    // cumplió su horario y que es especial», y que se vea en todas las vistas. Se da por
+    // cumplida una falta y se mira en Horas, Horario y Reportes; luego se deshace.
+    await irPorElMenu(pagina, '/hours');
+    await semanaAnterior(pagina);
+    const antesDelCumplido = await cuenta(pagina, FILAS_DE_FALTA);
+    if (antesDelCumplido > 0) {
+      await justificar(pagina, { tipo: 'credit', motivo: 'election_duty' });
+      const trasCumplido = await cuenta(pagina, FILAS_DE_FALTA);
+      if (trasCumplido !== antesDelCumplido - 1) {
+        problemas.push(
+          `dar por cumplida una falta deja ${trasCumplido} en Horas, no ${antesDelCumplido - 1}`,
+        );
+      }
+      const enLaFila = await pagina.getByText(/Cumplido · Miembro de mesa/).count();
+      if (enLaFila === 0)
+        problemas.push('Horas no dice «Cumplido · Miembro de mesa» en su jornada');
+
+      await irPorElMenu(pagina, '/schedule');
+      await semanaAnterior(pagina);
+      const tarjeta = await textoDe(pagina, '[data-testid^="shift-"][data-testid$="-cumplido"]');
+      if (!/Cumplido · Miembro de mesa/.test(tarjeta)) {
+        problemas.push(`Horario no lo dice en la tarjeta del turno: «${tarjeta}»`);
+      }
+      await irPorElMenu(pagina, '/reports');
+      await semanaAnterior(pagina);
+      const correcciones = await textoDe(pagina, '[data-testid="report-corrections"]');
+      if (!/cumplido por motivo especial/.test(correcciones)) {
+        problemas.push(`Reportes no lo cuenta: «${correcciones}»`);
+      }
+      console.log(
+        `  miembro de mesa      Horas ${antesDelCumplido} → ${trasCumplido} faltas, Horario y Reportes lo dicen`,
+      );
+
+      // Y se deshace desde el detalle de la jornada: la falta vuelve.
+      await irPorElMenu(pagina, '/hours');
+      await semanaAnterior(pagina);
+      await visible(pagina, ':text-matches("Cumplido · Miembro de mesa")').first().click();
+      await pagina.locator('[data-testid="session-detail-sheet"]').waitFor({ timeout: 8000 });
+      await pagina.locator('[data-testid="session-undo-credit"]').click();
+      await pagina
+        .locator('[data-testid="session-detail-sheet"]')
+        .waitFor({ state: 'detached', timeout: 8000 })
+        .catch(() => problemas.push('«Quitar cumplido» no cierra el detalle'));
+      await esperar(pagina, 1500);
+      const trasDeshacer = await cuenta(pagina, FILAS_DE_FALTA);
+      if (trasDeshacer !== antesDelCumplido) {
+        problemas.push(
+          `tras deshacerlo Horas lista ${trasDeshacer} faltas, no ${antesDelCumplido}`,
+        );
+      }
+      console.log(`  deshacer             vuelve a ${trasDeshacer} faltas`);
+    } else {
+      console.log('  miembro de mesa      sin faltas que dar por cumplidas en la semana');
+    }
+
     // --- 5. Equipo, esta semana, contra Horas de esta semana.
     await irPorElMenu(pagina, '/hours');
     await semanaActual(pagina);

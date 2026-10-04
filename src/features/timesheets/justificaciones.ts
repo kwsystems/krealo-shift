@@ -8,6 +8,8 @@ import {
   type MotivoDeFalta,
   type TipoDeFalta,
 } from '@/domain/motivos-de-falta';
+import type { MotivoDeCumplido } from '@/domain/motivos-de-cumplido';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import {
   ADMIN_LIST_STALE_MS,
   requireClient,
@@ -145,6 +147,30 @@ export function useMutacionesDeFaltas() {
     quitar: useMutation({
       mutationFn: (shiftId: string) => llamar(RPC.clearAbsenceResolution, { p_shift_id: shiftId }),
       onSuccess: refrescar,
+    }),
+    /*
+     * CUMPLIÓ SU HORARIO, POR UN MOTIVO ESPECIAL (4-oct): crea su jornada a la hora del turno.
+     * Cambia horas, así que refresca TODAS las vistas que las enseñan, no solo las faltas:
+     * Horas, Horario, Inicio, Reportes, Equipo. Ver `creditShiftAsWorked`.
+     */
+    darPorCumplido: useMutation({
+      mutationFn: (params: { shiftId: string; reason: MotivoDeCumplido; note: string | null }) =>
+        llamar(RPC.creditShiftAsWorked, {
+          p_shift_id: params.shiftId,
+          p_reason: params.reason,
+          p_note: params.note,
+        }),
+      onSuccess: () => {
+        refrescar();
+        refrescarVistasDeHoras(queryClient);
+      },
+    }),
+    deshacerCumplido: useMutation({
+      mutationFn: (shiftId: string) => llamar(RPC.undoShiftCredit, { p_shift_id: shiftId }),
+      onSuccess: () => {
+        refrescar();
+        refrescarVistasDeHoras(queryClient);
+      },
     }),
   };
 }

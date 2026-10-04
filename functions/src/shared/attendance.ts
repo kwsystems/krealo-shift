@@ -407,6 +407,18 @@ export async function rebuildWorkSession(
          * lee Horas para decir «Según horario» en vez de dejar creer que alguien fichó.
          */
         source: (inicio.source as string | undefined) ?? null,
+        /*
+         * CUMPLIDO POR UN MOTIVO ESPECIAL (4-oct): el motivo viaja en los metadatos de la
+         * entrada que escribe `creditShiftAsWorked`, y la jornada lo hereda aquí, en cada
+         * reconstrucción. Así no se pierde aunque la jornada se vuelva a armar, y cada
+         * pantalla dice «Cumplido · Miembro de mesa» en vez de «Según horario».
+         */
+        credit_reason:
+          ((inicio.metadata as Record<string, unknown> | undefined)?.motivo_especial as
+            string | undefined) ?? null,
+        credit_note:
+          ((inicio.metadata as Record<string, unknown> | undefined)?.nota_especial as
+            string | undefined) ?? null,
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       },

@@ -22,6 +22,7 @@ import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
+import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 
 /**
  * Fila de sesión de trabajo (§11.4).
@@ -144,15 +145,18 @@ export function SessionRow({
       ? t('timesheet.sinceTime', { time: start })
       : estado === 'descanso'
         ? t('timesheet.sinceTime', { time: descansoDesde ?? start })
-        : session.source === 'import'
-          ? /*
-             * REGISTRADA DESDE EL HORARIO, no fichada: la semana es de antes del reloj y
-             * alguien la registró como cumplida. Se dice en la fila porque las horas son
-             * las mismas que las de un día fichado, y sin esto no habría forma de saber
-             * que nadie marcó esas horas.
-             */
-            `${start} – ${end} · ${t('timesheet.fromSchedule')}`
-          : `${start} – ${end}`;
+        : esCumplidoEspecial(session)
+          ? // Cumplido por un motivo especial (4-oct): el motivo, no «Según horario».
+            `${start} – ${end} · ${etiquetaDeCumplido(t, session)}`
+          : session.source === 'import'
+            ? /*
+               * REGISTRADA DESDE EL HORARIO, no fichada: la semana es de antes del reloj y
+               * alguien la registró como cumplida. Se dice en la fila porque las horas son
+               * las mismas que las de un día fichado, y sin esto no habría forma de saber
+               * que nadie marcó esas horas.
+               */
+              `${start} – ${end} · ${t('timesheet.fromSchedule')}`
+            : `${start} – ${end}`;
 
   // «Almorzando» si su pausa es la comida: ver `estadoVisible`.
   const visible =

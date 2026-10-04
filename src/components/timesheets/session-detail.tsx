@@ -23,6 +23,7 @@ import { readAdjustmentSide, type AdjustmentSide } from '@/features/timesheets/a
 import type { TimeAdjustment, TimeEvent, WorkSession } from '@/features/timesheets/api';
 import type { TimesheetAlert } from '@/features/timesheets/alerts';
 import type { SupportedLanguage } from '@/i18n';
+import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 
@@ -58,6 +59,8 @@ export function SessionDetailSheet({
   onSubmitCorrection,
   onReclassifyDeparture,
   seccionHoraExtra,
+  onUndoCredit,
+  undoingCredit = false,
   onClose,
 }: {
   session: WorkSession;
@@ -87,6 +90,12 @@ export function SessionDetailSheet({
    * pantalla, que es la que tiene los turnos y lo aprobado; aquí solo se coloca.
    */
   seccionHoraExtra?: ReactNode;
+  /**
+   * Deshacer un «cumplido por motivo especial» (4-oct): borra esa jornada y el turno vuelve a
+   * ser lo que era —una falta, si nadie marcó—. Solo para las jornadas que lo son.
+   */
+  onUndoCredit?: () => void;
+  undoingCredit?: boolean;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -167,6 +176,26 @@ export function SessionDetailSheet({
         label={t('timesheet.breaks')}
         value={minutesToHHmm(session.unpaid_break_minutes + session.paid_break_minutes)}
       />
+
+      {esCumplidoEspecial(session) ? (
+        <InlineNotice
+          tone="working"
+          icon="ribbon-outline"
+          title={etiquetaDeCumplido(t, session, true)}
+          body={t('credit.detailBody')}
+          action={
+            onUndoCredit === undefined ? undefined : (
+              <GhostButton
+                label={t('credit.undo')}
+                onPress={onUndoCredit}
+                loading={undoingCredit}
+                testID="session-undo-credit"
+              />
+            )
+          }
+          testID="session-credit"
+        />
+      ) : null}
 
       {alerts.length > 0 ? (
         <Row gap={spacing.xs} wrap align="flex-start">

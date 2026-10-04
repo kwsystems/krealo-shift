@@ -154,4 +154,71 @@ describe('las faltas de la semana en Horas', () => {
     // Ya revisada, se puede volver a «sin revisar».
     expect(screen.getByTestId('justificar-falta-quitar')).toBeTruthy();
   });
+
+  /*
+   * CUMPLIÓ SU HORARIO (4-oct): la tercera respuesta. Miembro de mesa en elecciones: el día
+   * cuenta como trabajado, con su motivo. Los motivos son otros y la ayuda dice qué pasa.
+   */
+  it('«Cumplió su horario» ofrece sus propios motivos y guarda como cumplido', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await renderWithProviders(
+      <JustificarFaltaSheet
+        falta={falta('c')}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        timeFormat="24h"
+        language="es-PE"
+        guardando={false}
+        quitando={false}
+        onGuardar={onGuardar}
+        onQuitar={jest.fn(() => Promise.resolve())}
+        onClose={jest.fn()}
+      />,
+    );
+    await fireEvent.press(screen.getByTestId('justificar-falta-tipo-credit'));
+    expect(screen.queryByTestId('justificar-falta-medical')).toBeNull();
+    expect(screen.getByText('Miembro de mesa')).toBeTruthy();
+    expect(screen.getByTestId('justificar-falta-efecto').props.children).toMatch(
+      /Cuenta como trabajado/,
+    );
+    expect(screen.getByText('Dar por cumplido')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('justificar-falta-election_duty'));
+    await fireEvent.press(screen.getByTestId('justificar-falta-guardar'));
+    await waitFor(() =>
+      expect(onGuardar).toHaveBeenCalledWith({
+        kind: 'credit',
+        reason: 'election_duty',
+        note: null,
+      }),
+    );
+  });
+
+  it('si el servidor dice que ya marcó ese día, lo explica', async () => {
+    const onGuardar = jest.fn(() =>
+      Promise.reject(Object.assign(new Error('x'), { motivo: 'CON_MARCAS' })),
+    );
+    await renderWithProviders(
+      <JustificarFaltaSheet
+        falta={falta('c')}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        timeFormat="24h"
+        language="es-PE"
+        guardando={false}
+        quitando={false}
+        onGuardar={onGuardar}
+        onQuitar={jest.fn(() => Promise.resolve())}
+        onClose={jest.fn()}
+      />,
+    );
+    await fireEvent.press(screen.getByTestId('justificar-falta-tipo-credit'));
+    await fireEvent.press(screen.getByTestId('justificar-falta-training'));
+    await fireEvent.press(screen.getByTestId('justificar-falta-guardar'));
+    await waitFor(() =>
+      expect(screen.getByTestId('justificar-falta-error').props.children).toMatch(
+        /ya tiene marcas/,
+      ),
+    );
+  });
 });

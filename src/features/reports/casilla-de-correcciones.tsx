@@ -43,6 +43,9 @@ export function CasillaDeCorrecciones({
           resumen.segunHorario > 0
             ? t('reports.correctionsFromSchedule', { count: resumen.segunHorario })
             : null,
+          resumen.cumplidosEspeciales > 0
+            ? t('reports.correctionsCredited', { count: resumen.cumplidosEspeciales })
+            : null,
         ]
           .filter((parte): parte is string => parte !== null)
           .join(' ');

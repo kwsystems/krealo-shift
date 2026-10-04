@@ -54,6 +54,7 @@ import {
   type ResolucionDeFalta,
 } from '@/features/timesheets/justificaciones';
 import { etiquetaDeFalta, motivoDeFalta } from '@/features/timesheets/textos-de-falta';
+import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
@@ -729,11 +730,14 @@ function FilaDelDia({
    * tocó el reloj ese día sería contarle algo que no pasó.
    */
   const marcas = dia.jornadas.map((j) =>
-    j.source === 'import'
-      ? t('portal.markFromSchedule')
-      : j.ends_at === null
-        ? t('portal.markOpen', { from: hora(j.starts_at) })
-        : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
+    // Cumplido por un motivo especial (4-oct): su motivo, y el comentario si lo hay.
+    esCumplidoEspecial(j)
+      ? etiquetaDeCumplido(t, j, true)
+      : j.source === 'import'
+        ? t('portal.markFromSchedule')
+        : j.ends_at === null
+          ? t('portal.markOpen', { from: hora(j.starts_at) })
+          : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
   );
   const rotuloDelTurno =
     dia.turnos.length > 0
