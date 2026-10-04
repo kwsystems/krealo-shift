@@ -2,7 +2,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
 import { auth, COLLECTIONS, db, nowISO } from './shared/admin';
 import { audit, membershipOf, requireRole, requireUid, type AppRole } from './shared/caller';
-import { idDeInvitacion, normalizarCorreo } from './invitations';
+import { idDeInvitacion, normalizarCorreo, sedesDeLaEmpresa } from './invitations';
 
 /**
  * Quien tiene acceso a la organizacion, y con que rol.
@@ -104,12 +104,15 @@ export const listMembers = onCall(async (request) => {
          * disponibilidad, y desde el panel no había forma de saberlo.
          */
         employeeId: (m.employee_id as string | null | undefined) ?? null,
+        // Las sedes que gestiona: Ajustes las enseña y deja cambiarlas a un gerente (4-oct).
+        managedLocationIds: (m.managed_location_ids as string[] | undefined) ?? [],
       };
     }),
     invitations: invitaciones.docs.map((d) => ({
       email: d.data().email,
       role: d.data().role,
       createdAt: d.data().created_at,
+      locationIds: (d.data().location_ids as string[] | undefined) ?? [],
     })),
   };
 });
@@ -165,10 +168,26 @@ export const setMemberRole = onCall(async (request) => {
     .where('organization_id', '==', organizationId)
     .get();
 
+  /*
+   * UN GERENTE CONSERVA O RECIBE SUS SEDES (4-oct). Pasar a alguien a gerente le dejaba la
+   * lista vacía, y un gerente sin sedes no puede hacer nada: las que se elijan, o las que ya
+   * gestionaba.
+   */
+  const pedidas: unknown[] = Array.isArray(request.data?.locationIds)
+    ? request.data.locationIds
+    : [];
+  const sedesDelGerente =
+    pedidas.length > 0
+      ? await sedesDeLaEmpresa(organizationId, pedidas)
+      : ((actual.managed_location_ids as string[] | undefined) ?? []);
   await ref.update({
     role: nuevoRol,
     managed_location_ids:
-      nuevoRol === 'owner' || nuevoRol === 'admin' ? ubicaciones.docs.map((d) => d.id) : [],
+      nuevoRol === 'owner' || nuevoRol === 'admin'
+        ? ubicaciones.docs.map((d) => d.id)
+        : nuevoRol === 'manager'
+          ? sedesDelGerente
+          : [],
     updated_at: nowISO(),
   });
 
@@ -267,5 +286,49 @@ export const cancelInvitation = onCall(async (request) => {
     before: { email: correo },
   });
 
+  return { ok: true };
+});
+
+/**
+ * LAS SEDES QUE GESTIONA UN GERENTE (4-oct). Era lo único que faltaba para que el rol
+ * sirviera: nada escribía `managed_location_ids` de un gerente, y sin esa lista las reglas y
+ * las funciones le niegan Horas, Inicio, Bandeja, Reportes, publicar y corregir. Solo
+ * dueño o administración, y solo sedes de la empresa; al menos una.
+ */
+export const setMemberLocations = onCall(async (request) => {
+  const uid = requireUid(request);
+  const organizationId = textoRequerido(request.data?.organizationId, 'organizationId');
+  const objetivo = textoRequerido(request.data?.userId, 'userId');
+  const pedidas: unknown[] = Array.isArray(request.data?.locationIds)
+    ? request.data.locationIds
+    : [];
+
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin']);
+
+  const ref = db.collection(COLLECTIONS.memberships).doc(`${organizationId}_${objetivo}`);
+  const actual = (await ref.get()).data();
+  if (actual === undefined) throw new HttpsError('not-found', 'Esa persona no tiene acceso.');
+  if (actual.role !== 'manager') {
+    throw new HttpsError(
+      'failed-precondition',
+      'Solo un gerente tiene sedes elegidas: dueños y administración gestionan todas.',
+    );
+  }
+  const sedes = await sedesDeLaEmpresa(organizationId, pedidas);
+  if (sedes.length === 0) {
+    throw new HttpsError('invalid-argument', 'Elige al menos una sede.', { motivo: 'SIN_SEDES' });
+  }
+
+  await ref.update({ managed_location_ids: sedes, updated_at: nowISO() });
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'member_locations_changed',
+    entityType: 'organization_membership',
+    entityId: ref.id,
+    before: { managed_location_ids: actual.managed_location_ids ?? [] },
+    after: { managed_location_ids: sedes },
+  });
   return { ok: true };
 });

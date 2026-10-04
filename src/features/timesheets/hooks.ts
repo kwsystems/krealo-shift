@@ -118,6 +118,7 @@ export function useSesionesAlDiaCon(
 export function useTimeEvents(params: {
   organizationId: string | null;
   employeeId: string | null;
+  locationId: string | null;
   fromISO: string;
   toISO: string;
   cacheKey: string;
@@ -128,6 +129,7 @@ export function useTimeEvents(params: {
       fetchTimeEvents({
         organizationId: params.organizationId ?? '',
         employeeId: params.employeeId ?? '',
+        locationId: params.locationId,
         fromISO: params.fromISO,
         toISO: params.toISO,
       }),

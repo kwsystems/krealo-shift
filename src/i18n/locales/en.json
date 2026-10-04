@@ -951,6 +951,9 @@
     "createHint": "A company is a different business, with its own people and its own hours. A location is another store of the same business."
   },
   "settings": {
+    "managerLocations": "Locations they manage",
+    "managerNeedsLocation": "A manager needs at least one location.",
+    "inviteLocations": "Locations they will manage",
     "aboutTitle": "About this app",
     "addJobRole": "Open a new job role",
     "addJobRoleDone": "Job role \"{{name}}\" is open. You can assign it when adding someone.",

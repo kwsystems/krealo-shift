@@ -256,23 +256,44 @@ async function replaceAssignments(params: {
    * hoja se quedaba quieta: «le doy guardar y no pasa nada», con un empleado huerfano
    * por cada intento.
    */
-  await execute((db) =>
+  /*
+   * SOLO LA DIFERENCIA (4-oct). Se borraba todo y se volvía a escribir, y un gerente que
+   * editaba a alguien que también trabaja en otra sede no puede borrar esa asignación (las
+   * reglas solo le dejan tocar las de sus sedes): el nombre se guardaba y las sedes no, con
+   * «Falta un permiso». Ahora lo que no cambia no se toca.
+   */
+  const actuales = await selectRows(z.array(z.object({ location_id: z.string() })), (db) =>
     db
       .from(TABLES.employeeLocationAssignments)
-      .delete()
+      .select('location_id')
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId),
   );
-  if (params.locationIds.length === 0) return;
+  const yaEstan = new Set(actuales.map((fila) => fila.location_id));
+  const quedan = new Set(params.locationIds);
+  for (const locationId of yaEstan) {
+    if (quedan.has(locationId)) continue;
+    await execute((db) =>
+      db
+        .from(TABLES.employeeLocationAssignments)
+        .delete()
+        .eq('organization_id', params.organizationId)
+        .eq('employee_id', params.employeeId)
+        .eq('location_id', locationId),
+    );
+  }
+  const nuevas = params.locationIds.filter((locationId) => !yaEstan.has(locationId));
+  if (nuevas.length === 0) return;
 
   await execute((db) =>
     db.from(TABLES.employeeLocationAssignments).insert(
-      params.locationIds.map((locationId, index) => ({
+      nuevas.map((locationId, index) => ({
         organization_id: params.organizationId,
         employee_id: params.employeeId,
         location_id: locationId,
         can_manage: false,
-        is_primary: index === 0,
+        // La principal es la primera de la lista, si no tenía ninguna.
+        is_primary: yaEstan.size === 0 && index === 0,
       })),
     ),
   );
@@ -284,24 +305,37 @@ async function replaceJobRoles(params: {
   employeeId: string;
   jobRoleIds: string[];
 }): Promise<void> {
-  // Mismo motivo que en las asignaciones de sede: la consulta que precede al borrado
-  // tiene que acotar lo que la regla lee.
-  await execute((db) =>
+  // Solo la diferencia, como las sedes (4-oct): lo que no cambia no se toca.
+  const actuales = await selectRows(z.array(z.object({ job_role_id: z.string() })), (db) =>
     db
       .from(TABLES.employeeJobRoles)
-      .delete()
+      .select('job_role_id')
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId),
   );
-  if (params.jobRoleIds.length === 0) return;
+  const yaEstan = new Set(actuales.map((fila) => fila.job_role_id));
+  const quedan = new Set(params.jobRoleIds);
+  for (const jobRoleId of yaEstan) {
+    if (quedan.has(jobRoleId)) continue;
+    await execute((db) =>
+      db
+        .from(TABLES.employeeJobRoles)
+        .delete()
+        .eq('organization_id', params.organizationId)
+        .eq('employee_id', params.employeeId)
+        .eq('job_role_id', jobRoleId),
+    );
+  }
+  const nuevos = params.jobRoleIds.filter((jobRoleId) => !yaEstan.has(jobRoleId));
+  if (nuevos.length === 0) return;
 
   await execute((db) =>
     db.from(TABLES.employeeJobRoles).insert(
-      params.jobRoleIds.map((jobRoleId, index) => ({
+      nuevos.map((jobRoleId, index) => ({
         organization_id: params.organizationId,
         employee_id: params.employeeId,
         job_role_id: jobRoleId,
-        is_primary: index === 0,
+        is_primary: yaEstan.size === 0 && index === 0,
       })),
     ),
   );

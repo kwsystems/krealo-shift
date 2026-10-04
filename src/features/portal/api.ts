@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { callFunction } from '@/lib/firebase/functions';
+
 import { shiftRowSchema, type ShiftRow } from '@/features/schedules/api';
 import { workSessionSchema, type WorkSession } from '@/features/timesheets/api';
 import type { DateKey } from '@/features/schedules/week';
@@ -76,7 +78,26 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
       .eq('status', 'active')
       .order('created_at', { ascending: true }),
   );
-  const mia = membresias.find((m) => m.role === 'employee' && m.employee_id !== null);
+  let mia = membresias.find((m) => m.role === 'employee' && m.employee_id !== null);
+  /*
+   * SIN FICHA LIGADA, SE INTENTA LIGAR UNA VEZ (4-oct): si su correo ya está en una ficha
+   * —se puso después de invitarla, o cambió de cuenta—, el servidor la liga ahora. Antes
+   * solo se intentaba al entrar sin ninguna membresía, así que quien ya tenía una de
+   * empleado sin ficha se quedaba con «pide que pongan este correo en tu ficha» para siempre.
+   */
+  if (mia === undefined) {
+    const { data } = await callFunction<{ claimed: boolean }>('claimInvitation');
+    if (data?.claimed === true) {
+      const otraVez = await selectRows(z.array(miMembresiaSchema), (client) =>
+        client
+          .from(TABLES.organizationMemberships)
+          .select('organization_id, role, employee_id')
+          .eq('user_id', userId)
+          .eq('status', 'active'),
+      );
+      mia = otraVez.find((m) => m.role === 'employee' && m.employee_id !== null);
+    }
+  }
   if (mia === undefined || mia.employee_id === null) return null;
   const organizationId = mia.organization_id;
   const employeeId = mia.employee_id;

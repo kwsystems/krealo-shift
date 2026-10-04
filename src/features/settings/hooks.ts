@@ -21,6 +21,7 @@ import {
   fetchMembers,
   inviteMember,
   revokeMember,
+  setMemberLocations,
   setMemberRole,
   type AppRoleName,
 } from './members';
@@ -203,13 +204,13 @@ export function useMemberMutations(organizationId: string | null) {
   };
 
   const invite = useMutation({
-    mutationFn: (params: { email: string; role: AppRoleName }) =>
+    mutationFn: (params: { email: string; role: AppRoleName; locationIds?: string[] }) =>
       inviteMember({ organizationId: organizationId ?? '', ...params }),
     onSuccess: invalidar,
   });
 
   const changeRole = useMutation({
-    mutationFn: (params: { userId: string; role: AppRoleName }) =>
+    mutationFn: (params: { userId: string; role: AppRoleName; locationIds?: string[] }) =>
       setMemberRole({ organizationId: organizationId ?? '', ...params }),
     onSuccess: invalidar,
   });
@@ -226,5 +227,11 @@ export function useMemberMutations(organizationId: string | null) {
     onSuccess: invalidar,
   });
 
-  return { invite, changeRole, revoke, cancelInvite };
+  const changeLocations = useMutation({
+    mutationFn: (params: { userId: string; locationIds: string[] }) =>
+      setMemberLocations({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  return { invite, changeRole, changeLocations, revoke, cancelInvite };
 }

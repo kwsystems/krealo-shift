@@ -55,7 +55,13 @@ export { claimInvitation, inviteMember } from './invitations';
  */
 export { purgarFotosDeFichaje } from './purga-fotos';
 
-export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './members';
+export {
+  listMembers,
+  setMemberRole,
+  setMemberLocations,
+  revokeMember,
+  cancelInvitation,
+} from './members';
 
 /*
  * Eliminar a un empleado de PRUEBA con todo su historial. A quien se va se le desactiva;

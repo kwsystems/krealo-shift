@@ -115,6 +115,7 @@ const FIJOS_A_PROPOSITO = new Map([
   ['revokeAllSessions.ok', 'marcador de éxito'],
   ['setMemberRole.ok', 'marcador de éxito'],
   ['revokeMember.ok', 'marcador de éxito'],
+  ['setMemberLocations.ok', 'marcador de éxito'],
   ['cancelInvitation.ok', 'marcador de éxito'],
 ]);
 

@@ -4,7 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useMemberMutations, useMembers } from './hooks';
 import { appRoles, type AppRoleName, type Member } from './members';
 import { AsyncSection } from '@/components/schedule/data-states';
-import { FormCard, InlineNotice, SelectField } from '@/components/schedule/fields';
+import {
+  FormCard,
+  InlineNotice,
+  MultiSelectField,
+  SelectField,
+} from '@/components/schedule/fields';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { FormField } from '@/components/ui/form-field';
 import { AppText } from '@/components/ui/app-text';
@@ -53,19 +58,32 @@ export function MembersCard() {
   const organizationId = scope.organization?.id ?? null;
 
   const members = useMembers(organizationId);
-  const { invite, changeRole, revoke, cancelInvite } = useMemberMutations(organizationId);
+  const { invite, changeRole, changeLocations, revoke, cancelInvite } =
+    useMemberMutations(organizationId);
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<AppRoleName>('manager');
+  /*
+   * LAS SEDES DE UN GERENTE, al invitarlo y después (4-oct). Sin ellas el rol no servía:
+   * entraba al panel y casi todo le decía «Falta un permiso». Se propone la sede que se mira.
+   */
+  const [sedesInvitacion, setSedesInvitacion] = useState<string[]>(
+    scope.locationId === null ? [] : [scope.locationId],
+  );
+  const opcionesDeSede = scope.locations.map((sede) => ({ value: sede.id, label: sede.name }));
+  const alternar = (lista: readonly string[], id: string) =>
+    lista.includes(id) ? lista.filter((otra) => otra !== id) : [...lista, id];
   const [aRetirar, setARetirar] = useState<Member | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
 
   const repartibles = rolesQuePuedeDar(scope.role);
   const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-  const ocupado = invite.isPending || changeRole.isPending || revoke.isPending;
+  const ocupado =
+    invite.isPending || changeRole.isPending || changeLocations.isPending || revoke.isPending;
 
   /** El último error de cualquiera de las cuatro, para no repetir el bloque cuatro veces. */
-  const error = invite.error ?? changeRole.error ?? revoke.error ?? cancelInvite.error;
+  const error =
+    invite.error ?? changeRole.error ?? changeLocations.error ?? revoke.error ?? cancelInvite.error;
 
   if (!scope.isAdmin) {
     return (
@@ -125,7 +143,16 @@ export function MembersCard() {
                       options={repartibles.map((r) => ({ value: r, label: t(`roles.${r}`) }))}
                       onChange={(nuevo) => {
                         setAviso(null);
-                        changeRole.mutate({ userId: member.userId, role: nuevo });
+                        changeRole.mutate({
+                          userId: member.userId,
+                          role: nuevo,
+                          // Si pasa a gerente sin sedes, la que se está mirando.
+                          ...(nuevo === 'manager' &&
+                          member.managedLocationIds.length === 0 &&
+                          scope.locationId !== null
+                            ? { locationIds: [scope.locationId] }
+                            : {}),
+                        });
                       }}
                       testID={`member-role-${member.userId}`}
                     />
@@ -146,6 +173,23 @@ export function MembersCard() {
                     />
                   </Row>
                 )}
+                {member.role === 'manager' && !member.isSelf && member.status === 'active' ? (
+                  <MultiSelectField
+                    label={t('settings.managerLocations')}
+                    values={member.managedLocationIds}
+                    options={opcionesDeSede}
+                    onToggle={(id) => {
+                      const nuevas = alternar(member.managedLocationIds, id);
+                      if (nuevas.length === 0) {
+                        setAviso(t('settings.managerNeedsLocation'));
+                        return;
+                      }
+                      setAviso(null);
+                      changeLocations.mutate({ userId: member.userId, locationIds: nuevas });
+                    }}
+                    testID={`member-locations-${member.userId}`}
+                  />
+                ) : null}
               </Card>
             ))}
           </Stack>
@@ -205,13 +249,28 @@ export function MembersCard() {
               onChange={setRole}
               testID="invite-role"
             />
+            {role === 'manager' ? (
+              <MultiSelectField
+                label={t('settings.inviteLocations')}
+                values={sedesInvitacion}
+                options={opcionesDeSede}
+                onToggle={(id) => setSedesInvitacion((actual) => alternar(actual, id))}
+                testID="invite-locations"
+              />
+            ) : null}
             <PrimaryButton
               label={t('settings.inviteSend')}
               loading={invite.isPending}
-              disabled={!correoValido || ocupado}
+              disabled={
+                !correoValido || ocupado || (role === 'manager' && sedesInvitacion.length === 0)
+              }
               onPress={() => {
                 invite.mutate(
-                  { email: email.trim().toLowerCase(), role },
+                  {
+                    email: email.trim().toLowerCase(),
+                    role,
+                    ...(role === 'manager' ? { locationIds: sedesInvitacion } : {}),
+                  },
                   {
                     onSuccess: () => {
                       setAviso(t('settings.inviteSent', { email: email.trim().toLowerCase() }));

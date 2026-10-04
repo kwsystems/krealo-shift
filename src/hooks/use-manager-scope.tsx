@@ -226,6 +226,8 @@ export type ManagerLocation = z.infer<typeof locationSchema>;
 const membershipSchema = z.object({
   organization_id: docId(),
   role: z.enum(['owner', 'admin', 'manager', 'employee']),
+  // Las sedes que gestiona un gerente: el selector le enseña solo esas (4-oct).
+  managed_location_ids: z.array(z.string()).default([]),
 });
 
 const organizationSchema = z.object({
@@ -323,7 +325,7 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
   const memberships = await selectRows(z.array(membershipSchema), (client) =>
     client
       .from(TABLES.organizationMemberships)
-      .select('organization_id, role')
+      .select('organization_id, role, managed_location_ids')
       .eq('user_id', userId)
       .eq('status', 'active')
       .order('created_at', { ascending: true }),
@@ -349,7 +351,7 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
       const reintento = await selectRows(z.array(membershipSchema), (client) => {
         const query = client
           .from(TABLES.organizationMemberships)
-          .select('organization_id, role')
+          .select('organization_id, role, managed_location_ids')
           .eq('status', 'active')
           .order('created_at', { ascending: true });
         return userId === null ? query : query.eq('user_id', userId);
@@ -373,13 +375,23 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
       .single(),
   );
 
-  const locations = await selectRows(z.array(locationSchema), (client) =>
+  const deLaEmpresa = await selectRows(z.array(locationSchema), (client) =>
     client
       .from(TABLES.locations)
       .select('id, name, address, timezone, is_active, settings')
       .eq('organization_id', membership.organization_id)
       .order('name', { ascending: true }),
   );
+  /*
+   * UN GERENTE VE SUS SEDES, NO TODAS (4-oct). Se le ofrecían todas las de la empresa, y en
+   * las que no gestiona las reglas le niegan casi todo: elegía una sede y la pantalla decía
+   * «Falta un permiso». Dueños y administración gestionan todas.
+   */
+  const gestionadas = new Set(membership.managed_location_ids);
+  const locations =
+    membership.role === 'manager'
+      ? deLaEmpresa.filter((sede) => gestionadas.has(sede.id))
+      : deLaEmpresa;
 
   // La ruta de arranque decide por rol (§6.1) y este es el primer punto donde el
   // rol real se conoce: se publica en el store de sesión para que no haya dos

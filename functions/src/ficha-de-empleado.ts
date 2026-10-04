@@ -67,7 +67,8 @@ export async function ligarFichaDeEmpleado(params: {
       .where('organization_id', '==', org)
       .where('employee_id', '==', ficha.id)
       .get();
-    if (otras.docs.some((m) => m.data().user_id !== uid)) continue;
+    // Solo una cuenta ACTIVA la tiene tomada: una retirada no bloquea a la nueva (4-oct).
+    if (otras.docs.some((m) => m.data().user_id !== uid && m.data().status === 'active')) continue;
     ligables.push({ org, employeeId: ficha.id });
   }
   if (ligables.length === 0) return { claimed: false, reason: 'ya-ligada' };
@@ -80,7 +81,19 @@ export async function ligarFichaDeEmpleado(params: {
   for (const { org, employeeId } of ligables) {
     const ref = db.collection(COLLECTIONS.memberships).doc(`${org}_${uid}`);
     const creada = await db.runTransaction(async (tx) => {
-      if ((await tx.get(ref)).exists) return false; // ya es miembro de esa empresa: no se toca
+      const previa = (await tx.get(ref)).data();
+      if (previa !== undefined) {
+        /*
+         * YA ES MIEMBRO. Si es una cuenta de EMPLEADO, activa y sin ficha —la que queda al
+         * invitar a alguien como Empleado desde Ajustes—, se liga ahora (4-oct): antes nunca
+         * se ligaba y su celular decía para siempre «pide que pongan este correo en tu
+         * ficha», aunque ya estuviera puesto. Un gerente o administrador no se toca.
+         */
+        const sinFicha = (previa.employee_id ?? null) === null;
+        if (previa.role !== 'employee' || previa.status !== 'active' || !sinFicha) return false;
+        tx.update(ref, { employee_id: employeeId, updated_at: nowISO() });
+        return true;
+      }
       tx.set(ref, {
         id: ref.id,
         organization_id: org,

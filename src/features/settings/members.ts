@@ -30,12 +30,14 @@ const memberSchema = z.object({
   isSelf: z.boolean(),
   /** La ficha de empleado de esa cuenta, si la tiene. Ver `listMembers`. */
   employeeId: docId().nullable().default(null),
+  managedLocationIds: z.array(z.string()).default([]),
 });
 
 const invitationSchema = z.object({
   email: z.string(),
   role: z.enum(appRoles),
   createdAt: z.string(),
+  locationIds: z.array(z.string()).default([]),
 });
 
 const listSchema = z.object({
@@ -65,6 +67,8 @@ export function inviteMember(params: {
   organizationId: string;
   email: string;
   role: AppRoleName;
+  /** Las sedes de un gerente: sin ellas no puede hacer nada (4-oct). */
+  locationIds?: string[];
 }): Promise<unknown> {
   return llamar('inviteMember', params, okSchema);
 }
@@ -73,8 +77,18 @@ export function setMemberRole(params: {
   organizationId: string;
   userId: string;
   role: AppRoleName;
+  locationIds?: string[];
 }): Promise<unknown> {
   return llamar('setMemberRole', params, okSchema);
+}
+
+/** Las sedes que gestiona un gerente (4-oct). Ver `functions/src/members.ts`. */
+export function setMemberLocations(params: {
+  organizationId: string;
+  userId: string;
+  locationIds: string[];
+}): Promise<unknown> {
+  return llamar('setMemberLocations', params, okSchema);
 }
 
 export function revokeMember(params: { organizationId: string; userId: string }): Promise<unknown> {

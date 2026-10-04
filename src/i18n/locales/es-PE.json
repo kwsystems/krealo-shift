@@ -951,6 +951,9 @@
     "createHint": "Una empresa es otro negocio, con su propia gente y sus propias horas. Una sede es otra tienda del mismo negocio."
   },
   "settings": {
+    "managerLocations": "Sedes que gestiona",
+    "managerNeedsLocation": "Un gerente necesita al menos una sede.",
+    "inviteLocations": "Sedes que va a gestionar",
     "aboutTitle": "Acerca de esta app",
     "addJobRole": "Abrir un puesto nuevo",
     "addJobRoleDone": "Puesto «{{name}}» abierto. Ya se puede asignar al dar de alta a alguien.",

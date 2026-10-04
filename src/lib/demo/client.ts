@@ -2299,6 +2299,8 @@ function crearFunctions(almacen: Almacen) {
                 role: 'manager',
                 status: 'active',
                 isSelf: false,
+                // Un gerente gestiona las sedes que se le eligen (4-oct).
+                managedLocationIds: [DEMO_LOCATION_1],
               },
               {
                 // La vendedora de la demo YA entró a su celular: es la cuenta de
@@ -2323,6 +2325,7 @@ function crearFunctions(almacen: Almacen) {
 
         case 'inviteMember':
         case 'setMemberRole':
+        case 'setMemberLocations':
         case 'revokeMember':
         case 'cancelInvitation':
           return sinError({ ok: true });

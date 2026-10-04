@@ -193,21 +193,32 @@ export async function fetchWorkSessions(params: {
 export async function fetchTimeEvents(params: {
   organizationId: string;
   employeeId: string;
+  /**
+   * LA SEDE, desde el panel (4-oct). Las reglas dejan a un gerente leer los fichajes de sus
+   * sedes, y Firestore niega la consulta entera si no puede demostrarlo con sus filtros: sin
+   * este, el detalle de una jornada le fallaba a un gerente. El celular no la manda: ahí se
+   * leen los de la propia persona.
+   */
+  locationId?: string | null;
   fromISO: string;
   toISO: string;
 }): Promise<TimeEvent[]> {
-  return selectRows(z.array(timeEventSchema), (db) =>
-    db
+  return selectRows(z.array(timeEventSchema), (db) => {
+    let consulta = db
       .from(TABLES.timeEvents)
       .select(
         'id, employee_id, event_type, break_type, occurred_at, source, is_offline, reclassified_as, break_reason',
       )
       .eq('organization_id', params.organizationId)
-      .eq('employee_id', params.employeeId)
+      .eq('employee_id', params.employeeId);
+    if (params.locationId !== undefined && params.locationId !== null) {
+      consulta = consulta.eq('location_id', params.locationId);
+    }
+    return consulta
       .gte('occurred_at', params.fromISO)
       .lt('occurred_at', params.toISO)
-      .order('occurred_at', { ascending: true }),
-  );
+      .order('occurred_at', { ascending: true });
+  });
 }
 
 export async function fetchAdjustments(sessionIds: string[]): Promise<TimeAdjustment[]> {

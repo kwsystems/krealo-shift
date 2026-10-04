@@ -109,12 +109,25 @@ export const claimInvitation = onCall(async (request) => {
     .collection(COLLECTIONS.locations)
     .where('organization_id', '==', organizationId)
     .get();
+  /*
+   * UN GERENTE GESTIONA LAS SEDES QUE SE ELIGIERON AL INVITARLO (4-oct). Se quedaba con la
+   * lista vacía y nada la rellenaba: entraba al panel y Horas, Inicio, Bandeja y Reportes le
+   * decían «Falta un permiso». Solo las que siguen siendo de la empresa.
+   */
+  const deLaEmpresa = new Set(ubicaciones.docs.map((d) => d.id));
+  const sedesDelGerente = Array.isArray(datos.location_ids)
+    ? (datos.location_ids as unknown[]).filter(
+        (id): id is string => typeof id === 'string' && deLaEmpresa.has(id),
+      )
+    : [];
 
   await db.runTransaction(async (tx) => {
     const actual = await tx.get(invitacion.ref);
     if (actual.data()?.status !== 'pending') {
       throw new HttpsError('aborted', 'Esa invitación ya se usó.');
     }
+    // Su ficha de empleado, si ya la tenía ligada, no se pierde al canjear (4-oct).
+    const membresiaPrevia = (await tx.get(membresiaRef)).data();
 
     tx.set(
       membresiaRef,
@@ -131,8 +144,12 @@ export const claimInvitation = onCall(async (request) => {
          * `syncManagedLocations` al asignarle tiendas.
          */
         managed_location_ids:
-          rol === 'owner' || rol === 'admin' ? ubicaciones.docs.map((d) => d.id) : [],
-        employee_id: null,
+          rol === 'owner' || rol === 'admin'
+            ? ubicaciones.docs.map((d) => d.id)
+            : rol === 'manager'
+              ? sedesDelGerente
+              : [],
+        employee_id: (membresiaPrevia?.employee_id as string | null | undefined) ?? null,
         created_at: nowISO(),
         updated_at: nowISO(),
       },
@@ -194,6 +211,9 @@ export const inviteMember = onCall(async (request) => {
   const organizationId = String(request.data?.organizationId ?? '');
   const correo = normalizarCorreo(String(request.data?.email ?? ''));
   const rol = String(request.data?.role ?? 'manager');
+  const pedidas: unknown[] = Array.isArray(request.data?.locationIds)
+    ? request.data.locationIds
+    : [];
 
   if (!correo.includes('@')) {
     throw new HttpsError('invalid-argument', 'Ese correo no parece válido.');
@@ -209,6 +229,14 @@ export const inviteMember = onCall(async (request) => {
     throw new HttpsError('permission-denied', 'No puedes invitar con un rol superior al tuyo.');
   }
 
+  // Un gerente sin sedes no puede hacer nada: se eligen al invitarlo (4-oct).
+  const sedes = rol === 'manager' ? await sedesDeLaEmpresa(organizationId, pedidas) : [];
+  if (rol === 'manager' && sedes.length === 0) {
+    throw new HttpsError('invalid-argument', 'Elige al menos una sede para el gerente.', {
+      motivo: 'SIN_SEDES',
+    });
+  }
+
   const id = idDeInvitacion(organizationId, correo);
   await db.collection(COLLECTIONS.invitations).doc(id).set(
     {
@@ -216,6 +244,7 @@ export const inviteMember = onCall(async (request) => {
       organization_id: organizationId,
       email: correo,
       role: rol,
+      location_ids: sedes,
       status: 'pending',
       invited_by: uid,
       created_at: nowISO(),
@@ -234,3 +263,18 @@ export const inviteMember = onCall(async (request) => {
 
   return { invitationId: id };
 });
+
+/** Las sedes pedidas que de verdad son de la empresa, sin repetir. */
+export async function sedesDeLaEmpresa(
+  organizationId: string,
+  pedidas: readonly unknown[],
+): Promise<string[]> {
+  const ubicaciones = await db
+    .collection(COLLECTIONS.locations)
+    .where('organization_id', '==', organizationId)
+    .get();
+  const deLaEmpresa = new Set(ubicaciones.docs.map((d) => d.id));
+  return [
+    ...new Set(pedidas.filter((id): id is string => typeof id === 'string' && deLaEmpresa.has(id))),
+  ];
+}

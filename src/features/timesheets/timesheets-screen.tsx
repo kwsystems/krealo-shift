@@ -191,17 +191,31 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     if (selected === null) return { fromISO: range.fromISO, toISO: range.toISO, key: 'none' };
     const dayKey = dateKeyOf(selected.starts_at, scope.timezone);
     const startInstant = localDateTimeToInstant(dayKey, '00:00', scope.timezone);
-    const endInstant = localDateTimeToInstant(dayKey, '23:59', scope.timezone);
+    /*
+     * HASTA LAS 00:00 DEL DÍA SIGUIENTE, O HASTA LA SALIDA SI ES MÁS TARDE (4-oct). Cortaba a
+     * las 23:59: una marca a las 23:59:30 no salía, y la salida de una jornada que pasa la
+     * medianoche tampoco, así que no se podía ver ni reclasificar.
+     */
+    const finDelDia =
+      startInstant === null
+        ? null
+        : new Date(Date.parse(startInstant) + 24 * 60 * 60_000).toISOString();
+    const salida = selected.ends_at ?? nowISO;
+    const hasta =
+      finDelDia === null
+        ? range.toISO
+        : new Date(Math.max(Date.parse(finDelDia), Date.parse(salida) + 60_000)).toISOString();
     return {
       fromISO: startInstant ?? range.fromISO,
-      toISO: endInstant ?? range.toISO,
-      key: dayKey,
+      toISO: hasta,
+      key: `${dayKey}:${selected.id}`,
     };
-  }, [selected, scope.timezone, range.fromISO, range.toISO]);
+  }, [selected, scope.timezone, range.fromISO, range.toISO, nowISO]);
 
   const events = useTimeEvents({
     organizationId: scope.organization?.id ?? null,
     employeeId: selected?.employee_id ?? null,
+    locationId: scope.locationId,
     fromISO: selectedDayRange.fromISO,
     toISO: selectedDayRange.toISO,
     cacheKey: selectedDayRange.key,

@@ -364,6 +364,28 @@
       ]
     },
     {
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "occurred_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "shift_publications",
       "queryScope": "COLLECTION",
       "fields": [
