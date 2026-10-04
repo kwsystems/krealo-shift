@@ -1,3 +1,4 @@
+import { enTrozos } from '@/lib/firebase/en-trozos';
 import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
@@ -103,18 +104,26 @@ export async function fetchEmployees(organizationId: string): Promise<Employee[]
  * Asignaciones de ubicación. La tabla no lleva `organization_id`, así que se
  * filtra por las ubicaciones visibles y RLS hace el resto.
  */
+// El límite de 30 de un `in`: ver `en-trozos.ts`.
+export { enTrozos, MAXIMO_DE_UN_IN } from '@/lib/firebase/en-trozos';
+
 export async function fetchLocationAssignments(params: {
   organizationId: string;
   locationIds: string[];
 }): Promise<LocationAssignment[]> {
   if (params.locationIds.length === 0) return [];
-  return selectRows(z.array(assignmentSchema), (db) =>
-    db
-      .from(TABLES.employeeLocationAssignments)
-      .select('employee_id, location_id, can_manage, is_primary')
-      .eq('organization_id', params.organizationId)
-      .in('location_id', params.locationIds),
+  const partes = await Promise.all(
+    enTrozos([...new Set(params.locationIds)]).map((trozo) =>
+      selectRows(z.array(assignmentSchema), (db) =>
+        db
+          .from(TABLES.employeeLocationAssignments)
+          .select('employee_id, location_id, can_manage, is_primary')
+          .eq('organization_id', params.organizationId)
+          .in('location_id', trozo),
+      ),
+    ),
   );
+  return partes.flat();
 }
 
 export async function fetchEmployeeJobRoles(params: {
@@ -122,13 +131,18 @@ export async function fetchEmployeeJobRoles(params: {
   employeeIds: string[];
 }): Promise<EmployeeJobRole[]> {
   if (params.employeeIds.length === 0) return [];
-  return selectRows(z.array(employeeJobRoleSchema), (db) =>
-    db
-      .from(TABLES.employeeJobRoles)
-      .select('employee_id, job_role_id, is_primary')
-      .eq('organization_id', params.organizationId)
-      .in('employee_id', params.employeeIds),
+  const partes = await Promise.all(
+    enTrozos([...new Set(params.employeeIds)]).map((trozo) =>
+      selectRows(z.array(employeeJobRoleSchema), (db) =>
+        db
+          .from(TABLES.employeeJobRoles)
+          .select('employee_id, job_role_id, is_primary')
+          .eq('organization_id', params.organizationId)
+          .in('employee_id', trozo),
+      ),
+    ),
   );
+  return partes.flat();
 }
 
 export async function fetchJobRoles(organizationId: string): Promise<JobRole[]> {

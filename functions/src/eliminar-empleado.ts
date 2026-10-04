@@ -86,17 +86,44 @@ export const deleteEmployee = onCall(async (request) => {
    * TODO LO SUYO, cada consulta atada a SU organización además de a su id: si un id se
    * repitiera en otra empresa, esto no la tocaría.
    */
-  const [eventos, sesiones, turnos, descansosLibres, solicitudes, sedes, puestos, intervalos] =
-    await Promise.all([
-      porEmpleado(COLLECTIONS.timeEvents, organizationId, employeeId).get(),
-      porEmpleado(COLLECTIONS.workSessions, organizationId, employeeId).get(),
-      refsDe(porEmpleado(COLLECTIONS.shifts, organizationId, employeeId)),
-      refsDe(porEmpleado(COLLECTIONS.restDays, organizationId, employeeId)),
-      refsDe(porEmpleado(COLLECTIONS.timeEditRequests, organizationId, employeeId)),
-      refsDe(porEmpleado(COLLECTIONS.employeeLocations, organizationId, employeeId)),
-      refsDe(porEmpleado(COLLECTIONS.employeeJobRoles, organizationId, employeeId)),
-      refsDe(porEmpleado(COLLECTIONS.breakIntervals, organizationId, employeeId)),
-    ]);
+  /*
+   * Y LO QUE SE AÑADIÓ DESPUÉS (auditoría, 4-oct): horas que debe, disponibilidad, lo que se
+   * dijo de sus faltas y sus horas extra aprobadas. Se quedaban, y Reportes seguía contando
+   * las horas debidas de alguien que ya no existe.
+   */
+  const [
+    eventos,
+    sesiones,
+    turnos,
+    descansosLibres,
+    solicitudes,
+    sedes,
+    puestos,
+    intervalos,
+    debidas,
+    disponibilidad,
+    justificaciones,
+    horasExtra,
+    notasPrivadas,
+    cuentas,
+  ] = await Promise.all([
+    porEmpleado(COLLECTIONS.timeEvents, organizationId, employeeId).get(),
+    porEmpleado(COLLECTIONS.workSessions, organizationId, employeeId).get(),
+    refsDe(porEmpleado(COLLECTIONS.shifts, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.restDays, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.timeEditRequests, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.employeeLocations, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.employeeJobRoles, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.breakIntervals, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.owedHours, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.availability, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.absenceResolutions, organizationId, employeeId)),
+    refsDe(porEmpleado(COLLECTIONS.overtimeApprovals, organizationId, employeeId)),
+    // Las notas privadas de sus turnos (4-oct): ver `src/features/schedules/notas-privadas.ts`.
+    refsDe(porEmpleado(COLLECTIONS.shiftPrivateNotes, organizationId, employeeId)),
+    // Su cuenta NO se borra —es de la persona—: se desliga de una ficha que ya no existe.
+    refsDe(porEmpleado(COLLECTIONS.memberships, organizationId, employeeId)),
+  ]);
 
   // Las correcciones cuelgan de la jornada o del fichaje que corrigieron, no del empleado.
   const idsDeSesion = sesiones.docs.map((d) => d.id);
@@ -128,7 +155,15 @@ export const deleteEmployee = onCall(async (request) => {
     descansosLibres: descansosLibres.length,
     solicitudes: solicitudes.length,
     correcciones: correccionesUnicas.length,
-    otros: sedes.length + puestos.length + intervalos.length,
+    otros:
+      sedes.length +
+      puestos.length +
+      intervalos.length +
+      debidas.length +
+      disponibilidad.length +
+      justificaciones.length +
+      horasExtra.length +
+      notasPrivadas.length,
   };
 
   if (dryRun) {
@@ -163,12 +198,18 @@ export const deleteEmployee = onCall(async (request) => {
     ...sedes,
     ...puestos,
     ...intervalos,
+    ...debidas,
+    ...disponibilidad,
+    ...justificaciones,
+    ...horasExtra,
+    ...notasPrivadas,
     ...correccionesUnicas,
     db.collection(COLLECTIONS.pinCredentials).doc(employeeId),
     empleadoRef,
   ];
   const escritor = db.bulkWriter();
   for (const ref of aBorrar) void escritor.delete(ref);
+  for (const cuenta of cuentas) void escritor.update(cuenta, { employee_id: null });
   await escritor.close();
 
   await audit({

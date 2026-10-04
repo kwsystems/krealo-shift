@@ -26,6 +26,7 @@ import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
 import { corregirSalidaConFichaje, noEnElFuturo } from './shared/salida-a-mano';
 import { exigirQueSeaDeLaSede } from './shared/persona-de-la-sede';
+import { anotarCambioTrasAprobar, SIN_CAMBIOS_TRAS_APROBAR } from './shared/periodo-aprobado';
 
 /** El mismo valor de fabrica que `DEFAULT_LOCATION_SETTINGS.minimumRestMinutes`: once horas. */
 const DESCANSO_MINIMO_POR_DEFECTO = 660;
@@ -587,6 +588,13 @@ export async function ajustarSesion(
         entityType: 'work_session',
         entityId: workSessionId,
       });
+      await anotarCambioTrasAprobar({
+        organizationId: previa.organization_id as string,
+        locationId: previa.location_id as string,
+        instante: newStartsAt ?? (previa.starts_at as string),
+        uid,
+        motivo: 'work_session_adjusted',
+      });
       return;
     }
   }
@@ -664,6 +672,15 @@ export async function ajustarSesion(
     entityType: 'work_session',
     entityId: workSessionId,
   });
+  if (sesion !== undefined) {
+    await anotarCambioTrasAprobar({
+      organizationId: sesion.organization_id as string,
+      locationId: sesion.location_id as string,
+      instante: sesion.starts_at as string,
+      uid,
+      motivo: 'work_session_adjusted',
+    });
+  }
 }
 
 /**
@@ -739,6 +756,13 @@ export const managerAddTimeEvent = onCall(async (request) => {
     entityType: 'time_event',
     entityId: eventId,
   });
+  await anotarCambioTrasAprobar({
+    organizationId: location.organization_id as string,
+    locationId,
+    instante: occurredAt,
+    uid,
+    motivo: 'manager_added_time_event',
+  });
 
   const abierta = await db
     .collection(COLLECTIONS.workSessions)
@@ -788,6 +812,8 @@ export const approveTimesheetPeriod = onCall(async (request) => {
       status: 'approved',
       approved_by: uid,
       approved_at: nowISO(),
+      // Aprobar otra vez es haber mirado lo que cambió: la cuenta vuelve a cero.
+      ...SIN_CAMBIOS_TRAS_APROBAR,
       updated_at: nowISO(),
     },
     { merge: true },
@@ -814,6 +840,7 @@ export const reopenTimesheetPeriod = onCall(async (request) => {
       status: 'reopened',
       approved_at: null,
       approved_by: null,
+      ...SIN_CAMBIOS_TRAS_APROBAR,
       reopened_by: uid,
       reopened_at: nowISO(),
       updated_at: nowISO(),

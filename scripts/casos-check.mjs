@@ -333,7 +333,10 @@ try {
       await pagina.locator('[data-testid="mi-horario-debes"]').waitFor({ timeout: 10000 });
       const total = await pagina.locator('[data-testid="mi-horario-debes-total"]').innerText();
       const texto = await pagina.locator('[data-testid="mi-horario-debes"]').innerText();
-      if (total.trim() !== '02:30') problemas.push(`su celular dice que debe «${total}», no 02:30`);
+      // Como una duración, igual que el resto del celular (auditoría, 4-oct): no «02:30».
+      if (total.trim() !== '2 h 30 min') {
+        problemas.push(`su celular dice que debe «${total}», no «2 h 30 min»`);
+      }
       if (!texto.includes('Cita médica')) problemas.push('su celular no enseña la nota');
       const caja = await desborde(pagina, '[data-testid="mi-horario-debes"]');
       if (caja.culpables.length > 0) {

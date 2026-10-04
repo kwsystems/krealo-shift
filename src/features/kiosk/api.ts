@@ -357,8 +357,37 @@ export function mapInvokeError(error: unknown, payload: unknown): KioskApiError 
     }
   }
 
-  const message = error instanceof Error ? error.message : 'unknown';
+  if (esFaltaDeRed(error)) return { kind: 'offline' };
+
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof (error as { message?: unknown } | null)?.message === 'string'
+        ? String((error as { message: string }).message)
+        : 'unknown';
   return { kind: 'server', message };
+}
+
+/**
+ * ¿ES LA RED Y NO EL SERVIDOR? (auditoría, 4-oct).
+ *
+ * `callFunction` no lanza nunca: un corte de red llega como un error más, y el de Firebase
+ * para «no hubo respuesta» es `internal` con el mensaje `internal`, sin detalles. Así que
+ * el `catch` de `invoke` —el que devolvía `offline`— no se ejecutaba jamás, y sin wifi el
+ * reloj decía «No pudimos completar la acción» en vez de hablar de la red. Un `internal`
+ * que lanzó el servidor trae su propio mensaje: ese sí es del servidor.
+ */
+function esFaltaDeRed(error: unknown): boolean {
+  const fuente = (error ?? {}) as { code?: unknown; message?: unknown; details?: unknown };
+  const codigo = typeof fuente.code === 'string' ? fuente.code.replace(/^functions\//, '') : '';
+  if (codigo === 'unavailable' || codigo === 'deadline-exceeded') return true;
+  const sinDetalles = fuente.details === undefined || fuente.details === null;
+  return (
+    codigo === 'internal' &&
+    sinDetalles &&
+    typeof fuente.message === 'string' &&
+    fuente.message.trim().toLowerCase() === 'internal'
+  );
 }
 
 /** §16 `activate-kiosk`: vincula este dispositivo a UNA ubicación. */

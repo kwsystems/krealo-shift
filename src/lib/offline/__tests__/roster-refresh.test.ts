@@ -19,7 +19,7 @@
 // llamadas a `jest.mock` por encima de los imports, así que el módulo bajo prueba ve
 // las versiones simuladas de todas formas. Import estático y no `await import()`, que
 // en este preset necesita --experimental-vm-modules.
-import { refreshOfflinePackage } from '../sync';
+import { REFRESCO_DEL_PAQUETE_MS, refrescarPaqueteSiToca, refreshOfflinePackage } from '../sync';
 
 const mockRefreshKioskRoster = jest.fn();
 const mockCacheRosterAndShifts = jest.fn();
@@ -232,5 +232,40 @@ describe('el motor no lanza, pero deja rastro', () => {
       'last_sync_error',
       expect.stringContaining('SQLITE_BUSY'),
     );
+  });
+});
+
+describe('las reglas de la sede no se quedan congeladas (auditoría, 4-oct)', () => {
+  let warn: jest.SpyInstance;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => warn.mockRestore());
+
+  it('llegan al reloj aunque falle guardar el equipo en la base local', async () => {
+    // Es lo que pasa en la web, donde la base local no se abre: el largo del PIN tenía que
+    // llegar igual.
+    mockRefreshKioskRoster.mockResolvedValue(RESPUESTA);
+    mockCacheRosterAndShifts.mockRejectedValue(new Error('La base local no persiste en web'));
+
+    await refreshOfflinePackage();
+
+    expect(mockUpdatePolicies).toHaveBeenCalledWith(POLITICAS);
+  });
+
+  it('se bajan solas, pero no más de una vez cada 15 minutos', async () => {
+    mockRefreshKioskRoster.mockResolvedValue(RESPUESTA);
+    mockCacheRosterAndShifts.mockResolvedValue(undefined);
+    const lejos = Date.now() + 10 * REFRESCO_DEL_PAQUETE_MS;
+
+    await refrescarPaqueteSiToca(lejos);
+    await refrescarPaqueteSiToca(lejos + 60_000);
+    expect(mockRefreshKioskRoster).toHaveBeenCalledTimes(1);
+
+    await refrescarPaqueteSiToca(lejos + REFRESCO_DEL_PAQUETE_MS + 1);
+    expect(mockRefreshKioskRoster).toHaveBeenCalledTimes(2);
   });
 });

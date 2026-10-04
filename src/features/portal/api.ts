@@ -179,7 +179,13 @@ export async function fetchMisTurnos(params: {
       .gte('starts_at', params.fromISO)
       .lt('starts_at', params.toISO)
       .order('starts_at', { ascending: true }),
-  ).then((filas) => filas.filter((fila) => fila.status === 'published' || estaPorConfirmar(fila)));
+  ).then((filas) =>
+    filas
+      .filter((fila) => fila.status === 'published' || estaPorConfirmar(fila))
+      // La nota privada de quien gestiona no es para la persona: ni en memoria. Las nuevas ya
+      // no viven en el turno (`schedules/notas-privadas.ts`); esto cubre las de antes.
+      .map((fila) => ({ ...fila, manager_note: null })),
+  );
 }
 
 /** Sus jornadas: lo que marcó, ya convertido en horas por el servidor. */

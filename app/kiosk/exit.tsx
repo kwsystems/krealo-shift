@@ -12,6 +12,7 @@ import { DangerButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
+import { textoDelErrorDelPin } from '@/features/kiosk/errores-del-pin';
 import { formatKioskDiagnostics } from '@/features/kiosk/diagnostics';
 import {
   readCameraPermission,
@@ -88,6 +89,7 @@ export default function KioskExitScreen() {
     };
   }, []);
   const deactivate = useKioskStore((s) => s.deactivate);
+  const markRevoked = useKioskStore((s) => s.markRevoked);
   const { online, pendingCount, lastSyncAt, needsReviewCount } = useNetworkStore();
 
   const [pin, setPin] = useState('');
@@ -138,19 +140,13 @@ export default function KioskExitScreen() {
       return;
     }
 
-    if (result.error.kind === 'not_configured') {
-      setError(t('errors.notConfigured'));
-      return;
-    }
-
-    if (result.error.kind === 'device_credential') {
-      // No es "PIN incorrecto": el iPad no pudo leer su credencial. Decir lo otro
-      // haria que alguien probara PIN distintos durante diez minutos.
-      setError(t('errors.deviceCredential'));
-      return;
-    }
-
-    setError(t('kiosk.pinIncorrect'));
+    /*
+     * EL MISMO MAPEO QUE LA PANTALLA DEL PIN (auditoría, 4-oct): antes todo lo demás era
+     * «PIN incorrecto», también un PIN bloqueado o un reloj revocado. Y un reloj revocado
+     * se marca como tal, como allí: el servidor acaba de decir que ya no existe.
+     */
+    if (result.error.kind === 'revoked') markRevoked();
+    setError(textoDelErrorDelPin(t, result.error) ?? t('errors.generic'));
   };
 
   /**

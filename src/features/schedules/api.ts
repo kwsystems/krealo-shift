@@ -1,8 +1,10 @@
+import * as Crypto from 'expo-crypto';
 import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
 
 import { pisaAOtro, type TurnoEnElTiempo } from './conflicts';
+import { conNotaPrivada, fetchNotasPrivadas, guardarNotasPrivadas } from './notas-privadas';
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
 import {
   AdminError,
@@ -102,7 +104,7 @@ export async function fetchWeekShifts(params: {
   fromISO: string;
   toISO: string;
 }): Promise<ShiftRow[]> {
-  return selectRows(z.array(shiftRowSchema), (db) =>
+  const turnos = await selectRows(z.array(shiftRowSchema), (db) =>
     db
       .from(TABLES.shifts)
       .select(SHIFT_COLUMNS)
@@ -112,6 +114,12 @@ export async function fetchWeekShifts(params: {
       .lt('starts_at', params.toISO)
       .order('starts_at', { ascending: true }),
   );
+  // La nota privada vive aparte: ver `notas-privadas.ts`.
+  const notas = await fetchNotasPrivadas({
+    organizationId: params.organizationId,
+    shiftIds: turnos.map((turno) => turno.id),
+  });
+  return turnos.map((turno) => conNotaPrivada(turno, notas));
 }
 
 /**
@@ -233,9 +241,29 @@ function buildRow(params: {
     timezone,
     planned_unpaid_break_minutes: Math.max(0, Math.trunc(input.plannedUnpaidBreakMinutes)),
     employee_note: input.employeeNote,
-    manager_note: input.managerNote,
+    // Nunca en el turno: lo lee el celular de la persona. Ver `notas-privadas.ts`.
+    manager_note: null,
   };
 }
+
+/** La nota privada de un turno, para `guardarNotasPrivadas`. */
+function notaDe(params: {
+  organizationId: string;
+  locationId: string;
+  shiftId: string;
+  input: Pick<ShiftInput, 'employeeId' | 'managerNote'>;
+}) {
+  return {
+    organizationId: params.organizationId,
+    locationId: params.locationId,
+    employeeId: params.input.employeeId,
+    shiftId: params.shiftId,
+    note: params.input.managerNote,
+  };
+}
+
+const conTexto = (nota: string | null | undefined) =>
+  nota !== null && nota !== undefined && nota.trim() !== '';
 
 function actorId(): string | null {
   return useSessionStore.getState().user?.userId ?? null;
@@ -261,10 +289,13 @@ export async function createShift(params: {
 }): Promise<void> {
   const row = buildRow(params);
   const createdBy = actorId();
+  // El id se elige aquí para poder guardar la nota privada con él.
+  const id = Crypto.randomUUID();
 
   await execute((db) =>
     db.from(TABLES.shifts).insert({
       ...row,
+      id,
       status: 'draft',
       publication_version: 0,
       published_at: null,
@@ -272,6 +303,9 @@ export async function createShift(params: {
       updated_by: createdBy,
     }),
   );
+  if (conTexto(params.input.managerNote)) {
+    await guardarNotasPrivadas([notaDe({ ...params, shiftId: id })]);
+  }
 }
 
 /**
@@ -361,6 +395,17 @@ export async function updateShift(params: {
   actual?: ShiftRow;
 }): Promise<ResultadoDeLaEdicion> {
   const row = buildRow(params);
+  /*
+   * LA NOTA PRIVADA SE GUARDA APARTE, y si el turno traía una vieja se muda: el `update` deja
+   * el turno con `manager_note: null` y la nota queda donde el celular no llega. Sin nota
+   * antes ni ahora no se escribe nada.
+   */
+  const guardarNota = () =>
+    conTexto(params.input.managerNote) ||
+    params.actual === undefined ||
+    conTexto(params.actual.manager_note)
+      ? guardarNotasPrivadas([notaDe(params)])
+      : Promise.resolve();
 
   if (
     params.actual !== undefined &&
@@ -377,6 +422,7 @@ export async function updateShift(params: {
         })
         .eq('id', params.shiftId),
     );
+    await guardarNota();
     return 'notas';
   }
 
@@ -386,6 +432,7 @@ export async function updateShift(params: {
       .update({ ...row, status: 'draft', updated_by: actorId() })
       .eq('id', params.shiftId),
   );
+  await guardarNota();
   return 'borrador';
 }
 
@@ -438,6 +485,12 @@ export async function removeShift(params: { shiftId: string; status: string }): 
   }
 
   await execute((db) => db.from(TABLES.shifts).delete().eq('id', params.shiftId));
+  // Y su nota privada, si tenía. Si esto falla el borrador ya no está, que es lo pedido.
+  const { error } = await requireClient()
+    .from(TABLES.shiftPrivateNotes)
+    .delete()
+    .eq('id', params.shiftId);
+  if (error !== null) console.warn('[krealo-shift] no se pudo borrar la nota privada', error);
 }
 
 /**
@@ -498,6 +551,7 @@ export async function copyPreviousWeek(params: {
   const createdBy = actorId();
   let omitidos = 0;
   const rows: Record<string, unknown>[] = [];
+  const notas: Parameters<typeof guardarNotasPrivadas>[0][number][] = [];
   for (const shift of turnosOrigen) {
     if (shift.status === 'cancelled' || !esDeLaPersona(shift.employee_id)) continue;
     const dateKey = addDaysToKey(dateKeyOf(shift.starts_at, timezone), 7);
@@ -521,7 +575,19 @@ export async function copyPreviousWeek(params: {
     // Lo copiado también cuenta: dos turnos encima en la semana de origen no se copian dos.
     yaHay.push(copia);
 
+    const id = Crypto.randomUUID();
+    // La nota privada se copia también, a su sitio: ver `notas-privadas.ts`.
+    if (conTexto(shift.manager_note)) {
+      notas.push({
+        organizationId,
+        locationId,
+        employeeId: shift.employee_id,
+        shiftId: id,
+        note: shift.manager_note,
+      });
+    }
     rows.push({
+      id,
       organization_id: organizationId,
       location_id: locationId,
       employee_id: shift.employee_id,
@@ -531,7 +597,7 @@ export async function copyPreviousWeek(params: {
       timezone,
       planned_unpaid_break_minutes: shift.planned_unpaid_break_minutes,
       employee_note: shift.employee_note,
-      manager_note: shift.manager_note,
+      manager_note: null,
       status: 'draft' as const,
       publication_version: 0,
       published_at: null,
@@ -561,6 +627,7 @@ export async function copyPreviousWeek(params: {
   const descansos = await setRestDays({ organizationId, locationId, days: descansosACopiar });
 
   if (rows.length > 0) await execute((db) => db.from(TABLES.shifts).insert(rows));
+  await guardarNotasPrivadas(notas);
   return { turnos: rows.length, descansos, omitidos };
 }
 

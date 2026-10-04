@@ -250,6 +250,29 @@ service cloud.firestore {
     }
 
     /*
+     * LA NOTA PRIVADA DE QUIEN GESTIONA, FUERA DEL TURNO (auditoría, 4-oct). En el turno la
+     * leía el celular de la persona: una regla da o quita el documento entero, no un campo.
+     * Aquí solo la leen quienes gestionan, y solo la escribe quien manda en la sede DEL
+     * TURNO —el `get()` lo comprueba—, con el id del turno como id de la nota.
+     *
+     * Borrar una que no existe se permite: quitar un borrador intenta borrar su nota, y la
+     * mayoría no tiene. Sin `resource == null` ese borrado fallaría por mirar un documento
+     * que no hay.
+     */
+    match /shift_private_notes/{shiftId} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow create, update: if request.resource.data.shift_id == shiftId
+        && managesLocation(
+          request.resource.data.organization_id,
+          request.resource.data.location_id
+        )
+        && get(/databases/$(database)/documents/shifts/$(shiftId)).data.location_id
+          == request.resource.data.location_id;
+      allow delete: if resource == null
+        || managesLocation(resource.data.organization_id, resource.data.location_id);
+    }
+
+    /*
      * DIAS LIBRES MARCADOS. Mismos permisos que un turno —lo decide quien gestiona la
      * sede, lo lee cualquier miembro de la empresa— porque es la misma decisión: parte
      * del horario de la semana. Sin `update` no se podría volver a pegar la tabla: el

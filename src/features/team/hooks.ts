@@ -116,9 +116,14 @@ export function useTeam(params: { organizationId: string | null; locationIds: st
   return {
     members,
     jobRoles: jobRoles.data ?? [],
-    isPending: employees.isPending,
-    isFetching: employees.isFetching || assignments.isFetching,
-    error: employees.error ?? jobRoles.error ?? assignments.error,
+    /*
+     * LOS PUESTOS DE CADA PERSONA TAMBIÉN CUENTAN (auditoría, 4-oct). Si su consulta fallaba,
+     * todos salían sin puesto sin decir nada, y guardar a alguien así le borraba los suyos.
+     * Mientras cargan tampoco se enseña la lista: con `jobRoleIds` vacío, editar es borrar.
+     */
+    isPending: employees.isPending || (employeeIds.length > 0 && employeeRoles.isPending),
+    isFetching: employees.isFetching || assignments.isFetching || employeeRoles.isFetching,
+    error: employees.error ?? jobRoles.error ?? assignments.error ?? employeeRoles.error,
     refetch: () => {
       void employees.refetch();
       void jobRoles.refetch();

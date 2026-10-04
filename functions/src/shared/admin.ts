@@ -62,6 +62,7 @@ export const COLLECTIONS = {
   kioskActivationCodes: 'kiosk_activation_codes',
   kioskRejectedAttempts: 'kiosk_rejected_attempts',
   shifts: 'shifts',
+  shiftPrivateNotes: 'shift_private_notes',
   shiftPublications: 'shift_publications',
   restDays: 'rest_days',
   timeEvents: 'time_events',
@@ -75,6 +76,8 @@ export const COLLECTIONS = {
   availability: 'availability',
   /** Por qué faltó alguien a un turno: ver `faltas.ts`. Una por turno. */
   absenceResolutions: 'absence_resolutions',
+  /** Las horas extra aprobadas por día; las escribe el panel (ver `horas-extra.ts`). */
+  overtimeApprovals: 'overtime_approvals',
   announcements: 'announcements',
   pushTokens: 'push_tokens',
   notificationPreferences: 'notification_preferences',

@@ -9,7 +9,7 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { submitTimeEditRequest } from '@/features/kiosk/api';
-import { horaPropuestaComoInstante } from '@/features/kiosk/hora-propuesta';
+import { horaPropuestaComoInstante, horaTecleada } from '@/features/kiosk/hora-propuesta';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { spacing } from '@/theme/tokens';
@@ -88,9 +88,11 @@ export default function KioskForgotScreen() {
       return;
     }
 
-    const proposedAt = horaPropuestaComoInstante(time, timezone);
+    // La salida o la pausa olvidadas son de la jornada que sigue abierta: ver `hora-propuesta.ts`.
+    const desde = kind === 'forgot_clock_in' ? null : (verification.openSession?.startedAt ?? null);
+    const proposedAt = horaPropuestaComoInstante(time, timezone, new Date(), desde);
     if (proposedAt === null) {
-      setError(t('schedule.invalidTime'));
+      setError(horaTecleada(time) === null ? t('schedule.invalidTime') : t('timesheet.futureTime'));
       return;
     }
 
@@ -114,7 +116,8 @@ export default function KioskForgotScreen() {
       setVencido(true);
       return;
     }
-    setError(result.error.kind === 'offline' ? t('errors.network') : t('errors.generic'));
+    // «Quedó guardado en este dispositivo» no es verdad de una solicitud: no se guarda sin red.
+    setError(result.error.kind === 'offline' ? t('kiosk.noConnection') : t('errors.generic'));
   };
 
   if (verification === null) return null;

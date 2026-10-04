@@ -148,6 +148,13 @@ const periodSchema = z.object({
   ends_on: z.string(),
   status: z.enum(periodStatusValues),
   approved_at: z.string().nullable(),
+  /**
+   * CAMBIOS DE HORAS DESPUÉS DE APROBAR (auditoría, 4-oct): los anota el servidor
+   * (`shared/periodo-aprobado.ts`) y vuelven a cero al aprobar o reabrir. Las semanas
+   * de antes no los traen.
+   */
+  changes_after_approval: z.number().int().nullish(),
+  changed_after_approval_at: z.string().nullish(),
 });
 
 export type TimesheetPeriod = z.infer<typeof periodSchema>;
@@ -299,7 +306,9 @@ export async function fetchPeriod(params: {
   const rows = await selectRows(z.array(periodSchema), (db) =>
     db
       .from(TABLES.timesheetPeriods)
-      .select('id, location_id, starts_on, ends_on, status, approved_at')
+      .select(
+        'id, location_id, starts_on, ends_on, status, approved_at, changes_after_approval, changed_after_approval_at',
+      )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
       .eq('starts_on', params.from)

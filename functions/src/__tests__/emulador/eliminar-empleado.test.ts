@@ -197,3 +197,53 @@ describe('eliminar a un empleado de prueba', () => {
     expect((await db.collection(COLLECTIONS.timeEvents).doc('ajeno-ev').get()).exists).toBe(true);
   });
 });
+
+describe('lo que se añadió después también se borra (auditoría, 4-oct)', () => {
+  it('horas que debe, disponibilidad, faltas, horas extra y notas privadas; la cuenta se desliga', async () => {
+    const comun = { organization_id: ORG, employee_id: PRUEBA, location_id: 'sede' };
+    await db
+      .collection(COLLECTIONS.owedHours)
+      .doc('d1')
+      .set({ ...comun, minutes: 60 });
+    await db
+      .collection(COLLECTIONS.availability)
+      .doc('v1')
+      .set({ ...comun, type: 'note' });
+    await db
+      .collection(COLLECTIONS.absenceResolutions)
+      .doc('j1')
+      .set({ ...comun, kind: 'justified' });
+    await db
+      .collection(COLLECTIONS.overtimeApprovals)
+      .doc('x1')
+      .set({ ...comun, minutes: 30 });
+    await db
+      .collection(COLLECTIONS.shiftPrivateNotes)
+      .doc('turno-1')
+      .set({ ...comun, shift_id: 'turno-1', note: 'Nota privada' });
+    await db.collection(COLLECTIONS.memberships).doc(`${ORG}_cuenta-de-prueba`).set({
+      organization_id: ORG,
+      user_id: 'cuenta-de-prueba',
+      employee_id: PRUEBA,
+      role: 'employee',
+      status: 'active',
+    });
+
+    await llamar(ADMIN, { employeeId: PRUEBA, confirmName: 'persona de prueba' });
+
+    for (const coleccion of [
+      COLLECTIONS.owedHours,
+      COLLECTIONS.availability,
+      COLLECTIONS.absenceResolutions,
+      COLLECTIONS.overtimeApprovals,
+      COLLECTIONS.shiftPrivateNotes,
+    ]) {
+      const quedan = await db.collection(coleccion).where('employee_id', '==', PRUEBA).get();
+      expect(quedan.size).toBe(0);
+    }
+    const cuenta = (
+      await db.collection(COLLECTIONS.memberships).doc(`${ORG}_cuenta-de-prueba`).get()
+    ).data();
+    expect(cuenta).toMatchObject({ user_id: 'cuenta-de-prueba', employee_id: null });
+  });
+});

@@ -1405,6 +1405,20 @@ function NotificationsCard() {
         sistema esta denegado, elegir que avisos quieres recibir no sirve de nada y
         hay que decirlo antes de que la persona los configure (§20).
       */}
+      {/*
+        LOS AVISOS TODAVÍA NO SE ENVÍAN, Y SE DICE (auditoría, 4-oct). Los interruptores
+        guardan la preferencia, pero no hay ninguna función en el servidor que mande avisos:
+        la tarjeta prometía uno «que no se puede apagar» —fichar desde un reloj revocado—
+        que nunca llegaba. Una promesa así es peor que ninguna: quien confía en el aviso deja
+        de mirar. Cuando exista el envío, este aviso se quita y vuelve el de la alerta fija.
+      */}
+      <InlineNotice
+        tone="warning"
+        icon="notifications-off-outline"
+        title={t('settings.notifyNotYetTitle')}
+        body={t('settings.notifyNotYetBody')}
+        testID="notify-not-yet"
+      />
       <PushPermissionCard />
 
       <AsyncSection
@@ -1426,20 +1440,6 @@ function NotificationsCard() {
                 testID={`notify-${key}`}
               />
             ))}
-            {/*
-              La séptima alerta de §19 no tiene interruptor, y se DICE. Dejarlo
-              implícito significa que llega una notificación que nada en la app
-              menciona, y quien busque cómo apagarla no la va a encontrar: no
-              existe. Va después de los seis interruptores porque es la respuesta a
-              "¿y esto es todo lo que me van a avisar?".
-            */}
-            <InlineNotice
-              tone="info"
-              icon="lock-closed-outline"
-              title={t('settings.notifyAlwaysOnTitle')}
-              body={t('settings.notifyAlwaysOnBody')}
-              testID="notify-always-on"
-            />
             {saved ? (
               <InlineNotice tone="working" icon="checkmark-circle" title={t('settings.saved')} />
             ) : null}

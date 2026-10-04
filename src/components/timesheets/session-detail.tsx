@@ -70,6 +70,8 @@ export function SessionDetailSheet({
   undoingCredit = false,
   enCurso,
   nowISO,
+  semanaAprobada = false,
+  error = null,
   onClose,
 }: {
   session: WorkSession;
@@ -108,6 +110,17 @@ export function SessionDetailSheet({
   /** Si la persona sigue dentro: para contar sus horas en vivo, como la fila. */
   enCurso?: EnCurso;
   nowISO: string;
+  /**
+   * LA SEMANA YA ESTÁ APROBADA (auditoría, 4-oct): se puede corregir igual —bloquearlo es
+   * decisión de Andree—, pero se avisa antes, y el servidor lo anota en la semana.
+   */
+  semanaAprobada?: boolean;
+  /**
+   * SI CORREGIR, «NO FUE FIN DE JORNADA» O «DESHACER CUMPLIDO» FALLÓ (auditoría, 4-oct). La
+   * hoja se quedaba abierta sin decir nada; el choque con otra edición ya tenía su aviso
+   * (`conflict`), el resto de fallos no.
+   */
+  error?: string | null;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -179,13 +192,26 @@ export function SessionDetailSheet({
       onClose={onClose}
       testID="session-detail-sheet"
       footer={
-        <PrimaryButton
-          label={t('timesheet.correctEntry')}
-          onPress={handleSubmit}
-          loading={saving}
-          disabled={submitted && !reasonValid}
-          testID="session-correct-submit"
-        />
+        <Stack gap={spacing.sm}>
+          {/* En el pie, junto al botón: ahí mira quien acaba de tocar «Corregir». */}
+          {error !== null ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="session-detail-error"
+            >
+              {error}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            label={t('timesheet.correctEntry')}
+            onPress={handleSubmit}
+            loading={saving}
+            disabled={submitted && !reasonValid}
+            testID="session-correct-submit"
+          />
+        </Stack>
       }
     >
       <AppText variant="bodyStrong">{employeeName}</AppText>
@@ -393,6 +419,16 @@ export function SessionDetailSheet({
           icon="warning-outline"
           title={t('states.conflictTitle')}
           body={t('errors.concurrentEdit')}
+        />
+      ) : null}
+
+      {semanaAprobada ? (
+        <InlineNotice
+          tone="warning"
+          icon="lock-closed-outline"
+          title={t('timesheet.approvedWeekTitle')}
+          body={t('timesheet.approvedWeekBody')}
+          testID="timesheet-detail-approved-week"
         />
       ) : null}
 

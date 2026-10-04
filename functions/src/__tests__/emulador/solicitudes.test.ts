@@ -427,3 +427,28 @@ describe('la hora que teclea la persona en el reloj', () => {
     expect(() => propuestaDelReloj('mañana', 'America/Lima', ahora)).toThrow();
   });
 });
+
+describe('con la jornada abierta de otro día (auditoría, 4-oct)', () => {
+  // Entró el sábado 19 a las 10:00 de Lima; se acuerda el martes 22 a las 09:00.
+  const entrada = '2026-09-19T15:00:00.000Z';
+  const ahora = Date.parse(M('09:00'));
+
+  it('«19:00» es el sábado de su jornada, no el lunes', () => {
+    expect(propuestaDelReloj('19:00', 'America/Lima', ahora, entrada)).toBe(
+      '2026-09-20T00:00:00.000Z',
+    );
+  });
+
+  it('un reloj con la versión de antes manda «ayer a esa hora»: se pone en su jornada', () => {
+    // El reloj viejo manda el lunes 21 a las 19:00: una jornada de 57 h.
+    expect(propuestaDelReloj(L('19:00'), 'America/Lima', ahora, entrada)).toBe(
+      '2026-09-20T00:00:00.000Z',
+    );
+  });
+
+  it('un instante que ya cae en su jornada se respeta', () => {
+    expect(propuestaDelReloj('2026-09-19T23:30:00.000Z', 'America/Lima', ahora, entrada)).toBe(
+      '2026-09-19T23:30:00.000Z',
+    );
+  });
+});

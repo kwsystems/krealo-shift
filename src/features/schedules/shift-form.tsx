@@ -78,6 +78,11 @@ type Props = {
   onSubmit: (input: ShiftInput) => void;
   onDuplicate?: () => void;
   onRemove?: () => void;
+  /**
+   * SI NO SE PUDO GUARDAR, SE DICE AQUÍ (auditoría, 4-oct). La hoja se quedaba abierta sin
+   * ningún mensaje y parecía que el botón no hacía nada.
+   */
+  error?: string | null;
   onClose: () => void;
 };
 
@@ -94,6 +99,7 @@ export function ShiftFormSheet({
   onSubmit,
   onDuplicate,
   onRemove,
+  error = null,
   onClose,
 }: Props) {
   const { t } = useTranslation();
@@ -159,6 +165,11 @@ export function ShiftFormSheet({
       testID="shift-form-sheet"
       footer={
         <Stack gap={spacing.sm}>
+          {error !== null ? (
+            <AppText variant="help" tone="danger" testID="shift-form-error">
+              {error}
+            </AppText>
+          ) : null}
           <PrimaryButton
             label={esDescanso ? t('schedule.markRestDay') : t('schedule.saveDraft')}
             hint={esDescanso ? t('schedule.markRestDayHint') : t('schedule.saveDraftHint')}

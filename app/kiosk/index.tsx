@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { Image, Pressable, View } from 'react-native';
+import { Image, Platform, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Haptics from 'expo-haptics';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { AppScreen, Row, Stack } from '@/components/ui/layout';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { SyncIndicator } from '@/components/ui/states';
 import { verifyPin } from '@/features/kiosk/api';
+import { minutosHasta, textoDelErrorDelPin } from '@/features/kiosk/errores-del-pin';
 import { logoPublicUrl } from '@/features/settings/logo';
 import { buildOfflineSession, cacheAttendanceState } from '@/features/kiosk/offline-session';
 import { useKioskVerificationStore } from '@/features/kiosk/verification-store';
@@ -165,27 +166,20 @@ export default function KioskIdleScreen() {
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 
       switch (result.error.kind) {
-        case 'invalid_pin':
-          setError(t('kiosk.pinIncorrect'));
-          break;
-        case 'locked': {
-          // No revelamos a quién corresponde el PIN bloqueado (§8).
-          const minutes = minutesUntil(result.error.lockedUntil);
-          setError(t('kiosk.pinLocked', { minutes }));
-          break;
-        }
         case 'revoked':
           // Se marca el estado, no solo el mensaje: el servidor acaba de decir que
           // este reloj ya no existe para el. Sin esto la pantalla de "reloj
           // desactivado" era inalcanzable y el iPad seguia pidiendo PIN que
           // siempre iban a fallar, sin decir por que.
           markRevoked();
-          setError(t('errors.kioskRevoked'));
-          break;
-        case 'wrong_location':
-          setError(t('errors.kioskWrongLocation'));
+          setError(textoDelErrorDelPin(t, result.error));
           break;
         case 'offline': {
+          // En la web no hay fichaje sin red: ver `actions.tsx`. Se dice que es la red.
+          if (Platform.OS === 'web') {
+            setError(t('kiosk.noConnection'));
+            break;
+          }
           // Sin red se valida el PIN contra el verificador local del dispositivo,
           // que el servidor entrego al activar el kiosco (§9.7).
           const offline = await verifyPinOffline(candidate);
@@ -213,7 +207,7 @@ export default function KioskIdleScreen() {
           }
 
           if (offline.reason === 'locked') {
-            setError(t('kiosk.pinLocked', { minutes: minutesUntil(offline.lockedUntil) }));
+            setError(t('kiosk.pinLocked', { minutes: minutosHasta(offline.lockedUntil) }));
           } else if (offline.reason === 'no_verifiers') {
             setError(t('kiosk.offlineNotReady'));
           } else if (offline.reason === 'no_device_key') {
@@ -227,21 +221,13 @@ export default function KioskIdleScreen() {
           }
           break;
         }
-        case 'not_configured':
-          // Defensa en profundidad: con el guardián en el layout raíz esto ya no
-          // debería alcanzarse. Pero antes caía en el genérico —"Inténtalo otra
-          // vez"— que es un consejo imposible: reintentar no arregla que la app no
-          // tenga servidor.
-          setError(t('errors.notConfigured'));
-          break;
-        case 'device_credential':
-          // NO se cae al camino offline. El PIN sin conexión se valida con la clave
-          // del Keychain, que es justo lo que no se pudo leer: intentarlo daría un
-          // "PIN incorrecto" que sería mentira. Se dice qué pasa y qué hacer.
-          setError(t('errors.deviceCredential'));
-          break;
         default:
-          setError(t('errors.generic'));
+          /*
+           * Los demás, con el mismo texto que la pantalla de salir: ver
+           * `errores-del-pin.ts`. `device_credential` NO se cae al camino sin red: el PIN
+           * sin conexión se valida con la clave que justo no se pudo leer.
+           */
+          setError(textoDelErrorDelPin(t, result.error));
       }
     },
     [binding, markRevoked, setFromOnline, setFromOffline, t],
@@ -557,12 +543,6 @@ export default function KioskIdleScreen() {
       </View>
     </AppScreen>
   );
-}
-
-function minutesUntil(isoDate: string): number {
-  const target = Date.parse(isoDate);
-  if (Number.isNaN(target)) return 1;
-  return Math.max(1, Math.ceil((target - Date.now()) / 60_000));
 }
 
 const useEstilos = estilosDelTema((colors) => ({

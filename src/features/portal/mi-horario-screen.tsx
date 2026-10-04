@@ -48,7 +48,7 @@ import {
   weekDays,
   weekRangeInstants,
 } from '@/features/schedules/week';
-import { fetchTimeEvents } from '@/features/timesheets/api';
+import { fetchTimeEvents, type WorkSession } from '@/features/timesheets/api';
 import {
   useMisJustificaciones,
   type ResolucionDeFalta,
@@ -63,6 +63,9 @@ import { useTheme } from '@/theme/use-theme';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 import { HorasQueDebes } from './horas-que-debes';
+import { situacionDeHoy } from './hoy';
+import { duracion } from '@/features/timesheets/duracion';
+import { DEFAULT_LOCATION_SETTINGS } from '@/hooks/use-manager-scope';
 import { MiDisponibilidad } from './mi-disponibilidad';
 import { ChipDeDisponibilidad } from '@/components/availability/chip-de-disponibilidad';
 import { useMiDisponibilidad } from '@/features/availability/api';
@@ -85,19 +88,6 @@ import { disponibilidadDelDia, type Disponibilidad } from '@/features/availabili
  * UNA COLUMNA, del ancho de un teléfono también en el ordenador: es una vista personal, no
  * un tablero, y en pantalla ancha una tira centrada se lee mejor que cuatro columnas vacías.
  */
-
-/**
- * UNA DURACIÓN COMO LA DIRÍA UNA PERSONA: «8 h 25 min», no «08:25». En el panel las horas
- * van en reloj porque se suman en columnas; aquí las lee quien las trabajó, y «12:15 h» se
- * confunde con la hora del día.
- */
-export function duracion(minutos: number, t: TFunction): string {
-  const h = Math.floor(minutos / 60);
-  const m = minutos % 60;
-  if (h === 0) return t('portal.durationMinutes', { m });
-  if (m === 0) return t('portal.durationHours', { h });
-  return t('portal.durationHoursMinutes', { h, m });
-}
 
 export function MiHorarioScreen() {
   const { t } = useTranslation();
@@ -167,9 +157,15 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     queryKey: ['portal', 'turnos', ficha.employeeId, desdeSemanas, hastaSemanas],
     queryFn: () => fetchMisTurnos({ ...base, fromISO: desdeSemanas, toISO: hastaSemanas }),
   });
+  /*
+   * LAS JORNADAS, DESDE UN DÍA ANTES (auditoría, 4-oct): el lunes a las 00:30, quien sigue
+   * en su turno del domingo 18:00–01:00 tiene la jornada abierta en la semana anterior, y
+   * sin ella el celular le decía «Hoy es tu día libre» mientras trabajaba.
+   */
+  const desdeJornadas = new Date(Date.parse(desdeSemanas) - 24 * 60 * 60 * 1000).toISOString();
   const jornadasSemanas = useQuery({
-    queryKey: ['portal', 'jornadas', ficha.employeeId, desdeSemanas, hastaSemanas],
-    queryFn: () => fetchMisJornadas({ ...base, fromISO: desdeSemanas, toISO: hastaSemanas }),
+    queryKey: ['portal', 'jornadas', ficha.employeeId, desdeJornadas, hastaSemanas],
+    queryFn: () => fetchMisJornadas({ ...base, fromISO: desdeJornadas, toISO: hastaSemanas }),
     // Lo de hoy cambia mientras trabaja: se refresca solo cada minuto.
     refetchInterval: 60_000,
   });
@@ -319,6 +315,10 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
           {diaDeHoy === undefined || cargandoSemana ? null : (
             <Hoy
               dia={diaDeHoy}
+              abierta={abierta}
+              toleranciaMin={
+                ficha.sede?.settings.lateGraceMinutes ?? DEFAULT_LOCATION_SETTINGS.lateGraceMinutes
+              }
               enDescanso={enDescanso}
               desdeDescanso={descansoDesde === null ? null : hora(descansoDesde)}
               descansoDesdeISO={descansoDesde}
@@ -431,7 +431,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               <View style={estilos.ficha}>
                 <StatTile
                   label={t('portal.statHours')}
-                  value={duracion(mes.minutosNetos, t)}
+                  value={duracion(t, mes.minutosNetos)}
                   icon="time-outline"
                   testID="mi-horario-horas"
                 />
@@ -534,9 +534,16 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   );
 }
 
-/** Lo de hoy, en una frase y con su color: es lo primero que se mira. */
+/**
+ * Lo de hoy, en una frase y con su color: es lo primero que se mira.
+ *
+ * QUÉ LE PASA HOY lo decide `situacionDeHoy` (hoy.ts), con sus pruebas: pasada la
+ * medianoche, el turno partido y la tolerancia de la sede. Aquí solo se dice.
+ */
 function Hoy({
   dia,
+  abierta,
+  toleranciaMin,
   enDescanso,
   desdeDescanso,
   descansoDesdeISO,
@@ -545,6 +552,10 @@ function Hoy({
   zona,
 }: {
   dia: DiaDelVendedor;
+  /** La jornada que tiene abierta ahora, aunque haya empezado ayer. */
+  abierta: WorkSession | undefined;
+  /** La tolerancia de su sede para llegar tarde, la misma de Inicio y Horario. */
+  toleranciaMin: number;
   enDescanso: boolean;
   desdeDescanso: string | null;
   /** El instante en que empezó su pausa: con él, sus horas no suben mientras descansa. */
@@ -556,101 +567,105 @@ function Hoy({
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
-  const turno = dia.turnos[0];
-  const abierta = dia.jornadas.find((j) => j.ends_at === null && !jornadaOlvidada(j, nowISO));
-  const rango =
-    turno === undefined
-      ? null
-      : `${hora(turno.starts_at)}\u00a0–\u2060\u00a0${hora(turno.ends_at)}`;
+  // EL RANGO NO SE PARTE: ver `FilaDelDia`. Con turno partido van todos: «10:00 – 14:00 · 17:00 – 22:00».
+  const rangoDe = (lista: readonly { starts_at: string; ends_at: string }[]) =>
+    lista.map((tt) => `${hora(tt.starts_at)} –⁠ ${hora(tt.ends_at)}`).join(' · ');
+  const rango = dia.turnos.length === 0 ? null : rangoDe(dia.turnos);
+  const situacion = situacionDeHoy({ dia, abierta, enDescanso, nowISO, toleranciaMin });
 
   const { tono, titulo, detalle } = ((): {
     tono: StatusTone;
     titulo: string;
     detalle: string | null;
   } => {
-    if (abierta !== undefined && enDescanso) {
-      return {
-        tono: 'onBreak',
-        titulo: t('portal.nowOnBreak', { time: desdeDescanso ?? '' }),
-        detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
-      };
+    switch (situacion.tipo) {
+      case 'enDescanso':
+        return {
+          tono: 'onBreak',
+          titulo: t('portal.nowOnBreak', { time: desdeDescanso ?? '' }),
+          detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
+        };
+      case 'trabajando': {
+        const llevas = duracion(t, minutosDeLaJornada(situacion.jornada, nowISO, descansoDesdeISO));
+        // «En todo el día» solo si hoy hubo otra entrada antes que esta.
+        const otras = dia.jornadas.filter((j) => j.id !== situacion.jornada.id);
+        return {
+          tono: 'working',
+          titulo: t('portal.nowWorking', { time: hora(situacion.jornada.starts_at) }),
+          detalle:
+            otras.length > 0 && dia.jornadas.some((j) => j.id === situacion.jornada.id)
+              ? t('portal.nowSoFarDay', { hours: llevas, day: duracion(t, dia.minutosNetos) })
+              : t('portal.nowSoFar', { hours: llevas }),
+        };
+      }
+      case 'sinLlegar':
+        return {
+          tono: 'late',
+          titulo: t('portal.todayNotArrived', { time: hora(situacion.turno.starts_at) }),
+          detalle: t('portal.todayNotArrivedDetail'),
+        };
+      case 'empezando':
+        return {
+          tono: 'info',
+          titulo: t('portal.todayStarting', { time: hora(situacion.turno.starts_at) }),
+          detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
+        };
+      case 'siguiente':
+        return {
+          tono: 'info',
+          titulo: t('portal.todayBackAt', { time: hora(situacion.turno.starts_at) }),
+          detalle: t('portal.todaySoFar', { hours: duracion(t, dia.minutosNetos) }),
+        };
+      case 'terminado':
+        return {
+          tono: 'offShift',
+          titulo: t('portal.todayDone', { hours: duracion(t, dia.minutosNetos) }),
+          detalle:
+            situacion.faltas.length > 0
+              ? t('portal.missedShift', { range: rangoDe(situacion.faltas) })
+              : rango === null
+                ? null
+                : t('portal.todayShift', { range: rango }),
+        };
+      case 'falta':
+        return {
+          tono: situacion.justificada ? 'warning' : 'late',
+          titulo: situacion.justificada
+            ? t('portal.todayAbsentJustified', { range: rangoDe(situacion.faltas) })
+            : t('portal.todayAbsent', { range: rangoDe(situacion.faltas) }),
+          detalle:
+            situacion.siguiente !== null
+              ? t('portal.todayNextShift', { range: rangoDe([situacion.siguiente]) })
+              : dia.justificaciones[0] !== undefined
+                ? dichoDeLaFalta(t, dia.justificaciones[0])
+                : situacion.justificada
+                  ? null
+                  : t('portal.todayAbsentDetail'),
+        };
+      case 'sinMarca':
+        return {
+          tono: 'warning',
+          titulo: t('portal.todayNoMark', { range: rango ?? '' }),
+          detalle: null,
+        };
+      // Hoy tenía turno y se lo están cambiando (4-oct): ni «libre» ni la hora de antes.
+      case 'porConfirmar':
+        return {
+          tono: 'info',
+          titulo: t('portal.todayPendingChange', {
+            range: `${hora(situacion.turno.starts_at)} – ${hora(situacion.turno.ends_at)}`,
+          }),
+          detalle: t('portal.pendingChangeBody'),
+        };
+      case 'libre':
+        return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
+      case 'porVenir':
+        return {
+          tono: 'info',
+          titulo: t('portal.todayUpcoming', { range: rango ?? '' }),
+          detalle: null,
+        };
     }
-    if (abierta !== undefined) {
-      return {
-        tono: 'working',
-        titulo: t('portal.nowWorking', { time: hora(abierta.starts_at) }),
-        detalle:
-          dia.jornadas.length > 1
-            ? t('portal.nowSoFarDay', {
-                hours: duracion(minutosDeLaJornada(abierta, nowISO, descansoDesdeISO), t),
-                day: duracion(dia.minutosNetos, t),
-              })
-            : t('portal.nowSoFar', {
-                hours: duracion(minutosDeLaJornada(abierta, nowISO, descansoDesdeISO), t),
-              }),
-      };
-    }
-    if (dia.jornadas.length > 0) {
-      return {
-        tono: 'offShift',
-        titulo: t('portal.todayDone', { hours: duracion(dia.minutosNetos, t) }),
-        detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
-      };
-    }
-    // Hoy tenía turno y se lo están cambiando (4-oct): ni «libre» ni la hora de antes.
-    if (turno === undefined && dia.porConfirmar[0] !== undefined) {
-      return {
-        tono: 'info',
-        titulo: t('portal.todayPendingChange', {
-          range: `${hora(dia.porConfirmar[0].starts_at)} – ${hora(dia.porConfirmar[0].ends_at)}`,
-        }),
-        detalle: t('portal.pendingChangeBody'),
-      };
-    }
-    if (turno === undefined) {
-      return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
-    }
-    if (dia.estado === 'faltaJustificada') {
-      return {
-        tono: 'warning',
-        titulo: t('portal.todayAbsentJustified', { range: rango ?? '' }),
-        detalle: dichoDeLaFalta(t, dia.justificaciones[0]),
-      };
-    }
-    if (dia.estado === 'falta') {
-      return {
-        tono: 'late',
-        titulo: t('portal.todayAbsent', { range: rango ?? '' }),
-        detalle:
-          dia.justificaciones[0] === undefined
-            ? t('portal.todayAbsentDetail')
-            : dichoDeLaFalta(t, dia.justificaciones[0]),
-      };
-    }
-    if (Date.parse(turno.ends_at) <= Date.parse(nowISO)) {
-      return {
-        tono: 'warning',
-        titulo: t('portal.todayNoMark', { range: rango ?? '' }),
-        detalle: null,
-      };
-    }
-    /*
-     * YA EMPEZÓ Y NO HA MARCADO (2-oct): lo mismo que ve quien administra —«No ha llegado»
-     * en Horario e Inicio—, dicho a la persona. Antes, pasada la hora, seguía diciendo
-     * «Hoy te toca de 13:00 a 22:00» como si no hubiera empezado.
-     */
-    if (Date.parse(turno.starts_at) <= Date.parse(nowISO)) {
-      return {
-        tono: 'late',
-        titulo: t('portal.todayNotArrived', { time: hora(turno.starts_at) }),
-        detalle: t('portal.todayNotArrivedDetail'),
-      };
-    }
-    return {
-      tono: 'info',
-      titulo: t('portal.todayUpcoming', { range: rango ?? '' }),
-      detalle: null,
-    };
   })();
 
   return (
@@ -730,10 +745,23 @@ function FilaDelDia({
   const { t } = useTranslation();
   const { colors } = useTheme();
   const estilos = useEstilos();
-  const insignia = INSIGNIA[dia.estado];
   const faltasJustificadas = dia.faltas.every((tt) =>
     dia.justificaciones.some((dicho) => dicho.shift_id === tt.id && dicho.kind === 'justified'),
   );
+  /*
+   * UN DÍA CON FALTA NO LLEVA «A TIEMPO» EN VERDE (auditoría, 4-oct). Con turno partido,
+   * llegar puntual a la mañana y faltar a la tarde dejaba la insignia verde al lado del
+   * «Faltaste a tu turno» en rojo: dos cosas opuestas sobre el mismo día. La insignia dice
+   * lo que más pesa; la puntualidad del turno al que vino sigue contando en el mes.
+   */
+  const insignia =
+    INSIGNIA[
+      dia.estado === 'aTiempo' && dia.faltas.length > 0
+        ? faltasJustificadas
+          ? 'faltaJustificada'
+          : 'falta'
+        : dia.estado
+    ];
   // EL RANGO DE HORAS NO SE PARTE: espacios que no se parten (U+00A0) y un WORD JOINER
   // (U+2060) tras el guion, porque el navegador corta DESPUÉS de un guion aunque el espacio
   // que sigue no se parta. En 390 px se leía «03:00 –» / «12:10», dos datos sueltos.
@@ -877,7 +905,7 @@ function FilaDelDia({
           )}
           {dia.minutosNetos > 0 ? (
             <AppText variant="label" tone="muted" tabular>
-              {duracion(dia.minutosNetos, t)}
+              {duracion(t, dia.minutosNetos)}
             </AppText>
           ) : null}
         </View>

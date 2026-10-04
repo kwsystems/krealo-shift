@@ -64,7 +64,23 @@ function cadenaDesde(lineas: string[], i: number): string {
   let abiertos = 0;
   for (let j = i; j < lineas.length; j += 1) {
     const linea = lineas[j]!;
-    if (j > i && abiertos === 0 && !linea.trim().startsWith('.')) break;
+    /*
+     * LOS COMENTARIOS Y LAS LÍNEAS EN BLANCO NO CORTAN LA CADENA (auditoría, 4-oct). La
+     * lectura paraba en el primer comentario entre dos `.where(...)`, y tres consultas se
+     * veían a medias: hoy tienen su índice, pero por suerte y no porque esto lo mirara. Y no
+     * se cuentan sus paréntesis: un «(4-oct)» en un comentario descuadraba la cuenta.
+     */
+    const limpia = linea.trim();
+    if (
+      j > i &&
+      (limpia === '' ||
+        limpia.startsWith('//') ||
+        limpia.startsWith('/*') ||
+        limpia.startsWith('*'))
+    ) {
+      continue;
+    }
+    if (j > i && abiertos === 0 && !limpia.startsWith('.')) break;
     texto += `${linea}\n`;
     for (const c of linea) {
       if (c === '(') abiertos += 1;

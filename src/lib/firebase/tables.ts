@@ -44,6 +44,8 @@ export const TABLES = {
   jobRoles: 'job_roles',
   employeeJobRoles: 'employee_job_roles',
   shifts: 'shifts',
+  /** La nota privada de quien gestiona, fuera del turno: ver `schedules/notas-privadas.ts`. */
+  shiftPrivateNotes: 'shift_private_notes',
   shiftPublications: 'shift_publications',
   restDays: 'rest_days',
   /**

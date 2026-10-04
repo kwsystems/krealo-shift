@@ -6,7 +6,7 @@ import { KioskNotSetUpState, useKioskNotSetUp } from '@/components/kiosk/not-set
 import { KioskUnavailableHere } from '@/components/kiosk/unavailable-here';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { keepScreenAwake, releaseScreenAwake } from '@/lib/kiosk/screen-awake';
-import { refreshQueueIndicators, runSync } from '@/lib/offline/sync';
+import { refrescarPaqueteSiToca, refreshQueueIndicators, runSync } from '@/lib/offline/sync';
 import { useKioskStore } from '@/stores/kiosk-store';
 import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
 import { useNetworkStore } from '@/stores/network-store';
@@ -69,10 +69,13 @@ export default function KioskLayout() {
   }, [setScreenAwake]);
 
   // Al arrancar y cada minuto: refresca el indicador e intenta enviar la cola.
+  // Y las reglas de la sede, cada 15 minutos como mucho: ver `refrescarPaqueteSiToca`.
   useEffect(() => {
     void refreshQueueIndicators();
+    void refrescarPaqueteSiToca();
     const interval = setInterval(() => {
       void runSync();
+      void refrescarPaqueteSiToca();
     }, PERIODIC_SYNC_MS);
     return () => clearInterval(interval);
   }, []);

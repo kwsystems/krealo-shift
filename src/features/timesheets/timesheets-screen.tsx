@@ -70,6 +70,7 @@ import {
   addWeeks,
   currentWeekStart,
   dateKeyOf,
+  formatDateKeyShort,
   localDateTimeToInstant,
   weekEnd,
   weekRangeInstants,
@@ -83,7 +84,7 @@ import { useManagerScope } from '@/hooks/use-manager-scope';
 import { currentLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { radii, spacing } from '@/theme/tokens';
-import { minutesToHHmm } from '@/utils/time';
+import { formatClockTime, minutesToHHmm } from '@/utils/time';
 
 /**
  * Horas y hojas de tiempo (§11.4).
@@ -154,6 +155,10 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     (pedida === null ? null : ((sessions.data ?? []).find((fila) => fila.id === pedida) ?? null));
   /* Cerrar el detalle cierra también la jornada pedida: si no, se volvería a abrir sola. */
   const cerrarDetalle = () => {
+    // Lo que falló en esta jornada no se arrastra a la próxima que se abra.
+    mutations.adjust.reset();
+    mutations.reclassify.reset();
+    mutacionesDeFaltas.deshacerCumplido.reset();
     setSelected(null);
     setPedida(null);
   };
@@ -799,6 +804,35 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
 
                   <>
                     {/*
+                      HORAS CAMBIADAS DESPUÉS DE APROBAR (auditoría, 4-oct). El servidor las
+                      anota en la semana; aquí se dicen al lado de «Aprobada», que es donde
+                      se mira antes de exportar la nómina.
+                    */}
+                    {periodoAprobado &&
+                    (period.data?.changes_after_approval ?? 0) > 0 &&
+                    typeof period.data?.changed_after_approval_at === 'string' ? (
+                      <InlineNotice
+                        tone="warning"
+                        icon="create-outline"
+                        title={t('timesheet.changedAfterApprovalTitle', {
+                          count: period.data.changes_after_approval ?? 0,
+                        })}
+                        body={t('timesheet.changedAfterApprovalBody', {
+                          date: formatDateKeyShort(
+                            dateKeyOf(period.data.changed_after_approval_at, scope.timezone),
+                            language,
+                          ),
+                          time: formatClockTime(
+                            period.data.changed_after_approval_at,
+                            scope.timezone,
+                            scope.timeFormat,
+                            language,
+                          ),
+                        })}
+                        testID="timesheet-changed-after-approval"
+                      />
+                    ) : null}
+                    {/*
                       EL MOTIVO DE VERDAD, con nombres. Aquí decía siempre «Hay fichajes que
                       necesitan revisión», fuera cual fuera el error: lo vio Andree el 30-sep y
                       era falso —el periodo ni siquiera se podía crear—.
@@ -864,6 +898,14 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
           alerts={alertsBySession.get(selected.id) ?? []}
           enCurso={enCursoPorSesion.get(selected.id)}
           nowISO={nowISO}
+          semanaAprobada={periodoAprobado}
+          error={
+            (mutations.adjust.isError && !conflict) ||
+            mutations.reclassify.isError ||
+            mutacionesDeFaltas.deshacerCumplido.isError
+              ? t('errors.generic')
+              : null
+          }
           timezone={scope.timezone}
           timeFormat={scope.timeFormat}
           language={language}

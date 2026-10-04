@@ -323,3 +323,58 @@ describe('un lote de hace días', () => {
     expect(unica).toMatchObject({ ends_at: dia(0, 21), status: 'complete', net_minutes: 480 });
   });
 });
+
+describe('lo que manda el aparato se comprueba (auditoría, 4-oct)', () => {
+  it('un fichaje con fecha del futuro queda por revisar, no se guarda', async () => {
+    const futuro = new Date(Date.now() + 3 * 60 * 60_000).toISOString();
+    const r = await sincronizar([
+      evento({ clave: 'f-1', tipo: 'clock_in', seq: 1, cuando: futuro }),
+    ]);
+    expect(r.results[0]).toMatchObject({ status: 'needs_review' });
+    expect(await eventosGuardados()).toHaveLength(0);
+  });
+
+  it('una hora que no es fecha tampoco', async () => {
+    const r = await sincronizar([
+      evento({ clave: 'f-2', tipo: 'clock_in', seq: 1, cuando: 'ayer' }),
+    ]);
+    expect(r.results[0]).toMatchObject({ status: 'needs_review' });
+  });
+
+  it('alguien ya inactivo queda por revisar', async () => {
+    await db.collection(COLLECTIONS.employees).doc(PERSONA).update({ status: 'inactive' });
+    const r = await sincronizar([
+      evento({ clave: 'f-3', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+    ]);
+    expect(r.results[0]).toMatchObject({ status: 'needs_review' });
+    expect(await eventosGuardados()).toHaveLength(0);
+  });
+
+  it('si la pausa es pagada lo decide la sede, no el aparato', async () => {
+    const r = await sincronizar([
+      evento({ clave: 'p-1', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+      {
+        ...evento({ clave: 'p-2', tipo: 'break_start', seq: 2, cuando: hora(240) }),
+        breakReason: 'meal',
+        breakType: 'paid',
+      },
+    ]);
+    expect(r.accepted).toBe(2);
+    const pausa = (await eventosGuardados()).find((e) => e.event_type === 'break_start');
+    expect(pausa).toMatchObject({ break_reason: 'meal', break_type: 'unpaid' });
+  });
+
+  it('«Otro» sin decir el motivo queda por revisar', async () => {
+    const r = await sincronizar([
+      evento({ clave: 'o-1', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+      {
+        ...evento({ clave: 'o-2', tipo: 'break_start', seq: 2, cuando: hora(240) }),
+        breakReason: 'other',
+        breakNote: '   ',
+      },
+    ]);
+    expect(r.results.find((x) => x.idempotencyKey === 'o-2')).toMatchObject({
+      status: 'needs_review',
+    });
+  });
+});

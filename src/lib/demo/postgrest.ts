@@ -1,3 +1,5 @@
+import { COMPOSITE_IDS, documentId } from '@/lib/firebase/ids-compuestos';
+
 /**
  * El trocito de PostgREST que esta app usa de verdad (modo demostración).
  *
@@ -211,18 +213,27 @@ export class ConsultaDemo<T = Fila[]> implements PromiseLike<Resultado<T>> {
        * O sea que la demostración no podía dar de alta NADA, y eso lo escondía: es la
        * superficie contra la que se verifica todo lo demás.
        */
+      /*
+       * EL MISMO ID QUE EN PRODUCCIÓN para las tablas de clave compuesta (auditoría, 4-oct):
+       * un día libre es «sede_persona_día» allí, y aquí era un id nuevo en cada alta.
+       * Pegar dos veces duplicaba el descanso y quitarlo dejaba el otro: lo contrario de
+       * lo que pasa en la tienda. Ver `ids-compuestos.ts`.
+       */
       const nuevas: Fila[] = this.carga.map((fila) => ({
         ...fila,
-        id: fila.id ?? nuevoId(this.nombre),
+        id: fila.id ?? documentId(this.nombre, fila) ?? nuevoId(this.nombre),
         created_at: fila.created_at ?? new Date().toISOString(),
       }));
       const clave = this.conflicto;
+      const compuesta = COMPOSITE_IDS[this.nombre] !== undefined;
       const conserva =
         this.operacion === 'upsert' && clave.length > 0
           ? actuales.filter(
               (fila) => !nuevas.some((nueva) => clave.every((c) => fila[c] === nueva[c])),
             )
-          : actuales;
+          : compuesta
+            ? actuales.filter((fila) => !nuevas.some((nueva) => nueva.id === fila.id))
+            : actuales;
       this.almacen.set(this.nombre, [...conserva, ...nuevas]);
       return { error: null, creadas: nuevas };
     }

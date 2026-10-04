@@ -14,7 +14,7 @@ import {
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
-import { minutesToHHmm } from '@/utils/time';
+import { duracion } from '@/features/timesheets/duracion';
 
 /**
  * LAS HORAS QUE DEBES, en el celular de la persona (Andree, 1-oct: «a ella debería
@@ -66,7 +66,7 @@ export function HorasQueDebes({
         <Row justify="space-between" align="center" gap={spacing.md}>
           <AppText variant="section">{t('portal.owedTitle')}</AppText>
           <AppText variant="section" tone="warning" tabular testID="mi-horario-debes-total">
-            {minutesToHHmm(minutosPendientes(filas))}
+            {duracion(t, minutosPendientes(filas))}
           </AppText>
         </Row>
         <AppText variant="help" tone="muted">
@@ -85,7 +85,7 @@ export function HorasQueDebes({
                 )}
               </Stack>
               <AppText variant="bodyStrong" tabular>
-                {minutesToHHmm(fila.minutes)}
+                {duracion(t, fila.minutes)}
               </AppText>
             </Row>
           </View>

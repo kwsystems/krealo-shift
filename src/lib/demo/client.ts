@@ -211,6 +211,38 @@ function crearAuth(alCambiar: () => void) {
 function crearRpc(almacen: Almacen) {
   const filas = (tabla: string): Fila[] => almacen.get(tabla) ?? [];
 
+  /**
+   * Un cambio de horas en una semana ya aprobada queda anotado en ella, como en el servidor
+   * (`functions/src/shared/periodo-aprobado.ts`).
+   */
+  const anotarCambioTrasAprobar = (sede: unknown, instante: unknown) => {
+    if (typeof instante !== 'string' || Number.isNaN(Date.parse(instante))) return;
+    const zona = String(
+      filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+    );
+    const dia = new Intl.DateTimeFormat('en-CA', {
+      timeZone: zona,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(instante));
+    almacen.set(
+      'timesheet_periods',
+      filas('timesheet_periods').map((fila) =>
+        fila.location_id === sede &&
+        fila.status === 'approved' &&
+        String(fila.starts_on) <= dia &&
+        dia <= String(fila.ends_on)
+          ? {
+              ...fila,
+              changes_after_approval: Number(fila.changes_after_approval ?? 0) + 1,
+              changed_after_approval_at: new Date().toISOString(),
+            }
+          : fila,
+      ),
+    );
+  };
+
   return async (nombre: string, argumentos: Record<string, unknown> = {}) => {
     switch (nombre) {
       case 'create_kiosk_activation_code':
@@ -376,6 +408,9 @@ function crearRpc(almacen: Almacen) {
             ...periodo,
             status: aprobar ? 'approved' : 'reopened',
             approved_at: aprobar ? new Date().toISOString() : null,
+            // Como el servidor: aprobar o reabrir pone a cero lo cambiado después.
+            changes_after_approval: 0,
+            changed_after_approval_at: null,
           },
         ]);
         return sinError({ periodId: periodo.id, status: aprobar ? 'approved' : 'reopened' });
@@ -416,6 +451,10 @@ function crearRpc(almacen: Almacen) {
             'employees_working_now',
             filas('employees_working_now').filter((fila) => fila.work_session_id !== id),
           );
+        }
+        const ajustada = filas('work_sessions').find((fila) => fila.id === id);
+        if (ajustada !== undefined) {
+          anotarCambioTrasAprobar(ajustada.location_id, ajustada.starts_at);
         }
         return sinError(null);
       }
@@ -545,6 +584,7 @@ function crearRpc(almacen: Almacen) {
       }
 
       case 'manager_add_time_event': {
+        anotarCambioTrasAprobar(argumentos.p_location_id, argumentos.p_occurred_at);
         const idEvento = `${Date.now().toString(16)}-0000-4000-8000-000000000000`.slice(0, 36);
         almacen.set('time_events', [
           ...filas('time_events'),
@@ -712,6 +752,8 @@ function crearRpc(almacen: Almacen) {
         const sede = argumentos.p_location_id;
         const semana = argumentos.p_week_start;
         const ids = new Set(Array.isArray(argumentos.p_shift_ids) ? argumentos.p_shift_ids : []);
+        // Como el servidor (auditoría, 4-oct): publicar nada no es un éxito.
+        if (ids.size === 0) return conError('No hay turnos que publicar.');
         const version =
           Math.max(
             0,
@@ -1061,7 +1103,8 @@ function crearRpc(almacen: Almacen) {
               ends_at: null,
               paid_break_minutes: 0,
               unpaid_break_minutes: 0,
-              flags: [],
+              // Sin turno, la marca de «sin turno», como la pone el servidor.
+              flags: ['unscheduled'],
               departure_reason: null,
               departure_note: null,
               source: 'manager',
@@ -2228,7 +2271,10 @@ function crearFunctions(almacen: Almacen) {
               employee_id: empleada?.id ?? 'demo-empleado-1',
               location_id: DEMO_LOCATION_1,
               work_session_id: null,
-              target_date: proposedAt.slice(0, 10),
+              // El día de la TIENDA, no el de UTC: a las 20:00 de Lima ya es mañana en UTC.
+              target_date: new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(
+                new Date(proposedAt),
+              ),
               kind,
               proposed_value:
                 kind === 'forgot_clock_in' ? { startsAt: proposedAt } : { endsAt: proposedAt },

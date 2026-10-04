@@ -15,6 +15,8 @@ import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/att
 import { cerradaDeHecho, repararSalidasPuestasAMano } from './shared/salida-a-mano';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
+import { deLaJornada } from './shared/hora-de-la-jornada';
+import { datosDelFichaje, horaDelFichajeSinRed } from './shared/validar-fichaje';
 import { instanteLocal, zonaSegura } from './shared/zonas';
 import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
@@ -705,17 +707,24 @@ export const submitTimeEvent = onCall(OPCIONES_CON_SECRETO, async (request) => {
    */
   const occurredAt = nowISO();
 
+  // Tipo, motivos, notas y si la pausa es pagada, comprobados aquí: ver `validar-fichaje.ts`.
+  const sede = (await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data();
+  const datos = datosDelFichaje(
+    { ...(request.data ?? {}), eventType },
+    (sede ?? {}) as Record<string, unknown>,
+  );
+
   const resultado = await recordTimeEvent({
     organizationId: kiosk.organizationId,
     employeeId,
     locationId: kiosk.locationId,
-    eventType,
+    eventType: datos.eventType,
     shiftId,
-    breakType: (request.data?.breakType as string | null) ?? null,
-    breakReason: (request.data?.breakReason as string | null) ?? null,
-    breakNote: (request.data?.breakNote as string | null) ?? null,
-    departureReason: (request.data?.departureReason as string | null) ?? null,
-    departureNote: (request.data?.departureNote as string | null) ?? null,
+    breakType: datos.breakType,
+    breakReason: datos.breakReason,
+    breakNote: datos.breakNote,
+    departureReason: datos.departureReason,
+    departureNote: datos.departureNote,
     occurredAt,
     occurredAtDevice: (request.data?.occurredAtDevice as string | null) ?? null,
     idempotencyKey,
@@ -804,6 +813,28 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
     ).docs.map((doc) => String(doc.data().employee_id)),
   );
 
+  /*
+   * LO QUE MANDA EL APARATO SE COMPRUEBA (auditoría, 4-oct): la hora —una fecha, y no del
+   * futuro—, que la persona siga activa, y el tipo, los motivos y si la pausa es pagada
+   * (`validar-fichaje.ts`). Lo que no pasa queda «por revisar» y no se pierde: casi
+   * siempre es un iPad con la hora mal o alguien dado de baja con fichajes de antes.
+   */
+  const sede = ((await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data() ??
+    {}) as Record<string, unknown>;
+  const ids = [...new Set(ordenados.map((evento) => String(evento?.employeeOpaqueId ?? '')))];
+  const activas = new Set(
+    (
+      await Promise.all(
+        ids
+          .filter((id) => id !== '')
+          .map((id) => db.collection(COLLECTIONS.employees).doc(id).get()),
+      )
+    )
+      .filter((doc) => doc.exists && doc.data()?.status === 'active')
+      .map((doc) => doc.id),
+  );
+  const ahora = Date.now();
+
   const resultados = [];
   for (const evento of ordenados) {
     const idempotencyKey = String(evento?.idempotencyKey ?? '');
@@ -818,25 +849,38 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
       continue;
     }
 
+    const hora = horaDelFichajeSinRed(evento.occurredAtDevice, ahora);
+    const porRevisar =
+      hora === null
+        ? 'La hora del aparato no es una fecha válida o está en el futuro.'
+        : !activas.has(employeeId)
+          ? 'Esa persona ya no está activa: un encargado tiene que mirar este fichaje.'
+          : null;
+    if (porRevisar !== null) {
+      resultados.push({ idempotencyKey, status: 'needs_review' as const, reason: porRevisar });
+      continue;
+    }
+
     try {
+      const datos = datosDelFichaje(evento as Record<string, unknown>, sede);
       const resultado = await recordTimeEvent({
         organizationId: kiosk.organizationId,
         employeeId,
         locationId: kiosk.locationId,
-        eventType: String(evento.eventType) as TimeEventType,
+        eventType: datos.eventType,
         shiftId: (evento.shiftId as string | null) ?? null,
-        breakType: evento.breakType ?? null,
-        breakReason: evento.breakReason ?? null,
-        breakNote: evento.breakNote ?? null,
-        departureReason: evento.departureReason ?? null,
-        departureNote: evento.departureNote ?? null,
+        breakType: datos.breakType,
+        breakReason: datos.breakReason,
+        breakNote: datos.breakNote,
+        departureReason: datos.departureReason,
+        departureNote: datos.departureNote,
         /*
          * AQUI SI MANDA EL RELOJ DEL IPAD, al reves que en un fichaje en linea. Es el
          * unico dato que hay de cuando paso: el servidor se entera horas despues, y
          * sellarlo con su propia hora pondria la entrada de las 8 a las 14. Se
          * guardan las dos, y `is_offline` deja dicho cual es cual.
          */
-        occurredAt: String(evento.occurredAtDevice ?? nowISO()),
+        occurredAt: hora as string,
         occurredAtDevice: (evento.occurredAtDevice as string | null) ?? null,
         idempotencyKey,
         deviceId: kiosk.deviceId,
@@ -914,9 +958,15 @@ export function propuestaDelReloj(
   valor: unknown,
   zona: string,
   ahora: number = Date.now(),
+  /**
+   * La entrada de la jornada que sigue abierta, si la hay y lo que se olvidó es la salida o
+   * la pausa: la hora tiene que ser de ESA jornada. Ver `deLaJornada`, abajo.
+   */
+  desde: string | null = null,
 ): string | null {
   if (valor === undefined || valor === null || String(valor).trim() === '') return null;
   const texto = String(valor).trim();
+  const zonaBuena = zonaSegura(zona, 'propuestaDelReloj');
 
   const reloj = /^(\d{1,2})[:.h]?(\d{2})$/.exec(texto);
   if (reloj !== null) {
@@ -926,7 +976,7 @@ export function propuestaDelReloj(
       throw new HttpsError('invalid-argument', 'Escribe la hora como 14:30.', { motivo: 'HORA' });
     }
     const hora = `${String(horas).padStart(2, '0')}:${String(minutos).padStart(2, '0')}`;
-    const zonaBuena = zonaSegura(zona, 'propuestaDelReloj');
+    if (desde !== null) return deLaJornada(hora, desde, zonaBuena) ?? null;
     const hoy = fechaLocal(new Date(ahora).toISOString(), zonaBuena) as string;
     const deHoy = instanteLocal(hoy, hora, zonaBuena);
     if (deHoy !== null && Date.parse(deHoy) <= ahora + 5 * 60 * 1000) return deHoy;
@@ -938,8 +988,30 @@ export function propuestaDelReloj(
   if (Number.isNaN(instante.getTime())) {
     throw new HttpsError('invalid-argument', 'Escribe la hora como 14:30.', { motivo: 'HORA' });
   }
+  /*
+   * UN INSTANTE FUERA DE SU JORNADA SE LEE POR SU HORA (auditoría, 4-oct). Un reloj con la
+   * versión de antes manda «ayer a esa hora»: con la jornada del sábado abierta, el lunes
+   * eso es el domingo, y aprobarla daba una jornada de 34 h. Si cae antes de la entrada o
+   * más de 16 h después, se toma su hora y se pone en la jornada.
+   */
+  if (desde !== null) {
+    const desdeMs = Date.parse(desde);
+    const fuera = instante.getTime() <= desdeMs || instante.getTime() - desdeMs > JORNADA_MAXIMA_MS;
+    if (fuera) {
+      const hora = new Intl.DateTimeFormat('en-GB', {
+        timeZone: zonaBuena,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+      }).format(instante);
+      return deLaJornada(hora, desde, zonaBuena) ?? instante.toISOString();
+    }
+  }
   return instante.toISOString();
 }
+
+/** Ninguna jornada de tienda pasa de esto: lo mismo que «Salida dudosa». */
+const JORNADA_MAXIMA_MS = 16 * 60 * 60 * 1000;
 
 export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request) => {
   const kiosk = await authenticateKiosk(request.data);
@@ -953,7 +1025,18 @@ export const submitTimeEditRequest = onCall(OPCIONES_CON_SECRETO, async (request
   const zonaDeLaSede =
     ((await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data()?.timezone as
       string | undefined) ?? 'America/Lima';
-  const propuesta = propuestaDelReloj(request.data?.proposedAt, zonaDeLaSede);
+  const tipoDeSolicitud = String(request.data?.kind ?? 'correction');
+  // La salida o la pausa olvidadas son de la jornada que sigue abierta: ver `deLaJornada`.
+  const abierta =
+    tipoDeSolicitud === 'forgot_clock_out' || tipoDeSolicitud === 'forgot_break'
+      ? await jornadaAbiertaMasReciente(employeeId)
+      : undefined;
+  const propuesta = propuestaDelReloj(
+    request.data?.proposedAt,
+    zonaDeLaSede,
+    Date.now(),
+    abierta === undefined ? null : String(abierta.starts_at),
+  );
 
   const doc = await db.collection(COLLECTIONS.timeEditRequests).add({
     organization_id: kiosk.organizationId,
@@ -1023,6 +1106,18 @@ export const attachPhoto = onCall(async (request) => {
   }
 
   const ruta = `attendance-photos/${kiosk.organizationId}/${eventId}.jpg`;
+
+  /*
+   * UNA FOTO QUE YA ESTÁ NO SE VUELVE A SUBIR, Y NO ES UN ERROR (auditoría, 4-oct). Se subía
+   * primero y se comprobaba después: un reintento —la respuesta se perdió por la red—
+   * sobrescribía la imagen y luego fallaba con «ya tiene foto», y la cola de fotos del
+   * aparato se quedaba atascada en esa para siempre. Ahora se mira antes, y si ya está se
+   * contesta lo mismo que la primera vez.
+   */
+  if (typeof evento.photo_path === 'string') {
+    return { ok: true as const, photoPath: evento.photo_path };
+  }
+
   await getStorage()
     .bucket()
     .file(ruta)
@@ -1034,9 +1129,6 @@ export const attachPhoto = onCall(async (request) => {
    * Es el mismo hueco que dejaba el disparador `reject_mutation()` en Postgres para
    * `attach-photo`, y por el mismo motivo.
    */
-  if (typeof evento.photo_path === 'string') {
-    throw new HttpsError('already-exists', 'Ese fichaje ya tiene foto.');
-  }
   await eventoRef.update({ photo_path: ruta });
 
   return { ok: true as const, photoPath: ruta };

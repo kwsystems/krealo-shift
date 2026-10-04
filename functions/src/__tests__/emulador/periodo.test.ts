@@ -1,4 +1,4 @@
-import { approveTimesheetPeriod, reopenTimesheetPeriod } from '../../manager';
+import { approveTimesheetPeriod, managerAdjustTime, reopenTimesheetPeriod } from '../../manager';
 import { COLLECTIONS, db } from '../../shared/admin';
 
 /**
@@ -46,6 +46,11 @@ async function sesion(id: string, empleado: string, desde: string, hasta: string
       starts_at: desde,
       ends_at: hasta,
       status: hasta === null ? 'open' : 'complete',
+      // Lo que lleva toda jornada de verdad: corregirla lo copia en la fila del ajuste.
+      gross_minutes: hasta === null ? null : (Date.parse(hasta) - Date.parse(desde)) / 60_000,
+      net_minutes: hasta === null ? null : (Date.parse(hasta) - Date.parse(desde)) / 60_000,
+      unpaid_break_minutes: 0,
+      updated_at: desde,
     });
 }
 
@@ -133,5 +138,59 @@ describe('aprobar un periodo', () => {
     expect((await fallo(correr(approveTimesheetPeriod, semana, VENDEDOR))).code).toBe(
       'permission-denied',
     );
+  });
+});
+
+/**
+ * CAMBIAR HORAS DE UNA SEMANA YA APROBADA QUEDA ANOTADO EN ELLA (auditoría, 4-oct): Horas lo
+ * enseña al lado de «Aprobada», que es donde se mira antes de exportar la nómina.
+ */
+describe('cambios después de aprobar', () => {
+  const periodo = async () => (await periodos())[0];
+
+  it('una corrección en la semana aprobada la anota, y volver a aprobar pone la cuenta a cero', async () => {
+    await sesion('s-1', 'emp-a', H(22, 10), H(22, 19));
+    await correr(approveTimesheetPeriod, semana);
+    expect(await periodo()).toMatchObject({ changes_after_approval: 0 });
+
+    await correr(managerAdjustTime, {
+      p_work_session_id: 's-1',
+      p_reason: 'Salió a las 18:00',
+      p_new_ends_at: H(22, 18),
+    });
+    await correr(managerAdjustTime, {
+      p_work_session_id: 's-1',
+      p_reason: 'Entró a las 11:00',
+      p_new_starts_at: H(22, 11),
+    });
+    expect(await periodo()).toMatchObject({
+      status: 'approved',
+      changes_after_approval: 2,
+      changed_after_approval_by: GERENTE,
+      changed_after_approval_at: expect.any(String),
+    });
+    const auditoria = (await db.collection(COLLECTIONS.auditLogs).get()).docs
+      .map((d) => d.data())
+      .filter((d) => d.action === 'timesheet_period_changed_after_approval');
+    expect(auditoria).toHaveLength(2);
+
+    await correr(reopenTimesheetPeriod, semana);
+    await correr(approveTimesheetPeriod, semana);
+    expect(await periodo()).toMatchObject({
+      changes_after_approval: 0,
+      changed_after_approval_at: null,
+    });
+  });
+
+  it('una corrección en una semana sin aprobar, o en otra semana, no anota nada', async () => {
+    await sesion('s-1', 'emp-a', H(22, 10), H(22, 19));
+    await sesion('s-2', 'emp-a', H(29, 10), H(29, 19));
+    await correr(approveTimesheetPeriod, semana);
+    await correr(managerAdjustTime, {
+      p_work_session_id: 's-2',
+      p_reason: 'Otra semana',
+      p_new_ends_at: H(29, 18),
+    });
+    expect(await periodo()).toMatchObject({ changes_after_approval: 0 });
   });
 });

@@ -760,6 +760,93 @@ describe('reglas de Firestore', () => {
     });
   });
 
+  /*
+   * LA NOTA PRIVADA DE QUIEN GESTIONA, FUERA DEL TURNO (auditoría, 4-oct): en el turno la
+   * leía el celular de la persona. Ver `src/features/schedules/notas-privadas.ts`.
+   */
+  describe('la nota privada de un turno', () => {
+    const VENDEDOR = 'cuenta-del-vendedor-nota';
+    const nota = (shiftId: string, location_id = SEDE) => ({
+      organization_id: ORG,
+      location_id,
+      employee_id: 'emp-yo',
+      shift_id: shiftId,
+      note: 'Llega tarde los lunes',
+    });
+
+    beforeEach(async () => {
+      await escribir(`organization_memberships/${ORG}_${VENDEDOR}`, {
+        id: `${ORG}_${VENDEDOR}`,
+        organization_id: ORG,
+        user_id: VENDEDOR,
+        role: 'employee',
+        status: 'active',
+        employee_id: 'emp-yo',
+        managed_location_ids: [],
+        created_at: '2026-10-04T12:00:00.000Z',
+      });
+      await escribir('shifts/turno-con-nota', {
+        id: 'turno-con-nota',
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-yo',
+        status: 'published',
+        starts_at: '2026-10-05T15:00:00.000Z',
+        ends_at: '2026-10-05T23:00:00.000Z',
+      });
+      await escribir('shift_private_notes/turno-con-nota', nota('turno-con-nota'));
+    });
+
+    it('quien gestiona la escribe, la lee con la consulta de Horario y la borra', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertSucceeds(
+        setDoc(doc(db, 'shift_private_notes/turno-con-nota'), nota('turno-con-nota'), {
+          merge: true,
+        }),
+      );
+      const leidas = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'shift_private_notes'),
+            where('organization_id', '==', ORG),
+            where('shift_id', 'in', ['turno-con-nota', 'otro']),
+          ),
+        ),
+      );
+      expect(leidas.docs.map((d) => d.id)).toEqual(['turno-con-nota']);
+      await assertSucceeds(deleteDoc(doc(db, 'shift_private_notes/turno-con-nota')));
+      // Quitar un borrador sin nota intenta borrar la suya: no puede fallar.
+      await assertSucceeds(deleteDoc(doc(db, 'shift_private_notes/turno-sin-nota')));
+    });
+
+    it('no se escribe con otro id ni a nombre de otra sede que la del turno', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertFails(setDoc(doc(db, 'shift_private_notes/otro-id'), nota('turno-con-nota')));
+      await assertFails(
+        setDoc(doc(db, 'shift_private_notes/turno-con-nota'), nota('turno-con-nota', 'otra-sede')),
+      );
+    });
+
+    it('el vendedor del turno no la lee ni la escribe', async () => {
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+      await assertFails(getDoc(doc(db, 'shift_private_notes/turno-con-nota')));
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'shift_private_notes'),
+            where('organization_id', '==', ORG),
+            where('shift_id', 'in', ['turno-con-nota']),
+          ),
+        ),
+      );
+      await assertFails(
+        setDoc(doc(db, 'shift_private_notes/turno-con-nota'), nota('turno-con-nota')),
+      );
+      // Su turno sí lo sigue leyendo.
+      await assertSucceeds(getDoc(doc(db, 'shifts/turno-con-nota')));
+    });
+  });
+
   describe('lo que NO puede pasar', () => {
     it('sin sesión no se lee nada', async () => {
       const db = entorno.unauthenticatedContext().firestore();

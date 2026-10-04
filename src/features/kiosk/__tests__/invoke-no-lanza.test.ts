@@ -92,15 +92,36 @@ describe('invoke con el Keychain roto', () => {
     });
   });
 
-  it('un fallo de red sigue siendo offline, que es lo que activa el camino sin conexión', async () => {
-    // La otra mitad: no se puede arreglar lo anterior a costa de dejar de distinguir
-    // la falta de red, que es la condición NORMAL en una tienda.
+  /*
+   * LA RED CAÍDA CON LA FORMA QUE DE VERDAD LLEGA (auditoría, 4-oct). Esta prueba simulaba
+   * que `invoke` LANZABA, y no lanza nunca: `callFunction` devuelve el error. Pasaba en
+   * verde mientras en la tienda, sin wifi, el reloj decía «No pudimos completar la acción».
+   */
+  it.each([
+    [{ code: 'functions/internal', message: 'internal', details: null }],
+    [{ code: 'internal', message: 'internal' }],
+    [{ code: 'functions/unavailable', message: 'Failed to fetch' }],
+    [{ code: 'functions/deadline-exceeded', message: 'deadline-exceeded' }],
+  ])('un fallo de red (%j) es offline', async (error) => {
     mockGet.mockResolvedValue('secreto');
-    mockInvoke.mockRejectedValue(new Error('Network request failed'));
+    mockInvoke.mockResolvedValue({ data: null, error });
 
     await expect(verifyPin({ pin: '123456', locationId: 'loc-1' })).resolves.toEqual({
       ok: false,
       error: { kind: 'offline' },
+    });
+  });
+
+  it('un error interno DEL SERVIDOR, con su mensaje, no es la red', async () => {
+    mockGet.mockResolvedValue('secreto');
+    mockInvoke.mockResolvedValue({
+      data: null,
+      error: { code: 'internal', message: 'No se pudo leer la sede.', details: null },
+    });
+
+    await expect(verifyPin({ pin: '123456', locationId: 'loc-1' })).resolves.toMatchObject({
+      ok: false,
+      error: { kind: 'server' },
     });
   });
 });

@@ -43,6 +43,7 @@ export function PegarHorarioSheet({
   turnosExistentes,
   existentes,
   descansosExistentes,
+  error = null,
   onClose,
   onSubmit,
 }: {
@@ -57,6 +58,8 @@ export function PegarHorarioSheet({
   existentes: { employeeId: string; startsAt: string; endsAt: string }[];
   /** Los descansos que ya hay en la semana: ver «DESCANSO Y TURNO EL MISMO DIA», abajo. */
   descansosExistentes: { id: string; employeeId: string; dateKey: DateKey }[];
+  /** Si el servidor no aceptó lo pegado: la hoja sigue abierta y lo dice. */
+  error?: string | null;
   onClose: () => void;
   onSubmit: (datos: {
     turnos: TurnoPegado[];
@@ -145,25 +148,32 @@ export function PegarHorarioSheet({
       onClose={onClose}
       testID="paste-week-sheet"
       footer={
-        <PrimaryButton
-          label={
-            turnos.length > 0
-              ? t('schedule.pasteCreate', { count: turnos.length })
-              : descansos.length > 0
-                ? t('schedule.pasteMarkRest', { count: descansos.length })
-                : t('schedule.pasteCreateEmpty')
-          }
-          onPress={() =>
-            onSubmit({
-              turnos,
-              descansos,
-              descansosQueQuitar: descansosQueSobran.map((descanso) => descanso.id),
-            })
-          }
-          disabled={!puedeCrear}
-          loading={saving}
-          testID="paste-week-confirm"
-        />
+        <Stack gap={spacing.sm}>
+          {error !== null ? (
+            <AppText variant="help" tone="danger" testID="paste-week-error">
+              {error}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            label={
+              turnos.length > 0
+                ? t('schedule.pasteCreate', { count: turnos.length })
+                : descansos.length > 0
+                  ? t('schedule.pasteMarkRest', { count: descansos.length })
+                  : t('schedule.pasteCreateEmpty')
+            }
+            onPress={() =>
+              onSubmit({
+                turnos,
+                descansos,
+                descansosQueQuitar: descansosQueSobran.map((descanso) => descanso.id),
+              })
+            }
+            disabled={!puedeCrear}
+            loading={saving}
+            testID="paste-week-confirm"
+          />
+        </Stack>
       }
     >
       <AppText variant="help" tone="subtle">

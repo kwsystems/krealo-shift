@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { SYNC_KEYS, getSyncMetadata, setSyncMetadata } from './database';
 import * as FileSystem from 'expo-file-system';
 
@@ -339,6 +340,24 @@ function toWirePayload(event: OutboxEvent): EventoDeColaEnviado {
  * Y no se veía porque los verificadores SÍ se actualizaban: un PIN nuevo o rotado
  * funcionaba sin red, lo que hace que el mecanismo parezca vivo.
  */
+/** Cuándo se bajó el paquete por última vez en esta sesión del aparato. */
+let ultimoRefresco = 0;
+
+/** Cada cuánto el reloj vuelve a bajar sus reglas y su equipo por su cuenta. */
+export const REFRESCO_DEL_PAQUETE_MS = 15 * 60_000;
+
+/**
+ * LAS REGLAS DE LA SEDE NO SE QUEDAN CONGELADAS (auditoría, 4-oct). El reloj solo las bajaba
+ * al activarse o con «Actualizar equipo»: si se cambiaba el largo del PIN de 6 a 4, el
+ * teclado seguía esperando 6 y nadie podía fichar. Ahora se bajan solas cada 15 minutos
+ * —lo llama el layout del reloj con su sincronización— y no más a menudo.
+ */
+export async function refrescarPaqueteSiToca(ahora: number = Date.now()): Promise<void> {
+  if (ahora - ultimoRefresco < REFRESCO_DEL_PAQUETE_MS) return;
+  ultimoRefresco = ahora;
+  await refreshOfflinePackage();
+}
+
 export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
   try {
     return await refreshOfflinePackageUnsafe();
@@ -352,6 +371,23 @@ export async function refreshOfflinePackage(): Promise<{ ok: boolean }> {
 async function refreshOfflinePackageUnsafe(): Promise<{ ok: boolean }> {
   const result = await refreshKioskRoster();
   if (!result.ok) return { ok: false };
+  ultimoRefresco = Math.max(ultimoRefresco, Date.now());
+
+  /*
+   * LAS REGLAS PRIMERO, Y FUERA DE LA BASE LOCAL (auditoría, 4-oct). Iban después de
+   * guardar el equipo en SQLite, y en la web —donde el reloj de la tienda corre— esa base
+   * no se abre: el paso fallaba antes de llegar aquí y el teclado seguía pidiendo los
+   * dígitos de PIN de cuando se activó. Las reglas viven en el store del reloj, que existe
+   * en todas partes.
+   */
+  const kiosk = useKioskStore.getState();
+  await kiosk.updatePolicies(result.data.policies);
+  await kiosk.updateOrganization({
+    name: result.data.organization.name,
+    logoPath: result.data.organization.logoPath,
+  });
+  // En la web no hay fichaje sin red ni base local que llenar: ver `database.ts`.
+  if (Platform.OS === 'web') return { ok: true };
 
   // Equipo, turnos y políticas a SQLite. Reemplaza el conjunto entero, que es lo que
   // hace que quien salió de la tienda desaparezca del iPad.
@@ -371,15 +407,8 @@ async function refreshOfflinePackageUnsafe(): Promise<{ ok: boolean }> {
     })),
   );
 
-  // Las políticas van TAMBIÉN al store del kiosco y no solo a SQLite: son las que
-  // deciden si la pantalla pide foto y cuántos dígitos tiene el teclado del PIN, y
-  // eso lo lee la interfaz del binding, no de la base local.
-  const kiosk = useKioskStore.getState();
-  await kiosk.updatePolicies(result.data.policies);
-  await kiosk.updateOrganization({
-    name: result.data.organization.name,
-    logoPath: result.data.organization.logoPath,
-  });
+  // Las políticas ya están en el store del kiosco (arriba): son las que deciden si la
+  // pantalla pide foto y cuántos dígitos tiene el teclado del PIN.
 
   await setSyncMetadata(SYNC_KEYS.lastRosterRefreshAt, new Date().toISOString());
   return { ok: true };

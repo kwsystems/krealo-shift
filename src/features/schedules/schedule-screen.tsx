@@ -123,6 +123,13 @@ export function ScheduleScreen({
   const [editing, setEditing] = useState<EditingState | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
   const [pasteOpen, setPasteOpen] = useState(false);
+  /*
+   * PEGAR SON HASTA TRES LLAMADAS SEGUIDAS (quitar descansos, marcar descansos, crear
+   * turnos) y la hoja solo miraba la última: mientras corrían las dos primeras el botón
+   * seguía tocable, y si una fallaba la promesa se perdía sin decir nada.
+   */
+  const [pegando, setPegando] = useState(false);
+  const [pegarFallo, setPegarFallo] = useState(false);
   const [workedOpen, setWorkedOpen] = useState(false);
   const [copyEmployeeId, setCopyEmployeeId] = useState<string | null>(null);
   const [publishAllOpen, setPublishAllOpen] = useState(false);
@@ -978,6 +985,14 @@ export function ScheduleScreen({
             mutations.markRestDays.isPending
           }
           existingStatus={editing.mode === 'edit' ? editing.shift.status : undefined}
+          error={
+            mutations.create.isError ||
+            mutations.update.isError ||
+            mutations.markRestDays.isError ||
+            mutations.duplicate.isError
+              ? t('errors.generic')
+              : null
+          }
           onSubmitRestDay={
             editing.mode === 'create'
               ? ({ employeeId, dateKey }) => {
@@ -1015,7 +1030,14 @@ export function ScheduleScreen({
                 }
               : undefined
           }
-          onClose={() => setEditing(null)}
+          onClose={() => {
+            // El error de un intento anterior no se arrastra a la próxima vez que se abra.
+            mutations.create.reset();
+            mutations.update.reset();
+            mutations.markRestDays.reset();
+            mutations.duplicate.reset();
+            setEditing(null);
+          }}
         />
       ) : null}
 
@@ -1052,7 +1074,12 @@ export function ScheduleScreen({
             },
           );
         }}
-        onCancel={() => setRemovingShift(null)}
+        loading={mutations.remove.isPending}
+        error={mutations.remove.isError ? t('errors.generic') : null}
+        onCancel={() => {
+          mutations.remove.reset();
+          setRemovingShift(null);
+        }}
       />
 
       <ConfirmSheet
@@ -1071,7 +1098,12 @@ export function ScheduleScreen({
             },
           );
         }}
-        onCancel={() => setPublishAllOpen(false)}
+        loading={mutations.publish.isPending}
+        error={mutations.publish.isError ? t('errors.generic') : null}
+        onCancel={() => {
+          mutations.publish.reset();
+          setPublishAllOpen(false);
+        }}
       />
 
       {publishPickerOpen ? (
@@ -1104,6 +1136,11 @@ export function ScheduleScreen({
           <AppText variant="help" tone="subtle">
             {t('schedule.publishPickerHint')}
           </AppText>
+          {mutations.publish.isError ? (
+            <AppText variant="help" tone="danger" testID="publish-picker-error">
+              {t('errors.generic')}
+            </AppText>
+          ) : null}
           <Stack gap={spacing.sm}>
             {datedShifts
               .filter((shift) => pendingIds.includes(shift.id))
@@ -1161,7 +1198,12 @@ export function ScheduleScreen({
             },
           );
         }}
-        onCancel={() => setRemovingRestDay(null)}
+        loading={mutations.unmarkRestDay.isPending}
+        error={mutations.unmarkRestDay.isError ? t('errors.generic') : null}
+        onCancel={() => {
+          mutations.unmarkRestDay.reset();
+          setRemovingRestDay(null);
+        }}
       />
 
       <ConfirmSheet
@@ -1213,7 +1255,8 @@ export function ScheduleScreen({
           empleados={empleadosParaPegar}
           timezone={scope.timezone}
           language={language}
-          saving={mutations.createMany.isPending}
+          saving={pegando}
+          error={pegarFallo ? t('errors.generic') : null}
           turnosExistentes={rows.filter((row) => row.status !== 'cancelled').length}
           existentes={rows
             .filter((row) => row.status !== 'cancelled')
@@ -1223,8 +1266,17 @@ export function ScheduleScreen({
               endsAt: row.ends_at,
             }))}
           descansosExistentes={descansos}
-          onClose={() => setPasteOpen(false)}
+          onClose={() => {
+            setPegarFallo(false);
+            setPasteOpen(false);
+          }}
           onSubmit={({ turnos, descansos: descansosPegados, descansosQueQuitar }) => {
+            setPegando(true);
+            setPegarFallo(false);
+            const fallo = () => {
+              setPegando(false);
+              setPegarFallo(true);
+            };
             /*
              * LOS DESCANSOS SE MARCAN ANTES DE CREAR LOS TURNOS, y el orden importa si
              * algo falla: quedarse con los días libres marcados y sin turnos se ve al
@@ -1252,6 +1304,7 @@ export function ScheduleScreen({
 
             void marcar.then(() => {
               if (turnos.length === 0) {
+                setPegando(false);
                 setPasteOpen(false);
                 setFeedback(t('schedule.restDaysMarked', { count: descansosPegados.length }));
                 return;
@@ -1269,6 +1322,7 @@ export function ScheduleScreen({
                 })),
                 {
                   onSuccess: (count) => {
+                    setPegando(false);
                     setPasteOpen(false);
                     setFeedback(
                       descansosPegados.length === 0
@@ -1278,9 +1332,10 @@ export function ScheduleScreen({
                           })}`,
                     );
                   },
+                  onError: fallo,
                 },
               );
-            });
+            }, fallo);
           }}
         />
       ) : null}
@@ -1288,41 +1343,53 @@ export function ScheduleScreen({
       <AdminSheet
         visible={copyOpen}
         title={t('schedule.copyPreviousWeek')}
-        onClose={() => setCopyOpen(false)}
+        onClose={() => {
+          mutations.copyWeek.reset();
+          setCopyOpen(false);
+        }}
         testID="copy-week-sheet"
         footer={
-          <PrimaryButton
-            label={t('schedule.copyPreviousWeek')}
-            loading={mutations.copyWeek.isPending}
-            onPress={() => {
-              mutations.copyWeek.mutate(
-                { employeeId: copyEmployeeId },
-                {
-                  /*
-                   * `copyPreviousWeek` DEVUELVE DOS CUENTAS, y el compilador no avisó: el
-                   * antiguo `t('schedule.copied', { count })` seguía compilando con
-                   * `count` convertido en objeto, y entonces el plural de i18next deja de
-                   * resolver y el mensaje sale con el marcador sin sustituir. Un tipo
-                   * `unknown` en la interpolación es el precio de que traducir acepte
-                   * cualquier valor; aquí se paga mirándolo.
-                   */
-                  onSuccess: ({ turnos, descansos, omitidos }) => {
-                    setCopyOpen(false);
-                    setFeedback(
-                      [
-                        t('schedule.copied', { count: turnos }),
-                        descansos === 0 ? null : t('schedule.copiedRestDays', { count: descansos }),
-                        omitidos === 0 ? null : t('schedule.copiedSkipped', { count: omitidos }),
-                      ]
-                        .filter((parte) => parte !== null)
-                        .join(' '),
-                    );
+          <Stack gap={spacing.sm}>
+            {mutations.copyWeek.isError ? (
+              <AppText variant="help" tone="danger" testID="copy-week-error">
+                {t('errors.generic')}
+              </AppText>
+            ) : null}
+            <PrimaryButton
+              label={t('schedule.copyPreviousWeek')}
+              loading={mutations.copyWeek.isPending}
+              onPress={() => {
+                mutations.copyWeek.mutate(
+                  { employeeId: copyEmployeeId },
+                  {
+                    /*
+                     * `copyPreviousWeek` DEVUELVE DOS CUENTAS, y el compilador no avisó: el
+                     * antiguo `t('schedule.copied', { count })` seguía compilando con
+                     * `count` convertido en objeto, y entonces el plural de i18next deja de
+                     * resolver y el mensaje sale con el marcador sin sustituir. Un tipo
+                     * `unknown` en la interpolación es el precio de que traducir acepte
+                     * cualquier valor; aquí se paga mirándolo.
+                     */
+                    onSuccess: ({ turnos, descansos, omitidos }) => {
+                      setCopyOpen(false);
+                      setFeedback(
+                        [
+                          t('schedule.copied', { count: turnos }),
+                          descansos === 0
+                            ? null
+                            : t('schedule.copiedRestDays', { count: descansos }),
+                          omitidos === 0 ? null : t('schedule.copiedSkipped', { count: omitidos }),
+                        ]
+                          .filter((parte) => parte !== null)
+                          .join(' '),
+                      );
+                    },
                   },
-                },
-              );
-            }}
-            testID="copy-week-confirm"
-          />
+                );
+              }}
+              testID="copy-week-confirm"
+            />
+          </Stack>
         }
       >
         <AppText variant="help" tone="subtle">

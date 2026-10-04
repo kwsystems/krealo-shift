@@ -5,7 +5,7 @@ import {
   type BreakReason,
 } from '@/domain/break-reason';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Platform, View } from 'react-native';
 import { router } from 'expo-router';
 import * as Crypto from 'expo-crypto';
 import * as Haptics from 'expo-haptics';
@@ -664,6 +664,16 @@ export default function KioskActionsScreen() {
     }
 
     if (result.error.kind === 'offline') {
+      /*
+       * EN LA WEB NO HAY COLA (auditoría, 4-oct): no sobrevive a un recargado y en un build
+       * de producción ni se abre (`database.ts`). Se dice que no se fichó y por qué, para
+       * que se vuelva a marcar con red, en vez de prometer que quedó guardado.
+       */
+      if (Platform.OS === 'web') {
+        setError(t('kiosk.noConnection'));
+        setStep({ name: 'identify' });
+        return;
+      }
       // La red se cayo entre validar el PIN y enviar el fichaje: el evento va a la
       // cola local en lugar de perderse (§17).
       await commitOffline(event);
