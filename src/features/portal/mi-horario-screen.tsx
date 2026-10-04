@@ -263,6 +263,10 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   );
 
   const cargandoSemana = turnosSemanas.isPending || jornadasSemanas.isPending;
+  /** Ni un turno publicado, ni uno cambiando, ni una marca: esa semana no se ha publicado. */
+  const semanaSinPublicar = diasSemana.every(
+    (d) => d.turnos.length === 0 && d.porConfirmar.length === 0 && d.jornadas.length === 0,
+  );
   const fallo =
     turnosSemanas.error ?? jornadasSemanas.error ?? turnosMes.error ?? jornadasMes.error;
 
@@ -341,6 +345,20 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             <Card style={estilos.lista} testID="mi-horario-dias">
               {cargandoSemana ? (
                 <LoadingState />
+              ) : semanaSinPublicar ? (
+                /*
+                  UNA SEMANA SIN NADA PUBLICADO NO SON SIETE DÍAS LIBRES (4-oct). Se enseñaban
+                  siete filas «Libre» y debajo, en pequeño, que el horario no estaba publicado:
+                  lo primero que se lee dice lo contrario de lo que pasa.
+                */
+                <EmptyState
+                  icon="calendar-outline"
+                  title={
+                    semana === 'proxima' ? t('portal.nextWeekEmpty') : t('portal.thisWeekEmpty')
+                  }
+                  body={t('portal.weekEmptyBody')}
+                  testID="mi-horario-semana-sin-publicar"
+                />
               ) : (
                 diasSemana.map((dia, i) => (
                   <View key={dia.dia}>
@@ -361,13 +379,6 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                 ))
               )}
             </Card>
-            {semana === 'proxima' &&
-            !cargandoSemana &&
-            diasSemana.every((d) => d.turnos.length === 0) ? (
-              <AppText variant="help" tone="subtle">
-                {t('portal.nextWeekEmpty')}
-              </AppText>
-            ) : null}
           </Stack>
 
           {/* 3. EL MES */}
@@ -551,6 +562,16 @@ function Hoy({
         detalle: rango === null ? null : t('portal.todayShift', { range: rango }),
       };
     }
+    // Hoy tenía turno y se lo están cambiando (4-oct): ni «libre» ni la hora de antes.
+    if (turno === undefined && dia.porConfirmar[0] !== undefined) {
+      return {
+        tono: 'info',
+        titulo: t('portal.todayPendingChange', {
+          range: `${hora(dia.porConfirmar[0].starts_at)} – ${hora(dia.porConfirmar[0].ends_at)}`,
+        }),
+        detalle: t('portal.pendingChangeBody'),
+      };
+    }
     if (turno === undefined) {
       return { tono: 'offShift', titulo: t('portal.todayFree'), detalle: null };
     }
@@ -633,7 +654,8 @@ const INSIGNIA: Partial<
         | 'radio-button-on'
         | 'help-circle-outline'
         | 'person-remove-outline'
-        | 'document-text-outline';
+        | 'document-text-outline'
+        | 'time-outline';
       clave: string;
     }
   >
@@ -648,6 +670,7 @@ const INSIGNIA: Partial<
     clave: 'portal.badgeAbsentJustified',
   },
   sinMarca: { tono: 'warning', icono: 'help-circle-outline', clave: 'portal.badgeNoMark' },
+  porConfirmar: { tono: 'info', icono: 'time-outline', clave: 'portal.badgePendingChange' },
   // La misma palabra que Horas para la salida olvidada.
   sinSalida: { tono: 'warning', icono: 'alert-circle', clave: 'portal.badgeNoClockOut' },
 };
@@ -679,9 +702,9 @@ function FilaDelDia({
   // EL RANGO DE HORAS NO SE PARTE: espacios que no se parten (U+00A0) y un WORD JOINER
   // (U+2060) tras el guion, porque el navegador corta DESPUÉS de un guion aunque el espacio
   // que sigue no se parta. En 390 px se leía «03:00 –» / «12:10», dos datos sueltos.
-  const turnos = dia.turnos
-    .map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`)
-    .join(' · ');
+  const rango = (lista: readonly { starts_at: string; ends_at: string }[]) =>
+    lista.map((tt) => `${hora(tt.starts_at)}\u00a0–\u2060\u00a0${hora(tt.ends_at)}`).join(' · ');
+  const turnos = rango(dia.turnos);
   /*
    * «MARCASTE» SOLO SI MARCÓ. Una jornada registrada desde el horario —las semanas de
    * antes del reloj— no la fichó nadie, y decirle «Marcaste 10:00 – 19:00» a quien nunca
@@ -697,9 +720,11 @@ function FilaDelDia({
   const rotuloDelTurno =
     dia.turnos.length > 0
       ? turnos
-      : dia.jornadas.length > 0
-        ? t('portal.noShift')
-        : t('portal.free');
+      : dia.porConfirmar.length > 0
+        ? rango(dia.porConfirmar)
+        : dia.jornadas.length > 0
+          ? t('portal.noShift')
+          : t('portal.free');
 
   return (
     <Row
@@ -719,14 +744,29 @@ function FilaDelDia({
       <Stack gap={0} style={estilos.centro}>
         {/* El feriado ENCIMA del turno: es lo primero que alguien quiere saber de ese día. */}
         <EtiquetaDeFeriado dateKey={dia.dia} timezone={zona} />
-        <AppText variant="bodyStrong" tabular tone={dia.turnos.length === 0 ? 'subtle' : 'default'}>
+        <AppText
+          variant="bodyStrong"
+          tabular
+          tone={dia.turnos.length === 0 && dia.porConfirmar.length === 0 ? 'subtle' : 'default'}
+        >
           {rotuloDelTurno}
         </AppText>
+        {/*
+          UN TURNO QUE SE ESTÁ CAMBIANDO (4-oct). Se dice qué es en vez de callarlo: antes el
+          día pasaba a «Libre» mientras quien gestiona lo editaba sin volver a publicar.
+        */}
+        {dia.porConfirmar.length > 0 ? (
+          <AppText variant="help" tone="primary" testID={`mi-horario-por-confirmar-${dia.dia}`}>
+            {dia.turnos.length > 0
+              ? t('portal.pendingChangeExtra', { range: rango(dia.porConfirmar) })
+              : t('portal.pendingChangeBody')}
+          </AppText>
+        ) : null}
         {/*
           LA NOTA DE SU TURNO (3-oct): «Nota para el empleado» se escribe en Horario para
           ella, y solo se veía en el reloj de la tienda. La privada de quien gestiona, no.
         */}
-        {dia.turnos
+        {[...dia.turnos, ...dia.porConfirmar]
           .filter((tt) => tt.employee_note !== null && tt.employee_note.trim() !== '')
           .map((tt) => (
             <Row

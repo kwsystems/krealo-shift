@@ -201,11 +201,19 @@ describe('bono de asistencia', () => {
     expect(r).toMatchObject({ estado: 'gana', turnosContados: 1 });
   });
 
-  it('sin turnos en el mes, o inactivo, no sale', () => {
+  it('sin turnos en el mes no sale', () => {
     const t = turno('b', '02');
-    expect(
-      calcular([t], [sesion(t)], [activo('a'), { id: 'b', status: 'inactive', hire_date: null }]),
-    ).toEqual([]);
+    expect(calcular([t], [sesion(t)], [activo('a')])).toEqual([]);
+  });
+
+  /*
+   * DADA DE BAJA, PERO TRABAJÓ ESE MES (4-oct): sale en el bono de ese mes. Antes no salía, y
+   * dar de baja a alguien el 4-oct la borraba del bono de septiembre.
+   */
+  it('dada de baja hoy, sale en el mes que trabajó', () => {
+    const t = turno('b', '02');
+    const [r] = calcular([t], [sesion(t)], [{ id: 'b', status: 'inactive', hire_date: null }]);
+    expect(r).toMatchObject({ employeeId: 'b', estado: 'gana', turnosContados: 1 });
   });
 
   it('un día de ANTES DEL RELOJ no cuenta como falta para nadie', () => {

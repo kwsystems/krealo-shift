@@ -14,6 +14,7 @@ import {
   DEMO_ORG_ID,
   DEMO_USER_ID,
   DEMO_VENDEDOR_EMAIL,
+  DEMO_EMPLEADOS_DENTRO,
   DEMO_VENDEDOR_USER_ID,
   TZ,
   crearAlmacen,
@@ -1658,6 +1659,59 @@ function crearFunctions(almacen: Almacen) {
          * que el servidor. Con un `{ ok: true }` que no borrara nada, la pantalla diría
          * «eliminada» y la persona seguiría en la lista: dos cosas contradiciéndose.
          */
+        /*
+         * DAR DE BAJA CON SU ÚLTIMO DÍA (4-oct), con las mismas reglas que
+         * `functions/src/baja-de-empleado.ts`: lo de antes no se toca, sus turnos de después
+         * se cancelan —no se borran— y sus días libres de después se quitan.
+         */
+        case 'dischargeEmployee': {
+          const cuerpo = (opciones?.body ?? {}) as {
+            employeeId?: string;
+            lastDay?: string;
+            dryRun?: boolean;
+          };
+          const id = cuerpo.employeeId ?? '';
+          const empleado = (almacen.get('employees') ?? []).find((f) => f.id === id);
+          if (empleado === undefined) return conError('Ese empleado no existe.');
+          const hoy = dateKeyOf(new Date(), TZ);
+          const ultimaJornada = (almacen.get('work_sessions') ?? [])
+            .filter((f) => f.employee_id === id)
+            .map((f) => String(f.starts_at))
+            .sort()
+            .at(-1);
+          const ultimoDiaMarcado =
+            ultimaJornada === undefined ? null : dateKeyOf(ultimaJornada, TZ);
+          const ultimoDia = cuerpo.lastDay;
+          const valido = typeof ultimoDia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ultimoDia);
+          if (!valido && cuerpo.dryRun !== true) return conError('Falta el último día de trabajo.');
+          if (valido && ultimoDia > hoy) return conError('El último día no puede ser futuro.');
+          const despues = (dia: string) => valido && dia > ultimoDia;
+          const turnos = (almacen.get('shifts') ?? []).filter(
+            (f) =>
+              f.employee_id === id &&
+              (f.status === 'draft' || f.status === 'published') &&
+              despues(dateKeyOf(String(f.starts_at), TZ)),
+          );
+          const descansos = (almacen.get('rest_days') ?? []).filter(
+            (f) => f.employee_id === id && despues(String(f.date_key)),
+          );
+          const resumen = {
+            nombre: String(empleado.full_name ?? ''),
+            hoy,
+            ultimoDiaMarcado,
+            turnos: turnos.length,
+            descansos: descansos.length,
+          };
+          if (cuerpo.dryRun === true) return sinError(resumen);
+          empleado.status = 'inactive';
+          empleado.end_date = ultimoDia;
+          for (const turno of turnos) turno.status = 'cancelled';
+          almacen.set(
+            'rest_days',
+            (almacen.get('rest_days') ?? []).filter((f) => !descansos.includes(f)),
+          );
+          return sinError(resumen);
+        }
         case 'deleteEmployee': {
           const cuerpo = (opciones?.body ?? {}) as { employeeId?: string; dryRun?: boolean };
           const id = cuerpo.employeeId ?? '';
@@ -1986,6 +2040,17 @@ function crearFunctions(almacen: Almacen) {
                 role: 'manager',
                 status: 'active',
                 isSelf: false,
+              },
+              {
+                // La vendedora de la demo YA entró a su celular: es la cuenta de
+                // `sign-in-demo-vendedor`, ligada a la ficha 1 (ver `seed.ts`).
+                userId: DEMO_VENDEDOR_USER_ID,
+                email: DEMO_VENDEDOR_EMAIL,
+                displayName: 'Vendedora (demostración)',
+                role: 'employee',
+                status: 'active',
+                isSelf: false,
+                employeeId: DEMO_EMPLEADOS_DENTRO[0],
               },
             ],
             invitations: [

@@ -8,6 +8,7 @@ import { locationSchema, type ManagerLocation } from '@/hooks/use-manager-scope'
 import { docId } from '@/lib/firebase/ids';
 import { getDataClient } from '@/lib/firebase/query';
 import { RPC, TABLES } from '@/lib/firebase/tables';
+import { estaPorConfirmar } from './resumen';
 
 /**
  * LO QUE LEE LA VISTA DEL VENDEDOR, y nada más.
@@ -130,7 +131,15 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
   };
 }
 
-/** Sus turnos PUBLICADOS: un borrador no existe para nadie más que quien lo prepara. */
+/**
+ * Sus turnos PUBLICADOS: un borrador no existe para nadie más que quien lo prepara.
+ *
+ * Con UNA excepción (4-oct): el que ya se le publicó y quien gestiona está cambiando —el
+ * «Cambiado» de Horario—. Ese turno existía para la persona; si se dejara fuera, su día
+ * pasaría a decir «Libre» mientras se edita. Vuelve marcado como lo que es y la pantalla lo
+ * dice «por confirmar» (ver `estaPorConfirmar`). Un borrador NUNCA publicado sigue sin
+ * salir: esa semana todavía no existe para ella.
+ */
 export async function fetchMisTurnos(params: {
   organizationId: string;
   employeeId: string;
@@ -145,11 +154,11 @@ export async function fetchMisTurnos(params: {
       )
       .eq('organization_id', params.organizationId)
       .eq('employee_id', params.employeeId)
-      .eq('status', 'published')
+      .in('status', ['published', 'draft'])
       .gte('starts_at', params.fromISO)
       .lt('starts_at', params.toISO)
       .order('starts_at', { ascending: true }),
-  );
+  ).then((filas) => filas.filter((fila) => fila.status === 'published' || estaPorConfirmar(fila)));
 }
 
 /** Sus jornadas: lo que marcó, ya convertido en horas por el servidor. */

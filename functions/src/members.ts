@@ -98,6 +98,12 @@ export const listMembers = onCall(async (request) => {
         status: m.status,
         // Para que la pantalla pueda decir «eres tú» y no ofrecerte quitarte.
         isSelf: m.user_id === uid,
+        /*
+         * LA FICHA A LA QUE ESTÁ LIGADA LA CUENTA, si es de un empleado (4-oct). Con ella Equipo
+         * dice quién ya entró al celular: sin entrar no puede ver su horario ni poner su
+         * disponibilidad, y desde el panel no había forma de saberlo.
+         */
+        employeeId: (m.employee_id as string | null | undefined) ?? null,
       };
     }),
     invitations: invitaciones.docs.map((d) => ({

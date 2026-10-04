@@ -51,6 +51,11 @@ const employeeSchema = z.object({
    * añadido en el futuro no tumbe la pantalla de quien todavia no lo tiene.
    */
   hire_date: z.string().nullable().default(null),
+  /**
+   * Su último día de trabajo (AAAA-MM-DD), si se le dio de baja con él (4-oct). Lo escribe
+   * `dischargeEmployee` en el servidor; con valor por defecto, por lo mismo que `hire_date`.
+   */
+  end_date: z.string().nullable().default(null),
   user_id: docId().nullable().default(null),
 });
 
@@ -86,7 +91,9 @@ export async function fetchEmployees(organizationId: string): Promise<Employee[]
   return selectRows(z.array(employeeSchema), (db) =>
     db
       .from(TABLES.employees)
-      .select('id, full_name, preferred_name, email, employee_number, status, hire_date, user_id')
+      .select(
+        'id, full_name, preferred_name, email, employee_number, status, hire_date, end_date, user_id',
+      )
       .eq('organization_id', organizationId)
       .order('full_name', { ascending: true }),
   );
@@ -369,14 +376,51 @@ export async function updateEmployee(params: {
   });
 }
 
-/** Activar o desactivar sin borrar historial (§11.2). */
+/**
+ * Activar o desactivar sin borrar historial (§11.2). Al VOLVER a activar se olvida su último
+ * día: si regresa, ya no es alguien que se fue. Lo que la baja canceló sigue cancelado.
+ */
 export async function setEmployeeStatus(params: {
   employeeId: string;
   status: EmployeeStatus;
 }): Promise<void> {
   await execute((db) =>
-    db.from(TABLES.employees).update({ status: params.status }).eq('id', params.employeeId),
+    db
+      .from(TABLES.employees)
+      .update(
+        params.status === 'active'
+          ? { status: 'active', end_date: null }
+          : { status: params.status },
+      )
+      .eq('id', params.employeeId),
   );
+}
+
+/**
+ * DAR DE BAJA CON SU ÚLTIMO DÍA (4-oct). Ver `dischargeEmployee` en
+ * `functions/src/baja-de-empleado.ts`: guarda el día, la deja inactiva y cancela sus turnos
+ * de después. Con `dryRun` solo cuenta, y sin `lastDay` además propone el día en que marcó
+ * por última vez.
+ */
+const bajaSchema = z.object({
+  nombre: z.string(),
+  hoy: z.string(),
+  ultimoDiaMarcado: z.string().nullable(),
+  turnos: z.number().int(),
+  descansos: z.number().int(),
+});
+export type ResumenDeBaja = z.infer<typeof bajaSchema>;
+
+export async function dischargeEmployee(params: {
+  employeeId: string;
+  lastDay?: string;
+  dryRun?: boolean;
+}): Promise<ResumenDeBaja> {
+  const { data, error } = await callFunction<unknown>('dischargeEmployee', params);
+  if (error !== null) throw toAdminError(error);
+  const parsed = bajaSchema.safeParse(data);
+  if (!parsed.success) throw new AdminError('unexpectedShape', parsed.error.message);
+  return parsed.data;
 }
 
 /**

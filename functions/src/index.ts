@@ -62,6 +62,7 @@ export { listMembers, setMemberRole, revokeMember, cancelInvitation } from './me
  * esto es para quien no debió existir. Ver sus tres seguros en el propio archivo.
  */
 export { deleteEmployee } from './eliminar-empleado';
+export { dischargeEmployee } from './baja-de-empleado';
 
 /*
  * Resolver una solicitud de la Bandeja (30-sep). Aprobar un «olvidé marcar» registra el

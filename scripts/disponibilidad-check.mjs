@@ -225,6 +225,48 @@ try {
     console.log(`  celular              agregado, ${enSuSemana} días de su semana lo enseñan`);
     await contexto.close();
   }
+
+  /*
+   * ¿QUIÉN LA TIENE DE VERDAD? (4-oct). Andree: «revisar si realmente los empleados tienen lo
+   * de disponibilidad». La tiene quien ya entró al celular con su correo, y eso ahora lo dice
+   * la ficha de Equipo. En la demo, la vendedora (ficha 1) ya entró; el resto, no.
+   */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 600 });
+    await irPorElMenu(pagina, '/team');
+    const vendedora = '33333333-3333-4333-8333-000000000001';
+    const lectura = async (id) => {
+      await pagina.locator(`[data-testid="team-member-${id}"]`).first().click();
+      const fila = pagina.locator('[data-testid="employee-phone-access"]');
+      await fila.waitFor({ timeout: 15000 }).catch(() => undefined);
+      const texto =
+        (await fila.count()) === 0 ? null : (await fila.innerText()).replace(/\s+/g, ' ');
+      await pagina.keyboard.press('Escape');
+      await pagina
+        .locator('[data-testid="employee-detail-sheet"]')
+        .waitFor({ state: 'detached', timeout: 10000 })
+        .catch(() => undefined);
+      await esperar(pagina, 500);
+      return texto;
+    };
+    const ella = await lectura(vendedora);
+    const otraFila = pagina.locator(
+      `[data-testid^="team-member-"][role="button"]:not([data-testid="team-member-${vendedora}"])`,
+    );
+    const otraId = ((await otraFila.first().getAttribute('data-testid')) ?? '').slice(
+      'team-member-'.length,
+    );
+    const otra = await lectura(otraId);
+    if (ella === null || !/Ya entró/.test(ella))
+      problemas.push(`la ficha de la vendedora no dice que ya entró al celular: «${ella}»`);
+    if (otra === null || /Ya entró/.test(otra))
+      problemas.push(`la ficha de alguien que nunca entró dice otra cosa: «${otra}»`);
+    console.log(`  acceso al celular    vendedora «${ella}» · otra «${otra}»`);
+    await contexto.close();
+  }
 } finally {
   await navegador.close();
   await cerrar();

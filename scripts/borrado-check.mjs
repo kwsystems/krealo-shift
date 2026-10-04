@@ -85,21 +85,49 @@ try {
     return filas();
   })();
   await filtro('active');
+  /*
+   * DAR DE BAJA PIDE EL ÚLTIMO DÍA (4-oct). «Desactivar» lo hacía de un toque y sin fecha, y
+   * los turnos que la persona tenía después de irse seguían saliendo como faltas. Ahora se
+   * abre una hoja con el calendario —empieza en el último día que marcó— y dice cuántos
+   * turnos de después se quitan antes de confirmar. Se comprueba en la primera.
+   */
+  const casoBaja = 'dejó de trabajar: pide su último día y dice qué turnos se quitan';
   const deBaja = [];
   for (let i = 0; i < 2; i += 1) {
     const fila = pagina.locator('[data-testid^="team-member-"][role="button"]').first();
     const id = (await fila.getAttribute('data-testid')).slice('team-member-'.length);
     await fila.click();
     await pagina.locator('[data-testid="employee-deactivate"]').click();
-    await pagina
-      .locator('[data-testid="employee-detail-sheet"]')
-      .waitFor({ state: 'detached', timeout: 15000 });
+    const hojaBaja = pagina.locator('[data-testid="dar-de-baja-sheet"]');
+    await hojaBaja.waitFor({ timeout: 15000 });
+    const resumen = pagina.locator('[data-testid="dar-de-baja-resumen"]');
+    await resumen.waitFor({ timeout: 15000 });
+    if (i === 0) {
+      const texto = (await resumen.innerText()).replace(/\s+/g, ' ');
+      const calendario = await pagina.locator('[data-testid="dar-de-baja-calendario"]').count();
+      const ultimaMarca = (
+        await pagina.locator('[data-testid="dar-de-baja-ultima-marca"]').innerText()
+      ).trim();
+      if (calendario === 0) fallar(casoBaja, 'la hoja no trae calendario para el último día');
+      else if (!/^Último día: /.test(texto) || !/turno/.test(texto))
+        fallar(casoBaja, `la hoja no dice el día ni los turnos: «${texto}»`);
+      else pasa(casoBaja, `${ultimaMarca} ${texto}`);
+      await pagina.screenshot({ path: join(CAPTURAS, '0-dar-de-baja.png'), fullPage: true });
+    }
+    await pagina.locator('[data-testid="dar-de-baja-confirmar"]').click();
+    await hojaBaja.waitFor({ state: 'detached', timeout: 15000 });
     await pagina.waitForTimeout(400);
     deBaja.push(id);
   }
 
   await filtro('inactive');
   const inactivosAntes = await filas();
+  const conFecha = await pagina
+    .locator(`[data-testid="team-member-${deBaja[0]}"]`)
+    .innerText()
+    .catch(() => '');
+  if (!/Se fue el /.test(conFecha))
+    fallar(casoBaja, `en Inactivo no dice cuándo se fue: «${conFecha.replace(/\s+/g, ' ')}»`);
 
   /* ------------------------------------------------------------------ */
   const caso2 = 'en Inactivo sí está, y tocar una fila la marca en vez de abrirla';

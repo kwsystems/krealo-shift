@@ -21,7 +21,14 @@ import { cubreElTurno } from '@/features/timesheets/faltas';
  * verdad no existe: no hay nada que sembrar, los días los trae la vida.
  */
 
-export const ESCENARIOS = ['normal', 'tranquilo', 'ausentes', 'solicitudes', 'sinllegar'] as const;
+export const ESCENARIOS = [
+  'normal',
+  'tranquilo',
+  'ausentes',
+  'solicitudes',
+  'sinllegar',
+  'cambiado',
+] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
 export function escenarioDeLaUrl(): Escenario {
@@ -330,8 +337,37 @@ function dejarSinLlegar(almacen: Almacen, cuantos: number): number {
   return elegidos.size;
 }
 
+/**
+ * UN TURNO DE LA VENDEDORA «CAMBIADO» (4-oct): se le publicó y quien gestiona lo editó sin
+ * volver a publicar. Antes ese día salía «Libre» en su celular; ahora tiene que salir «por
+ * confirmar». El último publicado suyo de esta semana, una hora más tarde y en borrador.
+ */
+function cambiarUnTurnoDeLaVendedora(almacen: Almacen): void {
+  const vendedora = DEMO_EMPLEADOS_DENTRO[0];
+  const lunes = localDateTimeToInstant(weekStartOfKey(dateKeyOf(new Date(), TZ), 1), '00:00', TZ);
+  if (lunes === null) return;
+  const suyos = (almacen.get('shifts') ?? [])
+    .filter(
+      (t) =>
+        t.employee_id === vendedora && t.status === 'published' && String(t.starts_at) >= lunes,
+    )
+    .sort((a, b) => String(b.starts_at).localeCompare(String(a.starts_at)));
+  const turno = suyos[0];
+  if (turno === undefined) return;
+  const hora = 3600_000;
+  turno.status = 'draft';
+  turno.starts_at = new Date(Date.parse(String(turno.starts_at)) + hora).toISOString();
+  turno.ends_at = new Date(Date.parse(String(turno.ends_at)) + hora).toISOString();
+}
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
   if (escenario === 'normal') return almacen;
+
+  // Solo toca un turno: el resto del día se queda como en la semilla.
+  if (escenario === 'cambiado') {
+    cambiarUnTurnoDeLaVendedora(almacen);
+    return almacen;
+  }
 
   // Los tres parten del mismo día limpio y añaden SOLO lo suyo. Si no, el titular lo
   // decidiría lo que arrastre la semilla y el escenario no significaría nada.

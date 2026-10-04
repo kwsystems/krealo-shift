@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { EmployeeDraft } from './api';
 import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
 import { EliminarEmpleadoSheet } from './eliminar-empleado-sheet';
+import { DarDeBajaSheet } from './dar-de-baja-sheet';
 import { EliminarVariosSheet } from './eliminar-varios-sheet';
 import { EmployeeFormSheet, emptyEmployeeValues, type EmployeeFormValues } from './employee-form';
 import { PestanasDeEquipo } from '@/features/availability/pestanas-de-equipo';
@@ -45,6 +46,7 @@ import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import type { DentroEnEquipo } from '@/components/team/member-row';
 import { formatClockTime } from '@/utils/time';
 import { useManagerScope } from '@/hooks/use-manager-scope';
+import { useMembers } from '@/features/settings/hooks';
 import { currentLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
 
@@ -75,6 +77,8 @@ export function TeamScreen() {
   const [pin, setPin] = useState<{ value: string; name: string } | null>(null);
   /** A quién se está eliminando: ver `EliminarEmpleadoSheet`. */
   const [eliminando, setEliminando] = useState<TeamMember | null>(null);
+  /** A quién se está dando de baja, con su último día: ver `DarDeBajaSheet`. */
+  const [dandoDeBaja, setDandoDeBaja] = useState<TeamMember | null>(null);
   /*
    * «ELIMINAR VARIOS»: quiénes están marcados, o `null` fuera de ese modo. Solo existe en
    * el filtro Inactivo —el servidor no borra a nadie activo— y cambiar de filtro lo cierra.
@@ -102,6 +106,22 @@ export function TeamScreen() {
   const team = useTeam({ organizationId, locationIds });
   const jobRolesQuery = useJobRoles(organizationId);
   const mutations = useTeamMutations(organizationId);
+  /*
+   * QUIÉN YA ENTRÓ AL CELULAR (4-oct). Andree: «revisar si realmente los empleados tienen lo
+   * de disponibilidad». La tienen en el celular, pero solo quien ya entró con su correo; desde
+   * el panel no había forma de saber quién. Lo da la lista de cuentas, que solo puede leer
+   * dueño o administrador: para quien gestiona sin serlo, la fila no sale.
+   */
+  const cuentas = useMembers(scope.isAdmin ? organizationId : null);
+  const conCelular = useMemo(
+    () =>
+      new Set(
+        (cuentas.data?.members ?? [])
+          .filter((m) => m.role === 'employee' && m.status === 'active' && m.employeeId !== null)
+          .map((m) => m.employeeId),
+      ),
+    [cuentas.data],
+  );
 
   const now = useLiveClock('minute');
   const nowISO = now.toISOString();
@@ -638,6 +658,21 @@ export function TeamScreen() {
               },
             )
           }
+          accesoAlCelular={
+            cuentas.data === undefined
+              ? null
+              : conCelular.has(selected.id)
+                ? 'entro'
+                : selected.email !== null && selected.email.trim() !== ''
+                  ? 'noEntro'
+                  : 'sinCorreo'
+          }
+          onDischarge={() => {
+            // Una hoja encima de otra no: se cierra la ficha y se abre la de la baja.
+            setSelectedId(null);
+            mutations.discharge.reset();
+            setDandoDeBaja(selected);
+          }}
           onResetPin={() => resetPin(selected)}
           onDelete={
             scope.isAdmin
@@ -676,6 +711,34 @@ export function TeamScreen() {
 
       {pin !== null ? (
         <TemporaryPinSheet pin={pin.value} employeeName={pin.name} onClose={() => setPin(null)} />
+      ) : null}
+
+      {dandoDeBaja !== null ? (
+        <DarDeBajaSheet
+          key={dandoDeBaja.id}
+          member={dandoDeBaja}
+          weekStartsOn={scope.weekStartsOn}
+          language={language}
+          pending={mutations.discharge.isPending}
+          error={mutations.discharge.error === null ? null : t('team.dischargeFailed')}
+          onConfirm={(lastDay) =>
+            mutations.discharge.mutate(
+              { employeeId: dandoDeBaja.id, lastDay },
+              {
+                onSuccess: (resumen) => {
+                  setFeedback(
+                    t('team.discharged', {
+                      name: dandoDeBaja.displayName,
+                      count: resumen.turnos,
+                    }),
+                  );
+                  setDandoDeBaja(null);
+                },
+              },
+            )
+          }
+          onClose={() => setDandoDeBaja(null)}
+        />
       ) : null}
 
       {eliminando !== null ? (

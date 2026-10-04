@@ -8,7 +8,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { ANCHO_DE_LA_TIRA, TiraDeLaSemana, type DiaDeLaTira } from './tira-de-la-semana';
-import { formatWeekdayShort } from '@/features/schedules/week';
+import { formatDateKeyShort, formatWeekdayShort } from '@/features/schedules/week';
 import { currentLanguage } from '@/i18n';
 import type { TeamMember } from '@/features/team/hooks';
 import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO, estadoVisible } from '@/features/timesheets/en-curso';
@@ -124,7 +124,10 @@ function MemberRowBase({
       : member.status === 'active'
         ? t('team.statusActive')
         : member.status === 'inactive'
-          ? t('team.statusInactive')
+          ? member.end_date === null
+            ? t('team.statusInactive')
+            : // Con su último día, si se le dio de baja con él (4-oct): «Se fue el 30 sep».
+              t('team.statusLeftShort', { day: formatDateKeyShort(member.end_date, language) })
           : t('team.statusInvited');
 
   const puestos =

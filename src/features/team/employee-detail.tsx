@@ -40,6 +40,8 @@ export function EmployeeDetailSheet({
   busy,
   onEdit,
   onToggleStatus,
+  onDischarge,
+  accesoAlCelular = null,
   onResetPin,
   onDelete,
   onClose,
@@ -68,6 +70,13 @@ export function EmployeeDetailSheet({
   busy: boolean;
   onEdit: () => void;
   onToggleStatus: () => void;
+  /** «Dejó de trabajar»: abre la hoja que pide su último día. Ver `dar-de-baja-sheet.tsx`. */
+  onDischarge: () => void;
+  /**
+   * Si ya entró al celular con su correo (4-oct): sin entrar no ve su horario ni puede poner
+   * su disponibilidad. `null` si no se sabe —quien gestiona sin ser administrador—.
+   */
+  accesoAlCelular?: 'entro' | 'noEntro' | 'sinCorreo' | null;
   onResetPin: () => void;
   /**
    * Eliminar definitivamente. Solo llega para dueño o administrador, y solo se ofrece con
@@ -83,7 +92,9 @@ export function EmployeeDetailSheet({
     member.status === 'active'
       ? t('team.statusActive')
       : member.status === 'inactive'
-        ? t('team.statusInactive')
+        ? member.end_date === null
+          ? t('team.statusInactive')
+          : t('team.statusLeft', { day: formatDateKeyShort(member.end_date, language) })
         : t('team.statusInvited');
 
   return (
@@ -116,9 +127,9 @@ export function EmployeeDetailSheet({
             <View style={estilos.mitad}>
               {member.status === 'active' ? (
                 <DangerButton
-                  label={t('team.deactivate')}
+                  label={t('team.discharge')}
                   hint={t('team.deactivateHint')}
-                  onPress={onToggleStatus}
+                  onPress={onDischarge}
                   testID="employee-deactivate"
                 />
               ) : (
@@ -153,6 +164,19 @@ export function EmployeeDetailSheet({
           <KeyValueRow label={t('team.employeeNumber')} value={member.employee_number} />
         ) : null}
         <KeyValueRow label={t('team.emailOptional')} value={member.email ?? t('team.noEmail')} />
+        {accesoAlCelular === null ? null : (
+          <KeyValueRow
+            label={t('team.phoneAccess')}
+            value={
+              accesoAlCelular === 'entro'
+                ? t('team.phoneAccessYes')
+                : accesoAlCelular === 'noEntro'
+                  ? t('team.phoneAccessNotYet')
+                  : t('team.phoneAccessNoEmail')
+            }
+            testID="employee-phone-access"
+          />
+        )}
         <KeyValueRow
           label={t('team.locations')}
           value={

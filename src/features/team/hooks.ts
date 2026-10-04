@@ -11,6 +11,7 @@ import {
   createJobRole,
   renameJobRole,
   deleteEmployee,
+  dischargeEmployee,
   resetEmployeePin,
   setJobRoleActive,
   setEmployeeStatus,
@@ -239,10 +240,23 @@ export function useTeamMutations(organizationId: string | null) {
     onSuccess: invalidate,
   });
 
+  /*
+   * DAR DE BAJA invalida también Horas, Inicio y Reportes: cancela sus turnos de después de
+   * irse, y esas pantallas los estaban contando —como programados o como faltas—.
+   */
+  const discharge = useMutation({
+    mutationFn: (params: { employeeId: string; lastDay: string }) => dischargeEmployee(params),
+    onSuccess: () => {
+      invalidate();
+      refrescarVistasDeHoras(queryClient);
+    },
+  });
+
   return {
     create,
     update,
     changeStatus,
+    discharge,
     resetPin,
     remove,
     removeMany,

@@ -135,7 +135,13 @@ export function bonoDeAsistencia(params: {
   const resultados: ResultadoDelBono[] = [];
 
   for (const empleado of empleados) {
-    if (empleado.status !== 'active') continue;
+    /*
+     * SIN MIRAR SI HOY SIGUE ACTIVO (4-oct). Aquí se saltaba a todo el que no lo estuviera,
+     * así que dar de baja a alguien la borraba del bono de los meses que SÍ trabajó:
+     * septiembre perdía a quien se fue el 30. Lo que decide si sale es si tuvo turnos en el
+     * mes, justo debajo; y los de después de irse ya no cuentan porque la baja los cancela
+     * (ver `functions/src/baja-de-empleado.ts`).
+     */
     const suyos = publicados
       .filter((t) => t.employee_id === empleado.id)
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));

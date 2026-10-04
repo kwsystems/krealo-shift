@@ -28,6 +28,8 @@ const memberSchema = z.object({
   role: z.enum(appRoles),
   status: z.enum(['invited', 'active', 'suspended']),
   isSelf: z.boolean(),
+  /** La ficha de empleado de esa cuenta, si la tiene. Ver `listMembers`. */
+  employeeId: docId().nullable().default(null),
 });
 
 const invitationSchema = z.object({

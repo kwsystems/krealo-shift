@@ -132,9 +132,55 @@ describe('los días del vendedor', () => {
   });
 
   it('los turnos en borrador no salen: no existen para quien ficha', () => {
-    const borrador = { ...turno('09'), status: 'draft' as const };
+    // NUNCA publicado (versión 0). Uno ya publicado y en cambio sale «por confirmar»: ver abajo.
+    const borrador = { ...turno('09'), status: 'draft' as const, publication_version: 0 };
     const [d] = dias([borrador], [], ['09']);
     expect(d?.estado).toBe('libre');
+  });
+});
+
+/*
+ * UN TURNO QUE QUIEN GESTIONA ESTÁ CAMBIANDO (4-oct). Ya se le publicó y se editó sin volver
+ * a publicar: el «Cambiado» de Horario. Antes desaparecía de su celular y el día decía
+ * «Libre». Ahora sale «por confirmar», y no cuenta como falta ni como turno, igual que en
+ * Horario e Inicio.
+ */
+describe('el turno que se está cambiando', () => {
+  const cambiando = (dia: string, desde?: string, hasta?: string): ShiftRow => ({
+    ...turno(dia, desde, hasta),
+    status: 'draft',
+    publication_version: 1,
+  });
+
+  it('sale «por confirmar», no «libre»', () => {
+    const [d] = dias([cambiando('09')], [], ['09']);
+    expect(d?.estado).toBe('porConfirmar');
+    expect(d?.turnos).toEqual([]);
+    expect(d?.porConfirmar).toHaveLength(1);
+  });
+
+  it('pasado y sin marca NO es falta: todavía no es un turno publicado', () => {
+    const [d] = dias([cambiando('05')], [], ['05'], '2026-10-01');
+    expect(d?.estado).toBe('porConfirmar');
+    expect(d?.faltas).toEqual([]);
+  });
+
+  it('un borrador que nunca se publicó no sale: esa semana no existe para ella', () => {
+    const nunca = { ...turno('09'), status: 'draft' as const, publication_version: 0 };
+    const [d] = dias([nunca], [], ['09']);
+    expect(d?.estado).toBe('libre');
+    expect(d?.porConfirmar).toEqual([]);
+  });
+
+  it('con otro turno publicado el mismo día, manda el publicado y el otro se dice aparte', () => {
+    const [d] = dias(
+      [turno('09', '13:00', '17:00'), cambiando('09', '20:00', '23:00')],
+      [],
+      ['09'],
+    );
+    expect(d?.estado).toBe('porVenir');
+    expect(d?.turnos).toHaveLength(1);
+    expect(d?.porConfirmar).toHaveLength(1);
   });
 });
 

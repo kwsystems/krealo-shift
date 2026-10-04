@@ -32,6 +32,8 @@ import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 export type EstadoDelDia =
   /** Sin turno ese día. */
   | 'libre'
+  /** Tenía un turno publicado y quien gestiona lo está cambiando: aún no lo volvió a publicar. */
+  | 'porConfirmar'
   /** Turno que aún no llegó. */
   | 'porVenir'
   /** Hoy, dentro o antes del turno, sin haber marcado todavía. */
@@ -64,7 +66,20 @@ export type DiaDelVendedor = {
   faltas: ShiftRow[];
   /** Lo que se dijo de esas faltas, de las que ya se dijo algo. */
   justificaciones: ResolucionDeFalta[];
+  /**
+   * SUS TURNOS QUE ESTÁN CAMBIANDO (4-oct): ya se le publicaron una vez y quien gestiona
+   * los editó sin volver a publicar —el «Cambiado» de Horario—. Antes desaparecían de su
+   * celular y el día salía «Libre» hasta la nueva publicación: le decía que no trabajaba
+   * justo cuando su turno se estaba moviendo. No cuentan para nada más —ni faltas, ni
+   * horas—, igual que en Horario e Inicio: solo se enseñan, dichos como lo que son.
+   */
+  porConfirmar: ShiftRow[];
 };
+
+/** Un turno que ya se publicó y ahora está en borrador: el «Cambiado» de Horario. */
+export function estaPorConfirmar(turno: Pick<ShiftRow, 'status' | 'publication_version'>): boolean {
+  return turno.status === 'draft' && (turno.publication_version ?? 0) > 0;
+}
 
 const MIN = 60 * 1000;
 
@@ -130,6 +145,9 @@ export function diasDelVendedor(params: {
     const suyos = turnos
       .filter((t) => t.status === 'published' && dateKeyOf(t.starts_at, timezone) === dia)
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const porConfirmar = turnos
+      .filter((t) => estaPorConfirmar(t) && dateKeyOf(t.starts_at, timezone) === dia)
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     const delDia = jornadas
       .filter((j) => dateKeyOf(j.starts_at, timezone) === dia)
       .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
@@ -156,7 +174,7 @@ export function diasDelVendedor(params: {
       if (primeraJornada !== undefined) {
         return primeraJornada.flags.includes('late_arrival') ? 'tarde' : 'aTiempo';
       }
-      if (primerTurno === undefined) return 'libre';
+      if (primerTurno === undefined) return porConfirmar.length > 0 ? 'porConfirmar' : 'libre';
       const faltasDelDia = faltas.filter((falta) => falta.dia === dia);
       if (faltasDelDia.length > 0) {
         return faltasDelDia.every((falta) => estadoDeFalta(falta) === 'justificada')
@@ -178,6 +196,7 @@ export function diasDelVendedor(params: {
       justificaciones: faltas.flatMap((falta) =>
         falta.dia === dia && falta.resolucion !== null ? [falta.resolucion] : [],
       ),
+      porConfirmar,
     };
   });
 }
