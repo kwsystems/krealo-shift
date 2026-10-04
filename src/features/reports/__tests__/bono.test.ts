@@ -282,3 +282,45 @@ describe('bono de asistencia', () => {
     ]);
   });
 });
+
+describe('cuándo no aplica (auditoría, 4-oct)', () => {
+  it('quien se dio de baja a mitad de mes no lo gana: mes incompleto', () => {
+    const t = turno('b', '02');
+    const [r] = calcular(
+      [t],
+      [sesion(t)],
+      [{ id: 'b', status: 'inactive', hire_date: null, end_date: '2026-09-10' }],
+    );
+    expect(r).toMatchObject({
+      estado: 'noAplica',
+      motivoNoAplica: 'bajaEnElMes',
+      baja: '2026-09-10',
+    });
+  });
+
+  it('quien se fue el último día del mes sí completó el mes', () => {
+    const t = turno('b', '02');
+    const [r] = calcular(
+      [t],
+      [sesion(t)],
+      [{ id: 'b', status: 'inactive', hire_date: null, end_date: '2026-09-30' }],
+    );
+    expect(r).toMatchObject({ estado: 'gana' });
+  });
+
+  it('sin ningún turno que contar no se gana, aunque no tenga nada en contra', () => {
+    // Su único turno fue antes del reloj: no cuenta para nadie.
+    const t = turno('a', '02');
+    const [r] = bonoDeAsistencia({
+      turnos: [t],
+      sesiones: [],
+      empleados: [activo('a')],
+      desde: DESDE,
+      finISO: FIN,
+      nowISO: TRAS_EL_MES,
+      relojDesde: '2026-09-20',
+      timezone: LIMA,
+    }).resultados;
+    expect(r).toMatchObject({ estado: 'noAplica', motivoNoAplica: 'sinTurnos', turnosContados: 0 });
+  });
+});

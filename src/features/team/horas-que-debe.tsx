@@ -54,7 +54,13 @@ export function HorasQueDebe({
           tabular
           testID="horas-que-debe-total"
         >
-          {pendiente > 0 ? minutesToHHmm(pendiente) : t('team.owedNone')}
+          {/* «—» hasta saberlo, o si no se pudo leer: «Nada» de una consulta que no llegó
+              era decir que no debía nada (auditoría, 4-oct). */}
+          {consulta.data === undefined
+            ? '—'
+            : pendiente > 0
+              ? minutesToHHmm(pendiente)
+              : t('team.owedNone')}
         </AppText>
       </Row>
       <AsyncSection

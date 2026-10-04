@@ -178,6 +178,11 @@ export function HojaDeDisponibilidad({
           }
         />
       ) : null}
+      {mutaciones.marcarVistas.isError ? (
+        <AppText variant="help" tone="danger" testID="disponibilidad-visto-error">
+          {t('errors.generic')}
+        </AppText>
+      ) : null}
 
       {personas === null || fila !== null ? null : (
         <SelectField

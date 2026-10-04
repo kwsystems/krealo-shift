@@ -3,6 +3,7 @@ import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
+import { SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, SeparadorDeRegistro, Stack } from '@/components/ui/layout';
 import { formatDateKeyShort } from '@/features/schedules/week';
 import {
@@ -37,6 +38,26 @@ export function HorasQueDebes({
     queryFn: () => fetchMisHorasDebidas({ organizationId, employeeId }),
   });
   const filas = pendientes(consulta.data ?? []);
+  /*
+   * SI NO SE PUDO LEER, SE DICE (auditoría, 4-oct). Escondida, la tarjeta se leía como «no
+   * debes nada» de una consulta que había fallado.
+   */
+  if (consulta.isError) {
+    return (
+      <Card style={estilos.caja} testID="mi-horario-debes-error">
+        <Stack gap={spacing.sm}>
+          <AppText variant="help" tone="danger">
+            {t('portal.owedError')}
+          </AppText>
+          <SecondaryButton
+            label={t('common.retry')}
+            onPress={() => void consulta.refetch()}
+            fullWidth={false}
+          />
+        </Stack>
+      </Card>
+    );
+  }
   if (filas.length === 0) return null;
 
   return (

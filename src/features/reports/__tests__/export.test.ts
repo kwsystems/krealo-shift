@@ -153,7 +153,8 @@ describe('resumen para pegar en un chat', () => {
       topReason: { name: 'Comida', minutes: 45 },
     });
     expect(texto).toContain('48:51');
-    expect(texto).toContain('67% (3/9)');
+    // A tiempo sobre medidos: 6 de 9, no las 3 tardanzas.
+    expect(texto).toContain('67% (6/9)');
     expect(texto).toContain('Diego 11:21');
     expect(texto).toContain('Comida 00:45');
     expect(texto).toContain('• Faltas: 2');
@@ -299,6 +300,9 @@ describe('nombre del archivo', () => {
   it('lleva el periodo, para no acabar con cinco «reporte.csv» en Descargas', () => {
     expect(reportFileName({ from: '2026-09-14', to: '2026-09-20' })).toBe(
       'krealo-shift-reporte-2026-09-14_2026-09-20.csv',
+    );
+    expect(reportFileName({ from: '2026-09-14', to: '2026-09-20', dias: 3 })).toBe(
+      'krealo-shift-reporte-3-dias-2026-09-14_2026-09-20.csv',
     );
   });
 });

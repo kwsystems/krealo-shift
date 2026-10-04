@@ -179,9 +179,19 @@ const useEstilos = estilosDelTema((colors) => ({
     height: '100%',
     borderRadius: radii.pill,
   },
+  /*
+   * LOS COLORES DE LA PALETA DE ESTADOS (auditoría, 4-oct), los mismos de las insignias: la
+   * pausa era azul aquí y ámbar en «Almorzando», justo debajo; la tardanza era ámbar aquí y
+   * roja en el celular y en «Va tarde». Trabajando, verde (`working`); en pausa, el ámbar de
+   * `onBreak`; llegó tarde, el rojo de `late`. Y con leyenda: ver `LeyendaDeFranja`.
+   */
   relleno: { backgroundColor: colors.success600 },
-  rellenoTarde: { backgroundColor: colors.warning600 },
-  rellenoPausa: { backgroundColor: colors.info600 },
+  rellenoTarde: { backgroundColor: colors.danger600 },
+  rellenoPausa: { backgroundColor: colors.warning600 },
+  leyenda: { flexDirection: 'row', flexWrap: 'wrap', gap: spacing.md },
+  entradaDeLeyenda: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
+  muestra: { width: spacing.base, height: spacing.xs + 2, borderRadius: radii.pill },
+  muestraDelTurno: { backgroundColor: colors.border },
   /*
    * "AHORA" ES UNA LÍNEA FINA Y OSCURA, no un punto de color: tiene que leerse encima del
    * relleno y encima del carril sin competir con ninguno de los dos, y en los dos temas.
@@ -193,6 +203,33 @@ const useEstilos = estilosDelTema((colors) => ({
     backgroundColor: colors.ink900,
   },
 }));
+
+/**
+ * QUÉ ES CADA COLOR, debajo de la franja (auditoría, 4-oct). Con los mismos estilos que las
+ * barras: si un color cambia arriba, cambia aquí, y la leyenda no puede decir otra cosa.
+ */
+export function LeyendaDeFranja({ testID }: { testID?: string }) {
+  const { t } = useTranslation();
+  const estilos = useEstilos();
+  const muestras = [
+    { clave: 'turno', estilo: estilos.muestraDelTurno, texto: t('admin.bandLegendShift') },
+    { clave: 'trabajado', estilo: estilos.relleno, texto: t('admin.bandLegendWorked') },
+    { clave: 'tarde', estilo: estilos.rellenoTarde, texto: t('admin.bandLegendLate') },
+    { clave: 'pausa', estilo: estilos.rellenoPausa, texto: t('admin.bandLegendBreak') },
+  ];
+  return (
+    <View style={estilos.leyenda} testID={testID}>
+      {muestras.map((muestra) => (
+        <View key={muestra.clave} style={estilos.entradaDeLeyenda}>
+          <View style={[estilos.muestra, muestra.estilo]} />
+          <AppText variant="label" tone="muted">
+            {muestra.texto}
+          </AppText>
+        </View>
+      ))}
+    </View>
+  );
+}
 
 /** Una fila de la franja: quién, su forma del día, y la hora que hace falta leer. */
 export function FilaDeFranja({
@@ -383,7 +420,7 @@ export function ListaDeFranjas({
               <View style={estilos.quien} />
             </>
           )}
-          <View style={estilos.franja}>
+          <View style={[estilos.franja, estilos.alturaDelEje]}>
             {marcas.map((marca) => (
               /*
                * EL RÓTULO SE CENTRA EN SU MARCA con ancho fijo y margen negativo, que es
@@ -448,6 +485,12 @@ const useEstilosDeFila = estilosDelTema((colors) => ({
    * y está bien: recortarlo es lo que haría que la primera hora del día no se pudiera leer.
    */
   rotulo: { position: 'absolute', width: 56, marginLeft: -28, textAlign: 'center' },
+  /*
+   * LA ALTURA DE UN RÓTULO, RESERVADA (auditoría, 4-oct). Los rótulos van en absoluto, así que
+   * el eje no medía nada y lo de debajo —la barra de «Registradas · Programadas» de Inicio—
+   * se subía encima: «202:56 / 162:00» pisaba «16:00».
+   */
+  alturaDelEje: { minHeight: spacing.lg },
   filaApilada: { gap: spacing.xs },
   /* Apilado, el nombre y su hora van en una línea: el nombre crece y la hora se pega. */
   quienApilado: {

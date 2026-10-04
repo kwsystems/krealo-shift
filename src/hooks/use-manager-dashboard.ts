@@ -343,8 +343,20 @@ export function useManagerDashboard(params: {
         .map((falta) => falta.id),
     );
 
+    /*
+     * SIN JORNADAS NO SE ACUSA A NADIE (auditoría, 4-oct): mientras cargaban, Inicio decía
+     * «No se presentó» de quien sí había venido. Hasta tenerlas, nada de tarde ni de falta.
+     */
+    const jornadasListas = weekSessions.data !== undefined;
     for (const shift of enJuego) {
-      if (activeByEmployee.has(shift.employee_id)) continue;
+      if (!jornadasListas) break;
+      /*
+       * UN TURNO QUE YA TERMINÓ SE DECIDE SOLO POR SI SE CUBRIÓ (auditoría, 4-oct). Estar
+       * dentro ahora —en el turno de la tarde de un turno partido— borraba la falta del de
+       * la mañana. Estar dentro solo cuenta para los turnos que siguen en curso.
+       */
+      const terminado = shift.ends_at < nowISO;
+      if (!terminado && activeByEmployee.has(shift.employee_id)) continue;
       if (cubreElTurno(shift, sessions, ahoraMs)) continue;
 
       if (shift.starts_at > nowISO) {

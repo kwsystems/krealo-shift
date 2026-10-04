@@ -15,6 +15,7 @@ import {
 import { buildTimesheetCsv, timesheetFileName, type CsvLabels } from './csv';
 import { dentroPrimero, enCursoPorSesionDe, totalEnCurso } from './en-curso';
 import { conLasAbiertas, useJornadasAbiertas } from './jornadas-abiertas';
+import { puntualidadDe, puntualidadPorJornada } from './puntualidad';
 import {
   useAdjustments,
   useDailySummaries,
@@ -265,9 +266,11 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
         .map((turno) => claveDelDia(turno.employee_id, dateKeyOf(turno.starts_at, scope.timezone))),
     );
     const map = new Map<string, TimesheetAlert[]>();
+    // «Llegó tarde» y «Salió antes» por turno, no por jornada: ver `puntualidad.ts`.
+    const marcas = puntualidadPorJornada(allSessions);
     for (const session of allSessions) {
       const alerts = conTurnoSinPublicar(
-        alertsForSession(session, nowISO),
+        alertsForSession(session, nowISO, puntualidadDe(marcas, session)),
         borradores.has(
           claveDelDia(session.employee_id, dateKeyOf(session.starts_at, scope.timezone)),
         ),

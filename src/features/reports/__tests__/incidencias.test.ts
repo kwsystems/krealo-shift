@@ -231,3 +231,43 @@ describe('incidencias del periodo', () => {
     expect(resumirIncidencias(lista).porPersona.map((p) => p.employeeId)).toEqual(['b', 'a']);
   });
 });
+
+describe('tardanza y salida antes por turno (auditoría, 4-oct)', () => {
+  it('salir a almorzar marcando en el reloj no es «llegó tarde» ni «salió antes»', () => {
+    const t = turno('a', '2026-09-29');
+    // 10:00–13:00 y 14:00–18:00: el servidor marca las dos mitades por separado.
+    const manana = sesion(t, {
+      id: 's-manana',
+      ends_at: '2026-09-29T18:00:00.000Z',
+      flags: ['early_departure'],
+    });
+    const tarde = sesion(t, {
+      id: 's-tarde',
+      starts_at: '2026-09-29T19:00:00.000Z',
+      flags: ['late_arrival'],
+    });
+    const lista = calcular({ sesiones: [manana, tarde], turnos: [t] });
+    expect(lista.filter((i) => i.tipo === 'tarde' || i.tipo === 'salioAntes')).toEqual([]);
+  });
+
+  it('la tardanza se mira en la primera mitad y la salida antes en la última', () => {
+    const t = turno('a', '2026-09-29');
+    const manana = sesion(t, {
+      id: 's-manana',
+      starts_at: '2026-09-29T15:20:00.000Z',
+      ends_at: '2026-09-29T18:00:00.000Z',
+      flags: ['late_arrival', 'early_departure'],
+    });
+    const tarde = sesion(t, {
+      id: 's-tarde',
+      starts_at: '2026-09-29T19:00:00.000Z',
+      ends_at: '2026-09-29T22:30:00.000Z',
+      flags: ['late_arrival', 'early_departure'],
+    });
+    const lista = calcular({ sesiones: [manana, tarde], turnos: [t] });
+    expect(lista.map((i) => `${i.tipo}:${i.id}`).sort()).toEqual([
+      'salioAntes:antes:s-tarde',
+      'tarde:tarde:s-manana',
+    ]);
+  });
+});

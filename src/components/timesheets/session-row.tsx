@@ -305,7 +305,8 @@ export function SessionRow({
                 <StatusBadge
                   key={alert}
                   label={t(alertLabelKey(alert))}
-                  tone={alert === 'lateArrival' || alert === 'earlyDeparture' ? 'onBreak' : 'late'}
+                  // Rojo como en Inicio y el celular: el ámbar de `onBreak` es el de la pausa.
+                  tone="late"
                   icon={ALERT_ICONS[alert]}
                   compact
                 />

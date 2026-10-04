@@ -264,13 +264,27 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     (d) => d.jornadas.length > 0 || d.estado === 'sinMarca' || d.faltas.length > 0,
   );
 
-  const cargandoSemana = turnosSemanas.isPending || jornadasSemanas.isPending;
+  /*
+   * LO QUE SE DIJO DE SUS FALTAS Y DESDE CUÁNDO HAY RELOJ TAMBIÉN CUENTAN (auditoría, 4-oct):
+   * sin ellos, una falta justificada salía como «Falta» mientras cargaban, y para siempre si
+   * la consulta fallaba, sin decir que había fallado.
+   */
+  const cargandoSemana =
+    turnosSemanas.isPending ||
+    jornadasSemanas.isPending ||
+    misJustificaciones.isPending ||
+    (sedesConTurno.length > 0 && relojDesdeQuery.isPending);
   /** Ni un turno publicado, ni uno cambiando, ni una marca: esa semana no se ha publicado. */
   const semanaSinPublicar = diasSemana.every(
     (d) => d.turnos.length === 0 && d.porConfirmar.length === 0 && d.jornadas.length === 0,
   );
   const fallo =
-    turnosSemanas.error ?? jornadasSemanas.error ?? turnosMes.error ?? jornadasMes.error;
+    turnosSemanas.error ??
+    jornadasSemanas.error ??
+    turnosMes.error ??
+    jornadasMes.error ??
+    misJustificaciones.error ??
+    relojDesdeQuery.error;
 
   return (
     <AppScreen tone="canvas" scroll testID="mi-horario">
@@ -295,6 +309,8 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                 void jornadasSemanas.refetch();
                 void turnosMes.refetch();
                 void jornadasMes.refetch();
+                void misJustificaciones.refetch();
+                void relojDesdeQuery.refetch();
               }}
             />
           ) : null}

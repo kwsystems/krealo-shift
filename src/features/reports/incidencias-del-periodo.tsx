@@ -182,9 +182,12 @@ export function IncidenciasDelPeriodo({
                   t('reports.incidents.owed'),
                   t('reports.incidents.credited'),
                 ].map((rotulo) => (
-                  <AppText key={rotulo} variant="label" tone="subtle" style={estilos.columnaCifra}>
-                    {rotulo}
-                  </AppText>
+                  /* La misma caja que las celdas de debajo: así los rótulos caen encima. */
+                  <View key={rotulo} style={[estilos.columnaCifra, estilos.derecha]}>
+                    <AppText variant="label" tone="subtle" style={estilos.alDerecha}>
+                      {rotulo}
+                    </AppText>
+                  </View>
                 ))}
               </Row>
               {porPersona.map((fila) => (
@@ -264,12 +267,22 @@ export function IncidenciasDelPeriodo({
 function useTextosDeResumen() {
   const { t } = useTranslation();
   return {
+    /*
+     * CON LAS MISMAS PALABRAS QUE EL DÍA POR DÍA (auditoría, 4-oct): la fila decía «1 sin
+     * justificar» de una falta que debajo salía «Sin revisar». Son tres estados y se dicen
+     * los tres, con los textos de `absence` que usan Horas, Horario y Equipo.
+     */
     faltas: (fila: ResumenDeIncidencias): string | null =>
       fila.faltas === 0
         ? null
         : [
-            fila.faltasEnContra > 0
-              ? t('reports.incidents.against', { count: fila.faltasEnContra })
+            fila.faltasSinRevisar > 0
+              ? t('absence.pendingCount', { count: fila.faltasSinRevisar })
+              : null,
+            fila.faltasEnContra - fila.faltasSinRevisar > 0
+              ? t('reports.incidents.against', {
+                  count: fila.faltasEnContra - fila.faltasSinRevisar,
+                })
               : null,
             fila.faltasJustificadas > 0
               ? t('absence.justifiedCount', { count: fila.faltasJustificadas })
@@ -308,8 +321,16 @@ function FilaDePersona({
   const estilos = useEstilos();
   const respuesta = useRespuestaAlPuntero();
   const textos = useTextosDeResumen();
-  const vecesYTiempo = (veces: number, minutos: number) =>
-    veces === 0 ? '—' : minutos > 0 ? `${veces} · ${duracion(t, minutos)}` : String(veces);
+  /*
+   * «6 VECES», Y EL TIEMPO DEBAJO (auditoría, 4-oct): «6 · 54 min» no se entendía —¿seis
+   * qué?—. La cifra dice cuántas veces y el detalle cuánto tiempo en total.
+   */
+  const veces = (cuantas: number) =>
+    cuantas === 0 ? '—' : t('reports.incidents.times', { count: cuantas });
+  const tiempo = (cuantas: number, minutos: number) =>
+    cuantas === 0 || minutos === 0
+      ? null
+      : t('reports.incidents.inTotal', { time: duracion(t, minutos) });
 
   const celdas: {
     rotulo: string;
@@ -325,14 +346,14 @@ function FilaDePersona({
     },
     {
       rotulo: t('reports.incidents.late'),
-      valor: vecesYTiempo(fila.tardanzas, fila.minutosTarde),
-      detalle: null,
+      valor: veces(fila.tardanzas),
+      detalle: tiempo(fila.tardanzas, fila.minutosTarde),
       tono: fila.tardanzas === 0 ? 'muted' : undefined,
     },
     {
       rotulo: t('reports.incidents.early'),
-      valor: vecesYTiempo(fila.salidasAntes, fila.minutosAntes),
-      detalle: null,
+      valor: veces(fila.salidasAntes),
+      detalle: tiempo(fila.salidasAntes, fila.minutosAntes),
       tono: fila.salidasAntes === 0 ? 'muted' : undefined,
     },
     {
@@ -492,7 +513,8 @@ const useEstilos = estilosDelTema((colors) => ({
     borderBottomColor: colors.reglaFuerte,
   },
   columnaPersona: { flex: 2, minWidth: 0 },
-  columnaCifra: { flex: 1, minWidth: 0, textAlign: 'right' },
+  columnaCifra: { flex: 1, minWidth: 0 },
+  alDerecha: { textAlign: 'right' },
   fila: {
     minHeight: sizes.touchTargetPreferred,
     paddingHorizontal: spacing.sm,

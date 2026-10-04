@@ -3,6 +3,7 @@ import type { BreakReason } from '@/domain/break-reason';
 import { BREAK_REASONS } from '@/domain/break-reason';
 import { feriadoDe } from '@/domain/feriados-peru';
 import { claveDelDia } from '@/features/timesheets/horas-extra';
+import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 import { splitRegularAndOvertime } from '@/utils/time';
 
 /**
@@ -120,13 +121,21 @@ export function punctuality(sessions: WorkSession[]): Punctuality {
   let measured = 0;
   let late = 0;
   let unscheduled = 0;
+  /*
+   * POR TURNO, NO POR JORNADA (auditoría, 4-oct): la vuelta del almuerzo marcada en el reloj
+   * es otra jornada del mismo turno, y contaba como una llegada «5 h tarde». Solo se mide la
+   * primera jornada de cada turno. Ver `puntualidad.ts`.
+   */
+  const marcas = puntualidadPorJornada(sessions);
 
   for (const session of sessions) {
     if (session.flags.includes('unscheduled')) {
       unscheduled += 1;
       continue;
     }
-    const tarde = session.flags.includes('late_arrival');
+    const suya = puntualidadDe(marcas, session);
+    if (!suya.primera) continue;
+    const tarde = suya.tarde;
     measured += 1;
     if (tarde) late += 1;
 

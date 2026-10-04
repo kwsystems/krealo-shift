@@ -274,6 +274,16 @@ function soloHoras(texto) {
     if (lineas.length < 2) {
       problemas.push('el CSV compartido no tiene ni una fila de datos');
     }
+    /*
+     * LO QUE SE ANUNCIA ES LO QUE SE MANDA (auditoría, 4-oct): la hoja contaba solo a quien
+     * tuvo horas y el CSV llevaba también a quien solo faltó.
+     */
+    const anunciadas = /(\d+)\s+persona/i.exec(queSeComparte)?.[1];
+    if (anunciadas !== undefined && Number(anunciadas) !== lineas.length - 1) {
+      problemas.push(
+        `la hoja de compartir anuncia ${anunciadas} personas y el CSV lleva ${lineas.length - 1} filas`,
+      );
+    }
     // Tolerancia de un minuto por fila: cada fila redondea a dos decimales.
     if (desvio > (lineas.length - 1) * 0.017 + 0.01) {
       problemas.push(

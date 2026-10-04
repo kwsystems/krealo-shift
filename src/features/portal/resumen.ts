@@ -5,6 +5,7 @@ import { sesionDelTurno } from '@/features/reports/bono';
 import type { WorkSession } from '@/features/timesheets/api';
 import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { minutosEnCurso } from '@/features/timesheets/en-curso';
+import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 import { estadoDeFalta, faltasDeLosTurnos } from '@/features/timesheets/faltas';
 import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 
@@ -140,6 +141,8 @@ export function diasDelVendedor(params: {
   });
   const ahora = Date.parse(nowISO);
   const hoy = dateKeyOf(nowISO, timezone);
+  // Tardanza por turno, no por jornada: ver `puntualidad.ts`.
+  const marcas = puntualidadPorJornada(jornadas);
 
   return dias.map((dia) => {
     const suyos = turnos
@@ -168,14 +171,20 @@ export function diasDelVendedor(params: {
       minutosAntes = antes > 0 ? antes : null;
     }
 
+    const faltasDelDia = faltas.filter((falta) => falta.dia === dia);
     const estado = ((): EstadoDelDia => {
       if (delDia.some((j) => j.ends_at === null && !jornadaOlvidada(j, nowISO))) return 'enCurso';
       if (delDia.some((j) => jornadaOlvidada(j, nowISO))) return 'sinSalida';
       if (primeraJornada !== undefined) {
-        return primeraJornada.flags.includes('late_arrival') ? 'tarde' : 'aTiempo';
+        /*
+         * LA TARDANZA DE CUALQUIERA DE SUS TURNOS, NO SOLO DEL PRIMERO (auditoría, 4-oct). Con
+         * un turno partido el celular miraba solo el de la mañana: si llegaba tarde al de la
+         * tarde, el día seguía diciendo «A tiempo». La falta de otro turno del día no cambia
+         * esto: se enseña aparte, en `faltas`.
+         */
+        return delDia.some((j) => puntualidadDe(marcas, j).tarde) ? 'tarde' : 'aTiempo';
       }
       if (primerTurno === undefined) return porConfirmar.length > 0 ? 'porConfirmar' : 'libre';
-      const faltasDelDia = faltas.filter((falta) => falta.dia === dia);
       if (faltasDelDia.length > 0) {
         return faltasDelDia.every((falta) => estadoDeFalta(falta) === 'justificada')
           ? 'faltaJustificada'

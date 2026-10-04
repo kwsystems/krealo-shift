@@ -60,15 +60,19 @@ export type ResultadoDelBono = {
   /** Días de los turnos a los que llegó tarde. */
   tardanzas: DateKey[];
   /** Por qué no aplica, si no aplica. */
-  motivoNoAplica: 'ingresoEnElMes' | null;
+  motivoNoAplica: 'ingresoEnElMes' | 'bajaEnElMes' | 'sinTurnos' | null;
   /** Fecha de alta, si por ella no aplica. */
   ingreso: string | null;
+  /** Último día, si se dio de baja dentro del mes y por eso no aplica. */
+  baja: string | null;
 };
 
 export type EmpleadoDelBono = {
   id: string;
   status: string;
   hire_date: string | null;
+  /** Su último día, si se dio de baja: ver `functions/src/baja-de-empleado.ts`. */
+  end_date?: string | null;
 };
 
 /** Margen para asociar una jornada sin turno a un turno: quien entra un rato antes. */
@@ -78,7 +82,13 @@ export function sesionDelTurno(
   turno: ShiftRow,
   sesiones: readonly WorkSession[],
 ): WorkSession | null {
-  const porTurno = sesiones.find((s) => s.shift_id === turno.id);
+  /*
+   * LA PRIMERA DEL TURNO (auditoría, 4-oct): con la salida a almorzar marcada en el reloj un
+   * turno tiene dos jornadas, y la tardanza es la de la llegada, no la de la vuelta. La
+   * regla de `puntualidad.ts`, explícita aquí aunque las jornadas lleguen en orden.
+   */
+  const enOrden = [...sesiones].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+  const porTurno = enOrden.find((s) => s.shift_id === turno.id);
   if (porTurno !== undefined) return porTurno;
   /*
    * SIN `shift_id`, POR HORA: el reloj no siempre sabe a qué turno pertenece una entrada
@@ -88,7 +98,7 @@ export function sesionDelTurno(
   const inicio = Date.parse(turno.starts_at) - MARGEN_ANTES_MS;
   const fin = Date.parse(turno.ends_at);
   return (
-    sesiones.find((s) => {
+    enOrden.find((s) => {
       if (s.employee_id !== turno.employee_id || s.shift_id !== null) return false;
       const entrada = Date.parse(s.starts_at);
       return entrada >= inicio && entrada < fin;
@@ -119,6 +129,8 @@ export function bonoDeAsistencia(params: {
   const { turnos, sesiones, empleados, desde, finISO, nowISO, timezone, relojDesde } = params;
   const ahora = Date.parse(nowISO);
   const mesTerminado = ahora >= Date.parse(finISO);
+  /** El último día del mes en la sede: una baja antes de él deja el mes incompleto. */
+  const ultimoDia = dateKeyOf(new Date(Date.parse(finISO) - 1).toISOString(), timezone);
 
   const publicados = turnos.filter((t) => t.status === 'published');
   const faltas = new Map(
@@ -156,6 +168,7 @@ export function bonoDeAsistencia(params: {
       turnosContados: 0,
       cumplidos: 0,
       ingreso: null as string | null,
+      baja: null as string | null,
       motivoNoAplica: null as ResultadoDelBono['motivoNoAplica'],
     };
 
@@ -165,6 +178,21 @@ export function bonoDeAsistencia(params: {
         estado: 'noAplica',
         motivoNoAplica: 'ingresoEnElMes',
         ingreso: empleado.hire_date,
+      });
+      continue;
+    }
+
+    /*
+     * EL MES COMPLETO TAMBIÉN AL FINAL (auditoría, 4-oct). Se exigía para el alta y no para
+     * la baja: quien se fue el día 10 sin faltar «ganaba» un bono de un mes que no trabajó.
+     */
+    const finDeLaBaja = empleado.end_date ?? null;
+    if (finDeLaBaja !== null && finDeLaBaja < ultimoDia) {
+      resultados.push({
+        ...base,
+        estado: 'noAplica',
+        motivoNoAplica: 'bajaEnElMes',
+        baja: finDeLaBaja,
       });
       continue;
     }
@@ -193,6 +221,15 @@ export function bonoDeAsistencia(params: {
     }
 
     const limpio = base.faltas.length === 0 && base.tardanzas.length === 0;
+    /*
+     * SIN NINGÚN TURNO QUE CONTAR NO SE GANA (auditoría, 4-oct): una baja médica todo el mes,
+     * o un mes entero de antes del reloj, daban «Gana» porque no había nada en contra. No
+     * tener nada en contra no es haber cumplido.
+     */
+    if (limpio && mesTerminado && base.turnosContados === 0) {
+      resultados.push({ ...base, estado: 'noAplica', motivoNoAplica: 'sinTurnos' });
+      continue;
+    }
     resultados.push({
       ...base,
       estado: !limpio ? 'pierde' : mesTerminado ? 'gana' : 'enCamino',

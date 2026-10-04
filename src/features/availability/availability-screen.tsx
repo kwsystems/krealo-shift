@@ -149,6 +149,12 @@ export function AvailabilityScreen() {
               />
             </Row>
           ) : null}
+          {/* Si no se pudo, se dice (auditoría, 4-oct): antes el botón paraba y nada más. */}
+          {mutaciones.marcarVistas.isError ? (
+            <AppText variant="help" tone="danger" testID="disponibilidad-marcar-error">
+              {t('errors.generic')}
+            </AppText>
+          ) : null}
 
           <Resumen
             noPueden={filas.filter((fila) => fila.type === 'unavailable').length}

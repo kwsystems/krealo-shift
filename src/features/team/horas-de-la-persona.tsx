@@ -18,6 +18,7 @@ import {
 } from '@/features/schedules/week';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
 import { alertsForSession } from '@/features/timesheets/alerts';
+import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
 import { estadoDeFalta } from '@/features/timesheets/faltas';
 import {
@@ -156,9 +157,11 @@ export function HorasDeLaPersona({
    * listaba esas jornadas bajo el mismo nombre.
    */
   const porRevisar = new Set<DateKey>();
-  for (const jornada of jornadas.data ?? []) {
-    if (jornada.employee_id !== employeeId) continue;
-    if (alertsForSession(jornada, nowISO).length > 0) {
+  const suyas = (jornadas.data ?? []).filter((jornada) => jornada.employee_id === employeeId);
+  // Tardanza y salida antes por turno, como en Horas: ver `puntualidad.ts`.
+  const marcas = puntualidadPorJornada(suyas);
+  for (const jornada of suyas) {
+    if (alertsForSession(jornada, nowISO, puntualidadDe(marcas, jornada)).length > 0) {
       porRevisar.add(dateKeyOf(jornada.starts_at, timezone));
     }
   }

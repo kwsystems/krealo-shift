@@ -154,7 +154,8 @@ export function EmployeeDetailSheet({
     >
       <StatusBadge
         label={statusLabel}
-        tone={member.status === 'active' ? 'working' : 'offShift'}
+        // `info` y no `working`: el verde es «Trabajando ahora», no «sigue en la empresa».
+        tone={member.status === 'active' ? 'info' : 'offShift'}
         icon={member.status === 'active' ? 'checkmark-circle' : 'pause-circle-outline'}
       />
 

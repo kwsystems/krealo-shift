@@ -3,6 +3,7 @@ import { dateKeyOf, type DateKey } from '@/features/schedules/week';
 import type { WorkSession } from '@/features/timesheets/api';
 import { estadoDeFalta, type EstadoDeFalta, type Falta } from '@/features/timesheets/faltas';
 import type { HoraDebida } from '@/features/timesheets/horas-debidas';
+import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 
 /**
  * TODO LO QUE PASÓ EN EL PERIODO, Y CÓMO QUEDÓ (4-oct).
@@ -136,6 +137,13 @@ export function incidenciasDelPeriodo(params: {
     ]);
   }
   const lista: Incidencia[] = [];
+  /*
+   * POR TURNO (auditoría, 4-oct): quien marca salida para almorzar y vuelve tiene dos
+   * jornadas del mismo turno, y aquí salían «Llegó 5 h tarde» y «Salió 5 h antes». La
+   * tardanza es la de la primera jornada del turno y la salida antes la de la última: la
+   * regla de `puntualidad.ts`, la misma del bono, Inicio y el celular.
+   */
+  const marcas = puntualidadPorJornada(params.sesiones);
 
   for (const falta of params.faltas) {
     if (!dias.has(falta.dia)) continue;
@@ -168,7 +176,8 @@ export function incidenciasDelPeriodo(params: {
     }
 
     const turno = turnoDeLaSesion(sesion, turnoPorId, turnosPorPersona);
-    if (sesion.flags.includes('late_arrival')) {
+    const suya = puntualidadDe(marcas, sesion);
+    if (suya.tarde) {
       const minutos = turno === undefined ? null : minutosEntre(turno.starts_at, sesion.starts_at);
       lista.push({
         tipo: 'tarde',
@@ -180,7 +189,7 @@ export function incidenciasDelPeriodo(params: {
         inicioDelTurno: turno?.starts_at ?? null,
       });
     }
-    if (sesion.flags.includes('early_departure') && sesion.ends_at !== null) {
+    if (suya.salioAntes && sesion.ends_at !== null) {
       const minutos = turno === undefined ? null : minutosEntre(sesion.ends_at, turno.ends_at);
       lista.push({
         tipo: 'salioAntes',
@@ -222,6 +231,8 @@ export type ResumenDeIncidencias = {
   faltas: number;
   /** Sin revisar o sin justificar: las que cuentan en contra. */
   faltasEnContra: number;
+  /** De esas, las que nadie ha revisado todavía: el día por día las llama así. */
+  faltasSinRevisar: number;
   faltasJustificadas: number;
   tardanzas: number;
   minutosTarde: number;
@@ -238,6 +249,7 @@ const vacio = (employeeId: string): ResumenDeIncidencias => ({
   employeeId,
   faltas: 0,
   faltasEnContra: 0,
+  faltasSinRevisar: 0,
   faltasJustificadas: 0,
   tardanzas: 0,
   minutosTarde: 0,
@@ -256,6 +268,7 @@ function sumar(resumen: ResumenDeIncidencias, incidencia: Incidencia): void {
       resumen.faltas += 1;
       if (incidencia.estado === 'justificada') resumen.faltasJustificadas += 1;
       else resumen.faltasEnContra += 1;
+      if (incidencia.estado === 'sinRevisar') resumen.faltasSinRevisar += 1;
       return;
     case 'tarde':
       resumen.tardanzas += 1;

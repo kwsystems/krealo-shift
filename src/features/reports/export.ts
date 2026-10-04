@@ -140,7 +140,9 @@ export function buildReportSummary(params: {
   lineas.push(
     params.punctuality.onTimePercent === null
       ? `• ${params.labels.punctualityUnknown}`
-      : `• ${params.labels.punctuality}: ${params.punctuality.onTimePercent}% (${params.punctuality.late}/${params.punctuality.measured})`,
+      : // Los que llegaron a tiempo sobre los medidos: antes ponía las TARDANZAS, y «55 %
+        // (13/29)» decía 13 a tiempo cuando 13 eran las que llegaron tarde (auditoría, 4-oct).
+        `• ${params.labels.punctuality}: ${params.punctuality.onTimePercent}% (${params.punctuality.measured - params.punctuality.late}/${params.punctuality.measured})`,
   );
   lineas.push(
     params.absencesDetail === undefined
@@ -164,8 +166,14 @@ export function buildReportSummary(params: {
 }
 
 /** `krealo-shift-reporte-2026-09-14_2026-09-20.csv` */
-export function reportFileName(params: { from: string; to: string }): string {
-  return `krealo-shift-reporte-${params.from}_${params.to}.csv`;
+export function reportFileName(params: {
+  from: string;
+  to: string;
+  /** Con días sueltos, cuántos: el nombre no puede parecer el rango entero. */
+  dias?: number | null;
+}): string {
+  const sueltos = params.dias === undefined || params.dias === null ? '' : `${params.dias}-dias-`;
+  return `krealo-shift-reporte-${sueltos}${params.from}_${params.to}.csv`;
 }
 
 /** La fila de exportación que corresponde a cada persona del ranking. */

@@ -89,6 +89,12 @@ export function BonoCard({
 
   const detalle = (r: ResultadoDelBono): string => {
     if (r.estado === 'noAplica') {
+      if (r.motivoNoAplica === 'bajaEnElMes') {
+        return t('reports.bonusLeftMidMonth', {
+          date: formatDateKeyShort(r.baja ?? '', language),
+        });
+      }
+      if (r.motivoNoAplica === 'sinTurnos') return t('reports.bonusNoShiftsCounted');
       return t('reports.bonusJoinedMidMonth', {
         date: formatDateKeyShort(r.ingreso ?? '', language),
       });

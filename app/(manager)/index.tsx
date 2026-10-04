@@ -21,7 +21,12 @@ import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { LoImportanteDeHoy } from '@/components/dashboard/lo-importante';
 import { prioridadDelDia } from '@/features/dashboard/prioridad';
-import { FilaDeFranja, FranjaDeUnDia, ListaDeFranjas } from '@/components/franja/franja-del-dia';
+import {
+  FilaDeFranja,
+  FranjaDeUnDia,
+  LeyendaDeFranja,
+  ListaDeFranjas,
+} from '@/components/franja/franja-del-dia';
 import { marcasDeHora, ventanaDelDia } from '@/domain/franja-del-dia';
 import {
   useManagerDashboard,
@@ -313,6 +318,7 @@ export default function ManagerHomeScreen() {
                       ))}
                     </ListaDeFranjas>
                   )}
+                  {franjasDeHoy.length > 0 ? <LeyendaDeFranja testID="band-legend" /> : null}
 
                   <LimitBar
                     label={`${t('admin.workedHours')} · ${t('admin.scheduledHours')}`}

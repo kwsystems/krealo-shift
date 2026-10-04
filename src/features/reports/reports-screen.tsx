@@ -191,12 +191,13 @@ export function ReportsScreen() {
     staleTime: ADMIN_LIST_STALE_MS,
   });
   const empleados = useEmployees(organizationId);
-  const relojDesde = useInicioDelReloj({
+  const inicioDelReloj = useInicioDelReloj({
     organizationId,
     locationId: scope.locationId,
     timezone: scope.timezone,
     enabled: true,
-  }).data;
+  });
+  const relojDesde = inicioDelReloj.data;
 
   const nombre = (employeeId: string) => names.get(employeeId) ?? t('reports.unknownPerson');
   const etiquetaMotivo = breakReasonLabels(t);
@@ -268,6 +269,16 @@ export function ReportsScreen() {
           timezone: scope.timezone,
           resoluciones: justificaciones.data ?? [],
         }).filter((falta) => periodo.dias.includes(falta.dia));
+  /*
+   * «—» MIENTRAS NO SE SABE (auditoría, 4-oct). Con las jornadas, los turnos, el reloj o lo
+   * que se dijo de cada falta todavía cargando, la casilla decía «Faltas 0» —y en rojo las
+   * que ya estaban justificadas—: una cifra tranquilizadora o alarmante que no era ninguna.
+   */
+  const faltasCargando =
+    sessions.isPending ||
+    turnosDelMes.isPending ||
+    inicioDelReloj.isPending ||
+    justificaciones.isPending;
   const faltasFiltradas =
     personaElegida === null
       ? faltasDelPeriodo
@@ -312,9 +323,29 @@ export function ReportsScreen() {
   const dentro = incluyeHoy
     ? dentroPorEmpleado(sessions.data ?? [], enCursoPorSesionDe(workingNow.data), nowISO)
     : new Map<string, { minutos: number }>();
+  /*
+   * CON UNA PERSONA ELEGIDA, LAS CIFRAS DEL TOTAL SON SUYAS (auditoría, 4-oct). Se mezclaban:
+   * el total, «Personas» y «Extra» seguían siendo de toda la tienda mientras «A tiempo» ya
+   * era suyo, y las columnas comparaban sus horas con lo programado de todo el equipo. Lo
+   * que habla de la tienda entera —los rankings y la tabla por persona— no se filtra: con
+   * una sola barra no comparan nada.
+   */
+  const programadoFiltrado =
+    personaElegida === null
+      ? programado
+      : programadoDelPeriodo({
+          turnos: (turnosDelMes.data ?? []).filter((turno) => turno.employee_id === personaElegida),
+          dias: periodo.dias,
+          ahoraISO: nowISO,
+          timezone: scope.timezone,
+        });
+  const dentroFiltrado =
+    personaElegida === null
+      ? [...dentro.values()]
+      : [...dentro.entries()].filter(([id]) => id === personaElegida).map(([, valor]) => valor);
   const enCursoTotal = {
-    personas: dentro.size,
-    minutos: [...dentro.values()].reduce((suma, persona) => suma + persona.minutos, 0),
+    personas: dentroFiltrado.length,
+    minutos: dentroFiltrado.reduce((suma, persona) => suma + persona.minutos, 0),
   };
 
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
@@ -322,12 +353,18 @@ export function ReportsScreen() {
   const enFeriados = minutosEnFeriados(resumenFiltrado, scope.timezone);
   const conFeriado = periodo.dias.some((dia) => feriadoDe(dia, scope.timezone) !== null);
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
+  // La de todos, para la tabla por persona y el ranking de tardanzas: no se filtran.
+  const puntualidadDeTodos = useMemo(() => punctuality(filasSesiones), [filasSesiones]);
   const motivos = useMemo(() => minutesByReason(pausasFiltradas), [pausasFiltradas]);
   // Para el resumen que se comparte: los motivos del local entero, sin filtro.
   const motivosSinFiltrar = useMemo(() => minutesByReason(filasPausas), [filasPausas]);
 
-  const totalMinutos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
-  const extraMinutos = ranking.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
+  const rankingFiltrado =
+    personaElegida === null
+      ? ranking
+      : ranking.filter((fila) => fila.employeeId === personaElegida);
+  const totalMinutos = rankingFiltrado.reduce((suma, fila) => suma + fila.netMinutes, 0);
+  const extraMinutos = rankingFiltrado.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
   const conExtra = ranking.filter((fila) => fila.overtimeMinutes > 0);
 
   // Sin `useMemo`, como `dias` y `range`: ver el comentario de `range`, arriba.
@@ -351,7 +388,9 @@ export function ReportsScreen() {
    * Una fila por persona que trabajó, tenía turno, faltó o está dentro: las cuatro cosas,
    * porque quien no vino ningún día también tiene que salir —con cero—.
    */
-  const puntualPorPersona = new Map(puntualidad.byEmployee.map((fila) => [fila.employeeId, fila]));
+  const puntualPorPersona = new Map(
+    puntualidadDeTodos.byEmployee.map((fila) => [fila.employeeId, fila]),
+  );
   const rankingPorPersona = new Map(ranking.map((fila) => [fila.employeeId, fila]));
   const idsDeAsistencia = new Set([
     ...ranking.map((fila) => fila.employeeId),
@@ -414,7 +453,7 @@ export function ReportsScreen() {
   const maxExtra = Math.max(...conExtra.map((fila) => fila.netMinutes), 0);
 
   // ----------------------------------------------------------- puntualidad
-  const filasTardanza: RankingRow[] = puntualidad.byEmployee
+  const filasTardanza: RankingRow[] = puntualidadDeTodos.byEmployee
     .filter((fila) => fila.late > 0)
     .map((fila) => ({
       id: fila.employeeId,
@@ -525,7 +564,7 @@ export function ReportsScreen() {
         value: dia.netMinutes,
         valueText: minutesToHHmm(dia.netMinutes),
         isToday: dia.dateKey === hoyKey,
-        ...conProgramado(programado.porDia.get(dia.dateKey)?.total ?? 0),
+        ...conProgramado(programadoFiltrado.porDia.get(dia.dateKey)?.total ?? 0),
       }))
     : semanasDelMes(periodo.dias, scope.weekStartsOn).map((semana) => {
         const minutos = semana.dias.reduce((suma, d) => suma + (minutosPorDia.get(d) ?? 0), 0);
@@ -548,7 +587,10 @@ export function ReportsScreen() {
           isToday: semana.dias.includes(hoyKey),
           isFuture: semana.inicio > hoyKey,
           ...conProgramado(
-            semana.dias.reduce((suma, d) => suma + (programado.porDia.get(d)?.total ?? 0), 0),
+            semana.dias.reduce(
+              (suma, d) => suma + (programadoFiltrado.porDia.get(d)?.total ?? 0),
+              0,
+            ),
           ),
         };
       });
@@ -568,23 +610,40 @@ export function ReportsScreen() {
 
   const periodoLegible = etiquetaDelPeriodo(periodo, language, t);
 
+  /*
+   * LAS FILAS QUE SE VAN A MANDAR, ANTES DE MANDARLAS (auditoría, 4-oct): la hoja anunciaba
+   * «N personas» contando solo a quien tuvo horas, y el CSV llevaba también a quien solo
+   * faltó; y con solo faltas el botón ni se podía usar. Ahora la hoja dice cuántas filas
+   * lleva el archivo, y se puede compartir si hay alguna.
+   */
+  const filasDeExportar = buildExportRows({
+    ranking,
+    nameOf: nombre,
+    punctuality: puntualidadDeTodos,
+    breakMinutesByEmployee: pausasPorPersona,
+    absencesByEmployee: new Map(
+      [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [employeeId, suyas.length]),
+    ),
+    justifiedAbsencesByEmployee: new Map(
+      [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [
+        employeeId,
+        contarFaltas(suyas).justificadas,
+      ]),
+    ),
+  });
+  // Sin el filtro de persona: ver «Y se comparte SIN el filtro», arriba.
+  const totalDeTodos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
+  const extraDeTodos = ranking.reduce((suma, fila) => suma + fila.overtimeMinutes, 0);
+  /* Con días sueltos, el nombre del archivo lo dice: si no, parecía el rango entero. */
+  const nombreDelArchivo = reportFileName({
+    from,
+    to,
+    dias: periodo.seguidos ? null : periodo.dias.length,
+  });
+
   const compartir = useMutation({
     mutationFn: async (formato: 'csv' | 'resumen') => {
-      const filas = buildExportRows({
-        ranking: hoursByEmployee(filasResumen, aprobadas),
-        nameOf: nombre,
-        punctuality: punctuality(filasSesiones),
-        breakMinutesByEmployee: pausasPorPersona,
-        absencesByEmployee: new Map(
-          [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [employeeId, suyas.length]),
-        ),
-        justifiedAbsencesByEmployee: new Map(
-          [...faltasPorPersonaDelPeriodo].map(([employeeId, suyas]) => [
-            employeeId,
-            contarFaltas(suyas).justificadas,
-          ]),
-        ),
-      });
+      const filas = filasDeExportar;
 
       if (formato === 'csv') {
         const contenido = buildReportCsv({
@@ -604,13 +663,13 @@ export function ReportsScreen() {
           },
         });
         await compartirArchivo({
-          nombre: reportFileName({ from, to }),
+          nombre: nombreDelArchivo,
           // La marca de orden de bytes, igual que en el CSV de Horas: sin ella Excel
           // abre «Núñez» como «NuÃ±ez» y el reporte se devuelve.
           contenido: `${CSV_BOM}${contenido}`,
           tipoMime: 'text/csv',
           uti: 'public.comma-separated-values-text',
-          titulo: reportFileName({ from, to }),
+          titulo: nombreDelArchivo,
         });
         return filas.length;
       }
@@ -631,10 +690,10 @@ export function ReportsScreen() {
           topReason: t('reports.summaryTopReason'),
           footer: t('reports.summaryFooter'),
         },
-        totalMinutes: totalMinutos,
-        people: ranking.length,
-        overtimeMinutes: extraMinutos,
-        punctuality: punctuality(filasSesiones),
+        totalMinutes: totalDeTodos,
+        people: filas.length,
+        overtimeMinutes: extraDeTodos,
+        punctuality: puntualidadDeTodos,
         absences: faltasDelPeriodo.length,
         absencesDetail: detalleDeFaltas(t, faltasDelPeriodo),
         top:
@@ -651,7 +710,9 @@ export function ReportsScreen() {
       });
 
       await compartirArchivo({
-        nombre: t('reports.summaryFileName', { from, to }),
+        nombre: periodo.seguidos
+          ? t('reports.summaryFileName', { from, to })
+          : t('reports.summaryFileNameDays', { from, to, count: periodo.dias.length }),
         contenido: texto,
         tipoMime: 'text/plain',
         uti: 'public.plain-text',
@@ -782,7 +843,7 @@ export function ReportsScreen() {
             <SecondaryButton
               label={t('reports.share')}
               onPress={() => setCompartirAbierto(true)}
-              disabled={ranking.length === 0}
+              disabled={filasDeExportar.length === 0}
               fullWidth={false}
               testID="report-share-open"
             />
@@ -811,7 +872,7 @@ export function ReportsScreen() {
             visible={compartirAbierto}
             onClose={() => setCompartirAbierto(false)}
             periodo={periodoLegible}
-            personas={ranking.length}
+            personas={filasDeExportar.length}
             compartiendo={compartir.isPending ? (compartir.variables ?? null) : null}
             onCsv={() => compartir.mutate('csv')}
             onResumen={() => compartir.mutate('resumen')}
@@ -863,14 +924,14 @@ export function ReportsScreen() {
                 titulo={tituloDelResumen(tipo, incluyeHoy, t)}
                 trabajado={totalMinutos}
                 enCurso={enCursoTotal}
-                programado={programado}
+                programado={programadoFiltrado}
                 incluyeHoy={incluyeHoy}
               />
 
               <Row gap={spacing.sm} wrap align="stretch">
                 <StatTile
                   label={t('reports.people')}
-                  value={String(ranking.length)}
+                  value={String(rankingFiltrado.length)}
                   icon="people-outline"
                   testID="report-people"
                 />
@@ -922,9 +983,13 @@ export function ReportsScreen() {
                 />
                 <StatTile
                   label={t('reports.absences')}
-                  value={String(faltasFiltradas.length)}
-                  detalle={detalleDeFaltas(t, faltasFiltradas) ?? t('reports.absencesDetail')}
-                  tone={tonoDelTotalDeFaltas(faltasFiltradas)}
+                  value={faltasCargando ? '—' : String(faltasFiltradas.length)}
+                  detalle={
+                    faltasCargando
+                      ? t('reports.absencesDetail')
+                      : (detalleDeFaltas(t, faltasFiltradas) ?? t('reports.absencesDetail'))
+                  }
+                  tone={faltasCargando ? undefined : tonoDelTotalDeFaltas(faltasFiltradas)}
                   icon="person-remove-outline"
                   testID="report-absences"
                 />
@@ -935,12 +1000,32 @@ export function ReportsScreen() {
                 semana no tiene sentido —el bono es mensual— y no se enseña a medias.
               */}
               {tipo === 'mes' ? (
+                /*
+                  CON TODO CARGADO O NADA (auditoría, 4-oct): sin las jornadas, sin desde
+                  cuándo hay reloj o sin las justificaciones, el bono decía «Gana» de quien
+                  todavía no se sabía si había faltado.
+                */
                 <AsyncSection
-                  isPending={turnosDelMes.isPending || empleados.isPending}
-                  error={turnosDelMes.error ?? empleados.error}
+                  isPending={
+                    turnosDelMes.isPending ||
+                    empleados.isPending ||
+                    sessions.isPending ||
+                    inicioDelReloj.isPending ||
+                    justificaciones.isPending
+                  }
+                  error={
+                    turnosDelMes.error ??
+                    empleados.error ??
+                    sessions.error ??
+                    inicioDelReloj.error ??
+                    justificaciones.error
+                  }
                   onRetry={() => {
                     void turnosDelMes.refetch();
                     void empleados.refetch();
+                    void sessions.refetch();
+                    void inicioDelReloj.refetch();
+                    void justificaciones.refetch();
                   }}
                 >
                   <BonoCard

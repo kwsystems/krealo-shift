@@ -16,6 +16,7 @@ const base = {
   tardanzas: [],
   motivoNoAplica: null,
   ingreso: null,
+  baja: null,
 } satisfies Omit<ResultadoDelBono, 'employeeId' | 'estado'>;
 
 const resultados: ResultadoDelBono[] = [

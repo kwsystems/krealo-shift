@@ -345,6 +345,8 @@ export function ConfirmSheet({
   body,
   confirmLabel,
   destructive = false,
+  loading = false,
+  error = null,
   onConfirm,
   onCancel,
 }: {
@@ -353,6 +355,13 @@ export function ConfirmSheet({
   body?: string;
   confirmLabel: string;
   destructive?: boolean;
+  /** Mientras se hace: el botón trabaja y no se pulsa dos veces. */
+  loading?: boolean;
+  /**
+   * SI NO SE PUDO, SE DICE AQUÍ (auditoría, 4-oct). La hoja se cerraba o se quedaba quieta
+   * y nadie sabía si el reloj se revocó o la sede se cerró.
+   */
+  error?: string | null;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -367,10 +376,25 @@ export function ConfirmSheet({
             {body}
           </AppText>
         ) : null}
+        {error !== null ? (
+          <AppText variant="help" tone="danger" testID="confirm-sheet-error">
+            {error}
+          </AppText>
+        ) : null}
         {destructive ? (
-          <DangerButton label={confirmLabel} onPress={onConfirm} testID="confirm-sheet-confirm" />
+          <DangerButton
+            label={confirmLabel}
+            onPress={onConfirm}
+            loading={loading}
+            testID="confirm-sheet-confirm"
+          />
         ) : (
-          <PrimaryButton label={confirmLabel} onPress={onConfirm} testID="confirm-sheet-confirm" />
+          <PrimaryButton
+            label={confirmLabel}
+            onPress={onConfirm}
+            loading={loading}
+            testID="confirm-sheet-confirm"
+          />
         )}
         <GhostButton label={t('common.cancel')} onPress={onCancel} />
       </Stack>

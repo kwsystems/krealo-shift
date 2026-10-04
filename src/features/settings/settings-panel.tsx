@@ -908,6 +908,11 @@ function LocationCard({
               testID="location-reopen"
             />
           )}
+          {!aCerrar && mutations.toggleLocation.isError ? (
+            <AppText variant="help" tone="danger" testID="location-toggle-error">
+              {t('errors.generic')}
+            </AppText>
+          ) : null}
           <AppText variant="help" tone="subtle">
             {t('settings.locationNoDelete')}
           </AppText>
@@ -1005,17 +1010,29 @@ function LocationCard({
         body={t('settings.locationCloseConfirmBody')}
         confirmLabel={t('settings.locationClose')}
         destructive
+        loading={mutations.toggleLocation.isPending}
+        error={mutations.toggleLocation.isError ? t('errors.generic') : null}
         onConfirm={() => {
-          mutations.toggleLocation.mutate({ locationId: location.id, isActive: false });
-          setACerrar(false);
-          /*
-           * SE QUEDA EN PANTALLA LA QUE SE ACABA DE CERRAR. Al cerrarla, el resto del panel
-           * pasa a otra sede activa; sin esto la tarjeta saltaría con él, y quien acaba de
-           * cerrar una tienda por error no vería el botón de reabrirla donde estaba.
-           */
-          onElegirSede(location.id);
+          // La hoja se cierra cuando se cerró de verdad; si falla, lo dice ahí mismo.
+          mutations.toggleLocation.mutate(
+            { locationId: location.id, isActive: false },
+            {
+              onSuccess: () => {
+                setACerrar(false);
+                /*
+                 * SE QUEDA EN PANTALLA LA QUE SE ACABA DE CERRAR. Al cerrarla, el resto del
+                 * panel pasa a otra sede activa; sin esto la tarjeta saltaría con él, y quien
+                 * acaba de cerrar una tienda por error no vería el botón de reabrirla.
+                 */
+                onElegirSede(location.id);
+              },
+            },
+          );
         }}
-        onCancel={() => setACerrar(false)}
+        onCancel={() => {
+          mutations.toggleLocation.reset();
+          setACerrar(false);
+        }}
       />
     </FormCard>
   );
@@ -1195,7 +1212,7 @@ function KiosksCard() {
                   label={
                     device.status === 'active' ? t('team.statusActive') : t('kiosk.revokedTitle')
                   }
-                  tone={device.status === 'active' ? 'working' : 'offShift'}
+                  tone={device.status === 'active' ? 'info' : 'offShift'}
                   compact
                 />
               </Row>
@@ -1313,7 +1330,12 @@ function KiosksCard() {
             { onSuccess: () => setRevoking(null) },
           );
         }}
-        onCancel={() => setRevoking(null)}
+        loading={mutations.revokeKiosk.isPending}
+        error={mutations.revokeKiosk.isError ? t('errors.generic') : null}
+        onCancel={() => {
+          mutations.revokeKiosk.reset();
+          setRevoking(null);
+        }}
       />
 
       <ConfirmSheet

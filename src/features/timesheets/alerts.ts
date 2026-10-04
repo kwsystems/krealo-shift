@@ -1,4 +1,5 @@
 import type { WorkSession } from './api';
+import type { Puntualidad } from './puntualidad';
 import { minutesBetween } from '@/utils/time';
 
 /**
@@ -35,13 +36,27 @@ const FLAG_TO_ALERT: Record<string, TimesheetAlert> = {
   overlap: 'overlap',
 };
 
-export function alertsForSession(session: WorkSession, nowISO: string): TimesheetAlert[] {
+/**
+ * Con `puntualidad`, «Llegó tarde» y «Salió antes» siguen la regla del turno y no la marca
+ * de cada jornada: ver `puntualidad.ts`. Sin ella, las marcas tal cual —para quien solo
+ * tiene una jornada a mano—.
+ */
+export function alertsForSession(
+  session: WorkSession,
+  nowISO: string,
+  puntualidad?: Puntualidad,
+): TimesheetAlert[] {
   const alerts = new Set<TimesheetAlert>();
 
   for (const flag of session.flags) {
+    if (puntualidad !== undefined && (flag === 'late_arrival' || flag === 'early_departure')) {
+      continue;
+    }
     const mapped = FLAG_TO_ALERT[flag];
     if (mapped !== undefined) alerts.add(mapped);
   }
+  if (puntualidad?.tarde === true) alerts.add('lateArrival');
+  if (puntualidad?.salioAntes === true) alerts.add('earlyDeparture');
 
   if (session.status === 'needs_review') alerts.add('needsReview');
 
