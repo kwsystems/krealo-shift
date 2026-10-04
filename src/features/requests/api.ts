@@ -53,9 +53,10 @@ export const requestSchema = z.object({
   kind: z.enum(requestKindValues),
   proposed_value: proposedValueSchema,
   reason: z.string(),
-  status: z.enum(requestStatusValues),
-  reviewer_comment: z.string().nullable(),
-  reviewed_at: z.string().nullable(),
+  // Sin estado es pendiente: así se escribían las correcciones hechas desde Horas (4-oct).
+  status: z.enum(requestStatusValues).catch('pending'),
+  reviewer_comment: z.string().nullable().default(null),
+  reviewed_at: z.string().nullable().default(null),
   created_at: z.string(),
 });
 
@@ -70,21 +71,50 @@ export function tabForKind(kind: RequestKind): RequestTab {
   return 'forgot';
 }
 
+const COLUMNAS_DE_SOLICITUD =
+  'id, employee_id, location_id, work_session_id, target_date, kind, proposed_value, reason, status, reviewer_comment, reviewed_at, created_at';
+
+/**
+ * LAS SOLICITUDES DE LA SEDE: TODAS LAS PENDIENTES, y las 200 más recientes de las demás
+ * (4-oct). Antes eran solo las 200 más recientes de cualquier estado, y el contador del
+ * menú cuenta todas las pendientes: pasadas 200, una pendiente vieja seguía contando y ya
+ * no salía en ninguna lista.
+ *
+ * Y UNA FILA QUE NO SE ENTIENDE NO SE LLEVA LA BANDEJA: se aparta con un aviso en la
+ * consola y se enseñan las demás. Validar la lista entera de una vez hacía que una sola
+ * solicitud mal escrita dejara la Bandeja en «Algo no salió bien».
+ */
 export async function fetchRequests(params: {
   organizationId: string;
   locationId: string;
 }): Promise<TimeEditRequest[]> {
-  return selectRows(z.array(requestSchema), (db) =>
-    db
-      .from(TABLES.timeEditRequests)
-      .select(
-        'id, employee_id, location_id, work_session_id, target_date, kind, proposed_value, reason, status, reviewer_comment, reviewed_at, created_at',
-      )
-      .eq('organization_id', params.organizationId)
-      .eq('location_id', params.locationId)
-      .order('created_at', { ascending: false })
-      .limit(200),
-  );
+  const filaSuelta = z.array(z.record(z.string(), z.unknown()));
+  const [pendientes, recientes] = await Promise.all([
+    selectRows(filaSuelta, (db) =>
+      db
+        .from(TABLES.timeEditRequests)
+        .select(COLUMNAS_DE_SOLICITUD)
+        .eq('organization_id', params.organizationId)
+        .eq('location_id', params.locationId)
+        .eq('status', 'pending'),
+    ),
+    selectRows(filaSuelta, (db) =>
+      db
+        .from(TABLES.timeEditRequests)
+        .select(COLUMNAS_DE_SOLICITUD)
+        .eq('organization_id', params.organizationId)
+        .eq('location_id', params.locationId)
+        .order('created_at', { ascending: false })
+        .limit(200),
+    ),
+  ]);
+  const porId = new Map<string, TimeEditRequest>();
+  for (const fila of [...pendientes, ...recientes]) {
+    const leida = requestSchema.safeParse(fila);
+    if (leida.success) porId.set(leida.data.id, leida.data);
+    else console.warn('Bandeja: una solicitud no se pudo leer y se aparta', fila.id, leida.error);
+  }
+  return [...porId.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export async function countPendingRequests(params: {

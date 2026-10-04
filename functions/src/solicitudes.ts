@@ -264,7 +264,10 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
     new HttpsError('failed-precondition', 'Esa solicitud ya se resolvió.', {
       motivo: 'YA_RESUELTA',
     });
-  if (solicitud.status !== 'pending') throw yaResuelta();
+  // Sin estado es pendiente: así se escribían las correcciones hechas desde Horas (4-oct).
+  const pendiente = (estado: unknown) =>
+    estado === undefined || estado === null || estado === 'pending';
+  if (!pendiente(solicitud.status)) throw yaResuelta();
 
   const resolucion = {
     status: decision,
@@ -281,7 +284,7 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
   // ------------------------------------------------------------- rechazar
   if (decision === 'rejected') {
     await db.runTransaction(async (tx) => {
-      if ((await tx.get(requestRef)).data()?.status !== 'pending') throw yaResuelta();
+      if (!pendiente((await tx.get(requestRef)).data()?.status)) throw yaResuelta();
       tx.update(requestRef, resolucion);
     });
     await audit({
@@ -320,7 +323,7 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
       });
     }
     await db.runTransaction(async (tx) => {
-      if ((await tx.get(requestRef)).data()?.status !== 'pending') throw yaResuelta();
+      if (!pendiente((await tx.get(requestRef)).data()?.status)) throw yaResuelta();
       tx.update(requestRef, resolucion);
     });
     await audit({
@@ -391,7 +394,7 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
   const primeraSecuencia = await reservarSecuencias(nuevos.length);
 
   await db.runTransaction(async (tx) => {
-    if ((await tx.get(requestRef)).data()?.status !== 'pending') throw yaResuelta();
+    if (!pendiente((await tx.get(requestRef)).data()?.status)) throw yaResuelta();
 
     nuevos.forEach((nuevo, i) => {
       tx.create(

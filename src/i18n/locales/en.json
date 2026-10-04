@@ -667,7 +667,8 @@
     "punctualityNoDataShort": "Punctuality: no scheduled shifts to measure it against"
   },
   "requests": {
-    "title": "Requests",
+    "proposedTime": "Proposed time",
+    "title": "Inbox",
     "approveSheetTitle": "Approve and record",
     "approveSheetBody": "Approving records the punch under your name, with the request's reason, and it shows in Hours right away. Confirm the day and time.",
     "approveDay": "Day",
@@ -1332,6 +1333,10 @@
     "noLocationWarning": "No location: cannot clock in"
   },
   "timesheet": {
+    "sendToInbox": "Send to the Inbox",
+    "registerClockOut": "Record clock-out",
+    "registerClockIn": "Record clock-in",
+    "manualEntryTime": "Time",
     "futureTimeShort": "Not yet",
     "futureTime": "That time hasn’t happened yet. Check the day: after midnight, “today” is already the next day.",
     "closeOpenHint": "Setting the end records it as their clock-out: they stop showing as in on Home, Schedule and the clock.",
@@ -1380,8 +1385,8 @@
     "fromOffline": "Offline",
     "manualEntryKind": "Entry type",
     "manualEntryNoticeTitle": "Recorded as a request with a reason",
-    "manualEntryNoticeBody": "Original punches are never edited. Your entry goes to Requests with your reason and stays audited.",
-    "manualEntrySent": "Correction sent to Requests",
+    "manualEntryNoticeBody": "Original punches are never edited. Your correction goes to the Inbox with your reason and stays audited.",
+    "manualEntrySent": "Correction sent to the Inbox",
     "manualEntryRegistered": "Entry recorded. It stays in the history with its reason.",
     "manualEntryDirectNoticeTitle": "Recorded right away, with your reason",
     "manualEntryDirectNoticeBody": "No punch is changed: a new one is added. It stays in the history with your reason, and Reports counts it as a correction.",
@@ -1396,7 +1401,6 @@
     "openDetailHint": "Tap to see the detail and correct it",
     "rawEvents": "Recorded punches",
     "reopened": "Period reopened",
-    "sendManualEntry": "Send manual entry",
     "statusFilter": "Status",
     "stillOpen": "Still open",
     "absences": {

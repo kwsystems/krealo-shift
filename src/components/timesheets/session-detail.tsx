@@ -483,7 +483,15 @@ export function ManualEntrySheet({
       testID="manual-entry-sheet"
       footer={
         <PrimaryButton
-          label={t('timesheet.sendManualEntry')}
+          // El botón dice lo que pasa: una entrada o una salida se registran al momento; una
+          // corrección va a la Bandeja (4-oct). Decía siempre «Enviar fichaje manual».
+          label={
+            kind === 'forgot_clock_in'
+              ? t('timesheet.registerClockIn')
+              : kind === 'forgot_clock_out'
+                ? t('timesheet.registerClockOut')
+                : t('timesheet.sendToInbox')
+          }
           onPress={() => {
             setSubmitted(true);
             if (!canSubmit || employeeId === null) return;
@@ -552,7 +560,7 @@ export function ManualEntrySheet({
       />
 
       <FormField
-        label={t('kiosk.forgotProposedTime')}
+        label={t('timesheet.manualEntryTime')}
         value={time}
         onChangeText={(texto) => {
           setHoraTocada(true);

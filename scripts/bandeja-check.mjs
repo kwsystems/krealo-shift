@@ -79,10 +79,12 @@ try {
   /* ---------------------------------------------------------------- 1 */
   const caso1 = 'cada solicitud dice su hora y su día';
   const antes = await tarjetas(pagina).count();
-  const texto = sinGlifos(await pagina.locator('body').innerText());
+  // Solo la pantalla de Bandeja: las ya visitadas siguen montadas en la página (4-oct).
+  const texto = sinGlifos(await pagina.locator('[data-testid="manager-requests"]').innerText());
   if (antes < 2) fallar(caso1, `esperaba varias pendientes y hay ${antes}`);
   else if (texto.includes('--:--')) fallar(caso1, 'alguna enseña «--:--» en vez de la hora');
-  else if ((texto.match(/Hora que propones/g) ?? []).length < antes)
+  // «Hora propuesta» y no «Hora que propones»: esto lo lee quien gestiona (4-oct).
+  else if ((texto.match(/Hora propuesta/g) ?? []).length < antes)
     fallar(caso1, 'hay tarjetas sin la hora propuesta');
   else pasa(caso1, `${antes} pendientes`);
 

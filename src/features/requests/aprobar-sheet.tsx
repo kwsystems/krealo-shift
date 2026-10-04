@@ -260,7 +260,7 @@ export function AprobarSolicitudSheet({
         ) : null}
 
         {propuesta.hora !== null ? (
-          <KeyValueRow label={t('kiosk.forgotProposedTime')} value={propuesta.hora} />
+          <KeyValueRow label={t('requests.proposedTime')} value={propuesta.hora} />
         ) : null}
 
         <FormField

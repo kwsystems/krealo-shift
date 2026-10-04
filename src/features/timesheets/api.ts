@@ -434,6 +434,15 @@ export async function createManualEntryRequest(params: {
         channel: 'manager_app',
       },
       reason,
+      /*
+       * PENDIENTE Y SIN REVISAR, escrito (4-oct). Sin estos campos la Bandeja entera caía en
+       * «Algo no salió bien» —su esquema los exige— y ocultaba también las solicitudes buenas;
+       * el contador no la contaba y el servidor no dejaba resolverla.
+       */
+      status: 'pending',
+      reviewer_comment: null,
+      reviewed_at: null,
+      reviewed_by: null,
     }),
   );
 }

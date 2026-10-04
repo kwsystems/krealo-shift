@@ -28,7 +28,9 @@ import { Card, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import { useEmployeeNames } from '@/features/team/hooks';
 import { adminErrorKind } from '@/hooks/use-admin-query';
+import { formatDateKeyShort, formatWeekdayShort } from '@/features/schedules/week';
 import { useManagerScope } from '@/hooks/use-manager-scope';
+import { currentLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
 
 /**
@@ -88,6 +90,7 @@ const KIND_LABEL_KEYS: Record<TimeEditRequest['kind'], string> = {
 
 export function RequestsPanel() {
   const { t } = useTranslation();
+  const language = currentLanguage();
   const scope = useManagerScope();
 
   const [tab, setTab] = useState<RequestTab | null>(null);
@@ -305,10 +308,13 @@ export function RequestsPanel() {
                 </Row>
 
                 {propuesta.fecha !== null ? (
-                  <KeyValueRow label={t('schedule.date')} value={propuesta.fecha} />
+                  <KeyValueRow
+                    label={t('schedule.date')}
+                    value={`${formatWeekdayShort(propuesta.fecha, language)} ${formatDateKeyShort(propuesta.fecha, language)}`}
+                  />
                 ) : null}
                 {propuesta.hora !== null ? (
-                  <KeyValueRow label={t('kiosk.forgotProposedTime')} value={propuesta.hora} />
+                  <KeyValueRow label={t('requests.proposedTime')} value={propuesta.hora} />
                 ) : null}
                 <KeyValueRow label={t('timesheet.reasonLabel')} value={request.reason} />
                 {request.reviewer_comment !== null ? (

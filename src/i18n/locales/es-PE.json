@@ -667,7 +667,8 @@
     "punctualityNoDataShort": "Puntualidad: sin turnos programados para medirla"
   },
   "requests": {
-    "title": "Solicitudes",
+    "proposedTime": "Hora propuesta",
+    "title": "Bandeja",
     "approveSheetTitle": "Aprobar y registrar",
     "approveSheetBody": "Al aprobar, el fichaje queda registrado a tu nombre, con el motivo de la solicitud, y se ve en Horas al momento. Confirma el día y la hora.",
     "approveDay": "Día",
@@ -995,7 +996,7 @@
     "brandSwatch": "Usar el color {{color}}",
     "codeFailed": "No pudimos generar el código. Inténtalo otra vez.",
     "codeShownOnce": "Este código se muestra una sola vez y vence en {{minutes}} minutos.",
-    "configuration": "Configuración",
+    "configuration": "Ajustes",
     "copyDiagnostics": "Copiar diagnóstico",
     "defaultLocale": "Idioma predeterminado",
     "diagnostics": "Diagnósticos",
@@ -1332,6 +1333,10 @@
     "noLocationWarning": "Sin sede: no puede fichar"
   },
   "timesheet": {
+    "sendToInbox": "Enviar a la Bandeja",
+    "registerClockOut": "Registrar salida",
+    "registerClockIn": "Registrar entrada",
+    "manualEntryTime": "Hora",
     "futureTimeShort": "Todavía no llegó",
     "futureTime": "Esa hora todavía no llegó. Revisa el día: pasada la medianoche, «hoy» ya es el día siguiente.",
     "closeOpenHint": "Al poner la salida se registra como su fichaje de salida: deja de salir como dentro en Inicio, Horario y el reloj.",
@@ -1380,8 +1385,8 @@
     "fromOffline": "Sin conexión",
     "manualEntryKind": "Tipo de fichaje",
     "manualEntryNoticeTitle": "Queda como solicitud con motivo",
-    "manualEntryNoticeBody": "Los fichajes originales no se editan nunca. Tu registro entra en Solicitudes con tu motivo y queda auditado.",
-    "manualEntrySent": "Corrección enviada a Solicitudes",
+    "manualEntryNoticeBody": "Los fichajes originales no se editan nunca. Tu corrección entra en la Bandeja con tu motivo y queda auditada.",
+    "manualEntrySent": "Corrección enviada a la Bandeja",
     "manualEntryRegistered": "Fichaje registrado. Queda con el motivo en el historial.",
     "manualEntryDirectNoticeTitle": "Se registra al momento, con tu motivo",
     "manualEntryDirectNoticeBody": "No se cambia ningún fichaje: se agrega uno nuevo. Queda en el historial con tu motivo, y Reportes lo cuenta como corrección.",
@@ -1396,7 +1401,6 @@
     "openDetailHint": "Toca para ver el detalle y corregir",
     "rawEvents": "Fichajes registrados",
     "reopened": "Periodo reabierto",
-    "sendManualEntry": "Enviar fichaje manual",
     "statusFilter": "Estado",
     "stillOpen": "Sin salida",
     "absences": {
