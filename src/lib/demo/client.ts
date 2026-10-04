@@ -653,7 +653,8 @@ function crearRpc(almacen: Almacen) {
                 attendance_state: 'WORKING',
               },
             ]);
-            return sinError([{ event_id: idEvento, work_session_id: idSesion }]);
+            // La forma del servidor: ver `manualEventRowSchema`.
+            return sinError({ eventId: idEvento, workSessionId: idSesion });
           }
         }
         /*
@@ -694,10 +695,10 @@ function crearRpc(almacen: Almacen) {
               'employees_working_now',
               filas('employees_working_now').filter((fila) => fila.work_session_id !== abierta.id),
             );
-            return sinError([{ event_id: idEvento, work_session_id: abierta.id }]);
+            return sinError({ eventId: idEvento, workSessionId: abierta.id });
           }
         }
-        return sinError([{ event_id: idEvento, work_session_id: null }]);
+        return sinError({ eventId: idEvento, workSessionId: null });
       }
 
       /*

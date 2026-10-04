@@ -376,10 +376,21 @@ export async function fetchExportRows(params: {
   }
 }
 
+/**
+ * LO QUE DEVUELVE `managerAddTimeEvent`, TAL CUAL: un objeto en camelCase (4-oct).
+ *
+ * Aquí se esperaba `[{ event_id, work_session_id }]`, la forma de la base de antes, y el
+ * servidor manda `{ eventId, workSessionId }` desde el 22-sep. El fichaje SE GUARDABA y la
+ * app lo daba por fallido: «Agregar fichaje manual» no se cerraba ni refrescaba nada,
+ * «Marcar salida» de «Por resolver» parecía no hacer caso, y «Vino y no marcó» guardaba la
+ * entrada y nunca mandaba la salida. Lo vio Andree poniendo la entrada de dos vendedoras el
+ * día que la tienda abrió tarde. La demostración devolvía la forma vieja, así que ningún
+ * arnés lo veía; ahora devuelve esta.
+ */
 const manualEventRowSchema = z.object({
-  event_id: docId(),
+  eventId: docId(),
   // Un descanso no abre ni cierra sesion, asi que puede volver sin sesion asociada.
-  work_session_id: docId().nullable(),
+  workSessionId: docId().nullable(),
 });
 
 export const manualEntryKinds = ['forgot_clock_in', 'forgot_clock_out', 'correction'] as const;
@@ -470,13 +481,12 @@ export async function addManualTimeEvent(params: {
     });
     if (error !== null) throw toAdminError(error);
 
-    const parsed = z.array(manualEventRowSchema).safeParse(data);
-    const row = parsed.success ? parsed.data[0] : undefined;
-    if (row === undefined) {
+    const parsed = manualEventRowSchema.safeParse(data);
+    if (!parsed.success) {
       // El servidor respondió con otra forma: no se inventa un resultado (§20).
       throw toAdminError({ code: 'shape', message: 'UNEXPECTED_SHAPE' });
     }
-    return { eventId: row.event_id, workSessionId: row.work_session_id };
+    return parsed.data;
   } catch (error) {
     throw toAdminError(error);
   }

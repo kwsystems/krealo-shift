@@ -153,6 +153,11 @@ try {
     problemas.push(`el fichaje manual no deja elegir el día: «${dias.replace(/\s+/g, ' ')}»`);
   }
   console.log(`  días del fichaje     ${dias.replace(/\s+/g, ' ')}`);
+  // «Olvidé marcar entrada» se registra al momento: el aviso decía que iba a Solicitudes.
+  const aviso = await pagina.locator('[data-testid="manual-entry-notice"]').innerText();
+  if (/Solicitudes/.test(aviso)) {
+    problemas.push(`el fichaje directo dice que va a Solicitudes: «${aviso.replace(/\s+/g, ' ')}»`);
+  }
   await pagina.locator('[data-testid="manual-entry-sheet"]').screenshot({
     path: 'capturas/sincronia-manual.png',
   });

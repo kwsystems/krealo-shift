@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 
 import { fetchExportRows, PeriodoBloqueado, type WorkSession } from './api';
 import { useJornadasAlDia } from './jornadas-al-dia';
@@ -73,7 +74,7 @@ import {
   weekStartOfKey,
 } from '@/features/schedules/week';
 import { useEmployeeNames, useTeam } from '@/features/team/hooks';
-import { adminErrorKind } from '@/hooks/use-admin-query';
+import { AdminError, adminErrorKind } from '@/hooks/use-admin-query';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { useWorkingNow } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
@@ -755,7 +756,12 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     />
                     <SecondaryButton
                       label={t('timesheet.addManualEntry')}
-                      onPress={() => setManualOpen(true)}
+                      onPress={() => {
+                        // Lo que falló la vez anterior no es de este fichaje.
+                        mutations.addEvent.reset();
+                        mutations.manualEntry.reset();
+                        setManualOpen(true);
+                      }}
                       fullWidth={false}
                       testID="timesheet-manual"
                     />
@@ -994,6 +1000,13 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
             return instante !== null && Date.parse(instante) > Date.parse(nowISO) + 5 * 60_000;
           }}
           saving={mutations.manualEntry.isPending || mutations.addEvent.isPending}
+          error={
+            mutations.addEvent.error !== null
+              ? porQueNoSeRegistro(t, mutations.addEvent.error, mutations.addEvent.variables)
+              : mutations.manualEntry.error !== null
+                ? porQueNoSeRegistro(t, mutations.manualEntry.error, undefined)
+                : null
+          }
           onSubmit={({ employeeId, kind, dateKey: targetDate, time, reason }) => {
             const occurredAt = localDateTimeToInstant(targetDate, time, scope.timezone);
 
@@ -1051,6 +1064,26 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
       ) : null}
     </AppScreen>
   );
+}
+
+/**
+ * POR QUÉ NO SE REGISTRÓ UN FICHAJE MANUAL, en palabras de quien lo pone (4-oct). El caso de
+ * verdad es el de la transición: el servidor lo dice con los estados en inglés —«estaba en
+ * WORKING: no cabe un clock_in»—, y lo que significa es que a esa hora ya tenía una entrada.
+ */
+function porQueNoSeRegistro(
+  t: TFunction,
+  error: unknown,
+  fichaje: { eventType: string } | undefined,
+): string {
+  if (adminErrorKind(error) === 'forbidden') return t('states.noAccessBody');
+  const codigo = error instanceof AdminError ? error.code : '';
+  if (codigo.endsWith('failed-precondition') && fichaje !== undefined) {
+    return fichaje.eventType === 'clock_in'
+      ? t('timesheet.manualEntryAlreadyIn')
+      : t('timesheet.manualEntryNotIn');
+  }
+  return t('timesheet.manualEntryFailed');
 }
 
 /** Días entre dos fechas `YYYY-MM-DD`, inclusive. Para el tamaño de la exportación. */

@@ -418,6 +418,7 @@ export function ManualEntrySheet({
   openDayByEmployee,
   isFuture,
   saving,
+  error,
   onSubmit,
   onClose,
 }: {
@@ -432,6 +433,12 @@ export function ManualEntrySheet({
   openDayByEmployee: ReadonlyMap<string, string>;
   isFuture: (dateKey: string, time: string) => boolean;
   saving: boolean;
+  /**
+   * POR QUÉ NO SE GUARDÓ, DENTRO DE LA HOJA (4-oct). Antes el fallo no se veía en ningún
+   * sitio: la hoja se quedaba abierta, el botón no hacía nada y no había forma de saber si
+   * se había guardado. Lo vio Andree poniendo la entrada de una vendedora.
+   */
+  error: string | null;
   onSubmit: (params: {
     employeeId: string;
     kind: 'forgot_clock_in' | 'forgot_clock_out' | 'correction';
@@ -488,11 +495,25 @@ export function ManualEntrySheet({
         />
       }
     >
+      {/*
+        DOS AVISOS, porque son dos caminos: «Olvidé marcar» se registra al momento y
+        «Correcciones de hora» va a Solicitudes. Decía siempre lo segundo, y quien ponía una
+        entrada creía que tenía que aprobarla después.
+      */}
       <InlineNotice
         tone="info"
         icon="document-text-outline"
-        title={t('timesheet.manualEntryNoticeTitle')}
-        body={t('timesheet.manualEntryNoticeBody')}
+        title={
+          kind === 'correction'
+            ? t('timesheet.manualEntryNoticeTitle')
+            : t('timesheet.manualEntryDirectNoticeTitle')
+        }
+        body={
+          kind === 'correction'
+            ? t('timesheet.manualEntryNoticeBody')
+            : t('timesheet.manualEntryDirectNoticeBody')
+        }
+        testID="manual-entry-notice"
       />
 
       <SegmentedControl
@@ -552,6 +573,12 @@ export function ManualEntrySheet({
         error={submitted && !reasonValid ? t('timesheet.reasonRequired') : undefined}
         testID="manual-entry-reason"
       />
+
+      {error !== null ? (
+        <AppText variant="help" tone="danger" accessibilityRole="alert" testID="manual-entry-error">
+          {error}
+        </AppText>
+      ) : null}
     </AdminSheet>
   );
 }
