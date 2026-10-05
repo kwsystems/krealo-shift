@@ -94,6 +94,7 @@ export function registrarFichajeDemo(
       departure_reason: datos.eventType === 'clock_out' ? (datos.breakReason ?? null) : null,
       departure_note: datos.eventType === 'clock_out' ? (datos.breakNote ?? null) : null,
       occurred_at: instante,
+      received_at: instante,
       source: 'kiosk',
       is_offline: false,
       reclassified_as: null,

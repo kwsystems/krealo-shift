@@ -105,6 +105,8 @@ export {
  * esos días: después, un turno sin marcas se corrige persona por persona, con motivo.
  */
 export { registerScheduleAsWorked, viewClockStart } from './horario-cumplido';
+// El horario publicado de sus sedes, para el celular de cada persona (5-oct).
+export { viewStoreSchedule } from './horario-de-la-tienda';
 export { applyPlannedBreak, resolveSessionCase, settleOwedHours } from './casos';
 export { deleteAvailability, markAvailabilitySeen, saveAvailability } from './disponibilidad';
 export { clearAbsenceResolution, resolveAbsence } from './faltas';

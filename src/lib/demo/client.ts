@@ -6,6 +6,7 @@ import {
   aplicarEscenario,
   aplicarNombresLargos,
   escenarioDeLaUrl,
+  MARCAS_DEL_ESCENARIO_AVISOS,
   marcaDeLaUrl,
   nombresLargosDeLaUrl,
 } from './escenarios';
@@ -1741,6 +1742,76 @@ function crearRpc(almacen: Almacen) {
           }),
         );
       }
+      /*
+       * EL HORARIO DE TODA LA TIENDA (5-oct), como `viewStoreSchedule`: lo publicado de las
+       * sedes de la vendedora, y lo que se está cambiando como «por confirmar». Nombre,
+       * puesto y horas; ninguna nota.
+       */
+      case 'view_store_schedule': {
+        const desde = Date.parse(String(argumentos.p_from ?? ''));
+        const hasta = Date.parse(String(argumentos.p_to ?? ''));
+        if (Number.isNaN(desde) || Number.isNaN(hasta) || hasta <= desde) {
+          return conError('El final tiene que ser después del inicio.');
+        }
+        const suFicha = filas('organization_memberships').find(
+          (f) => f.user_id === DEMO_VENDEDOR_USER_ID,
+        )?.employee_id;
+        const sedes = [
+          ...new Set(
+            filas('employee_location_assignments')
+              .filter((f) => f.employee_id === suFicha)
+              .map((f) => String(f.location_id)),
+          ),
+        ];
+        const fichas = new Map(filas('employees').map((f) => [f.id, f]));
+        const puestos = new Map(filas('job_roles').map((f) => [f.id, f]));
+        const turnos = filas('shifts')
+          .filter((f) => {
+            const empieza = Date.parse(String(f.starts_at));
+            const visible =
+              f.status === 'published' ||
+              (f.status === 'draft' && Number(f.publication_version ?? 0) > 0);
+            return (
+              visible &&
+              typeof f.employee_id === 'string' &&
+              sedes.includes(String(f.location_id)) &&
+              empieza >= desde &&
+              empieza < hasta
+            );
+          })
+          .flatMap((f) => {
+            const ficha = fichas.get(f.employee_id);
+            if (ficha === undefined) return [];
+            const preferido = String(ficha.preferred_name ?? '').trim();
+            const puesto = puestos.get(f.job_role_id);
+            return [
+              {
+                id: String(f.id),
+                employee_id: String(f.employee_id),
+                nombre: preferido !== '' ? preferido : String(ficha.full_name),
+                puesto: puesto === undefined ? null : String(puesto.name),
+                color: puesto === undefined ? null : String(puesto.color),
+                location_id: String(f.location_id),
+                starts_at: String(f.starts_at),
+                ends_at: String(f.ends_at),
+                por_confirmar: f.status === 'draft',
+                es_mio: f.employee_id === suFicha,
+              },
+            ];
+          })
+          .sort((x, y) =>
+            x.starts_at === y.starts_at
+              ? x.nombre.localeCompare(y.nombre)
+              : x.starts_at.localeCompare(y.starts_at),
+          );
+        return sinError({
+          turnos,
+          sedes: sedes.map((id) => ({
+            id,
+            name: String(filas('locations').find((f) => f.id === id)?.name ?? ''),
+          })),
+        });
+      }
       case 'view_corrections_summary': {
         const sede = argumentos.p_location_id;
         const desde = String(argumentos.p_from ?? '');
@@ -2466,10 +2537,35 @@ export function getDemoClient(): DataClient {
     almacen = sembrar();
   };
 
+  /*
+   * `?escenario=avisos` (5-oct): las marcas del reloj que llegan con el panel abierto. Se
+   * programan la PRIMERA VEZ QUE ALGUIEN LEE LOS FICHAJES, que es el panel al abrirse:
+   * programadas al cargar la página llegarían con la pantalla de acceso delante, y la
+   * campana las tomaría por marcas de antes, que no avisan.
+   */
+  let marcasProgramadas = escenario !== 'avisos';
+  const programarMarcas = () => {
+    if (marcasProgramadas) return;
+    marcasProgramadas = true;
+    for (const { tras, ...marca } of MARCAS_DEL_ESCENARIO_AVISOS) {
+      setTimeout(() => {
+        const sede = (almacen.get('locations') ?? []).find((f) => f.id === DEMO_LOCATION_1);
+        registrarFichajeDemo(almacen, {
+          ...marca,
+          locationId: DEMO_LOCATION_1,
+          zona: String(sede?.timezone ?? 'America/Lima'),
+        });
+      }, tras);
+    }
+  };
+
   const cliente = {
     auth: crearAuth(reiniciar),
     // Se resuelve al usar, no al construir: así `reiniciar()` tiene efecto de verdad.
-    from: (nombre: string) => crearFrom(almacen)(nombre),
+    from: (nombre: string) => {
+      if (nombre === 'time_events') programarMarcas();
+      return crearFrom(almacen)(nombre);
+    },
     rpc: (nombre: string, argumentos?: Record<string, unknown>) =>
       crearRpc(almacen)(nombre, argumentos),
     /*

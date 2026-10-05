@@ -9,6 +9,7 @@ import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { AdminSheet } from '@/components/schedule/fields';
+import { CampanaDeAvisos } from '@/features/avisos/campana-de-avisos';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
@@ -53,10 +54,14 @@ export function BarraDeAlcance() {
   if (organization === null) return null;
 
   const resumen = location === null ? organization.name : `${organization.name} · ${location.name}`;
+  const apilado = !useSidebar && width < ANCHO_PARA_EL_ICONO;
 
   return (
     <>
-      <View style={estilos.barra} testID="desktop-header">
+      <View
+        style={[estilos.barra, useSidebar ? null : estilos.barraEstrecha]}
+        testID="desktop-header"
+      >
         {/*
           EL LOGO DE KREALO SHIFT (5-oct): el largo en pantalla ancha y solo la K con reloj
           en el teléfono. Allí el nombre entero gastaría el ancho que hace falta para el dato
@@ -89,15 +94,35 @@ export function BarraDeAlcance() {
         >
           {({ pressed }) => (
             <View style={[estilos.contexto, ...respuesta.estilo(pressed)]}>
-              <AppText style={estilos.organizacion} numberOfLines={1}>
-                {organization.name}
-              </AppText>
-              {location === null ? null : (
-                <>
-                  <AppText style={estilos.separador}>·</AppText>
-                  <AppText style={estilos.sede} numberOfLines={1}>
-                    {location.name}
+              {/*
+                POR DEBAJO DE 360 PX, EMPRESA Y SEDE UNA ENCIMA DE OTRA (5-oct). Con la campana
+                de avisos a la derecha, en una sola línea se cortaban las dos a 320 px; apiladas
+                caben enteras en el mismo alto táctil de 44 px.
+              */}
+              {apilado ? (
+                <View style={estilos.apilado}>
+                  <AppText style={estilos.organizacion} numberOfLines={1}>
+                    {organization.name}
                   </AppText>
+                  {location === null ? null : (
+                    <AppText style={estilos.sede} numberOfLines={1}>
+                      {location.name}
+                    </AppText>
+                  )}
+                </View>
+              ) : (
+                <>
+                  <AppText style={estilos.organizacion} numberOfLines={1}>
+                    {organization.name}
+                  </AppText>
+                  {location === null ? null : (
+                    <>
+                      <AppText style={estilos.separador}>·</AppText>
+                      <AppText style={estilos.sede} numberOfLines={1}>
+                        {location.name}
+                      </AppText>
+                    </>
+                  )}
                 </>
               )}
               {/*
@@ -109,6 +134,13 @@ export function BarraDeAlcance() {
             </View>
           )}
         </Pressable>
+
+        {/*
+          LOS AVISOS, ARRIBA A LA DERECHA (5-oct): quién marcó, quién salió a comer. Van en
+          la cabecera porque la cabecera está en todas las vistas del panel, y el aviso tiene
+          que llegar mires lo que mires. Ver `features/avisos/`.
+        */}
+        <CampanaDeAvisos />
       </View>
 
       <SelectorDeAlcance visible={abierto} onClose={() => setAbierto(false)} />
@@ -268,6 +300,13 @@ const useEstilos = estilosDelTema((colors) => ({
     borderBottomWidth: borderWidth.hairline,
   },
   /*
+   * EN EL TELÉFONO, MENOS AIRE A LOS LADOS Y ENTRE PIEZAS (5-oct). Desde que la campana de
+   * avisos vive a la derecha, los 24 px de margen y los 16 de separación de la pantalla
+   * ancha cortaban «Café Demostración · Sede Principal» a 375 px; con 16 y 8 se lee entero,
+   * y la campana conserva sus 44 px táctiles.
+   */
+  barraEstrecha: { paddingHorizontal: spacing.base, gap: spacing.sm },
+  /*
    * ALTO MÍNIMO TÁCTIL. Es lo único que se pulsa en esta barra y en un teléfono se pulsa
    * con el dedo: `responsive:check` exige 44 px en las DOS dimensiones, y el ancho no
    * compensa el alto.
@@ -279,6 +318,7 @@ const useEstilos = estilosDelTema((colors) => ({
     esto no cambia nada allí y lo arregla todo aquí, que es donde corre el panel.
   */
   pulsable: { flexShrink: 1, minWidth: 0 },
+  apilado: { flexShrink: 1, minWidth: 0 },
   contexto: {
     flexDirection: 'row',
     alignItems: 'center',

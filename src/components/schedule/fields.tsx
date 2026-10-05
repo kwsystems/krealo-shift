@@ -394,6 +394,13 @@ export function ToggleField({
         accessibilityHint={hint}
         trackColor={{ false: colors.border, true: colors.primary200 }}
         thumbColor={value ? colors.primary600 : colors.surface}
+        /*
+         * EN LA WEB EL BOTÓN ENCENDIDO LO PINTA `activeThumbColor`, no `thumbColor`, y su
+         * valor de fábrica en react-native-web es un verde azulado (#009688) que no es de la
+         * app: todos los interruptores encendidos salían de ese color sobre la pista violeta.
+         * No está en los tipos de React Native porque solo existe en la web.
+         */
+        {...({ activeThumbColor: colors.primary600 } as object)}
         testID={testID}
       />
     </Row>

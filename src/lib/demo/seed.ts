@@ -59,6 +59,17 @@ const empleadoId = (n: number) => id('33333333', n);
  * persona dependería de si le toca turno, y en una sola, de qué sede abre la app.
  */
 export const DEMO_EMPLEADOS_DENTRO = [empleadoId(1), empleadoId(3)] as const;
+/**
+ * Quienes marcan en `?escenario=avisos` (5-oct), todos de la sede principal: Ana, que está
+ * trabajando y sale a comer; Bruno, que está en su descanso y vuelve; Diego, que entra, y
+ * Elena, que sale. Ver `MARCAS_DEL_ESCENARIO_AVISOS` en `escenarios.ts`.
+ */
+export const DEMO_EMPLEADOS_AVISOS = {
+  ana: empleadoId(1),
+  bruno: empleadoId(2),
+  diego: empleadoId(4),
+  elena: empleadoId(5),
+} as const;
 const puestoId = (n: number) => id('44444444', n);
 const turnoId = (n: number) => id('55555555', n);
 const sesionId = (n: number) => id('66666666', n);
@@ -1134,7 +1145,14 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         ],
   );
   almacen.set('shift_publications', publicaciones);
-  almacen.set('time_events', eventos);
+  /*
+   * LA HORA DE LLEGADA (5-oct), que el servidor escribe en cada marca: es por la que piden
+   * los avisos del panel. En la semilla todo llegó en el momento de marcarse.
+   */
+  almacen.set(
+    'time_events',
+    eventos.map((evento) => ({ received_at: evento.occurred_at, ...evento })),
+  );
   almacen.set('work_sessions', sesiones);
   almacen.set('time_edit_requests', solicitudes);
   almacen.set('timesheet_periods', periodos);

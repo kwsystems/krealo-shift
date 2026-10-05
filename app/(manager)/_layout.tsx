@@ -1,8 +1,12 @@
+import { useState } from 'react';
+import { View } from 'react-native';
 import { Redirect, Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
+import { AvisosEmergentes } from '@/features/avisos/avisos-emergentes';
+import { useVigiaDeAvisos } from '@/features/avisos/use-vigia-de-avisos';
 import { MenuLateral, type PropsDelMenu } from '@/components/layout/menu-lateral';
 import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
 import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
@@ -114,16 +118,26 @@ function PanelConMarca() {
   const { colors } = useTheme();
   const { t } = useTranslation();
   const { useSidebar } = useResponsive();
+  const [altoDeCabecera, setAltoDeCabecera] = useState(0);
+  // UN vigía para todo el panel: la campana y el emergente leen lo que deja.
+  useVigiaDeAvisos();
 
   return (
-    <>
+    /*
+      UNA CAJA QUE ENVUELVE EL PANEL (5-oct), y solo por el aviso emergente: tiene que
+      flotar encima de cualquier pestaña, y para colocarlo justo debajo de la cabecera hace
+      falta un contenedor común donde medirla. Ocupa lo mismo que ocupaba el fragmento.
+    */
+    <View style={estiloDelPanel}>
       {/*
         La cabecera va DENTRO del provider porque lee la organización y la sede, y
         FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una
         cabecera que empieza donde acaba la navegación no es una cabecera de app. En
         pantallas estrechas se queda sin la marca pero SI con el alcance (ver BarraDeAlcance).
       */}
-      <BarraDeAlcance />
+      <View onLayout={(evento) => setAltoDeCabecera(evento.nativeEvent.layout.height)}>
+        <BarraDeAlcance />
+      </View>
       <Tabs
         /*
           EN PANTALLA ANCHA, EL MENÚ ES NUESTRO (1-oct): con subapartados dentro de Equipo y
@@ -362,9 +376,12 @@ function PanelConMarca() {
           }}
         />
       </Tabs>
-    </>
+      <AvisosEmergentes arriba={altoDeCabecera + spacing.sm} />
+    </View>
   );
 }
+
+const estiloDelPanel = { flex: 1 } as const;
 
 /**
  * Pone el color de la empresa a disposición de todo el panel.

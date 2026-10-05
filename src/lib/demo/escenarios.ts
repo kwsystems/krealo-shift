@@ -1,5 +1,5 @@
 import type { Almacen, Fila } from './postgrest';
-import { DEMO_EMPLEADOS_DENTRO, DEMO_LOCATION_1, TZ } from './seed';
+import { DEMO_EMPLEADOS_AVISOS, DEMO_EMPLEADOS_DENTRO, DEMO_LOCATION_1, TZ } from './seed';
 import { dateKeyOf, localDateTimeToInstant, weekStartOfKey } from '@/features/schedules/week';
 import { cubreElTurno } from '@/features/timesheets/faltas';
 
@@ -29,6 +29,7 @@ export const ESCENARIOS = [
   'sinllegar',
   'cambiado',
   'cumplido',
+  'avisos',
 ] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
@@ -377,8 +378,50 @@ function cumplidoEspecialDeLaVendedora(almacen: Almacen): void {
   suya.flags = [];
 }
 
+/**
+ * LAS MARCAS QUE LLEGAN SOLAS EN `?escenario=avisos` (5-oct), para ver la campana y el aviso
+ * emergente del panel sin ir al reloj: el día es el de siempre y, con el panel ya abierto,
+ * Ana sale a comer, Bruno vuelve de su descanso y, a la vez, Diego entra y Elena sale. Las
+ * dos últimas juntas a propósito: son las que prueban «y N avisos más».
+ *
+ * `tras` cuenta desde la primera lectura de fichajes, no desde la carga de la página: ver
+ * `getDemoClient`.
+ */
+export const MARCAS_DEL_ESCENARIO_AVISOS: readonly {
+  tras: number;
+  employeeId: string;
+  eventType: 'clock_in' | 'break_start' | 'break_end' | 'clock_out';
+  breakReason: string | null;
+}[] = [
+  {
+    tras: 2_500,
+    employeeId: DEMO_EMPLEADOS_AVISOS.ana,
+    eventType: 'break_start',
+    breakReason: 'meal',
+  },
+  {
+    tras: 5_000,
+    employeeId: DEMO_EMPLEADOS_AVISOS.bruno,
+    eventType: 'break_end',
+    breakReason: null,
+  },
+  {
+    tras: 7_500,
+    employeeId: DEMO_EMPLEADOS_AVISOS.diego,
+    eventType: 'clock_in',
+    breakReason: null,
+  },
+  {
+    tras: 7_500,
+    employeeId: DEMO_EMPLEADOS_AVISOS.elena,
+    eventType: 'clock_out',
+    breakReason: null,
+  },
+];
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
-  if (escenario === 'normal') return almacen;
+  // `avisos` es el día de siempre: lo suyo llega después, con el panel abierto.
+  if (escenario === 'normal' || escenario === 'avisos') return almacen;
 
   // Solo toca un turno: el resto del día se queda como en la semilla.
   if (escenario === 'cambiado') {

@@ -21,6 +21,9 @@
  * 7. «NO HA LLEGADO» (2-oct): con turnos ya empezados sin marca (`?escenario=sinllegar`),
  *    Horario marca en la tarjeta a las mismas personas que Inicio cuenta. Andree miraba un
  *    turno de las 13:00 a las 15:27 y Horario no decía nada.
+ * 8. EL HORARIO DE LA TIENDA del celular (5-oct) trae justo los turnos que Horario enseña
+ *    publicados (o publicados y cambiándose) esa semana en su sede: ni un borrador más, ni
+ *    un turno publicado menos.
  *
  * Uso:
  *   npm run demo:export
@@ -89,6 +92,8 @@ async function irPorElMenu(pagina, ruta) {
 
 let minutosDeLaVendedoraEnEquipo = null;
 let nombreDeLaVendedora = null;
+/** Los turnos que Horario enseña como publicados (o cambiándose) esta semana: ver 8. */
+let idsPublicadosEnHorario = null;
 
 try {
   {
@@ -150,6 +155,29 @@ try {
     if ((await delante(pagina, '[data-testid$="-nota-persona"]').count()) === 0) {
       problemas.push('Horario no enseña en la tarjeta la nota para la persona');
     }
+    /*
+     * 8. Los turnos de la semana en Horario, con su estado: va en la etiqueta accesible de la
+     * tarjeta («… Publicado.», «… Borrador.»). Las piezas de dentro llevan su sufijo.
+     */
+    const turnosDeHorario = await delante(
+      pagina,
+      '[data-testid^="shift-"][aria-label]',
+    ).evaluateAll((nodos) =>
+      nodos
+        .map((n) => ({
+          testid: n.getAttribute('data-testid') ?? '',
+          partes: (n.getAttribute('aria-label') ?? '').split('. '),
+        }))
+        .filter(
+          (x) =>
+            !/-(ahora|sin-llegar|cumplido|salida-automatica|falta|choca|nota-.+)$/.test(x.testid),
+        ),
+    );
+    idsPublicadosEnHorario = new Set(
+      turnosDeHorario
+        .filter((x) => !x.partes.includes('Borrador') && !x.partes.includes('Cancelado'))
+        .map((x) => x.testid.slice('shift-'.length)),
+    );
     const resumen = await texto(pagina, '[data-testid="weekly-total-drafts"]');
     if (resumen !== '') {
       const publicadas = aMinutos(/y (\d+:\d\d) publicad/.exec(resumen)?.[1] ?? '');
@@ -304,6 +332,32 @@ try {
     console.log(
       `  celular              ${suma} min esta semana (Equipo ${minutosDeLaVendedoraEnEquipo}${esLaMisma ? '' : ', otra persona'})`,
     );
+
+    // --- 8. «Toda la tienda» = lo publicado en Horario esta semana.
+    await pagina.locator('[data-testid="mi-horario-vista-tienda"]').click();
+    await pagina.locator('[data-testid="mi-horario-tienda"]').waitFor({ timeout: 20000 });
+    await pagina.waitForTimeout(500);
+    const enLaTienda = new Set(
+      (
+        await pagina
+          .locator('[data-testid^="tienda-turno-"], [data-testid^="tienda-mio-"]')
+          .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('data-testid') ?? ''))
+      ).map((id) => id.replace(/^tienda-(turno|mio)-/, '')),
+    );
+    if (idsPublicadosEnHorario === null || idsPublicadosEnHorario.size === 0) {
+      problemas.push('no se pudo leer qué turnos enseña Horario esta semana');
+    } else {
+      const faltan = [...idsPublicadosEnHorario].filter((id) => !enLaTienda.has(id));
+      const sobran = [...enLaTienda].filter((id) => !idsPublicadosEnHorario.has(id));
+      if (faltan.length > 0 || sobran.length > 0) {
+        problemas.push(
+          `«Toda la tienda» del celular no es lo publicado en Horario: faltan ${faltan.length}, sobran ${sobran.length}`,
+        );
+      }
+      console.log(
+        `  tienda en el celular ${enLaTienda.size} turnos; Horario publica ${idsPublicadosEnHorario.size}`,
+      );
+    }
     await contexto.close();
   }
 

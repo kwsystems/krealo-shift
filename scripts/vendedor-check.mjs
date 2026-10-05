@@ -10,7 +10,8 @@
  *   1. que entrar como vendedor lleve a SU vista y no al panel, y que el panel no se abra
  *      aunque escriba la dirección;
  *   2. que la pantalla tenga lo que se pidió: hoy, la semana (esta y la próxima) y el mes;
- *   3. que no aparezca el nombre de NADIE más del equipo;
+ *   3. que no aparezca el nombre de NADIE más del equipo, salvo en «con quién le toca» y en
+ *      el horario de toda la tienda (5-oct), que Andree pidió que viera;
  *   4. que a 360, 390 y 414 px no haya nada que se arrastre de lado ni se salga, y que a
  *      1280 siga siendo una columna legible;
  *   5. y que se pueda cerrar sesión, que en un celular prestado importa.
@@ -167,7 +168,12 @@ try {
       if (/\bLibre\b/.test(fila)) fallar(casoCambiado, `el ${dia} dice «Libre»: ${fila}`);
       // Solo ese turno: la insignia. Con otro publicado el mismo día manda el publicado y el
       // que cambia se dice aparte, «Además, por confirmar: …».
-      else if (!/Por confirmar|por confirmar:/.test(fila))
+      /*
+       * Y SI ESTÁ TRABAJANDO EN ESE TURNO, la insignia dice «Trabajando» y el cambio lo dice
+       * la frase de debajo (5-oct): el arnés fallaba entre las 9 y las 15 sin que la app
+       * dejara de decirlo.
+       */
+      else if (!/Por confirmar|por confirmar:|está cambiando este turno/.test(fila))
         fallar(casoCambiado, `el ${dia} no dice que su turno está por confirmar: ${fila}`);
       else pasa(casoCambiado, `${dia}: ${fila.slice(0, 90)}`);
       await p.screenshot({ path: join(CAPTURAS, '2b-por-confirmar-390.png'), fullPage: true });
@@ -195,11 +201,85 @@ try {
   }
 
   /* ------------------------------------------------------------------ */
-  const caso3 = 'no aparece nadie más del equipo';
-  const texto = await pagina.locator('[data-testid="mi-horario"]').innerText();
+  /*
+   * NADIE MÁS, SALVO DONDE SE DICE CON QUIÉN LE TOCA (5-oct). Andree pidió que cada persona
+   * vea también el horario de la tienda: los nombres del equipo salen ahora en la línea «Con
+   * Bruno» de sus turnos y en «Toda la tienda», y en NINGÚN otro sitio de su pantalla.
+   */
+  const caso3 = 'no aparece nadie más del equipo fuera de «con quién le toca»';
+  const texto = await pagina.locator('[data-testid="mi-horario"]').evaluate((nodo) => {
+    const copia = nodo.cloneNode(true);
+    for (const quitar of copia.querySelectorAll(
+      '[data-testid^="mi-horario-con-"], [data-testid="mi-horario-tienda"]',
+    ))
+      quitar.remove();
+    return copia.textContent ?? '';
+  });
   const vistos = OTROS.filter((nombre) => texto.includes(nombre));
   if (vistos.length > 0) fallar(caso3, `se ven: ${vistos.join(', ')}`);
   else pasa(caso3);
+
+  /* ------------------------------------------------------------------ */
+  /*
+   * EL HORARIO DE TODA LA TIENDA (5-oct): «para que sepan con quién estarán en horario».
+   * Siete días, su fila marcada «Tú» con las MISMAS horas que en «Solo yo», el resto del
+   * equipo con su puesto, ninguna nota de nadie, y debajo de su turno, con quién coincide.
+   */
+  const caso7 = 've el horario de toda la tienda y con quién le toca';
+  {
+    const conQuien = await pagina.locator('[data-testid^="mi-horario-con-"]').allInnerTexts();
+    const semanaSuya = (
+      await pagina.locator('[data-testid="mi-horario-dias"]').innerText()
+    ).replace(/\s+/g, ' ');
+    await pagina.locator('[data-testid="mi-horario-vista-tienda"]').click();
+    await pagina.locator('[data-testid="mi-horario-tienda"]').waitFor({ timeout: 20000 });
+    await pagina.waitForTimeout(400);
+    const tienda = pagina.locator('[data-testid="mi-horario-tienda"]');
+    const dias = await tienda.locator('[data-testid^="tienda-dia-"]').count();
+    const mios = (await tienda.locator('[data-testid^="tienda-mio-"]').allInnerTexts()).map((t) =>
+      t.replace(/\s+/g, ' '),
+    );
+    const otros = await tienda.locator('[data-testid^="tienda-turno-"]').allInnerTexts();
+    const textoTienda = await tienda.innerText();
+    const rango = (t) => (/\d{2}:\d{2}\s*–\s*\d{2}:\d{2}/.exec(t) ?? [''])[0].replace(/\s+/g, ' ');
+    const horasDistintas = mios.filter((t) => !semanaSuya.includes(rango(t)));
+    const companeros = OTROS.filter((n) => textoTienda.includes(n));
+    // Cada línea es «<icono>\nCon Bruno, Carla y Diego»: lo de después de «Con ».
+    const nombresConQuien = conQuien
+      .filter((linea) => linea.includes('Con '))
+      .flatMap((linea) => linea.slice(linea.indexOf('Con ') + 4).split(/,|\sy\s|\s\d+\smás/))
+      .map((n) => n.trim())
+      .filter((n) => n !== '');
+    const conQuienFuera = nombresConQuien.filter(
+      (n) => !n.startsWith('Nadie') && !textoTienda.includes(n),
+    );
+    await pagina.screenshot({ path: join(CAPTURAS, '4-tienda-390.png'), fullPage: true });
+    const medida = await desborde(pagina);
+
+    if (dias !== 7) fallar(caso7, `la semana de la tienda tiene ${dias} días`);
+    else if (mios.length === 0 || !mios.every((t) => t.startsWith('Tú')))
+      fallar(caso7, `su fila no va marcada «Tú»: ${JSON.stringify(mios)}`);
+    else if (horasDistintas.length > 0)
+      fallar(caso7, `sus horas no son las de «Solo yo»: ${horasDistintas.join(' | ')}`);
+    else if (otros.length === 0 || companeros.length === 0)
+      fallar(caso7, 'no sale nadie más del equipo en «Toda la tienda»');
+    else if (/Trae la llave/.test(textoTienda))
+      fallar(caso7, 'una nota de turno se ve en el horario de la tienda');
+    else if (conQuien.length === 0) fallar(caso7, 'debajo de sus turnos no dice con quién le toca');
+    else if (conQuienFuera.length > 0)
+      fallar(
+        caso7,
+        `«${conQuien[0]}» nombra a quien no está en la tienda: ${conQuienFuera.join(', ')}`,
+      );
+    else if (medida.arrastre > 1 || medida.culpables.length > 0)
+      fallar(caso7, `se sale a 390: ${medida.arrastre} px ${medida.culpables.join(' | ')}`);
+    else
+      pasa(
+        caso7,
+        `7 días, ${mios.length} suyo(s) con sus horas, ${otros.length} del equipo; «${conQuien[0].trim()}»`,
+      );
+    await pagina.locator('[data-testid="mi-horario-vista-mia"]').click();
+  }
 
   /* ------------------------------------------------------------------ */
   const caso4 = 'el panel no se abre aunque escriba la dirección';
@@ -267,5 +347,5 @@ if (problemas.length > 0) {
   process.exit(1);
 }
 console.log(
-  '\nVENDEDOR — OK: entra a su vista, ve lo suyo y a nadie más, cabe en el celular y puede salir.',
+  '\nVENDEDOR — OK: entra a su vista, ve lo suyo y el horario de su tienda, cabe en el celular y puede salir.',
 );

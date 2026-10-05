@@ -202,6 +202,11 @@ export const RPC = {
    */
   viewClockStart: 'view_clock_start',
   /**
+   * El horario publicado de sus sedes, para el celular de cada persona (5-oct): nombre,
+   * puesto y horas, nada más. Ver `functions/src/horario-de-la-tienda.ts`.
+   */
+  viewStoreSchedule: 'view_store_schedule',
+  /**
    * Resolver una solicitud de la Bandeja (30-sep): aprobar, rechazar o comentar. Las reglas
    * no dejan tocar una solicitud desde la app —cambia horas pagadas— y esta función no
    * existía, así que aprobar fallaba en silencio. Aprobar un «olvidé marcar» registra los

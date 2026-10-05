@@ -526,6 +526,29 @@
       ]
     },
     {
+      "//": "Avisos del panel (5-oct): las marcas del reloj de una sede por orden de LLEGADA, para pedir solo lo llegado despues de la ultima vista. Por llegada y no por hora de la marca: un reloj sin conexion manda tarde marcas de antes.",
+      "collectionGroup": "time_events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "location_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "source",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "received_at",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "collectionGroup": "overtime_approvals",
       "queryScope": "COLLECTION",
       "fields": [

@@ -208,7 +208,13 @@ export function ManualScreen({ dentroDelPanel = false }: { dentroDelPanel?: bool
                   titulo={t('manual.adminPublishTitle')}
                   cuerpo={t('manual.adminPublishBody')}
                 />
-                {pares(['adminSchedule', 'adminTeam', 'adminHours', 'adminInbox']).map((par) => (
+                {pares([
+                  'adminSchedule',
+                  'adminTeam',
+                  'adminHours',
+                  'adminInbox',
+                  'adminAlerts',
+                ]).map((par) => (
                   <Columnas key={par[0]} dos={dos}>
                     {par.map((clave) => (
                       <Bloque

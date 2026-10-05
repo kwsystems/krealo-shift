@@ -15,6 +15,13 @@ import {
   type MiFicha,
 } from './api';
 import {
+  companerosDe,
+  fetchHorarioDeLaTienda,
+  textoDeCompaneros,
+  turnosDelDia,
+  type HorarioDeLaTienda,
+} from './horario-de-la-tienda';
+import {
   diasDelVendedor,
   jornadaOlvidada,
   minutosDeLaJornada,
@@ -50,6 +57,7 @@ import {
   formatWeekdayShort,
   weekDays,
   weekRangeInstants,
+  type DateKey,
 } from '@/features/schedules/week';
 import { fetchTimeEvents, type WorkSession } from '@/features/timesheets/api';
 import {
@@ -84,9 +92,10 @@ import { disponibilidadDelDia, type Disponibilidad } from '@/features/availabili
  *
  * Lo pidió Andree: que cada persona del equipo entre con su correo y vea SOLO lo suyo —qué
  * horario le toca esta semana y la siguiente, cuánto lleva trabajado en el mes, si llegó
- * tarde o temprano—. Nada que editar y nada de los demás: las reglas de Firestore ya no le
- * dejan leer otra cosa (`isSelfEmployee`), así que esta pantalla no podría enseñarlo aunque
- * quisiera.
+ * tarde o temprano—. Nada que editar, y de los demás SOLO el horario publicado de su tienda
+ * (5-oct, «para que sepan con quién estarán»): nombre, puesto y horas, que da el servidor
+ * (`viewStoreSchedule`). Las reglas de Firestore no le dejan leer nada ajeno directamente
+ * (`isSelfEmployee`), así que lo demás de los demás no podría enseñarlo aunque quisiera.
  *
  * SE LEE DE ARRIBA ABAJO EN EL ORDEN EN QUE SE PREGUNTA:
  *   1. Hoy: ¿estoy dentro?, ¿a qué hora entro?, ¿hoy libro?
@@ -157,6 +166,12 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   const hora = (instante: string) => formatClockTime(instante, tz, formato, language);
 
   const [semana, setSemana] = useState<'esta' | 'proxima'>('esta');
+  /*
+   * SOLO YO O TODA LA TIENDA (5-oct). Arranca en lo suyo, que es lo que se abre a mirar; la
+   * tienda está a un toque, y su dato más útil —con quién coincide— sale también en «Solo
+   * yo», debajo de cada turno.
+   */
+  const [vista, setVista] = useState<'mia' | 'tienda'>('mia');
   const [mesOffset, setMesOffset] = useState(0);
 
   // Las dos semanas en una sola consulta: cambiar de una a otra no espera a la red.
@@ -187,6 +202,17 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     queryFn: () => fetchMisJornadas({ ...base, fromISO: desdeJornadas, toISO: hastaSemanas }),
     // Lo de hoy cambia mientras trabaja: se refresca solo cada minuto.
     refetchInterval: 60_000,
+  });
+  // El horario de la tienda de las dos semanas, en una llamada: ver `horario-de-la-tienda.ts`.
+  const tienda = useQuery({
+    queryKey: ['portal', 'tienda', ficha.organizationId, desdeSemanas, hastaSemanas],
+    queryFn: () =>
+      fetchHorarioDeLaTienda({
+        organizationId: ficha.organizationId,
+        fromISO: desdeSemanas,
+        toISO: hastaSemanas,
+      }),
+    staleTime: 5 * 60 * 1000,
   });
   const turnosMes = useQuery({
     queryKey: ['portal', 'turnos', ficha.employeeId, periodo.fromISO, periodo.toISO],
@@ -385,72 +411,119 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               onChange={setSemana}
               testID="mi-horario-semana"
             />
-            <Card style={estilos.lista} testID="mi-horario-dias">
-              {cargandoSemana ? (
-                <LoadingState />
-              ) : semanaSinPublicar ? (
-                /*
-                  UNA SEMANA SIN NADA PUBLICADO NO SON SIETE DÍAS LIBRES (4-oct). Se enseñaban
-                  siete filas «Libre» y debajo, en pequeño, que el horario no estaba publicado:
-                  lo primero que se lee dice lo contrario de lo que pasa.
-                */
-                <Stack gap={spacing.sm}>
-                  <EmptyState
-                    icon="calendar-outline"
-                    title={
-                      semana === 'proxima' ? t('portal.nextWeekEmpty') : t('portal.thisWeekEmpty')
-                    }
-                    body={t('portal.weekEmptyBody')}
-                    testID="mi-horario-semana-sin-publicar"
-                  />
-                  {/*
-                    LOS FERIADOS DE ESA SEMANA SIGUEN DICHOS aunque no haya turnos: iban en la
-                    fila de su día, y sin filas se perdían. Es justo lo que alguien mira cuando
-                    piensa en la semana que viene.
-                  */}
-                  {diasSemana
-                    .filter(
-                      (d) =>
-                        feriadoDe(d.dia, tz) !== null ||
-                        fechaComercialDe(d.dia, tz, ficha.tipoDeTienda) !== null,
-                    )
-                    .map((d) => (
-                      <Row key={d.dia} gap={spacing.sm} align="center">
-                        <AppText variant="label" tone="muted" tabular>
-                          {`${formatWeekdayShort(d.dia, language)} ${formatDateKeyShort(d.dia, language)}`}
-                        </AppText>
-                        <Stack gap={0}>
-                          <EtiquetasDelDia
-                            dateKey={d.dia}
-                            timezone={tz}
-                            tipo={ficha.tipoDeTienda}
-                            conPago
-                          />
-                        </Stack>
-                      </Row>
-                    ))}
-                </Stack>
-              ) : (
-                diasSemana.map((dia, i) => (
-                  <View key={dia.dia}>
-                    {i > 0 ? <SeparadorDeRegistro /> : null}
-                    <FilaDelDia
-                      dia={dia}
-                      esHoy={dia.dia === hoy}
+            <SegmentedControl
+              label={t('portal.viewLabel')}
+              value={vista}
+              options={[
+                { value: 'mia', label: t('portal.viewMine') },
+                { value: 'tienda', label: t('portal.viewStore') },
+              ]}
+              onChange={setVista}
+              testID="mi-horario-vista"
+            />
+            {vista === 'tienda' ? (
+              <>
+                <AppText variant="help" tone="subtle">
+                  {t('portal.storeHint')}
+                </AppText>
+                <Card style={estilos.lista} testID="mi-horario-tienda">
+                  {tienda.isPending ? (
+                    <LoadingState />
+                  ) : tienda.error !== null ? (
+                    <AdminErrorState error={tienda.error} onRetry={() => void tienda.refetch()} />
+                  ) : (
+                    <SemanaDeLaTienda
+                      dias={weekDays(semana === 'esta' ? inicio : addWeeks(inicio, 1))}
+                      horario={tienda.data}
+                      hoy={hoy}
                       hora={hora}
                       language={language}
                       zona={tz}
                       tipoDeTienda={ficha.tipoDeTienda}
-                      loQueDije={disponibilidadDelDia(
-                        miDisponibilidad.data ?? [],
-                        ficha.employeeId,
-                        dia.dia,
-                      )}
                     />
-                  </View>
-                ))
-              )}
-            </Card>
+                  )}
+                </Card>
+              </>
+            ) : (
+              <Card style={estilos.lista} testID="mi-horario-dias">
+                {cargandoSemana ? (
+                  <LoadingState />
+                ) : semanaSinPublicar ? (
+                  /*
+                  UNA SEMANA SIN NADA PUBLICADO NO SON SIETE DÍAS LIBRES (4-oct). Se enseñaban
+                  siete filas «Libre» y debajo, en pequeño, que el horario no estaba publicado:
+                  lo primero que se lee dice lo contrario de lo que pasa.
+                */
+                  <Stack gap={spacing.sm}>
+                    <EmptyState
+                      icon="calendar-outline"
+                      title={
+                        semana === 'proxima' ? t('portal.nextWeekEmpty') : t('portal.thisWeekEmpty')
+                      }
+                      body={t('portal.weekEmptyBody')}
+                      testID="mi-horario-semana-sin-publicar"
+                    />
+                    {/*
+                    LOS FERIADOS DE ESA SEMANA SIGUEN DICHOS aunque no haya turnos: iban en la
+                    fila de su día, y sin filas se perdían. Es justo lo que alguien mira cuando
+                    piensa en la semana que viene.
+                  */}
+                    {diasSemana
+                      .filter(
+                        (d) =>
+                          feriadoDe(d.dia, tz) !== null ||
+                          fechaComercialDe(d.dia, tz, ficha.tipoDeTienda) !== null,
+                      )
+                      .map((d) => (
+                        <Row key={d.dia} gap={spacing.sm} align="center">
+                          <AppText variant="label" tone="muted" tabular>
+                            {`${formatWeekdayShort(d.dia, language)} ${formatDateKeyShort(d.dia, language)}`}
+                          </AppText>
+                          <Stack gap={0}>
+                            <EtiquetasDelDia
+                              dateKey={d.dia}
+                              timezone={tz}
+                              tipo={ficha.tipoDeTienda}
+                              conPago
+                            />
+                          </Stack>
+                        </Row>
+                      ))}
+                  </Stack>
+                ) : (
+                  diasSemana.map((dia, i) => (
+                    <View key={dia.dia}>
+                      {i > 0 ? <SeparadorDeRegistro /> : null}
+                      <FilaDelDia
+                        dia={dia}
+                        esHoy={dia.dia === hoy}
+                        hora={hora}
+                        language={language}
+                        zona={tz}
+                        tipoDeTienda={ficha.tipoDeTienda}
+                        loQueDije={disponibilidadDelDia(
+                          miDisponibilidad.data ?? [],
+                          ficha.employeeId,
+                          dia.dia,
+                        )}
+                        conQuien={
+                          tienda.data === undefined ||
+                          dia.turnos.length + dia.porConfirmar.length === 0
+                            ? null
+                            : textoDeCompaneros(
+                                t,
+                                companerosDe(
+                                  [...dia.turnos, ...dia.porConfirmar],
+                                  tienda.data.turnos,
+                                ),
+                              )
+                        }
+                      />
+                    </View>
+                  ))
+                )}
+              </Card>
+            )}
           </Stack>
 
           {/* 3. EL MES */}
@@ -767,6 +840,125 @@ const INSIGNIA: Partial<
 };
 
 /** Un día: a la izquierda cuándo, en medio el turno y lo que marcó, a la derecha cómo fue. */
+/**
+ * LA SEMANA DE TODA LA TIENDA (5-oct): cada día con quién tiene turno, a qué hora y de qué.
+ * Su fila va marcada «Tú» y con fondo, para encontrarse de un vistazo entre los demás. Un día
+ * sin nadie se dice, no se salta: «nadie» también es saber con quién te toca.
+ *
+ * El punto de color es el del puesto, el mismo que en Horario: Cajero es violeta en las dos
+ * pantallas. El color no lleva el dato solo: el puesto va escrito al lado.
+ */
+function SemanaDeLaTienda({
+  dias,
+  horario,
+  hoy,
+  hora,
+  language,
+  zona,
+  tipoDeTienda,
+}: {
+  dias: readonly DateKey[];
+  horario: HorarioDeLaTienda;
+  hoy: DateKey;
+  hora: (instante: string) => string;
+  language: SupportedLanguage;
+  zona: string;
+  tipoDeTienda: TipoDeTienda | null;
+}) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+  const estilos = useEstilos();
+  const variasSedes = horario.sedes.length > 1;
+  const nombreDeSede = new Map(horario.sedes.map((sede) => [sede.id, sede.name]));
+
+  return (
+    <>
+      {dias.map((dia, i) => {
+        const esHoy = dia === hoy;
+        const delDia = turnosDelDia(horario.turnos, dia, zona);
+        const personas = new Set(delDia.map((turno) => turno.employee_id)).size;
+        return (
+          <View key={dia}>
+            {i > 0 ? <SeparadorDeRegistro /> : null}
+            <Stack
+              gap={spacing.sm}
+              style={esHoy ? { ...estilos.diaTienda, ...estilos.filaHoy } : estilos.diaTienda}
+              testID={`tienda-dia-${dia}`}
+            >
+              <Row justify="space-between" align="center" gap={spacing.sm}>
+                <Row gap={spacing.sm} align="center">
+                  <AppText variant="label" tone={esHoy ? 'primary' : 'muted'}>
+                    {esHoy ? t('portal.todayShort') : formatWeekdayShort(dia, language)}
+                  </AppText>
+                  <AppText variant="bodyStrong" tone={esHoy ? 'primary' : 'default'} tabular>
+                    {formatDateKeyShort(dia, language)}
+                  </AppText>
+                </Row>
+                {personas > 0 ? (
+                  <AppText variant="help" tone="subtle">
+                    {t('portal.storePeople', { count: personas })}
+                  </AppText>
+                ) : null}
+              </Row>
+              <EtiquetasDelDia dateKey={dia} timezone={zona} tipo={tipoDeTienda} conPago />
+              {delDia.length === 0 ? (
+                <AppText variant="help" tone="subtle">
+                  {t('portal.storeEmptyDay')}
+                </AppText>
+              ) : (
+                delDia.map((turno) => {
+                  const detalle = [
+                    turno.puesto,
+                    variasSedes ? (nombreDeSede.get(turno.location_id) ?? null) : null,
+                    turno.por_confirmar ? t('portal.storePending') : null,
+                  ]
+                    .filter((parte): parte is string => parte !== null && parte !== '')
+                    .join(' · ');
+                  return (
+                    <Row
+                      key={turno.id}
+                      gap={spacing.sm}
+                      align="center"
+                      style={
+                        turno.es_mio
+                          ? { ...estilos.turnoTienda, ...estilos.turnoMio }
+                          : estilos.turnoTienda
+                      }
+                      testID={turno.es_mio ? `tienda-mio-${turno.id}` : `tienda-turno-${turno.id}`}
+                    >
+                      <View
+                        style={[
+                          estilos.puntoDelPuesto,
+                          { backgroundColor: turno.color ?? colors.ink500 },
+                        ]}
+                      />
+                      <View style={estilos.centro}>
+                        <AppText variant="bodyStrong" numberOfLines={1}>
+                          {turno.es_mio
+                            ? `${t('portal.storeYou')} · ${turno.nombre}`
+                            : turno.nombre}
+                        </AppText>
+                        {detalle === '' ? null : (
+                          <AppText variant="help" tone="muted" numberOfLines={1}>
+                            {detalle}
+                          </AppText>
+                        )}
+                      </View>
+                      <AppText variant="body" tabular style={estilos.horasTienda}>
+                        {`${hora(turno.starts_at)}\u00a0–\u2060\u00a0${hora(turno.ends_at)}`}
+                      </AppText>
+                    </Row>
+                  );
+                })
+              )}
+            </Stack>
+          </View>
+        );
+      })}
+    </>
+  );
+}
+
 function FilaDelDia({
   dia,
   esHoy,
@@ -775,6 +967,7 @@ function FilaDelDia({
   zona,
   tipoDeTienda = null,
   loQueDije = [],
+  conQuien = null,
 }: {
   dia: DiaDelVendedor;
   esHoy: boolean;
@@ -784,6 +977,8 @@ function FilaDelDia({
   tipoDeTienda?: TipoDeTienda | null;
   /** Lo que dijo de ese día en «Mi disponibilidad» (1-oct): se ve al lado de su turno. */
   loQueDije?: readonly Disponibilidad[];
+  /** «Con Bruno y Carla» (5-oct): con quién coincide ese día. Solo en la semana. */
+  conQuien?: string | null;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -863,6 +1058,18 @@ function FilaDelDia({
         >
           {rotuloDelTurno}
         </AppText>
+        {/*
+          CON QUIÉN LE TOCA (5-oct): lo que Andree quería que supiera cada persona, debajo de
+          su propio turno, sin tener que abrir «Toda la tienda» y buscarse.
+        */}
+        {conQuien === null ? null : (
+          <Row gap={spacing.xs} align="center" testID={`mi-horario-con-${dia.dia}`}>
+            <Ionicons name="people-outline" size={14} color={colors.ink500} />
+            <AppText variant="help" tone="muted" style={estilos.centro}>
+              {conQuien}
+            </AppText>
+          </Row>
+        )}
         {/*
           UN TURNO QUE SE ESTÁ CAMBIANDO (4-oct). Se dice qué es en vez de callarlo: antes el
           día pasaba a «Libre» mientras quien gestiona lo editaba sin volver a publicar.
@@ -1012,4 +1219,15 @@ const useEstilos = estilosDelTema((colors) => ({
   hoy_info: { backgroundColor: colors.info50, borderColor: colors.info600 },
   hoy_offShift: { borderColor: colors.border },
   hoy_late: { backgroundColor: colors.danger50, borderColor: colors.danger600 },
+  diaTienda: { paddingVertical: spacing.md, paddingHorizontal: spacing.base },
+  turnoTienda: {
+    paddingVertical: spacing.xs,
+    paddingHorizontal: spacing.sm,
+    marginHorizontal: -spacing.sm,
+    borderRadius: radii.input,
+  },
+  /* Su fila, con fondo: dos señales con el «Tú» del texto, no solo color. */
+  turnoMio: { backgroundColor: colors.primary100 },
+  puntoDelPuesto: { width: 10, height: 10, borderRadius: 5, flexShrink: 0 },
+  horasTienda: { flexShrink: 0 },
 }));

@@ -27,6 +27,18 @@ type PersistedPreferences = {
    * de esta pantalla, no un permiso.
    */
   managerOrganizationId: string | null;
+  /**
+   * EL AVISO EMERGENTE DE CADA MARCA (5-oct): sí o no. Es del dispositivo, como el tema:
+   * quien tiene el panel abierto en el mostrador puede quererlo, y en el portátil de la
+   * oficina no. La campana guarda las marcas igual.
+   */
+  avisosEmergentes: boolean;
+  /**
+   * HASTA DÓNDE SE VIERON LOS AVISOS, por sede: la hora de llegada de la última marca que
+   * había al abrir la campana. Se guarda para que recargar no vuelva a pintar el contador
+   * con lo que ya se miró.
+   */
+  avisosVistosHasta: Record<string, string>;
 };
 
 type PreferencesState = PersistedPreferences & {
@@ -37,7 +49,12 @@ type PreferencesState = PersistedPreferences & {
   setTimeFormat: (format: TimeFormatPreference) => Promise<void>;
   setTheme: (theme: ThemePreference) => Promise<void>;
   setManagerOrganizationId: (organizationId: string | null) => Promise<void>;
+  setAvisosEmergentes: (activos: boolean) => Promise<void>;
+  marcarAvisosVistos: (locationId: string, hasta: string) => Promise<void>;
 };
+
+/** Sedes de las que se recuerda lo visto. Más no hace falta, y el guardado no crece sin fin. */
+const SEDES_CON_AVISOS_VISTOS = 12;
 
 /** es-PE arranca en 24 horas (§2). */
 const DEFAULTS: PersistedPreferences = {
@@ -51,6 +68,8 @@ const DEFAULTS: PersistedPreferences = {
    */
   theme: 'system',
   managerOrganizationId: null,
+  avisosEmergentes: true,
+  avisosVistosHasta: {},
 };
 
 /**
@@ -72,6 +91,8 @@ async function persistirActual(state: PreferencesState): Promise<void> {
     timeFormat: state.timeFormat,
     theme: state.theme,
     managerOrganizationId: state.managerOrganizationId,
+    avisosEmergentes: state.avisosEmergentes,
+    avisosVistosHasta: state.avisosVistosHasta,
   };
   await secureStorage.setJson(SECURE_KEYS.preferences, guardable);
 }
@@ -99,9 +120,25 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
     const timeFormat = stored?.timeFormat ?? DEFAULTS.timeFormat;
     const theme = stored?.theme ?? DEFAULTS.theme;
     const managerOrganizationId = stored?.managerOrganizationId ?? DEFAULTS.managerOrganizationId;
+    const avisosEmergentes =
+      typeof stored?.avisosEmergentes === 'boolean'
+        ? stored.avisosEmergentes
+        : DEFAULTS.avisosEmergentes;
+    const avisosVistosHasta =
+      stored?.avisosVistosHasta !== null && typeof stored?.avisosVistosHasta === 'object'
+        ? stored.avisosVistosHasta
+        : DEFAULTS.avisosVistosHasta;
 
     await changeLanguage(language);
-    set({ language, timeFormat, theme, managerOrganizationId, hydrated: true });
+    set({
+      language,
+      timeFormat,
+      theme,
+      managerOrganizationId,
+      avisosEmergentes,
+      avisosVistosHasta,
+      hydrated: true,
+    });
   },
 
   setLanguage: async (language) => {
@@ -134,6 +171,25 @@ export const usePreferencesStore = create<PreferencesState>((set, get) => ({
    */
   setManagerOrganizationId: async (managerOrganizationId) => {
     set({ managerOrganizationId });
+    await persistirActual(get());
+  },
+
+  setAvisosEmergentes: async (avisosEmergentes) => {
+    set({ avisosEmergentes });
+    await persistirActual(get());
+  },
+
+  /*
+   * Solo avanza: abrir la campana de una pestaña vieja no puede devolver a «sin ver» lo
+   * que ya se miró en otra más nueva.
+   */
+  marcarAvisosVistos: async (locationId, hasta) => {
+    const previo = get().avisosVistosHasta[locationId];
+    if (previo !== undefined && previo >= hasta) return;
+    const resto = Object.entries(get().avisosVistosHasta)
+      .filter(([sede]) => sede !== locationId)
+      .slice(-(SEDES_CON_AVISOS_VISTOS - 1));
+    set({ avisosVistosHasta: { ...Object.fromEntries(resto), [locationId]: hasta } });
     await persistirActual(get());
   },
 }));
