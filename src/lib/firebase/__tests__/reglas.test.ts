@@ -48,7 +48,10 @@ function aFirestore(campos: Record<string, unknown>): Record<string, unknown> {
   for (const [clave, valor] of Object.entries(campos)) {
     if (typeof valor === 'string') salida[clave] = { stringValue: valor };
     else if (typeof valor === 'boolean') salida[clave] = { booleanValue: valor };
-    else if (Array.isArray(valor)) {
+    // Los números se guardaban como `null`: una regla que compara `> 0` no tenía qué comparar.
+    else if (typeof valor === 'number' && Number.isInteger(valor)) {
+      salida[clave] = { integerValue: String(valor) };
+    } else if (Array.isArray(valor)) {
       salida[clave] = { arrayValue: { values: valor.map((v) => ({ stringValue: String(v) })) } };
     } else salida[clave] = { nullValue: null };
   }
@@ -479,15 +482,17 @@ describe('reglas de Firestore', () => {
 
   describe('un vendedor ve lo suyo y nada más', () => {
     const VENDEDOR = 'cuenta-del-vendedor';
-    const turno = (id: string, empleado: string) =>
+    const turno = (id: string, empleado: string, extra: Record<string, unknown> = {}) =>
       escribir(`shifts/${id}`, {
         id,
         organization_id: ORG,
         location_id: SEDE,
         employee_id: empleado,
         status: 'published',
+        publication_version: 2,
         starts_at: '2026-10-05T15:00:00.000Z',
         ends_at: '2026-10-05T23:00:00.000Z',
+        ...extra,
       });
     const jornada = (id: string, empleado: string) =>
       escribir(`work_sessions/${id}`, {
@@ -567,6 +572,43 @@ describe('reglas de Firestore', () => {
           ),
         ),
       );
+    });
+
+    /*
+     * SUS BORRADORES NUNCA PUBLICADOS NO SON SUYOS TODAVÍA (auditoría, 5-oct): su pantalla
+     * los escondía, pero el celular los descargaba. Sí lee el que ya se le publicó y quien
+     * gestiona está cambiando —el «por confirmar»—, con la consulta que hace su celular.
+     */
+    it('no lee sus borradores nunca publicados; sí el «por confirmar»', async () => {
+      await turno('turno-borrador', 'emp-yo', { status: 'draft', publication_version: 0 });
+      await turno('turno-cambiando', 'emp-yo', { status: 'draft', publication_version: 3 });
+      const db = entorno.authenticatedContext(VENDEDOR).firestore();
+
+      await assertFails(getDoc(doc(db, 'shifts', 'turno-borrador')));
+      await assertSucceeds(getDoc(doc(db, 'shifts', 'turno-cambiando')));
+      // La consulta de antes —todo lo suyo, publicado o no— ya no se deja.
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+            where('status', 'in', ['published', 'draft']),
+          ),
+        ),
+      );
+      const porConfirmar = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+            where('status', '==', 'draft'),
+            where('publication_version', '>', 0),
+          ),
+        ),
+      );
+      expect(porConfirmar.docs.map((d) => d.id)).toEqual(['turno-cambiando']);
     });
 
     it('no lee el turno, la jornada ni la ficha de otra persona', async () => {

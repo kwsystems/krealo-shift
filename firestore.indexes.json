@@ -284,6 +284,28 @@
       ]
     },
     {
+      "collectionGroup": "shifts",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "employee_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "publication_version",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
       "//": "Horario: los dias libres marcados de una semana en una sede. Rango sobre date_key, asi que el indice lleva los dos filtros de igualdad primero.",
       "collectionGroup": "rest_days",
       "queryScope": "COLLECTION",

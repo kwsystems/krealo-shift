@@ -237,8 +237,14 @@ service cloud.firestore {
       // Quien gestiona lo ve todo; un vendedor, solo lo suyo (30-sep: la vista del vendedor en
       // el celular). Con `isMember` a secas, cualquier cuenta de empleado podía leer por la API
       // los turnos de todo el equipo aunque su pantalla solo enseñara los suyos.
+      //
+      // Y DE LO SUYO, SOLO LO QUE SE LE DIO (auditoría, 5-oct): lo publicado y el borrador que
+      // ya se le publicó una vez —el «por confirmar»—. Un borrador NUNCA publicado no existe
+      // para la persona: su pantalla lo escondía, pero el celular lo descargaba igual.
       allow read: if isStaff(resource.data.organization_id)
-        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
+        || (isSelfEmployee(resource.data.organization_id, resource.data.employee_id)
+          && (resource.data.status == 'published'
+            || (resource.data.status == 'draft' && resource.data.publication_version > 0)));
       allow create: if managesLocation(
         request.resource.data.organization_id,
         request.resource.data.location_id

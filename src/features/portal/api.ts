@@ -166,6 +166,12 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
  * pasaría a decir «Libre» mientras se edita. Vuelve marcado como lo que es y la pantalla lo
  * dice «por confirmar» (ver `estaPorConfirmar`). Un borrador NUNCA publicado sigue sin
  * salir: esa semana todavía no existe para ella.
+ *
+ * EN DOS CONSULTAS, NO EN UNA (auditoría, 5-oct): pedir `status in [published, draft]` y
+ * filtrar aquí descargaba al celular los borradores que nunca se le publicaron, y la regla
+ * ahora no lo deja. Lo publicado va por días; lo «por confirmar» se pide entero —son pocos,
+ * los que quien gestiona está cambiando— y se recorta a los días aquí, porque Firestore no
+ * deja una desigualdad en dos campos sin otro índice.
  */
 export async function fetchMisTurnos(params: {
   organizationId: string;
@@ -173,24 +179,44 @@ export async function fetchMisTurnos(params: {
   fromISO: string;
   toISO: string;
 }): Promise<ShiftRow[]> {
-  return selectRows(z.array(shiftRowSchema), (db) =>
-    db
-      .from(TABLES.shifts)
-      .select(
-        'id, employee_id, location_id, job_role_id, starts_at, ends_at, timezone, planned_unpaid_break_minutes, employee_note, manager_note, status, publication_version, published_at, updated_at',
-      )
-      .eq('organization_id', params.organizationId)
-      .eq('employee_id', params.employeeId)
-      .in('status', ['published', 'draft'])
-      .gte('starts_at', params.fromISO)
-      .lt('starts_at', params.toISO)
-      .order('starts_at', { ascending: true }),
-  ).then((filas) =>
-    filas
-      .filter((fila) => fila.status === 'published' || estaPorConfirmar(fila))
+  const COLUMNAS =
+    'id, employee_id, location_id, job_role_id, starts_at, ends_at, timezone, planned_unpaid_break_minutes, employee_note, manager_note, status, publication_version, published_at, updated_at';
+  const [publicados, porConfirmar] = await Promise.all([
+    selectRows(z.array(shiftRowSchema), (db) =>
+      db
+        .from(TABLES.shifts)
+        .select(COLUMNAS)
+        .eq('organization_id', params.organizationId)
+        .eq('employee_id', params.employeeId)
+        .eq('status', 'published')
+        .gte('starts_at', params.fromISO)
+        .lt('starts_at', params.toISO)
+        .order('starts_at', { ascending: true }),
+    ),
+    selectRows(z.array(shiftRowSchema), (db) =>
+      db
+        .from(TABLES.shifts)
+        .select(COLUMNAS)
+        .eq('organization_id', params.organizationId)
+        .eq('employee_id', params.employeeId)
+        .eq('status', 'draft')
+        .gt('publication_version', 0),
+    ),
+  ]);
+  return (
+    [
+      ...publicados,
+      ...porConfirmar.filter(
+        (fila) =>
+          estaPorConfirmar(fila) &&
+          fila.starts_at >= params.fromISO &&
+          fila.starts_at < params.toISO,
+      ),
+    ]
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at))
       // La nota privada de quien gestiona no es para la persona: ni en memoria. Las nuevas ya
       // no viven en el turno (`schedules/notas-privadas.ts`); esto cubre las de antes.
-      .map((fila) => ({ ...fila, manager_note: null })),
+      .map((fila) => ({ ...fila, manager_note: null }))
   );
 }
 
