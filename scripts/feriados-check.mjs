@@ -31,6 +31,7 @@ import {
   esperarPantalla,
   irA,
   MARCADOR_ACCESO,
+  MARCADORES,
   servirExport,
   sinGlifos,
 } from './lib/arnes-web.mjs';
@@ -191,7 +192,12 @@ try {
   );
   await enTienda.locator('[data-testid="org-save"]').click();
   await enTienda.waitForTimeout(800);
-  await irA(enTienda, base, '/schedule', { asentar: 600 });
+  /*
+   * POR EL MENÚ, SIN RECARGAR: la demostración vive en memoria y `irA` recarga la página,
+   * así que volvía a la empresa sin tipo de tienda y no había nada que ver.
+   */
+  await enTienda.locator('a[href$="/schedule"]').first().click();
+  await esperarPantalla(enTienda, MARCADORES['/schedule'], { asentar: 800 });
   let marcadas = 0;
   for (let semana = 0; semana <= SEMANAS_COMO_MUCHO && marcadas === 0; semana += 1) {
     marcadas = await enTienda.locator('[data-testid^="fecha-comercial-"]:visible').count();

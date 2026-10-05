@@ -53,7 +53,8 @@ export function EtiquetaDeFeriado({
         </AppText>
       </Row>
       {conPago ? (
-        <AppText variant="help" tone="danger" testID={`feriado-pago-${dateKey}`}>
+        // Del tamaño del nombre del feriado: es su segunda línea, no un aviso aparte.
+        <AppText variant="label" tone="danger" testID={`feriado-pago-${dateKey}`}>
           {t('holidays.payShort')}
         </AppText>
       ) : null}
