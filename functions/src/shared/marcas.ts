@@ -149,3 +149,22 @@ export function marcasDeLaSesion(datos: DatosDeLaSesion): MarcaDeSesion[] {
 
   return [...marcas];
 }
+
+/**
+ * TARDANZA Y SALIDA ANTES SE MIDEN POR TURNO, NO POR JORNADA (5-oct), la misma regla que ya
+ * aplicaban las pantallas (`src/features/timesheets/puntualidad.ts`). Quien marca SALIDA para
+ * almorzar y vuelve a marcar ENTRADA deja dos jornadas del mismo turno: medida cada una sola
+ * contra el turno entero, la de la mañana «salió antes» y la de la tarde «llegó tarde», y
+ * eso quedaba guardado y salía en la exportación de Horas. De las jornadas de un turno, la
+ * tardanza es de la PRIMERA y la salida antes de la ÚLTIMA.
+ */
+export function marcasDentroDelTurno(
+  marcas: readonly MarcaDeSesion[],
+  posicion: { esLaPrimera: boolean; esLaUltima: boolean },
+): MarcaDeSesion[] {
+  return marcas.filter(
+    (marca) =>
+      !(marca === 'late_arrival' && !posicion.esLaPrimera) &&
+      !(marca === 'early_departure' && !posicion.esLaUltima),
+  );
+}

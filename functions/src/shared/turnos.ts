@@ -1,5 +1,5 @@
 import { COLLECTIONS, db, nowISO } from './admin';
-import { marcasDeLaSesion } from './marcas';
+import { marcasDeLaSesion, marcasDentroDelTurno, type MarcaDeSesion } from './marcas';
 import { politicasDe } from './politicas';
 
 /**
@@ -163,7 +163,19 @@ async function revisarSesiones(
   const sede = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
   const politicas = politicasDe(sede ?? {});
 
-  let cambiadas = 0;
+  /*
+   * PRIMERO SE MIDE CADA UNA, DESPUÉS POR TURNO (5-oct): de las jornadas de un mismo turno
+   * —la salida a almorzar marcada en el reloj— la tardanza es de la primera y la salida antes
+   * de la última. Sin esta segunda pasada, publicar la semana volvía a poner las dos marcas
+   * que `rebuildWorkSession` ya había quitado. Ver `marcasDentroDelTurno`.
+   */
+  const medidas: {
+    doc: FirebaseFirestore.QueryDocumentSnapshot;
+    antes: string[];
+    marcas: MarcaDeSesion[];
+    turnoId: string | null;
+    mismoTurno: boolean;
+  }[] = [];
   for (const doc of docs) {
     const sesion = doc.data();
     if (sesion.location_id !== locationId || typeof sesion.employee_id !== 'string') continue;
@@ -178,7 +190,7 @@ async function revisarSesiones(
       salida,
     });
     const antes = Array.isArray(sesion.flags) ? (sesion.flags as string[]) : [];
-    const marcas: string[] = marcasDeLaSesion({
+    const marcas: MarcaDeSesion[] = marcasDeLaSesion({
       turno: turno === null ? null : { starts_at: turno.starts_at, ends_at: turno.ends_at },
       entrada,
       salida,
@@ -188,13 +200,42 @@ async function revisarSesiones(
     });
     if (antes.includes('clock_drift')) marcas.push('clock_drift');
 
-    const mismoTurno = ((sesion.shift_id as string | null) ?? null) === (turno?.id ?? null);
+    medidas.push({
+      doc,
+      antes,
+      marcas,
+      turnoId: turno?.id ?? null,
+      mismoTurno: ((sesion.shift_id as string | null) ?? null) === (turno?.id ?? null),
+    });
+  }
+
+  const delTurno = new Map<string, typeof medidas>();
+  for (const medida of medidas) {
+    if (medida.turnoId === null) continue;
+    const clave = `${String(medida.doc.data().employee_id)}|${medida.turnoId}`;
+    delTurno.set(clave, [...(delTurno.get(clave) ?? []), medida]);
+  }
+  for (const grupo of delTurno.values()) {
+    grupo.sort((a, b) =>
+      String(a.doc.data().starts_at).localeCompare(String(b.doc.data().starts_at)),
+    );
+    grupo.forEach((medida, i) => {
+      medida.marcas = marcasDentroDelTurno(medida.marcas, {
+        esLaPrimera: i === 0,
+        esLaUltima: i === grupo.length - 1,
+      });
+    });
+  }
+
+  let cambiadas = 0;
+  for (const { doc, antes, marcas, turnoId, mismoTurno } of medidas) {
     const mismasMarcas =
-      antes.length === marcas.length && antes.every((marca) => marcas.includes(marca));
+      antes.length === marcas.length &&
+      antes.every((marca) => marcas.includes(marca as MarcaDeSesion));
     if (mismoTurno && mismasMarcas) continue;
 
     await doc.ref.update({
-      shift_id: turno?.id ?? null,
+      shift_id: turnoId,
       flags: marcas,
       recomputed_at: nowISO(),
       updated_at: nowISO(),

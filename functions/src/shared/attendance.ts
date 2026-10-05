@@ -9,7 +9,7 @@ import {
 import { COLLECTIONS, db, nowISO } from './admin';
 import { tipoEfectivo } from './eventos';
 import { enOrden, jornadaVigente, recorrer } from './secuencia';
-import { marcasDeLaSesion } from './marcas';
+import { marcasDeLaSesion, marcasDentroDelTurno, type MarcaDeSesion } from './marcas';
 import { politicasDe } from './politicas';
 import { turnoDeLaJornada } from './turnos';
 
@@ -386,7 +386,25 @@ export async function rebuildWorkSession(
   });
   const sedeDoc = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
 
-  const marcas = marcasDeLaSesion({
+  /*
+   * LAS OTRAS JORNADAS DEL MISMO TURNO (5-oct): quien marca salida para almorzar y vuelve
+   * tiene dos. La tardanza solo cuenta en la primera y la salida antes solo en la última, y
+   * a las hermanas se les quita la que dejó de ser suya. Ver `marcasDentroDelTurno`.
+   */
+  const hermanas =
+    turno === null
+      ? []
+      : (
+          await db
+            .collection(COLLECTIONS.workSessions)
+            .where('employee_id', '==', employeeId)
+            .where('shift_id', '==', turno.id)
+            .get()
+        ).docs.filter((doc) => doc.id !== sessionId);
+  const antes = hermanas.filter((doc) => String(doc.data().starts_at) < startsAt);
+  const despues = hermanas.filter((doc) => String(doc.data().starts_at) > startsAt);
+
+  const marcasSueltas = marcasDeLaSesion({
     turno: turno === null ? null : { starts_at: turno.starts_at, ends_at: turno.ends_at },
     entrada: startsAt,
     salida: endsAt,
@@ -395,6 +413,22 @@ export async function rebuildWorkSession(
     sinConexion: inicio.is_offline === true || salida?.is_offline === true,
     politicas: politicasDe(sedeDoc ?? {}),
   });
+  const marcas = marcasDentroDelTurno(marcasSueltas, {
+    esLaPrimera: antes.length === 0,
+    esLaUltima: despues.length === 0,
+  });
+  for (const [hermana, quitar] of [
+    ...antes.map((doc) => [doc, 'early_departure'] as const),
+    ...despues.map((doc) => [doc, 'late_arrival'] as const),
+  ]) {
+    const suyas = (hermana.data().flags as MarcaDeSesion[] | undefined) ?? [];
+    if (suyas.includes(quitar)) {
+      await hermana.ref.update({
+        flags: suyas.filter((marca) => marca !== quitar),
+        updated_at: nowISO(),
+      });
+    }
+  }
 
   await db
     .collection(COLLECTIONS.workSessions)
