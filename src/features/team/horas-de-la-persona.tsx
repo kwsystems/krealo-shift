@@ -41,6 +41,7 @@ import {
   type TimeFormatPreference,
 } from '@/utils/time';
 import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
+import { tramoConSalida } from '@/features/timesheets/textos-de-salida';
 
 /**
  * LAS HORAS DE UNA PERSONA, DÍA POR DÍA Y SEMANA POR SEMANA, en su ficha de Equipo.
@@ -293,6 +294,7 @@ type Jornada = {
   starts_at: string;
   ends_at: string | null;
   credit_reason?: string | null;
+  auto_clock_out?: boolean;
 };
 
 /**
@@ -318,7 +320,7 @@ function tramosPorDia(
         : formatClockTime(jornada.ends_at, timezone, timeFormat, language);
     const tramo = esCumplidoEspecial(jornada)
       ? `${entrada} – ${salida} · ${etiquetaDeCumplido(t, { credit_reason: jornada.credit_reason ?? null })}`
-      : `${entrada} – ${salida}`;
+      : tramoConSalida(t, jornada, `${entrada} – ${salida}`);
     porDia.set(dia, [...(porDia.get(dia) ?? []), tramo]);
   }
   return new Map([...porDia].map(([dia, tramos]) => [dia, tramos.join(' · ')]));

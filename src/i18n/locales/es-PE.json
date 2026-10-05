@@ -445,7 +445,9 @@
       "salida_a_pausa_one": "{{count}} salida convertida en pausa",
       "salida_a_pausa_other": "{{count}} salidas convertidas en pausa",
       "solicitud_aprobada_one": "{{count}} solicitud aprobada",
-      "solicitud_aprobada_other": "{{count}} solicitudes aprobadas"
+      "solicitud_aprobada_other": "{{count}} solicitudes aprobadas",
+      "salida_automatica_one": "{{count}} salida automática",
+      "salida_automatica_other": "{{count}} salidas automáticas"
     },
     "title": "Reportes",
     "subtitle": "Horas fichadas de esta sede. Mide presencia, no trabajo hecho: quien atiende en hora punta y quien está en una tienda vacía marcan lo mismo.",
@@ -1436,6 +1438,8 @@
     "reopened": "Periodo reabierto",
     "statusFilter": "Estado",
     "stillOpen": "Sin salida",
+    "autoExitLabel": "Salida automática",
+    "autoExitNoticeBody": "No marcó la salida y la jornada se cerró sola a la hora de fin de su turno. Si se fue a otra hora, corrige la salida aquí.",
     "absences": {
       "title_one": "{{count}} falta esta semana",
       "title_other": "{{count}} faltas esta semana",
@@ -1478,6 +1482,11 @@
       "stillIn": "Sigue dentro y su turno acabó a las {{end}}",
       "stillInNoShift": "Sigue dentro desde las {{in}}, sin turno",
       "stillInDetail": "Entró a las {{in}}. Si ya se fue, marca su salida.",
+      "autoExit": "No marcó la salida: se cerró sola a las {{time}}",
+      "autoExitDetail": "Se puso la hora de fin de su turno. Si se fue a otra hora, corrígela en la jornada.",
+      "autoExitNoShift": "No tenía turno: se cerró en su última marca, sin horas de más. Pon la hora a la que se fue.",
+      "autoExitOk": "La salida está bien",
+      "autoExitFix": "Corregir salida",
       "clockOutAt": "Marcar salida a las {{time}}",
       "otherTime": "Otra hora",
       "clockOutReason": "No marcó su salida: se pone la hora de fin de su turno.",

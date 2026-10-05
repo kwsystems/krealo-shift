@@ -23,6 +23,7 @@ import { useTheme } from '@/theme/use-theme';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
 import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
+import { tramoConSalida } from '@/features/timesheets/textos-de-salida';
 
 /**
  * Fila de sesión de trabajo (§11.4).
@@ -153,7 +154,8 @@ export function SessionRow({
                * que nadie marcó esas horas.
                */
               `${start} – ${end} · ${t('timesheet.fromSchedule')}`
-            : `${start} – ${end}`;
+            : // La salida que puso el sistema (5-oct) se dice: si no, parece fichada.
+              tramoConSalida(t, session, `${start} – ${end}`);
 
   // «Almorzando» si su pausa es la comida: ver `estadoVisible`.
   const visible =

@@ -20,6 +20,7 @@ export const TIPOS_DE_CORRECCION = [
   'solicitud_aprobada',
   'segun_horario',
   'cumplido_especial',
+  'salida_automatica',
 ] as const;
 export type TipoDeCorreccion = (typeof TIPOS_DE_CORRECCION)[number];
 
@@ -93,6 +94,7 @@ export function resumirCorrecciones(
     hora_corregida: 0,
     salida_a_pausa: 0,
     solicitud_aprobada: 0,
+    salida_automatica: 0,
   };
   let segunHorario = 0;
   let cumplidosEspeciales = 0;

@@ -139,6 +139,8 @@ export type GridProps = {
   sinLlegar?: ReadonlySet<string>;
   /** Los turnos cumplidos por un motivo especial (4-oct), con su jornada: ver `creditShiftAsWorked`. */
   cumplidos?: ReadonlyMap<string, { credit_reason: string | null; credit_note?: string | null }>;
+  /** Los turnos cuya salida puso el sistema (5-oct): ver `cierre-automatico.ts`. */
+  salidasAutomaticas?: ReadonlySet<string>;
 };
 
 /**
@@ -164,6 +166,7 @@ function avisoDeDisponibilidad(
 
 const SIN_FALTAS: ReadonlyMap<string, Falta> = new Map();
 const NADIE_SIN_LLEGAR: ReadonlySet<string> = new Set();
+const NINGUNA_SALIDA_AUTOMATICA: ReadonlySet<string> = new Set();
 const NINGUN_CUMPLIDO: ReadonlyMap<
   string,
   { credit_reason: string | null; credit_note?: string | null }
@@ -188,6 +191,7 @@ export function WeekGrid({
   faltas = SIN_FALTAS,
   sinLlegar = NADIE_SIN_LLEGAR,
   cumplidos = NINGUN_CUMPLIDO,
+  salidasAutomaticas = NINGUNA_SALIDA_AUTOMATICA,
 }: GridProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -368,6 +372,7 @@ export function WeekGrid({
                         falta={faltas.get(shift.id) ?? null}
                         sinLlegar={sinLlegar.has(shift.id)}
                         cumplido={cumplidos.get(shift.id) ?? null}
+                        salidaAutomatica={salidasAutomaticas.has(shift.id)}
                         ventana={ventana}
                         tonoDelPuesto={tonoDelPuesto([...jobRoleNames.keys()], shift.job_role_id)}
                         avisoDeDisponibilidad={avisoDeDisponibilidad(
@@ -433,6 +438,8 @@ export type DayListProps = {
   sinLlegar?: ReadonlySet<string>;
   /** Los turnos cumplidos por un motivo especial (4-oct), con su jornada: ver `creditShiftAsWorked`. */
   cumplidos?: ReadonlyMap<string, { credit_reason: string | null; credit_note?: string | null }>;
+  /** Los turnos cuya salida puso el sistema (5-oct): ver `cierre-automatico.ts`. */
+  salidasAutomaticas?: ReadonlySet<string>;
 };
 
 export function DayList({
@@ -456,6 +463,7 @@ export function DayList({
   faltas = SIN_FALTAS,
   sinLlegar = NADIE_SIN_LLEGAR,
   cumplidos = NINGUN_CUMPLIDO,
+  salidasAutomaticas = NINGUNA_SALIDA_AUTOMATICA,
 }: DayListProps) {
   const styles = useEstilos();
   const { t } = useTranslation();
@@ -533,6 +541,7 @@ export function DayList({
                     falta={faltas.get(shift.id) ?? null}
                     sinLlegar={sinLlegar.has(shift.id)}
                     cumplido={cumplidos.get(shift.id) ?? null}
+                    salidaAutomatica={salidasAutomaticas.has(shift.id)}
                     onPress={readOnly ? undefined : onSelectShift}
                     testID={`shift-${shift.id}`}
                   />

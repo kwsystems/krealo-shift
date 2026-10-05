@@ -176,6 +176,8 @@ export type ArregloDeCaso =
   | { tipo: 'debe'; sessionId: string; minutos: number; nota: string | null }
   | { tipo: 'justificado'; sessionId: string; nota: string | null }
   | { tipo: 'sin_refrigerio_ok'; sessionId: string }
+  /** La salida que puso el cierre automático está bien (5-oct). */
+  | { tipo: 'salida_automatica_ok'; sessionId: string }
   | { tipo: 'descontar_refrigerio'; sessionId: string }
   | {
       tipo: 'marcar_salida';
@@ -217,6 +219,13 @@ export async function arreglarCaso(arreglo: ArregloDeCaso): Promise<void> {
         p_work_session_id: arreglo.sessionId,
         p_case: 'sin_refrigerio',
         p_decision: 'worked_through',
+      });
+      return;
+    case 'salida_automatica_ok':
+      await llamar(RPC.resolveSessionCase, {
+        p_work_session_id: arreglo.sessionId,
+        p_case: 'salida_automatica',
+        p_decision: 'confirmed',
       });
       return;
     case 'descontar_refrigerio':

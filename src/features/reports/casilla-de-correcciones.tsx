@@ -9,6 +9,7 @@ const TIPOS = [
   'hora_corregida',
   'salida_a_pausa',
   'solicitud_aprobada',
+  'salida_automatica',
 ] as const;
 
 /**

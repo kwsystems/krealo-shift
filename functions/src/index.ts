@@ -54,6 +54,8 @@ export { claimInvitation, inviteMember } from './invitations';
  * se exporta desde aqui y sin esta linea sencillamente no existiria.
  */
 export { purgarFotosDeFichaje } from './purga-fotos';
+// La jornada que nadie cerró se cierra sola a la hora de fin del turno (5-oct).
+export { cerrarJornadasSinSalida } from './cierre-automatico';
 
 export {
   listMembers,

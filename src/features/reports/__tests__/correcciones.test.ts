@@ -20,13 +20,21 @@ const filas = [
   fila('segun_horario', 'a'),
   fila('segun_horario', 'a'),
   fila('cumplido_especial', 'b'),
+  // La salida que puso el sistema (5-oct): cuenta, porque es un fichaje que faltó.
+  fila('salida_automatica', 'a'),
 ];
 
 describe('resumen de correcciones', () => {
   it('cuenta por tipo y deja lo del horario aparte', () => {
     expect(resumirCorrecciones(filas, null)).toEqual({
-      total: 4,
-      porTipo: { fichaje_anadido: 2, hora_corregida: 1, salida_a_pausa: 0, solicitud_aprobada: 1 },
+      total: 5,
+      porTipo: {
+        fichaje_anadido: 2,
+        hora_corregida: 1,
+        salida_a_pausa: 0,
+        solicitud_aprobada: 1,
+        salida_automatica: 1,
+      },
       segunHorario: 2,
       // Miembro de mesa (4-oct): aparte, ni corrección ni «según horario».
       cumplidosEspeciales: 1,

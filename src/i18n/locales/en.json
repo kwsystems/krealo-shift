@@ -445,7 +445,9 @@
       "salida_a_pausa_one": "{{count}} clock-out turned into a break",
       "salida_a_pausa_other": "{{count}} clock-outs turned into breaks",
       "solicitud_aprobada_one": "{{count}} request approved",
-      "solicitud_aprobada_other": "{{count}} requests approved"
+      "solicitud_aprobada_other": "{{count}} requests approved",
+      "salida_automatica_one": "{{count}} automatic clock-out",
+      "salida_automatica_other": "{{count}} automatic clock-outs"
     },
     "title": "Reports",
     "subtitle": "Clocked hours for this location. It measures presence, not output: someone serving a rush and someone standing in an empty store clock the same.",
@@ -1436,6 +1438,8 @@
     "reopened": "Period reopened",
     "statusFilter": "Status",
     "stillOpen": "Still open",
+    "autoExitLabel": "Automatic clock-out",
+    "autoExitNoticeBody": "They did not clock out and the session closed on its own at the end of their shift. If they left at another time, fix the clock-out here.",
     "absences": {
       "title_one": "{{count}} absence this week",
       "title_other": "{{count}} absences this week",
@@ -1478,6 +1482,11 @@
       "stillIn": "Still clocked in; the shift ended at {{end}}",
       "stillInNoShift": "Clocked in since {{in}}, no shift",
       "stillInDetail": "Came in at {{in}}. If they already left, clock them out.",
+      "autoExit": "No clock-out: it closed on its own at {{time}}",
+      "autoExitDetail": "It was set to the end of their shift. If they left at another time, fix it in the session.",
+      "autoExitNoShift": "They had no shift: it closed at their last punch, with no extra hours. Set the time they left.",
+      "autoExitOk": "The clock-out is right",
+      "autoExitFix": "Fix clock-out",
       "clockOutAt": "Clock out at {{time}}",
       "otherTime": "Another time",
       "clockOutReason": "Didn’t clock out: the shift end time is used.",

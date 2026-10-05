@@ -641,6 +641,9 @@ function soloHoras(texto) {
       `la hora corregida de la demostración no se cuenta en ninguna de las dos semanas: ` +
         `«${estaSemana}» / «${anterior}»`,
     );
+  } else if (!/1 salida automática/.test(anterior)) {
+    // La salida que puso el sistema (5-oct), sembrada el lunes de la semana anterior.
+    problemas.push(`la salida automática de la demostración no se cuenta: «${anterior}»`);
   } else {
     console.log(`  correcciones        esta semana «${estaSemana}» · la anterior «${anterior}»`);
   }

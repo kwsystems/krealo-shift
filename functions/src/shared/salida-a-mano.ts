@@ -60,6 +60,14 @@ type Correccion = {
   newEndsAt: string;
   newStartsAt?: string | null;
   requestId?: string;
+  /**
+   * De dónde sale la salida, en los metadatos del fichaje: `salida_corregida` (quien
+   * gestiona) o `salida_automatica` (el cierre de las jornadas olvidadas). La jornada lo
+   * hereda al reconstruirse: ver `auto_clock_out` en `attendance.ts`.
+   */
+  origen?: 'salida_corregida' | 'salida_automatica';
+  /** El canal de la fila de `time_adjustments`: `manager_app` o `automatico`. */
+  canal?: 'manager_app' | 'automatico';
 };
 
 const minutos = (desde: string, hasta: string) =>
@@ -137,11 +145,16 @@ export async function corregirSalidaConFichaje(
      * `time_adjustments`, con el autor.
      */
     idDelFichaje = idSalida;
-    await db.collection(COLLECTIONS.timeEvents).doc(idSalida).update({
-      occurred_at: correccion.newEndsAt,
-      corregido_at: ahora,
-      corregido_por: correccion.uid,
-    });
+    await db
+      .collection(COLLECTIONS.timeEvents)
+      .doc(idSalida)
+      .update({
+        occurred_at: correccion.newEndsAt,
+        corregido_at: ahora,
+        corregido_por: correccion.uid,
+        // Una salida automática que alguien corrige deja de serlo: ya la miró una persona.
+        'metadata.origen': correccion.origen ?? 'salida_corregida',
+      });
   } else {
     idDelFichaje = `${organizationId}_salida_${sessionId}`;
     const seq = await reservarSecuencias(1);
@@ -163,7 +176,7 @@ export async function corregirSalidaConFichaje(
           },
           idDelFichaje,
           seq,
-          { origen: 'salida_corregida', work_session_id: sessionId },
+          { origen: correccion.origen ?? 'salida_corregida', work_session_id: sessionId },
         ),
       );
   }
@@ -201,7 +214,7 @@ export async function corregirSalidaConFichaje(
     reason: correccion.reason,
     created_by: correccion.uid,
     created_at: ahora,
-    channel: 'manager_app',
+    channel: correccion.canal ?? 'manager_app',
   };
   await db.collection(COLLECTIONS.timeAdjustments).add({
     ...comun,
@@ -212,7 +225,12 @@ export async function corregirSalidaConFichaje(
       occurred_at: salida === undefined ? null : (salida.occurred_at ?? null),
       ends_at: previa.ends_at ?? null,
     },
-    after_value: { event_type: 'clock_out', occurred_at: correccion.newEndsAt },
+    after_value: {
+      event_type: 'clock_out',
+      occurred_at: correccion.newEndsAt,
+      // La puso el sistema (5-oct): Reportes la cuenta aparte, como «salida automática».
+      ...(correccion.origen === 'salida_automatica' ? { origen: 'salida_automatica' } : {}),
+    },
   });
   if (
     correccion.newStartsAt !== null &&

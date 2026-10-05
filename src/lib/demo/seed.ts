@@ -337,6 +337,8 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
 
   let contadorSesion = 0;
   let contadorEvento = 0;
+  /** La jornada que el sistema cerró sola (5-oct), para su fila en las correcciones. */
+  let salidaAutomatica: { sesion: string; evento: string; salida: Date } | null = null;
 
   // Días cerrados: del lunes de la semana ANTERIOR hasta ayer, saltando domingos. Ver
   // el porqué de las dos semanas en el bloque de turnos.
@@ -384,6 +386,13 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       const enferma = persona === 1 && diaDeLaSemanaDelCaso === 1;
       const sinRefrigerio = persona === 4 && diaDeLaSemanaDelCaso === 4;
       const sinPausa = enferma || sinRefrigerio;
+      /*
+       * UNA SALIDA QUE PUSO EL SISTEMA (5-oct): el lunes de la semana anterior la segunda
+       * persona no marcó la salida y la jornada se cerró sola a las 14:00, fin de su turno
+       * (`functions/src/cierre-automatico.ts`). Sale en «Por resolver», en su fila de Horas,
+       * en Horario, en Equipo, en las correcciones de Reportes y en su celular.
+       */
+      const salidaSola = dia < 0 && persona === 1 && diaDeLaSemanaDelCaso === 0;
       const salida = enferma
         ? conHora(fecha, 10, 20)
         : cierra === 'tarde'
@@ -454,7 +463,8 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         organization_id: DEMO_ORG_ID,
         employee_id: empleadoId(persona + 1),
         location_id: ubicacion,
-        shift_id: (raras.length > 0 || sinPausa) && suTurno !== undefined ? suTurno.id : null,
+        shift_id:
+          (raras.length > 0 || sinPausa || salidaSola) && suTurno !== undefined ? suTurno.id : null,
         starts_at: aISO(entrada),
         ends_at: aISO(salida),
         gross_minutes: brutos,
@@ -470,6 +480,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
           ...raras,
         ],
         departure_reason: enferma ? 'medical' : null,
+        auto_clock_out: salidaSola,
         updated_at: aISO(salida),
       });
 
@@ -540,6 +551,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
             ['clock_out', salida, null],
           ]) as readonly (readonly [string, Date, string | null])[]) {
         contadorEvento += 1;
+        const puestaSola = salidaSola && tipo === 'clock_out';
         eventos.push({
           id: eventoId(contadorEvento),
           organization_id: DEMO_ORG_ID,
@@ -548,9 +560,17 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
           event_type: tipo,
           break_type: descanso,
           occurred_at: aISO(cuando),
-          source: 'kiosk',
+          source: puestaSola ? 'manager' : 'kiosk',
           is_offline: false,
+          ...(puestaSola ? { metadata: { origen: 'salida_automatica' } } : {}),
         });
+        if (puestaSola) {
+          salidaAutomatica = {
+            sesion: sesionId(contadorSesion),
+            evento: eventoId(contadorEvento),
+            salida: cuando,
+          };
+        }
       }
     }
   }
@@ -795,6 +815,31 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       channel: 'manager',
       author_name: 'Andree (demostración)',
     },
+    // La salida que puso el sistema (5-oct): sin autor, como en el servidor.
+    ...(salidaAutomatica === null
+      ? []
+      : [
+          {
+            id: id('bbbbbbbb', 2),
+            organization_id: DEMO_ORG_ID,
+            location_id: DEMO_LOCATION_1,
+            employee_id: empleadoId(2),
+            work_session_id: salidaAutomatica.sesion,
+            target_type: 'time_event',
+            target_id: salidaAutomatica.evento,
+            before_value: { event_type: 'clock_out', occurred_at: null, ends_at: null },
+            after_value: {
+              event_type: 'clock_out',
+              occurred_at: aISO(salidaAutomatica.salida),
+              origen: 'salida_automatica',
+            },
+            reason:
+              'Salida automática: no marcó la salida y la jornada se cerró sola a la hora de fin de su turno. Revísala.',
+            created_at: aISO(conHora(salidaAutomatica.salida, 23, 30)),
+            channel: 'automatico',
+            author_name: null,
+          },
+        ]),
   ];
 
   // -------------------------------------------------------------- períodos

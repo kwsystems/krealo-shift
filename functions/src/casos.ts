@@ -29,12 +29,14 @@ import { refrigerioCentrado } from './horario-cumplido';
  * desde la app, porque son horas que se pagan o se cobran.
  */
 
-const CASOS = ['faltan_horas', 'sin_refrigerio'] as const;
+// `salida_automatica` (5-oct): la jornada que se cerró sola; «la salida está bien».
+const CASOS = ['faltan_horas', 'sin_refrigerio', 'salida_automatica'] as const;
 type Caso = (typeof CASOS)[number];
 
 const DECISIONES: Record<Caso, readonly string[]> = {
   faltan_horas: ['owes', 'justified'],
   sin_refrigerio: ['worked_through'],
+  salida_automatica: ['confirmed'],
 };
 
 /** Más de una jornada entera no puede deberse por un solo día. */

@@ -80,6 +80,12 @@ export const workSessionSchema = z.object({
    */
   credit_reason: z.string().nullable().default(null),
   credit_note: z.string().nullable().default(null),
+  /**
+   * SALIDA PUESTA SOLA (5-oct): no marcó la salida y la jornada se cerró a la hora de fin de
+   * su turno (`functions/src/cierre-automatico.ts`). La escribe el servidor al reconstruir;
+   * las jornadas de antes no la traen.
+   */
+  auto_clock_out: z.boolean().default(false).catch(false),
   /*
    * LAS MARCAS RARAS QUE QUIEN GESTIONA YA DIO POR VISTAS (1-oct), una por marca: ver
    * `acknowledgeUnusualClock`. Las jornadas de antes no lo traen.
@@ -187,7 +193,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, avisos_vistos, casos_resueltos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
@@ -211,7 +217,7 @@ export async function fetchOpenWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, avisos_vistos, casos_resueltos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)

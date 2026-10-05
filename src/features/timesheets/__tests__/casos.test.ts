@@ -48,6 +48,7 @@ function jornada(extra: Partial<WorkSession>): WorkSession {
     departure_note: null,
     credit_reason: null,
     credit_note: null,
+    auto_clock_out: false,
     source: 'kiosk',
     avisos_vistos: [],
     casos_resueltos: [],
@@ -221,5 +222,28 @@ describe('un turno con varias jornadas (auditoría, 4-oct)', () => {
         timezone: TZ,
       }),
     ).toEqual([]);
+  });
+
+  describe('salida automática (5-oct)', () => {
+    it('la jornada que se cerró sola se revisa, con su turno', () => {
+      expect(casos([jornada({ auto_clock_out: true })])).toEqual([
+        expect.objectContaining({
+          tipo: 'salida_automatica',
+          id: 's1:salida_automatica',
+          turno: TURNO,
+        }),
+      ]);
+    });
+
+    it('«la salida está bien» la quita', () => {
+      expect(
+        casos([jornada({ auto_clock_out: true, casos_resueltos: ['salida_automatica'] })]),
+      ).toEqual([]);
+    });
+
+    it('sin turno también sale, y no esconde lo que le falta a otra jornada', () => {
+      const sola = jornada({ id: 's2', shift_id: null, auto_clock_out: true });
+      expect(casos([sola]).map((caso) => caso.tipo)).toEqual(['salida_automatica']);
+    });
   });
 });

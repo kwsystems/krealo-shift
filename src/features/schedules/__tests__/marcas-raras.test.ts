@@ -48,6 +48,7 @@ function jornada(extra: Partial<WorkSession> = {}): WorkSession {
     departure_note: null,
     credit_reason: null,
     credit_note: null,
+    auto_clock_out: false,
     source: 'kiosk',
     avisos_vistos: [],
     casos_resueltos: [],
@@ -99,9 +100,7 @@ describe('marcas raras de la semana', () => {
   });
 
   it('el resto de las marcas no son avisos de Horario', () => {
-    expect(raras([jornada({ flags: ['late_arrival', 'unscheduled', 'clock_drift'] })])).toEqual(
-      [],
-    );
+    expect(raras([jornada({ flags: ['late_arrival', 'unscheduled', 'clock_drift'] })])).toEqual([]);
   });
 
   it('con su turno fuera de la semana que se mira, sale igual, sin minutos', () => {

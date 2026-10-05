@@ -32,6 +32,8 @@ export const TIPOS_DE_CORRECCION = [
   'segun_horario',
   /** Un turno dado por cumplido por un motivo especial (4-oct): ver `cumplido-especial.ts`. */
   'cumplido_especial',
+  /** La salida que puso el sistema a quien no marcó (5-oct): ver `cierre-automatico.ts`. */
+  'salida_automatica',
 ] as const;
 export type TipoDeCorreccion = (typeof TIPOS_DE_CORRECCION)[number];
 
@@ -45,6 +47,7 @@ export function tipoDeCorreccion(fila: Fila): TipoDeCorreccion {
   if (typeof fila.request_id === 'string' && fila.request_id !== '') return 'solicitud_aprobada';
   if (despues.origen === 'horario') return 'segun_horario';
   if (despues.origen === 'especial') return 'cumplido_especial';
+  if (despues.origen === 'salida_automatica') return 'salida_automatica';
   if (typeof despues.reclassified_as === 'string') return 'salida_a_pausa';
   if (fila.target_type === 'time_event') return 'fichaje_anadido';
   return 'hora_corregida';

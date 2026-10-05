@@ -448,6 +448,13 @@ export async function rebuildWorkSession(
         credit_note:
           ((inicio.metadata as Record<string, unknown> | undefined)?.nota_especial as
             string | undefined) ?? null,
+        /*
+         * SALIDA PUESTA SOLA (5-oct): la jornada que nadie cerró se cierra a la hora de fin de
+         * su turno (`cierre-automatico.ts`) y queda así marcada, en cada reconstrucción, hasta
+         * que alguien corrija esa salida. Horas la enseña en «Por resolver».
+         */
+        auto_clock_out:
+          (salida?.metadata as Record<string, unknown> | undefined)?.origen === 'salida_automatica',
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       },

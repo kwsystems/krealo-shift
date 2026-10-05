@@ -11,6 +11,7 @@ import { CLAVE_DE_ESTADO, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso
 import { estadoDeFalta, type Falta } from '@/features/timesheets/faltas';
 import { iconoDeFalta, rotuloDeFaltaEnTurno } from '@/features/timesheets/textos-de-falta';
 import { etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
+import { etiquetaDeSalidaAutomatica } from '@/features/timesheets/textos-de-salida';
 import { borderWidth, radii, sizes, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTonos, type Tono } from '@/theme/tonos';
@@ -82,6 +83,7 @@ export function ShiftCard({
   falta = null,
   sinLlegar = false,
   cumplido = null,
+  salidaAutomatica = false,
   tonoDelPuesto = null,
   onPress,
   testID,
@@ -123,6 +125,11 @@ export function ShiftCard({
    */
   cumplido?: { credit_reason: string | null; credit_note?: string | null } | null;
   /**
+   * Si la salida de su jornada la puso el sistema (5-oct): no marcó y se cerró sola a la
+   * hora de fin del turno. La tarjeta lo dice, como Horas, Equipo y el celular.
+   */
+  salidaAutomatica?: boolean;
+  /**
    * EL COLOR DE SU PUESTO (1-oct), como en Homebase: un filo a la izquierda y la franja
    * del día en ese tono. Cajero siempre del mismo color. Ver `tonoDelPuesto`.
    */
@@ -163,6 +170,7 @@ export function ShiftCard({
     falta === null ? null : rotuloDeFaltaEnTurno(t, falta),
     sinLlegar ? t('schedule.notArrived') : null,
     cumplido === null ? null : etiquetaDeCumplido(t, cumplido),
+    salidaAutomatica ? etiquetaDeSalidaAutomatica(t) : null,
     shift.manager_note,
     shift.employee_note,
     minutesToHHmm(netMinutes),
@@ -367,6 +375,19 @@ export function ShiftCard({
           </AppText>
         </Row>
       )}
+
+      {salidaAutomatica ? (
+        <Row
+          gap={spacing.xs}
+          align="center"
+          testID={testID === undefined ? undefined : `${testID}-salida-automatica`}
+        >
+          <Ionicons name="time-outline" size={14} color={colors.warning600} />
+          <AppText variant="label" tone="muted" style={styles.textoDeFalta}>
+            {etiquetaDeSalidaAutomatica(t)}
+          </AppText>
+        </Row>
+      ) : null}
 
       {falta === null ? null : (
         <Row

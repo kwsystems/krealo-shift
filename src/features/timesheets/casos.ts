@@ -25,6 +25,9 @@ import type { WorkSession } from './api';
  *     bastante para haberlo tomado. «Descontar el del turno» o «trabajó sin refrigerio».
  *   - SIN SALIDA: sigue dentro y su turno acabó hace media hora o más —el caso de quien se
  *     fue sin marcar con la tienda ya cerrada—. «Marcar salida a la hora de fin de turno».
+ *   - SALIDA AUTOMÁTICA (5-oct): no marcó la salida y la jornada se cerró sola a la hora
+ *     de fin de su turno (`functions/src/cierre-automatico.ts`). «La salida está bien» o
+ *     «Corregir salida». Corregirla también lo resuelve: deja de ser automática.
  *   - SALIDA DUDOSA: la salida quedó en una hora que todavía no llegó, o la jornada pasa de
  *     dieciséis horas. Casi siempre es el día equivocado —una salida «de hoy a las 21:00»
  *     escrita pasada la medianoche—, y mientras siga así la jornada está viva en todas las
@@ -75,6 +78,13 @@ export type CasoPorResolver =
       dia: DateKey;
       /** La hora que se propone: el fin de su turno. `null` sin turno. */
       salidaPropuesta: string | null;
+    }
+  | {
+      tipo: 'salida_automatica';
+      id: string;
+      sesion: WorkSession;
+      turno: ShiftRow | null;
+      dia: DateKey;
     }
   | {
       tipo: 'salida_dudosa';
@@ -129,6 +139,15 @@ export function casosPorResolver(params: {
         });
       }
       continue;
+    }
+    if (sesion.auto_clock_out && !resuelto('salida_automatica')) {
+      casos.push({
+        tipo: 'salida_automatica',
+        id: `${sesion.id}:salida_automatica`,
+        sesion,
+        turno,
+        dia,
+      });
     }
     const futura = Date.parse(sesion.ends_at) > Date.parse(params.ahoraISO) + MARGEN_FUTURO_MS;
     if (
@@ -242,7 +261,13 @@ export function casosPorResolver(params: {
   }
 
   // Primero lo que sigue abierto —se está pagando ahora mismo—, y luego por día.
-  const orden = { sin_salida: 0, salida_dudosa: 1, sin_refrigerio: 2, faltan_horas: 3 } as const;
+  const orden = {
+    sin_salida: 0,
+    salida_dudosa: 1,
+    salida_automatica: 2,
+    sin_refrigerio: 3,
+    faltan_horas: 4,
+  } as const;
   return casos.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),
   );

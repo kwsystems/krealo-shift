@@ -14,6 +14,9 @@
  *    tocar las horas.
  * 5. EL CELULAR de la persona enseña «Horas que debes».
  * 6. EN UN TELÉFONO la lista y su hoja caben.
+ * 7. LA SALIDA QUE PUSO EL SISTEMA (5-oct): sale en «Por resolver» con su hora, la fila de
+ *    Horas y la tarjeta de Horario dicen «Salida automática», y «La salida está bien» quita el
+ *    caso sin quitar la marca.
  *
  * La semana es la ANTERIOR: la demostración la siembra entera, así que el arnés no depende
  * del día de la semana en que se corra.
@@ -73,7 +76,7 @@ async function casos(pagina) {
   return pagina.locator('[data-testid^="caso-"]').evaluateAll((nodos) =>
     nodos
       .map((n) => ({ id: n.getAttribute('data-testid').slice('caso-'.length), n }))
-      .filter(({ id }) => /:(faltan_horas|sin_refrigerio|sin_salida)$/.test(id))
+      .filter(({ id }) => /:(faltan_horas|sin_refrigerio|sin_salida|salida_automatica)$/.test(id))
       .map(({ id, n }) => ({ id, texto: (n.innerText || '').replace(/\s+/g, ' ').trim() })),
   );
 }
@@ -287,6 +290,61 @@ try {
     console.log(
       `  justificado y sin refrigerio: semana ${antes} → ${despues}; caja ${quedan ? 'sigue' : 'se fue'}`,
     );
+    await contexto.close();
+  }
+
+  /* ------------------------------------------- 7: la salida que puso el sistema (5-oct) */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await horasDeLaSemanaPasada(pagina);
+    const sola = (await casos(pagina)).find((c) => c.id.endsWith(':salida_automatica'));
+    if (sola === undefined) {
+      problemas.push('no sale en «Por resolver» la jornada que se cerró sola');
+    } else {
+      if (!/se cerró sola a las 2:00|se cerró sola a las 14:00/.test(sola.texto)) {
+        problemas.push(`el caso de la salida automática no dice la hora: «${sola.texto}»`);
+      }
+      const sesionId = sola.id.slice(0, -':salida_automatica'.length);
+      const fila = await pagina
+        .locator(`[data-testid="session-${sesionId}"]`)
+        .first()
+        .innerText()
+        .catch(() => '');
+      if (!/Salida automática/.test(fila)) {
+        problemas.push(
+          `la fila de Horas no dice «Salida automática»: «${fila.replace(/\s+/g, ' ')}»`,
+        );
+      }
+      await clic(pagina, `caso-${sola.id}-ok`);
+      if (!(await seFue(pagina, sola.id))) problemas.push('«La salida está bien» no quita el caso');
+      const filaDespues = await pagina
+        .locator(`[data-testid="session-${sesionId}"]`)
+        .first()
+        .innerText()
+        .catch(() => '');
+      if (!/Salida automática/.test(filaDespues)) {
+        problemas.push('dar la salida por buena borra «Salida automática» de la fila');
+      }
+
+      // Horario, por el menú —recargar perdería la demostración—, en la misma semana. Horas
+      // sigue montada detrás, así que todo se busca dentro de Horario.
+      await pagina.locator('a[href$="/schedule"]').first().click();
+      await esperarPantalla(pagina, MARCADORES['/schedule'], { asentar: 800 });
+      const horario = pagina.locator('[data-testid="manager-schedule"]');
+      const enHorario = () => horario.locator('[data-testid$="-salida-automatica"]').count();
+      let tarjetas = await enHorario();
+      if (tarjetas === 0) {
+        await horario.locator('[data-testid="week-previous"]').click();
+        await esperar(pagina, 1800);
+        tarjetas = await enHorario();
+      }
+      if (tarjetas === 0) problemas.push('la tarjeta de Horario no dice «Salida automática»');
+      console.log(
+        `  salida automática    «${sola.texto.slice(0, 80)}» · Horario ${tarjetas} tarjeta(s)`,
+      );
+    }
     await contexto.close();
   }
 

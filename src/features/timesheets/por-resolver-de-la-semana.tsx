@@ -198,6 +198,32 @@ export function PorResolverDeLaSemana({
               },
       };
     }
+    /*
+     * SALIDA PUESTA SOLA (5-oct): la jornada que nadie cerró se cerró a la hora de fin de su
+     * turno. Darla por buena, o corregirla en la jornada: corregirla también lo resuelve.
+     */
+    if (caso.tipo === 'salida_automatica') {
+      const fin = caso.sesion.ends_at ?? caso.sesion.starts_at;
+      return {
+        ...base,
+        que: t('timesheet.cases.autoExit', { time: hora(fin) }),
+        detalle:
+          caso.turno === null
+            ? t('timesheet.cases.autoExitNoShift')
+            : t('timesheet.cases.autoExitDetail'),
+        principal: {
+          etiqueta: t('timesheet.cases.autoExitOk'),
+          onPress: () =>
+            lanzar(caso.id, { tipo: 'salida_automatica_ok', sessionId: caso.sesion.id }),
+          testID: `caso-${caso.id}-ok`,
+        },
+        alternativa: {
+          etiqueta: t('timesheet.cases.autoExitFix'),
+          onPress: () => onVerJornada(caso.sesion),
+          testID: `caso-${caso.id}-corregir`,
+        },
+      };
+    }
     const propuesta = caso.salidaPropuesta;
     return {
       ...base,

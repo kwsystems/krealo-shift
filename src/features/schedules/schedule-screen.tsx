@@ -18,6 +18,7 @@ import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useSesionesAlDiaCon, useWorkSessions } from '@/features/timesheets/hooks';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import { esCumplidoEspecial } from '@/features/timesheets/textos-de-cumplido';
+import { esSalidaAutomatica } from '@/features/timesheets/textos-de-salida';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { acknowledgeUnusualClock } from '@/features/timesheets/api';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
@@ -325,6 +326,12 @@ export function ScheduleScreen({
       jornada.shift_id !== null && esCumplidoEspecial(jornada)
         ? [[jornada.shift_id, jornada] as const]
         : [],
+    ),
+  );
+  /** Los turnos cuya salida puso el sistema (5-oct): la tarjeta lo dice. */
+  const salidasAutomaticas = new Set(
+    (jornadasDeLaSemana.data ?? []).flatMap((jornada) =>
+      jornada.shift_id !== null && esSalidaAutomatica(jornada) ? [jornada.shift_id] : [],
     ),
   );
   const turnosSinMarcas =
@@ -892,6 +899,7 @@ export function ScheduleScreen({
                     faltas={faltasDeLaSemana.porTurno}
                     sinLlegar={sinLlegar}
                     cumplidos={cumplidos}
+                    salidasAutomaticas={salidasAutomaticas}
                   />
                 ) : view === 'week' ? (
                   <DayList
@@ -915,6 +923,7 @@ export function ScheduleScreen({
                     faltas={faltasDeLaSemana.porTurno}
                     sinLlegar={sinLlegar}
                     cumplidos={cumplidos}
+                    salidasAutomaticas={salidasAutomaticas}
                   />
                 ) : (
                   <Stack gap={spacing.base}>
@@ -950,6 +959,7 @@ export function ScheduleScreen({
                       faltas={faltasDeLaSemana.porTurno}
                       sinLlegar={sinLlegar}
                       cumplidos={cumplidos}
+                      salidasAutomaticas={salidasAutomaticas}
                     />
                   </Stack>
                 )}

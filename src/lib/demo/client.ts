@@ -442,6 +442,8 @@ function crearRpc(almacen: Almacen) {
               // `functions/src/shared/salida-a-mano.ts`.
               status:
                 nuevoFin === null ? fila.status : fila.status === 'open' ? 'complete' : fila.status,
+              // Corregida la salida, ya no es la que puso el sistema (5-oct).
+              auto_clock_out: typeof fin === 'string' ? false : fila.auto_clock_out,
               updated_at: new Date().toISOString(),
             };
           }),
@@ -1778,11 +1780,13 @@ function crearRpc(almacen: Almacen) {
                 ? 'segun_horario'
                 : despues.origen === 'especial'
                   ? 'cumplido_especial'
-                  : typeof despues.reclassified_as === 'string'
-                    ? 'salida_a_pausa'
-                    : fila.target_type === 'time_event'
-                      ? 'fichaje_anadido'
-                      : 'hora_corregida';
+                  : despues.origen === 'salida_automatica'
+                    ? 'salida_automatica'
+                    : typeof despues.reclassified_as === 'string'
+                      ? 'salida_a_pausa'
+                      : fila.target_type === 'time_event'
+                        ? 'fichaje_anadido'
+                        : 'hora_corregida';
           resultado.push({
             tipo,
             employee_id: fila.employee_id ?? sesion?.employee_id ?? null,

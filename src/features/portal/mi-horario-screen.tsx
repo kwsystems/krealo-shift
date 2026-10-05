@@ -56,6 +56,10 @@ import {
 } from '@/features/timesheets/justificaciones';
 import { etiquetaDeFalta, motivoDeFalta } from '@/features/timesheets/textos-de-falta';
 import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
+import {
+  esSalidaAutomatica,
+  marcaConSalidaAutomatica,
+} from '@/features/timesheets/textos-de-salida';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
@@ -801,7 +805,10 @@ function FilaDelDia({
         ? t('portal.markFromSchedule')
         : j.ends_at === null
           ? t('portal.markOpen', { from: hora(j.starts_at) })
-          : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
+          : // «Marcaste 10:00 – 19:00» mentiría: la salida la puso el sistema (5-oct).
+            esSalidaAutomatica(j)
+            ? marcaConSalidaAutomatica(t, hora(j.starts_at), hora(j.ends_at))
+            : t('portal.markRange', { from: hora(j.starts_at), to: hora(j.ends_at) }),
   );
   const rotuloDelTurno =
     dia.turnos.length > 0
