@@ -224,7 +224,8 @@
     "status": "Status",
     "flags": "Alerts",
     "regularHours": "Regular hours",
-    "overtimeHours": "Overtime hours"
+    "overtimeHours": "Overtime hours",
+    "holiday": "Public holiday"
   },
   "demo": {
     "banner": "Demo mode: this data is made up and resets on reload. There is no real server."
@@ -673,7 +674,14 @@
     "summaryFileName": "krealo-shift-summary-{{from}}_{{to}}.txt",
     "summaryFileNameDays_one": "krealo-shift-summary-{{count}}-day-{{from}}_{{to}}.txt",
     "summaryFileNameDays_other": "krealo-shift-summary-{{count}}-days-{{from}}_{{to}}.txt",
-    "punctualityNoDataShort": "Punctuality: no scheduled shifts to measure it against"
+    "punctualityNoDataShort": "Punctuality: no scheduled shifts to measure it against",
+    "csvHolidayHours": "Hours on holidays",
+    "csvHolidayDays": "Holidays worked",
+    "holidayWork": {
+      "title": "Worked on a public holiday",
+      "nobody": "Nobody worked that holiday.",
+      "footnote": "Net hours for that day, the same as in Timesheets. Tap someone to see only theirs."
+    }
   },
   "requests": {
     "proposedTime": "Proposed time",
@@ -1728,6 +1736,8 @@
   "holidays": {
     "label": "Holiday",
     "labelWithName": "Holiday · {{name}}",
+    "payShort": "Triple pay if worked",
+    "payRule": "Working a public holiday without another day off in exchange is paid triple: the day, the hours worked and 100% more (Peru, D.L. 713). With a substitute day off there is no surcharge.",
     "pe": {
       "anioNuevo": "New Year's Day",
       "juevesSanto": "Holy Thursday",
@@ -1744,6 +1754,35 @@
       "inmaculada": "Immaculate Conception",
       "ayacucho": "Battle of Ayacucho",
       "navidad": "Christmas Day"
+    }
+  },
+  "commercialDates": {
+    "hint": "A busy day: plan more people in the store.",
+    "storeType": "Store type",
+    "storeTypeHint": "Depending on the type, the calendar marks the busiest days of the year (for example, Children's Day for a toy store). Public holidays always show.",
+    "preview": "In {{year}} it will mark: {{list}}",
+    "types": {
+      "none": "Not set (holidays only)",
+      "jugueteria": "Toy store",
+      "ropa": "Clothing and shoes",
+      "libreria": "Books and school supplies",
+      "restaurante": "Restaurant or café",
+      "general": "General store"
+    },
+    "dates": {
+      "reyes": "Three Kings' Day",
+      "sanValentin": "Valentine's Day",
+      "campanaEscolar": "Back to school",
+      "diaDelNinoPeruano": "Peruvian Children's Day",
+      "diaDeLaMadre": "Mother's Day",
+      "diaDelPadre": "Father's Day",
+      "polloALaBrasa": "Rotisserie Chicken Day",
+      "gratificacionJulio": "July bonus season",
+      "diaDelNino": "Children's Day",
+      "halloween": "Halloween",
+      "blackFriday": "Black Friday",
+      "campanaNavidad": "Christmas season",
+      "nochevieja": "New Year's Eve"
     }
   }
 }

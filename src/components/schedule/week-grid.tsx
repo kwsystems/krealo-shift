@@ -22,7 +22,8 @@ import type { ShiftRow } from '@/features/schedules/api';
 import type { ScheduleWarning } from '@/features/schedules/conflicts';
 import type { EstadoDelTurno } from '@/features/schedules/en-turno';
 import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
-import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
+import { EtiquetasDelDia } from '@/components/schedule/feriado';
+import type { TipoDeTienda } from '@/domain/fechas-comerciales';
 import { formatDateKeyShort, formatDayColumn, type DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { borderWidth, radii, spacing } from '@/theme/tokens';
@@ -118,6 +119,8 @@ export type GridProps = {
   rows: EmployeeRow[];
   todayKey: DateKey;
   timezone: string;
+  /** El tipo de tienda: marca las fechas con más clientes. Ver `fechas-comerciales.ts`. */
+  tipoDeTienda?: TipoDeTienda | null;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   jobRoleNames: Map<string, string>;
@@ -171,6 +174,7 @@ export function WeekGrid({
   rows,
   todayKey,
   timezone,
+  tipoDeTienda = null,
   timeFormat,
   language,
   jobRoleNames,
@@ -270,8 +274,11 @@ export function WeekGrid({
               <AppText variant="label" tone={day === todayKey ? 'primary' : 'subtle'}>
                 {formatDayColumn(day, language)}
               </AppText>
-              {/* El feriado, al armar el horario: ver `src/domain/feriados-peru.ts`. */}
-              <EtiquetaDeFeriado dateKey={day} timezone={timezone} />
+              {/*
+                El feriado con su regla de pago, y la fecha con más clientes, al armar el
+                horario: ver `feriados-peru.ts` y `fechas-comerciales.ts`.
+              */}
+              <EtiquetasDelDia dateKey={day} timezone={timezone} tipo={tipoDeTienda} conPago />
             </View>
           ))}
         </Row>
@@ -409,6 +416,8 @@ export type DayListProps = {
   jobRoleNames: Map<string, string>;
   todayKey: DateKey;
   timezone: string;
+  /** El tipo de tienda: marca las fechas con más clientes. Ver `fechas-comerciales.ts`. */
+  tipoDeTienda?: TipoDeTienda | null;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   warningsFor: (shiftId: string) => ScheduleWarning[];
@@ -434,6 +443,7 @@ export function DayList({
   jobRoleNames,
   todayKey,
   timezone,
+  tipoDeTienda = null,
   timeFormat,
   language,
   warningsFor,
@@ -463,7 +473,7 @@ export function DayList({
                 <AppText variant="bodyStrong" tone={day === todayKey ? 'primary' : 'default'}>
                   {formatDayColumn(day, language)}
                 </AppText>
-                <EtiquetaDeFeriado dateKey={day} timezone={timezone} />
+                <EtiquetasDelDia dateKey={day} timezone={timezone} tipo={tipoDeTienda} conPago />
               </Stack>
               <AppText variant="label" tone="subtle" tabular>
                 {t('schedule.shiftsCount', { count: dayShifts.length })}

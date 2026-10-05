@@ -12,6 +12,8 @@ import {
   minutesByDay,
   minutesByReason,
   minutosEnFeriados,
+  trabajoEnFeriados,
+  feriadosPorPersona,
   punctuality,
 } from './aggregate';
 import {
@@ -39,6 +41,7 @@ import { BonoCard } from './bono-card';
 import { AsistenciaPorPersona, type FilaDeAsistencia } from './asistencia-por-persona';
 import { incidenciasDelPeriodo } from './incidencias';
 import { IncidenciasDelPeriodo } from './incidencias-del-periodo';
+import { FeriadosTrabajados } from './feriados-trabajados';
 import { programadoDelPeriodo } from './programado';
 import { ResumenDelPeriodo } from './resumen-del-periodo';
 import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
@@ -351,6 +354,9 @@ export function ReportsScreen() {
   const dias = minutesByDay(resumenFiltrado, periodo.dias);
   /* Lo trabajado en feriados, y si el periodo tiene alguno: ver `minutosEnFeriados`. */
   const enFeriados = minutosEnFeriados(resumenFiltrado, scope.timezone);
+  /* Quién trabajó cada feriado (4-oct): con el filtro de persona en pantalla, sin él en el CSV. */
+  const feriadosTrabajados = trabajoEnFeriados(resumenFiltrado, scope.timezone, periodo.dias);
+  const feriadosDeTodos = trabajoEnFeriados(filasResumen, scope.timezone, periodo.dias);
   const conFeriado = periodo.dias.some((dia) => feriadoDe(dia, scope.timezone) !== null);
   const puntualidad = useMemo(() => punctuality(sesionesFiltradas), [sesionesFiltradas]);
   // La de todos, para la tabla por persona y el ranking de tardanzas: no se filtran.
@@ -630,6 +636,7 @@ export function ReportsScreen() {
         contarFaltas(suyas).justificadas,
       ]),
     ),
+    holidaysByEmployee: feriadosPorPersona(feriadosDeTodos),
   });
   // Sin el filtro de persona: ver «Y se comparte SIN el filtro», arriba.
   const totalDeTodos = ranking.reduce((suma, fila) => suma + fila.netMinutes, 0);
@@ -660,6 +667,8 @@ export function ReportsScreen() {
             absences: t('reports.csvAbsences'),
             justifiedAbsences: t('reports.csvJustifiedAbsences'),
             breakMinutes: t('reports.csvBreakMinutes'),
+            holidayHours: t('reports.csvHolidayHours'),
+            holidayDays: t('reports.csvHolidayDays'),
           },
         });
         await compartirArchivo({
@@ -686,6 +695,7 @@ export function ReportsScreen() {
           punctuality: t('reports.onTime'),
           punctualityUnknown: t('reports.punctualityNoDataShort'),
           absences: t('reports.absences'),
+          holidays: t('reports.onHolidays'),
           topPerson: t('reports.summaryTop'),
           topReason: t('reports.summaryTopReason'),
           footer: t('reports.summaryFooter'),
@@ -696,6 +706,13 @@ export function ReportsScreen() {
         punctuality: puntualidadDeTodos,
         absences: faltasDelPeriodo.length,
         absencesDetail: detalleDeFaltas(t, faltasDelPeriodo),
+        holidays: {
+          minutes: feriadosDeTodos.reduce(
+            (suma, dia) => suma + dia.personas.reduce((s, p) => s + p.minutos, 0),
+            0,
+          ),
+          people: feriadosPorPersona(feriadosDeTodos).size,
+        },
         top:
           ranking[0] === undefined
             ? null
@@ -1050,6 +1067,15 @@ export function ReportsScreen() {
                 nombre={nombre}
                 timezone={scope.timezone}
                 timeFormat={scope.timeFormat}
+                language={language}
+                elegida={personaElegida}
+                onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}
+              />
+
+              {/* Quién trabajó cada feriado del periodo: ver `feriados-trabajados.tsx`. */}
+              <FeriadosTrabajados
+                trabajo={feriadosTrabajados}
+                nombre={nombre}
                 language={language}
                 elegida={personaElegida}
                 onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}

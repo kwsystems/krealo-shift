@@ -1,3 +1,4 @@
+import type { TipoDeTienda } from '@/domain/fechas-comerciales';
 import { z } from 'zod';
 
 import { zonaCanonica } from '@/domain/zona-horaria';
@@ -20,6 +21,8 @@ export type OrganizationPatch = {
   default_locale: string;
   default_timezone: string;
   week_starts_on: number;
+  /** El tipo de tienda (4-oct): qué fechas con más clientes marca el calendario. */
+  business_type: TipoDeTienda | null;
 };
 
 export async function updateOrganization(params: {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 
 import { AsyncSection } from '@/components/schedule/data-states';
+import { EtiquetasDelDia } from '@/components/schedule/feriado';
 import { InlineNotice, LimitBar, StatTile } from '@/components/schedule/fields';
 import { AnclaDePersona } from '@/components/ui/ancla';
 import { AppText } from '@/components/ui/app-text';
@@ -206,6 +207,16 @@ export default function ManagerHomeScreen() {
               <AppText variant="help" tone="subtle">
                 {formatLongDate(now, scope.timezone, language)}
               </AppText>
+              {/*
+                SI HOY ES FERIADO O UN DÍA CON MÁS CLIENTES, AQUÍ (4-oct): es lo primero que se
+                mira por la mañana, y las dos cosas cambian lo que hace falta hoy en la tienda.
+              */}
+              <EtiquetasDelDia
+                dateKey={hoy}
+                timezone={scope.timezone}
+                tipo={scope.organization?.business_type ?? null}
+                conPago
+              />
             </Stack>
             <SyncIndicator online={online} syncing={syncing} pendingCount={pendingCount} />
           </Row>

@@ -1,3 +1,4 @@
+import { feriadoDe } from '@/domain/feriados-peru';
 import { useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useMutation } from '@tanstack/react-query';
@@ -433,6 +434,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     overtimeHours: t('csv.overtimeHours'),
     status: t('csv.status'),
     flags: t('csv.flags'),
+    holiday: t('csv.holiday'),
   };
 
   const exportCsv = useMutation({
@@ -449,6 +451,10 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
         language,
         // Las mismas aprobadas que la pantalla: el archivo y los totales cuadran.
         horasExtraAprobadas: aprobadas,
+        nombreDelFeriado: (dia) => {
+          const feriado = feriadoDe(dia, scope.timezone);
+          return feriado === null ? '' : t(`holidays.pe.${feriado}`);
+        },
       });
       await shareCsv({ fileName: timesheetFileName({ from, to }), content });
       return rows.length;
@@ -510,6 +516,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
               horaExtraPorSesion={horaExtraPorSesion}
               unknownEmployeeLabel={t('team.unknownEmployee')}
               timezone={scope.timezone}
+              tipoDeTienda={scope.organization?.business_type ?? null}
               timeFormat={scope.timeFormat}
               language={language}
               onSelect={setSelected}

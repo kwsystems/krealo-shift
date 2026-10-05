@@ -33,7 +33,8 @@ export type CsvColumnKey =
   | 'regularHours'
   | 'overtimeHours'
   | 'status'
-  | 'flags';
+  | 'flags'
+  | 'holiday';
 
 export const CSV_COLUMNS: CsvColumnKey[] = [
   'employee',
@@ -49,6 +50,8 @@ export const CSV_COLUMNS: CsvColumnKey[] = [
   'overtimeHours',
   'status',
   'flags',
+  // Al final y no junto a la fecha: quien ya lee el archivo por posición no se descoloca.
+  'holiday',
 ];
 
 export type CsvLabels = Record<CsvColumnKey, string>;
@@ -73,6 +76,11 @@ export type CsvOptions = {
    * extra. Se pasan y no se leen de ninguna parte porque esta función es pura.
    */
   horasExtraAprobadas: ReadonlyMap<string, number>;
+  /**
+   * EL FERIADO DE CADA DÍA, por su nombre, o '' (4-oct): un feriado trabajado se paga
+   * distinto (D.L. 713), y quien hace la nómina lo tenía que buscar en el calendario.
+   */
+  nombreDelFeriado?: (dateKey: string) => string;
 };
 
 function minutesCell(value: number | null): string {
@@ -123,6 +131,7 @@ export function buildTimesheetCsv(rows: TimesheetExportRow[], options: CsvOption
       minutesCell(overtimeMinutes),
       row.status,
       (row.flags ?? []).join(' '),
+      options.nombreDelFeriado?.(row.work_date) ?? '',
     ]);
   });
 

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import { SessionRow, type HoraExtraDeLaFila } from './session-row';
 import { AppText } from '@/components/ui/app-text';
+import { EtiquetasDelDia } from '@/components/schedule/feriado';
+import type { TipoDeTienda } from '@/domain/fechas-comerciales';
 import { estadoDeFila, type EnCurso } from '@/features/timesheets/en-curso';
 import {
   dateKeyOf,
@@ -43,6 +45,8 @@ export type SessionListProps = {
   horaExtraPorSesion?: Map<string, HoraExtraDeLaFila>;
   unknownEmployeeLabel: string;
   timezone: string;
+  /** El tipo de tienda: la cabecera de cada día marca sus fechas con más clientes. */
+  tipoDeTienda?: TipoDeTienda | null;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   onSelect: (session: WorkSession) => void;
@@ -79,6 +83,7 @@ export function SessionList({
   horaExtraPorSesion,
   unknownEmployeeLabel,
   timezone,
+  tipoDeTienda = null,
   timeFormat,
   language,
   onSelect,
@@ -118,6 +123,9 @@ export function SessionList({
               : `${formatWeekdayShort(item.dia, language)} ${formatDateKeyShort(item.dia, language)}`
           }
           testID={`timesheet-day-${item.dia ?? 'dentro'}`}
+          dia={item.dia}
+          timezone={timezone}
+          tipoDeTienda={tipoDeTienda ?? null}
         />
       ) : (
         <SessionRow
@@ -143,6 +151,7 @@ export function SessionList({
       nowISO,
       unknownEmployeeLabel,
       timezone,
+      tipoDeTienda,
       timeFormat,
       language,
       onSelect,
@@ -183,13 +192,29 @@ function SeparadorEntreFilas({ leadingItem }: { leadingItem?: Elemento }) {
   return leadingItem?.tipo === 'dia' ? null : <SeparadorDeRegistro />;
 }
 
-function CabeceraDelDia({ texto, testID }: { texto: string; testID: string }) {
+function CabeceraDelDia({
+  texto,
+  testID,
+  dia,
+  timezone,
+  tipoDeTienda,
+}: {
+  texto: string;
+  testID: string;
+  dia: string | null;
+  timezone: string;
+  tipoDeTienda: TipoDeTienda | null;
+}) {
   const estilos = useEstilosDeCabecera();
   return (
     <View style={estilos.dia} testID={testID}>
       <AppText variant="label" tone="muted" accessibilityRole="header">
         {texto}
       </AppText>
+      {/* El feriado y su pago, junto a las horas de ese día: es lo que paga distinto. */}
+      {dia === null ? null : (
+        <EtiquetasDelDia dateKey={dia} timezone={timezone} tipo={tipoDeTienda} conPago />
+      )}
     </View>
   );
 }

@@ -878,6 +878,7 @@ export function ScheduleScreen({
                     rows={gridRows}
                     todayKey={todayKey}
                     timezone={scope.timezone}
+                    tipoDeTienda={scope.organization?.business_type ?? null}
                     timeFormat={scope.timeFormat}
                     language={language}
                     jobRoleNames={jobRoleNames}
@@ -901,6 +902,7 @@ export function ScheduleScreen({
                     jobRoleNames={jobRoleNames}
                     todayKey={todayKey}
                     timezone={scope.timezone}
+                    tipoDeTienda={scope.organization?.business_type ?? null}
                     timeFormat={scope.timeFormat}
                     language={language}
                     warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}
@@ -935,6 +937,7 @@ export function ScheduleScreen({
                       jobRoleNames={jobRoleNames}
                       todayKey={todayKey}
                       timezone={scope.timezone}
+                      tipoDeTienda={scope.organization?.business_type ?? null}
                       timeFormat={scope.timeFormat}
                       language={language}
                       warningsFor={(shiftId) => warningsForShift(analysis.warnings, shiftId)}

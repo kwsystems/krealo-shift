@@ -34,6 +34,8 @@ const ETIQUETAS: ReportExportLabels = {
   absences: 'Faltas',
   justifiedAbsences: 'Faltas justificadas',
   breakMinutes: 'Minutos de pausa',
+  holidayHours: 'Horas en feriado',
+  holidayDays: 'Feriados trabajados',
 };
 
 const horas = (parcial: Partial<EmployeeHours>): EmployeeHours => ({
@@ -58,6 +60,8 @@ describe('CSV del reporte', () => {
           absences: 0,
           justifiedAbsences: 0,
           breakMinutes: 0,
+          holidayMinutes: 0,
+          holidayDays: 0,
         },
       ],
       labels: ETIQUETAS,
@@ -80,16 +84,18 @@ describe('CSV del reporte', () => {
           absences: 0,
           justifiedAbsences: 0,
           breakMinutes: 30,
+          holidayMinutes: 0,
+          holidayDays: 0,
         },
       ],
       labels: ETIQUETAS,
     });
     const fila = csv.split('\r\n')[1] ?? '';
     expect(fila.startsWith('"Salazar, Bruno",')).toBe(true);
-    // Once columnas exactas: si la coma del nombre hubiera partido la fila, serían doce
+    // Trece columnas exactas: si la coma del nombre hubiera partido la fila, serían catorce
     // y todos los números de esta persona estarían corridos un sitio.
     const columnas = (fila.match(/,/g) ?? []).length - 1;
-    expect(columnas).toBe(10);
+    expect(columnas).toBe(12);
   });
 
   it('las columnas de la cabecera y las de los datos coinciden en número', () => {
@@ -104,13 +110,15 @@ describe('CSV del reporte', () => {
           absences: 0,
           justifiedAbsences: 0,
           breakMinutes: 45,
+          holidayMinutes: 0,
+          holidayDays: 0,
         },
       ],
       labels: ETIQUETAS,
     });
     const [cabecera = '', datos = ''] = csv.split('\r\n');
-    expect(cabecera.split(',')).toHaveLength(11);
-    expect(datos.split(',')).toHaveLength(11);
+    expect(cabecera.split(',')).toHaveLength(13);
+    expect(datos.split(',')).toHaveLength(13);
   });
 
   it('sin nadie, deja la cabecera y ninguna fila', () => {
@@ -342,7 +350,7 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
     footer: 'Son horas fichadas, no producción.',
   };
 
-  it('el CSV tiene exactamente estas once columnas y ninguna de notas', () => {
+  it('el CSV tiene exactamente estas trece columnas y ninguna de notas', () => {
     const cabecera = buildReportCsv({
       rows: [
         {
@@ -354,6 +362,8 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
           absences: 0,
           justifiedAbsences: 0,
           breakMinutes: 30,
+          holidayMinutes: 0,
+          holidayDays: 0,
         },
       ],
       labels: ETIQUETAS,
@@ -373,6 +383,8 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
       'Faltas',
       'Faltas justificadas',
       'Minutos de pausa',
+      'Horas en feriado',
+      'Feriados trabajados',
     ]);
   });
 
@@ -391,5 +403,21 @@ describe('lo que se comparte no lleva las notas de las pausas', () => {
     expect(texto).toContain('Otro');
     expect(texto).not.toContain('clínica');
     expect(texto).not.toContain('colegio');
+  });
+});
+
+describe('lo trabajado en feriados va en el archivo y en el resumen (4-oct)', () => {
+  it('dos columnas al final: horas y días de feriado de cada persona', () => {
+    const [fila] = buildExportRows({
+      ranking: [horas({ employeeId: 'e1', netMinutes: 960, regularMinutes: 960, days: 2 })],
+      nameOf: () => 'Ana',
+      punctuality: { onTimePercent: null, measured: 0, late: 0, unscheduled: 0, byEmployee: [] },
+      breakMinutesByEmployee: new Map(),
+      holidaysByEmployee: new Map([['e1', { minutos: 480, dias: 1 }]]),
+    });
+    const csv = buildReportCsv({ rows: [fila!], labels: ETIQUETAS });
+    const [cabecera, datos] = csv.split('\r\n');
+    expect(cabecera?.endsWith('Horas en feriado,Feriados trabajados')).toBe(true);
+    expect(datos?.endsWith(',08:00,1')).toBe(true);
   });
 });

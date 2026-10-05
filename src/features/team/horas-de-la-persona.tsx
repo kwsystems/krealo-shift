@@ -1,3 +1,6 @@
+import { useManagerScope } from '@/hooks/use-manager-scope';
+import { EtiquetasDelDia } from '@/components/schedule/feriado';
+import type { TipoDeTienda } from '@/domain/fechas-comerciales';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -89,6 +92,8 @@ export function HorasDeLaPersona({
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
+  // Para marcar en cada día el feriado y las fechas con más clientes, como en Horario.
+  const tipoDeTienda = useManagerScope().organization?.business_type ?? null;
   const [vista, setVista] = useState<Vista>('dia');
   const [offset, setOffset] = useState(0);
 
@@ -235,6 +240,8 @@ export function HorasDeLaPersona({
             diaEnCurso={diaEnCurso}
             faltas={faltasPorDia}
             language={language}
+            timezone={timezone}
+            tipoDeTienda={tipoDeTienda}
           />
         ) : (
           <SemanasDelMes
@@ -326,6 +333,8 @@ function TarjetaDeLaSemana({
   diaEnCurso,
   faltas,
   language,
+  timezone,
+  tipoDeTienda,
 }: {
   dias: readonly DateKey[];
   hoy: DateKey;
@@ -336,6 +345,8 @@ function TarjetaDeLaSemana({
   /** Lo que faltó cada día, ya escrito, y si cuenta en contra (rojo) o está justificado. */
   faltas: ReadonlyMap<DateKey, FaltaDelDia>;
   language: SupportedLanguage;
+  timezone: string;
+  tipoDeTienda: TipoDeTienda | null;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -392,6 +403,8 @@ function TarjetaDeLaSemana({
               </AppText>
             </View>
             <Stack gap={spacing.xs} style={estilos.centro}>
+              {/* El feriado (y su pago) y la fecha con más clientes, como en Horario. */}
+              <EtiquetasDelDia dateKey={dia} timezone={timezone} tipo={tipoDeTienda} conPago />
               {detalle === null ? null : (
                 <AppText
                   variant="label"

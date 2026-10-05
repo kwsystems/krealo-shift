@@ -1,3 +1,4 @@
+import { TIPOS_DE_TIENDA, type TipoDeTienda } from '@/domain/fechas-comerciales';
 import { z } from 'zod';
 
 import { callFunction } from '@/lib/firebase/functions';
@@ -33,6 +34,8 @@ const organizacionSchema = z.object({
   name: z.string(),
   default_timezone: z.string(),
   week_starts_on: z.number().int().nullable().default(null),
+  // Para marcar en su horario las fechas con más clientes: ver `fechas-comerciales.ts`.
+  business_type: z.enum(TIPOS_DE_TIENDA).nullable().default(null).catch(null),
 });
 
 const fichaSchema = z.object({
@@ -58,6 +61,8 @@ export type MiFicha = {
   /** La de la sede, o la de la empresa si no tiene sede. */
   timezone: string;
   weekStartsOn: number;
+  /** El tipo de tienda de su empresa: las fechas con más clientes salen en su horario. */
+  tipoDeTienda: TipoDeTienda | null;
 };
 
 /**
@@ -105,7 +110,7 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
   const [organizacion] = await selectRows(z.array(organizacionSchema), (client) =>
     client
       .from(TABLES.organizations)
-      .select('id, name, default_timezone, week_starts_on')
+      .select('id, name, default_timezone, week_starts_on, business_type')
       .eq('id', organizationId),
   );
   const [ficha] = await selectRows(z.array(fichaSchema), (client) =>
@@ -149,6 +154,7 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
     sede: sede ?? null,
     timezone: sede?.timezone ?? organizacion.default_timezone,
     weekStartsOn: sede?.settings.weekStartsOn ?? organizacion.week_starts_on ?? 1,
+    tipoDeTienda: organizacion.business_type,
   };
 }
 

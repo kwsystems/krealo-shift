@@ -29,6 +29,9 @@ export type ReportExportLabels = {
   absences: string;
   justifiedAbsences: string;
   breakMinutes: string;
+  /** Lo trabajado en feriados (4-oct): se paga distinto, D.L. 713. */
+  holidayHours: string;
+  holidayDays: string;
 };
 
 export type ReportExportRow = {
@@ -42,6 +45,9 @@ export type ReportExportRow = {
   /** De esas, las justificadas (2-oct): quien paga el bono necesita las dos cifras. */
   justifiedAbsences: number;
   breakMinutes: number;
+  /** Minutos y días trabajados en feriados: ver `trabajoEnFeriados`. */
+  holidayMinutes: number;
+  holidayDays: number;
 };
 
 /**
@@ -67,6 +73,9 @@ export function buildReportCsv(params: {
     params.labels.absences,
     params.labels.justifiedAbsences,
     params.labels.breakMinutes,
+    // Al final: quien ya lee el archivo por posición no se descoloca.
+    params.labels.holidayHours,
+    params.labels.holidayDays,
   ];
 
   const lineas = [cabecera.map(escapeCsvField).join(',')];
@@ -85,6 +94,8 @@ export function buildReportCsv(params: {
         String(fila.absences),
         String(fila.justifiedAbsences),
         String(fila.breakMinutes),
+        minutesToHHmm(fila.holidayMinutes),
+        String(fila.holidayDays),
       ].join(','),
     );
   }
@@ -101,6 +112,8 @@ export type SummaryLabels = {
   punctuality: string;
   punctualityUnknown: string;
   absences: string;
+  /** «Horas en feriado»: solo se dice si hubo. */
+  holidays?: string;
   topPerson: string;
   topReason: string;
   footer: string;
@@ -127,6 +140,8 @@ export function buildReportSummary(params: {
   absencesDetail?: string;
   top: { name: string; minutes: number } | null;
   topReason: { name: string; minutes: number } | null;
+  /** Lo trabajado en feriados del periodo, y por cuántas personas. */
+  holidays?: { minutes: number; people: number };
 }): string {
   const lineas = [params.labels.heading, ''];
 
@@ -149,6 +164,16 @@ export function buildReportSummary(params: {
       ? `• ${params.labels.absences}: ${params.absences}`
       : `• ${params.labels.absences}: ${params.absences} (${params.absencesDetail})`,
   );
+
+  if (
+    params.holidays !== undefined &&
+    params.holidays.minutes > 0 &&
+    params.labels.holidays !== undefined
+  ) {
+    lineas.push(
+      `• ${params.labels.holidays}: ${minutesToHHmm(params.holidays.minutes)} (${params.holidays.people})`,
+    );
+  }
 
   if (params.top !== null) {
     lineas.push(
@@ -186,10 +211,14 @@ export function buildExportRows(params: {
   absencesByEmployee?: ReadonlyMap<string, number>;
   /** De esas, las justificadas. */
   justifiedAbsencesByEmployee?: ReadonlyMap<string, number>;
+  /** Lo trabajado en feriados por persona: ver `feriadosPorPersona`. */
+  holidaysByEmployee?: ReadonlyMap<string, { minutos: number; dias: number }>;
 }): ReportExportRow[] {
   const puntual = new Map(params.punctuality.byEmployee.map((fila) => [fila.employeeId, fila]));
   const faltas = params.absencesByEmployee ?? new Map<string, number>();
   const justificadas = params.justifiedAbsencesByEmployee ?? new Map<string, number>();
+  const feriados =
+    params.holidaysByEmployee ?? new Map<string, { minutos: number; dias: number }>();
 
   const filas = params.ranking.map((fila) => {
     const suyo = puntual.get(fila.employeeId);
@@ -202,6 +231,8 @@ export function buildExportRows(params: {
       absences: faltas.get(fila.employeeId) ?? 0,
       justifiedAbsences: justificadas.get(fila.employeeId) ?? 0,
       breakMinutes: params.breakMinutesByEmployee.get(fila.employeeId) ?? 0,
+      holidayMinutes: feriados.get(fila.employeeId)?.minutos ?? 0,
+      holidayDays: feriados.get(fila.employeeId)?.dias ?? 0,
     };
   });
   /*
@@ -221,6 +252,8 @@ export function buildExportRows(params: {
       absences: cuantas,
       justifiedAbsences: justificadas.get(employeeId) ?? 0,
       breakMinutes: 0,
+      holidayMinutes: 0,
+      holidayDays: 0,
     });
   }
   return filas;

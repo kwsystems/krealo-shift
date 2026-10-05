@@ -28,6 +28,8 @@ import { JobRolesCard } from './job-roles-card';
 import { MembersCard } from './members-card';
 import { PinsCard } from './pins-card';
 import { MarcaCard } from './marca-card';
+import { CampoTipoDeTienda } from './tipo-de-tienda';
+import { dateKeyOf } from '@/features/schedules/week';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
 import { AppText } from '@/components/ui/app-text';
@@ -238,6 +240,7 @@ function OrganizationCard({
   const [timezone, setTimezone] = useState(organization.default_timezone);
   const [locale, setLocale] = useState(organization.default_locale);
   const [weekStartsOn, setWeekStartsOn] = useState(String(organization.week_starts_on));
+  const [tipoDeTienda, setTipoDeTienda] = useState(organization.business_type);
   const [saved, setSaved] = useState(false);
 
   const dayOptions = [0, 1, 2, 3, 4, 5, 6].map((day) => ({
@@ -260,6 +263,7 @@ function OrganizationCard({
     default_locale: locale,
     default_timezone: zonaCanonicaOrg ?? timezone.trim(),
     week_starts_on: Number(weekStartsOn),
+    business_type: tipoDeTienda,
   };
 
   const nameValid = patch.name.length > 1;
@@ -312,6 +316,19 @@ function OrganizationCard({
         }))}
         onChange={setLocale}
         testID="org-locale"
+      />
+
+      {/*
+        EL TIPO DE TIENDA, después del nombre y el idioma: dice qué es el negocio, y de eso
+        sale qué fechas marca el calendario. Ver `tipo-de-tienda.tsx`.
+      */}
+      <CampoTipoDeTienda
+        value={tipoDeTienda}
+        onChange={(tipo) => {
+          setSaved(false);
+          setTipoDeTienda(tipo);
+        }}
+        anio={Number(dateKeyOf(new Date().toISOString(), scope.timezone).slice(0, 4))}
       />
 
       <SelectField

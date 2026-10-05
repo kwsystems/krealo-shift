@@ -1,7 +1,7 @@
 import type { DailySummary, WorkSession } from '@/features/timesheets/api';
 import type { BreakReason } from '@/domain/break-reason';
 import { BREAK_REASONS } from '@/domain/break-reason';
-import { feriadoDe } from '@/domain/feriados-peru';
+import { feriadoDe, type ClaveDeFeriado } from '@/domain/feriados-peru';
 import { claveDelDia } from '@/features/timesheets/horas-extra';
 import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 import { splitRegularAndOvertime } from '@/utils/time';
@@ -240,4 +240,58 @@ export function minutosEnFeriados(summaries: DailySummary[], zona: string): numb
     (suma, dia) => (feriadoDe(dia.work_date, zona) === null ? suma : suma + dia.net_minutes),
     0,
   );
+}
+
+export type TrabajoEnFeriado = {
+  dia: string;
+  feriado: ClaveDeFeriado;
+  /** Quién trabajó ese feriado y cuánto, de más a menos. Vacío si nadie vino. */
+  personas: { employeeId: string; minutos: number }[];
+};
+
+/**
+ * QUIÉN TRABAJÓ CADA FERIADO DEL PERIODO (4-oct). Andree: «verifica en los reportes la
+ * gente que trabajó en feriado». La cifra de arriba (`minutosEnFeriados`) decía cuánto,
+ * pero no quién, y es la persona la que cobra el triple si no tuvo otro día de descanso a
+ * cambio (D.L. 713). Sale de los mismos resúmenes, así que la suma es la misma cifra.
+ *
+ * Van también los feriados en que no vino nadie: «nadie trabajó Angamos» es una respuesta.
+ */
+export function trabajoEnFeriados(
+  summaries: DailySummary[],
+  zona: string,
+  diasDelPeriodo: readonly string[],
+): TrabajoEnFeriado[] {
+  const resultado: TrabajoEnFeriado[] = [];
+  for (const dia of diasDelPeriodo) {
+    const feriado = feriadoDe(dia, zona);
+    if (feriado === null) continue;
+    const porPersona = new Map<string, number>();
+    for (const fila of summaries) {
+      if (fila.work_date !== dia || fila.net_minutes <= 0) continue;
+      porPersona.set(fila.employee_id, (porPersona.get(fila.employee_id) ?? 0) + fila.net_minutes);
+    }
+    resultado.push({
+      dia,
+      feriado,
+      personas: [...porPersona]
+        .map(([employeeId, minutos]) => ({ employeeId, minutos }))
+        .sort((a, b) => b.minutos - a.minutos),
+    });
+  }
+  return resultado;
+}
+
+/** Lo trabajado en feriados por persona —minutos y días—, para el CSV de quien paga. */
+export function feriadosPorPersona(
+  trabajo: readonly TrabajoEnFeriado[],
+): Map<string, { minutos: number; dias: number }> {
+  const mapa = new Map<string, { minutos: number; dias: number }>();
+  for (const { personas } of trabajo) {
+    for (const { employeeId, minutos } of personas) {
+      const actual = mapa.get(employeeId) ?? { minutos: 0, dias: 0 };
+      mapa.set(employeeId, { minutos: actual.minutos + minutos, dias: actual.dias + 1 });
+    }
+  }
+  return mapa;
 }

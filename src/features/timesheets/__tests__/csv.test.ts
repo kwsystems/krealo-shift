@@ -27,6 +27,7 @@ const labels: CsvLabels = {
   overtimeHours: 'Horas extra',
   status: 'Estado',
   flags: 'Alertas',
+  holiday: 'Feriado',
 };
 
 function row(overrides: Partial<TimesheetExportRow> = {}): TimesheetExportRow {
@@ -109,10 +110,10 @@ describe('exportación de la hoja de tiempo', () => {
 
     expect(lines).toHaveLength(2);
     expect(lines[0]).toBe(
-      'Empleado,Fecha,Entrada,Salida,Horas brutas,Descanso pagado,Descanso no pagado,Horas netas,Horas netas decimales,Horas regulares,Horas extra,Estado,Alertas',
+      'Empleado,Fecha,Entrada,Salida,Horas brutas,Descanso pagado,Descanso no pagado,Horas netas,Horas netas decimales,Horas regulares,Horas extra,Estado,Alertas,Feriado',
     );
     expect(lines[1]).toBe(
-      'Ana Torres,2026-08-27,09:00,18:30,09:30,00:00,01:00,08:30,8.50,08:00,00:30,complete,',
+      'Ana Torres,2026-08-27,09:00,18:30,09:30,00:00,01:00,08:30,8.50,08:00,00:30,complete,,',
     );
   });
 
@@ -145,7 +146,7 @@ describe('exportación de la hoja de tiempo', () => {
     );
 
     expect(csv.split('\r\n')[1]).toBe(
-      'Ana Torres,2026-08-27,09:00,,09:30,00:00,01:00,00:00,0.00,00:00,00:00,open,',
+      'Ana Torres,2026-08-27,09:00,,09:30,00:00,01:00,00:00,0.00,00:00,00:00,open,,',
     );
   });
 
@@ -157,7 +158,8 @@ describe('exportación de la hoja de tiempo', () => {
 
     const line = csv.split('\r\n')[1] ?? '';
     expect(line.startsWith('"Torres, Ana",')).toBe(true);
-    expect(line.endsWith('late_arrival clock_drift')).toBe(true);
+    // Las alertas, y detrás la columna del feriado (vacía ese día).
+    expect(line.endsWith('late_arrival clock_drift,')).toBe(true);
   });
 
   it('nombra el archivo con el rango exportado', () => {
@@ -202,5 +204,23 @@ describe('exportación de la hoja de tiempo', () => {
     });
 
     expect(csv.split('\r\n')[1]).toContain(',00:00,00:00,');
+  });
+});
+
+describe('el feriado de cada día va en el archivo (4-oct)', () => {
+  it('la última columna dice el feriado, o queda vacía', () => {
+    const csv = buildTimesheetCsv(
+      [row({ work_date: '2026-10-08' }), row({ work_date: '2026-10-09' })],
+      {
+        labels,
+        timezone: 'America/Lima',
+        horasExtraAprobadas: new Map(),
+        nombreDelFeriado: (dia) => (dia === '2026-10-08' ? 'Combate de Angamos' : ''),
+      },
+    );
+    const [cabecera, feriado, normal] = csv.split('\r\n');
+    expect(cabecera?.split(',').at(-1)).toBe('Feriado');
+    expect(feriado?.split(',').at(-1)).toBe('Combate de Angamos');
+    expect(normal?.split(',').at(-1)).toBe('');
   });
 });

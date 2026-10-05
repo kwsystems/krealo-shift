@@ -1,3 +1,4 @@
+import { TIPOS_DE_TIENDA } from '@/domain/fechas-comerciales';
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { z } from 'zod';
@@ -258,6 +259,13 @@ const organizationSchema = z.object({
     .regex(/^#[0-9A-Fa-f]{6}$/)
     .nullable()
     .default(null),
+  /**
+   * QUÉ TIPO DE TIENDA ES (4-oct): decide qué fechas con más clientes marca el calendario.
+   * Ver `src/domain/fechas-comerciales.ts`. Sin elegir —todas las empresas de antes— no
+   * marca ninguna, y un valor que esta versión no conoce cuenta como sin elegir en vez de
+   * tumbar la carga del panel.
+   */
+  business_type: z.enum(TIPOS_DE_TIENDA).nullable().default(null).catch(null),
 });
 
 export type ManagerOrganization = z.infer<typeof organizationSchema>;
@@ -370,7 +378,9 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
   const organization = await selectRows(organizationSchema, (client) =>
     client
       .from(TABLES.organizations)
-      .select('id, name, default_locale, default_timezone, week_starts_on, logo_path, brand_color')
+      .select(
+        'id, name, default_locale, default_timezone, week_starts_on, logo_path, brand_color, business_type',
+      )
       .eq('id', membership.organization_id)
       .single(),
   );

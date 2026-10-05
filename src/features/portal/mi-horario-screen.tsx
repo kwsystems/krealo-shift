@@ -24,7 +24,8 @@ import {
 import { AdminErrorState } from '@/components/schedule/data-states';
 import { SegmentedControl, StatTile } from '@/components/schedule/fields';
 import { MonthNavigator } from '@/components/schedule/week-tools';
-import { EtiquetaDeFeriado } from '@/components/schedule/feriado';
+import { EtiquetasDelDia } from '@/components/schedule/feriado';
+import { fechaComercialDe, type TipoDeTienda } from '@/domain/fechas-comerciales';
 import { feriadoDe } from '@/domain/feriados-peru';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton } from '@/components/ui/buttons';
@@ -325,6 +326,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               hora={hora}
               nowISO={nowISO}
               zona={tz}
+              tipoDeTienda={ficha.tipoDeTienda}
             />
           )}
 
@@ -384,13 +386,24 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                     piensa en la semana que viene.
                   */}
                   {diasSemana
-                    .filter((d) => feriadoDe(d.dia, tz) !== null)
+                    .filter(
+                      (d) =>
+                        feriadoDe(d.dia, tz) !== null ||
+                        fechaComercialDe(d.dia, tz, ficha.tipoDeTienda) !== null,
+                    )
                     .map((d) => (
                       <Row key={d.dia} gap={spacing.sm} align="center">
                         <AppText variant="label" tone="muted" tabular>
                           {`${formatWeekdayShort(d.dia, language)} ${formatDateKeyShort(d.dia, language)}`}
                         </AppText>
-                        <EtiquetaDeFeriado dateKey={d.dia} timezone={tz} />
+                        <Stack gap={0}>
+                          <EtiquetasDelDia
+                            dateKey={d.dia}
+                            timezone={tz}
+                            tipo={ficha.tipoDeTienda}
+                            conPago
+                          />
+                        </Stack>
                       </Row>
                     ))}
                 </Stack>
@@ -404,6 +417,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                       hora={hora}
                       language={language}
                       zona={tz}
+                      tipoDeTienda={ficha.tipoDeTienda}
                       loQueDije={disponibilidadDelDia(
                         miDisponibilidad.data ?? [],
                         ficha.employeeId,
@@ -515,6 +529,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
                       hora={hora}
                       language={language}
                       zona={tz}
+                      tipoDeTienda={ficha.tipoDeTienda}
                       loQueDije={disponibilidadDelDia(
                         miDisponibilidad.data ?? [],
                         ficha.employeeId,
@@ -550,6 +565,7 @@ function Hoy({
   hora,
   nowISO,
   zona,
+  tipoDeTienda,
 }: {
   dia: DiaDelVendedor;
   /** La jornada que tiene abierta ahora, aunque haya empezado ayer. */
@@ -564,6 +580,8 @@ function Hoy({
   nowISO: string;
   /** La de su sede: los feriados del Perú solo salen en sedes del Perú. */
   zona: string;
+  /** El de su empresa: las fechas con más clientes. Ver `fechas-comerciales.ts`. */
+  tipoDeTienda: TipoDeTienda | null;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -673,7 +691,7 @@ function Hoy({
       <AppText variant="label" tone="muted">
         {t('portal.today')}
       </AppText>
-      <EtiquetaDeFeriado dateKey={dia.dia} timezone={zona} />
+      <EtiquetasDelDia dateKey={dia.dia} timezone={zona} tipo={tipoDeTienda} conPago />
       <AppText variant="section" testID={`mi-horario-hoy-${tono}`}>
         {titulo}
       </AppText>
@@ -732,6 +750,7 @@ function FilaDelDia({
   hora,
   language,
   zona,
+  tipoDeTienda = null,
   loQueDije = [],
 }: {
   dia: DiaDelVendedor;
@@ -739,6 +758,7 @@ function FilaDelDia({
   hora: (instante: string) => string;
   language: SupportedLanguage;
   zona: string;
+  tipoDeTienda?: TipoDeTienda | null;
   /** Lo que dijo de ese día en «Mi disponibilidad» (1-oct): se ve al lado de su turno. */
   loQueDije?: readonly Disponibilidad[];
 }) {
@@ -809,7 +829,7 @@ function FilaDelDia({
       </View>
       <Stack gap={0} style={estilos.centro}>
         {/* El feriado ENCIMA del turno: es lo primero que alguien quiere saber de ese día. */}
-        <EtiquetaDeFeriado dateKey={dia.dia} timezone={zona} />
+        <EtiquetasDelDia dateKey={dia.dia} timezone={zona} tipo={tipoDeTienda} conPago />
         <AppText
           variant="bodyStrong"
           tabular

@@ -224,7 +224,8 @@
     "status": "Estado",
     "flags": "Alertas",
     "regularHours": "Horas regulares",
-    "overtimeHours": "Horas extra"
+    "overtimeHours": "Horas extra",
+    "holiday": "Feriado"
   },
   "demo": {
     "banner": "Modo demostración: los datos son inventados y se pierden al recargar. No es un servidor real."
@@ -673,7 +674,14 @@
     "summaryFileName": "krealo-shift-resumen-{{from}}_{{to}}.txt",
     "summaryFileNameDays_one": "krealo-shift-resumen-{{count}}-dia-{{from}}_{{to}}.txt",
     "summaryFileNameDays_other": "krealo-shift-resumen-{{count}}-dias-{{from}}_{{to}}.txt",
-    "punctualityNoDataShort": "Puntualidad: sin turnos programados para medirla"
+    "punctualityNoDataShort": "Puntualidad: sin turnos programados para medirla",
+    "csvHolidayHours": "Horas en feriado",
+    "csvHolidayDays": "Feriados trabajados",
+    "holidayWork": {
+      "title": "Trabajaron en feriado",
+      "nobody": "Nadie trabajó ese feriado.",
+      "footnote": "Las horas son las netas de ese día, las mismas de Horas. Toca a alguien para ver solo lo suyo."
+    }
   },
   "requests": {
     "proposedTime": "Hora propuesta",
@@ -1728,6 +1736,8 @@
   "holidays": {
     "label": "Feriado",
     "labelWithName": "Feriado · {{name}}",
+    "payShort": "Pago triple si se trabaja",
+    "payRule": "Trabajar un feriado sin otro día de descanso a cambio se paga triple: el día, lo trabajado y un 100 % más (D.L. 713). Con descanso sustitutorio no hay recargo.",
     "pe": {
       "anioNuevo": "Año Nuevo",
       "juevesSanto": "Jueves Santo",
@@ -1744,6 +1754,35 @@
       "inmaculada": "Inmaculada Concepción",
       "ayacucho": "Batalla de Ayacucho",
       "navidad": "Navidad"
+    }
+  },
+  "commercialDates": {
+    "hint": "Fecha con más clientes: conviene más gente en la tienda.",
+    "storeType": "Tipo de tienda",
+    "storeTypeHint": "Según el tipo, el calendario marca los días con más clientes del año (por ejemplo, el Día del Niño en una juguetería). Los feriados salen siempre.",
+    "preview": "En {{year}} marcará: {{list}}",
+    "types": {
+      "none": "Sin elegir (solo feriados)",
+      "jugueteria": "Juguetería",
+      "ropa": "Ropa y calzado",
+      "libreria": "Librería y útiles",
+      "restaurante": "Restaurante o cafetería",
+      "general": "Tienda en general"
+    },
+    "dates": {
+      "reyes": "Bajada de Reyes",
+      "sanValentin": "San Valentín",
+      "campanaEscolar": "Campaña escolar",
+      "diaDelNinoPeruano": "Día del Niño Peruano",
+      "diaDeLaMadre": "Día de la Madre",
+      "diaDelPadre": "Día del Padre",
+      "polloALaBrasa": "Día del Pollo a la Brasa",
+      "gratificacionJulio": "Gratificación de julio",
+      "diaDelNino": "Día del Niño",
+      "halloween": "Halloween",
+      "blackFriday": "Black Friday",
+      "campanaNavidad": "Campaña de Navidad",
+      "nochevieja": "Fin de año"
     }
   }
 }
