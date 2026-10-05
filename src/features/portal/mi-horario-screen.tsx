@@ -29,6 +29,7 @@ import { EtiquetasDelDia } from '@/components/schedule/feriado';
 import { fechaComercialDe, type TipoDeTienda } from '@/domain/fechas-comerciales';
 import { feriadoDe } from '@/domain/feriados-peru';
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { GhostButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import {
@@ -123,6 +124,7 @@ export function MiHorarioScreen() {
       <AppScreen tone="canvas" scroll testID="mi-horario">
         <ResponsiveContainer width="form">
           <Stack gap={spacing.lg}>
+            <MarcaKrealo alto={24} testID="mi-horario-marca" />
             <EmptyState
               icon="person-outline"
               title={
@@ -303,6 +305,11 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     <AppScreen tone="canvas" scroll testID="mi-horario">
       <ResponsiveContainer width="form">
         <Stack gap={spacing.lg}>
+          {/*
+            EL LOGO ARRIBA, PEQUEÑO (5-oct): esta pantalla no tiene cabecera, y quien la abre
+            desde un enlace del correo tiene que reconocer la app antes de leer su horario.
+          */}
+          <MarcaKrealo alto={24} testID="mi-horario-marca" />
           <Stack gap={spacing.xs}>
             <AppText variant="label" tone="primary">
               {ficha.sede === null

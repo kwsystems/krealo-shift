@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { useKioskStore } from '@/stores/kiosk-store';
@@ -35,6 +36,12 @@ export function KioskNotSetUpState() {
     <AppScreen tone="kiosk" testID="kiosk-not-set-up">
       <ResponsiveContainer width="form">
         <Stack gap={spacing.md} style={styles.centered}>
+          {/*
+            EL LOGO CUADRADO, CON SU NOMBRE (5-oct): un reloj sin activar todavía no es de
+            ninguna tienda, así que lo que se ve es la app. Activado, la esquina es del
+            negocio: su logotipo o su nombre, nunca los dos juntos.
+          */}
+          <MarcaKrealo variante="cuadrado" alto={140} testID="kiosk-marca" />
           <AppText variant="kioskTitle" style={styles.centerText}>
             {t('kiosk.notSetUpTitle')}
           </AppText>

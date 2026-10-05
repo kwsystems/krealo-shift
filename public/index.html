@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    <!--
+      LA MARCA DE KREALO SHIFT EN LA PESTAÑA Y AL INSTALAR (5-oct). Es la plantilla de Expo
+      para `output: 'single'` con los iconos del kit de marca: ICO de respaldo, SVG para
+      navegadores modernos, PNG de 32 y 16, el de iPhone de 180 y el manifiesto. Al haber
+      `public/favicon.ico`, Expo no genera el suyo desde `web.favicon`: una sola lista.
+      La barra del navegador va del color de la cabecera de la app, clara u oscura.
+    -->
+    <link rel="icon" href="/favicon.ico" sizes="16x16 32x32 48x48" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" sizes="any" />
+    <link rel="icon" href="/icons/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/icons/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1C1A24" media="(prefers-color-scheme: dark)" />
+    <meta name="apple-mobile-web-app-title" content="Krealo Shift" />
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>

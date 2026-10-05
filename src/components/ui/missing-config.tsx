@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { missingEnvKeys } from '@/lib/env';
 import { spacing } from '@/theme/tokens';
@@ -27,7 +28,7 @@ export function MissingConfigScreen() {
     <AppScreen tone="canvas" scroll testID="missing-config">
       <ResponsiveContainer width="form">
         <Stack gap={spacing.base}>
-          <AppText variant="title">{t('common.appName')}</AppText>
+          <MarcaKrealo alto={32} />
           <Card>
             <AppText variant="bodyStrong" tone="danger">
               {t('errors.configMissing', { keys: missingEnvKeys.join(', ') })}

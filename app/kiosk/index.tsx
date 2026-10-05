@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { NumericKeypad, PinDots } from '@/components/attendance/pin-pad';
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { GhostButton } from '@/components/ui/buttons';
 import { AppScreen, Row, Stack } from '@/components/ui/layout';
 import { LanguageSwitch } from '@/components/ui/language-switch';
@@ -441,7 +442,10 @@ export default function KioskIdleScreen() {
                 de la app queda solo como último recurso, para cuando no hay ni binding
                 —un instante en el arranque—.
               */}
-              {logoUrl === null ? (
+              {logoUrl === null && binding === null ? (
+                // Sin tienda todavía —un instante al arrancar—: el logo de la app (5-oct).
+                <MarcaKrealo alto={28} testID="kiosk-marca" />
+              ) : logoUrl === null ? (
                 <Stack gap={spacing.xs}>
                   <AppText variant="section" tone="primary">
                     {binding?.organizationName ?? t('common.appName')}

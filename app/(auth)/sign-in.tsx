@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { AccesoPorCorreo } from '@/features/acceso/acceso-por-correo';
 import { isDemoMode } from '@/lib/demo/config';
@@ -101,6 +102,8 @@ export default function SignInScreen() {
     <AppScreen tone="kiosk" scroll>
       <ResponsiveContainer width="form">
         <Stack gap={spacing.xl}>
+          {/* El logo de Krealo Shift encabeza el acceso (5-oct): es la puerta de la app. */}
+          <MarcaKrealo alto={36} testID="sign-in-marca" />
           <Stack gap={spacing.xs}>
             <AppText variant="title">{t('auth.signInTitle')}</AppText>
             <AppText variant="help" tone="subtle">

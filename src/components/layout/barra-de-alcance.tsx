@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack, useRespuestaAlPuntero } from '@/components/ui/layout';
 import { AdminSheet } from '@/components/schedule/fields';
@@ -36,11 +37,14 @@ import { useTheme } from '@/theme/use-theme';
  * la semana quitando, y el problema que hay que resolver no era que el formulario
  * estuviera mal: era que no se encontraba.
  */
+/** Desde este ancho cabe el icono de la app junto a la empresa y la sede. */
+const ANCHO_PARA_EL_ICONO = 360;
+
 export function BarraDeAlcance() {
   const estilos = useEstilos();
   const { t } = useTranslation();
   const { colors } = useTheme();
-  const { useSidebar } = useResponsive();
+  const { useSidebar, width } = useResponsive();
   const { organization, location } = useManagerScope();
   const [abierto, setAbierto] = useState(false);
   const respuesta = useRespuestaAlPuntero();
@@ -54,11 +58,17 @@ export function BarraDeAlcance() {
     <>
       <View style={estilos.barra} testID="desktop-header">
         {/*
-          LA MARCA SOLO EN PANTALLA ANCHA. En un teléfono el icono de la app y el cambiador
-          de tareas ya dicen qué aplicación es; repetirlo aquí gastaría en identidad un
-          ancho que hace falta para el dato que sí cambia.
+          EL LOGO DE KREALO SHIFT (5-oct): el largo en pantalla ancha y solo la K con reloj
+          en el teléfono. Allí el nombre entero gastaría el ancho que hace falta para el dato
+          que sí cambia —empresa y sede—; el icono ocupa 24 px y dice de qué app es. Por
+          debajo de 360 px ni el icono: medido a 320, cortaba los nombres de empresa y sede,
+          que se leían enteros sin él.
         */}
-        {useSidebar ? <AppText style={estilos.marca}>{t('app.name')}</AppText> : null}
+        {useSidebar ? (
+          <MarcaKrealo variante="horizontal" alto={30} />
+        ) : width >= ANCHO_PARA_EL_ICONO ? (
+          <MarcaKrealo variante="icono" alto={24} />
+        ) : null}
 
         <Pressable
           onPress={() => setAbierto(true)}
@@ -256,11 +266,6 @@ const useEstilos = estilosDelTema((colors) => ({
     backgroundColor: colors.surface,
     borderBottomColor: colors.border,
     borderBottomWidth: borderWidth.hairline,
-  },
-  marca: {
-    fontFamily: fontFamily.bold,
-    fontSize: fontSize.body,
-    color: colors.primary600,
   },
   /*
    * ALTO MÍNIMO TÁCTIL. Es lo único que se pulsa en esta barra y en un teléfono se pulsa

@@ -42,6 +42,9 @@ const TIPOS_ESPERADOS = {
   '.css': /css/,
   '.png': /image/,
   '.ico': /image|icon/,
+  // El logo, los favicons y el manifiesto (5-oct): servidos como lo que son, no como la página.
+  '.svg': /svg/,
+  '.webmanifest': /manifest|json/,
 };
 
 function archivos(dir) {

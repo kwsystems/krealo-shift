@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import { SegmentedControl } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
 import { useResponsive } from '@/hooks/use-responsive';
@@ -87,9 +88,8 @@ export function ManualScreen({ dentroDelPanel = false }: { dentroDelPanel?: bool
               */}
               {dentroDelPanel ? null : (
                 <Row justify="space-between" align="center" gap={spacing.sm} wrap>
-                  <AppText variant="label" tone="primary">
-                    Krealo Shift
-                  </AppText>
+                  {/* El logo, no el nombre escrito (5-oct): es la cabecera de esta página. */}
+                  <MarcaKrealo alto={30} />
                   <LanguageSwitch />
                 </Row>
               )}

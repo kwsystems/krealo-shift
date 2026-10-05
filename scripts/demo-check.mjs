@@ -218,6 +218,10 @@ if (DIR_PROD !== undefined) {
  *
  * Lo que se comprueba, entonces, es que la barra esté en LOS DOS y que en teléfono NO
  * lleve la marca: eso es lo que distingue «se adaptó» de «se olvidó el punto de corte».
+ *
+ * DESDE EL 5-OCT LA MARCA ES EL LOGO, no el nombre escrito: en ancho el largo, en el
+ * teléfono solo la K con reloj (el icono no es «la marca» que aquí se pide quitar: ocupa
+ * 24 px y no le roba sitio a la empresa). Se busca el logo largo, no el texto.
  */
 for (const [etiqueta, ancho, esperada] of [
   ['teléfono', 390, true],
@@ -234,9 +238,10 @@ for (const [etiqueta, ancho, esperada] of [
     );
   }
   // La marca solo en ancho: es la mitad que sí depende del punto de corte.
-  const conMarca = (await pag.locator('[data-testid="desktop-header"]').innerText().catch(() => ''))
-    .toLowerCase()
-    .includes('krealo shift');
+  const conMarca =
+    (await pag
+      .locator('[data-testid="desktop-header"] [data-testid^="marca-krealo-horizontal-"]')
+      .count()) > 0;
   const marcaEsperada = ancho >= 768;
   if (conMarca !== marcaEsperada) {
     problemas.push(

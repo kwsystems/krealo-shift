@@ -35,3 +35,8 @@ functions/lib/
 *.jpg
 *.ico
 *.ipa
+
+# Los archivos del kit de marca (5-oct), tal cual llegaron —sus sumas SHA-256 están en el kit—,
+# y la plantilla HTML de Expo: lleva `%WEB_TITLE%` y `%LANG_ISO_CODE%`, que Expo sustituye
+# como texto, y reformatearla es un cambio que solo se puede probar exportando.
+public/

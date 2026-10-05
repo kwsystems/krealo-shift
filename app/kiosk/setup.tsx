@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FormField } from '@/components/ui/form-field';
 import { AppText } from '@/components/ui/app-text';
+import { MarcaKrealo } from '@/components/ui/marca-krealo';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
 import { activateKiosk } from '@/features/kiosk/api';
@@ -109,6 +110,7 @@ export default function KioskSetupScreen() {
     <AppScreen tone="kiosk" scroll>
       <ResponsiveContainer width="form">
         <Stack gap={spacing.lg}>
+          <MarcaKrealo alto={32} testID="kiosk-setup-marca" />
           <Stack gap={spacing.xs}>
             <AppText variant="title">{t('kiosk.setupTitle')}</AppText>
             <AppText variant="help" tone="subtle">
