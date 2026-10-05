@@ -137,7 +137,18 @@ function conNavegadorDelSistema(chromium) {
   const lanzarOriginal = chromium.launch.bind(chromium);
   return {
     ...chromium,
-    launch: async (opciones = {}) => {
+    launch: async (opcionesPedidas = {}) => {
+      /*
+       * EL NAVEGADOR EN HORA DE LIMA (5-oct), como el de quien usa la app en la tienda. La
+       * demostración arma su semana con el reloj del navegador y la app con la zona de la
+       * sede; con el contenedor en UTC, de 19:00 a 24:00 de un domingo en Lima el navegador
+       * ya era lunes y las dos miraban semanas distintas: once arneses fallaban sin que la
+       * app tuviera nada mal. Quien pida otra zona con `env.TZ` la sigue teniendo.
+       */
+      const opciones = {
+        ...opcionesPedidas,
+        env: { ...process.env, TZ: 'America/Lima', ...(opcionesPedidas.env ?? {}) },
+      };
       try {
         return await lanzarOriginal(opciones);
       } catch (error) {

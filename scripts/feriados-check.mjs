@@ -10,7 +10,10 @@
  *   1. en la cabecera de la rejilla de Horario, en la columna del día y con su nombre;
  *   2. en el teléfono, en la lista de días de Horario;
  *   3. en la vista del vendedor, si su semana o la siguiente tiene uno;
- *   4. y en Reportes → Mes, lo trabajado en feriados, en el último mes que tuvo alguno.
+ *   4. y en Reportes → Mes, lo trabajado en feriados, en el último mes que tuvo alguno;
+ *   5. (5-oct) con su regla de pago: «Pago triple si se trabaja» bajo el feriado;
+ *   6. (5-oct) el tipo de tienda de Ajustes: elegida «Juguetería», Horario marca sus fechas
+ *      con más clientes (Halloween, Black Friday, Navidad…) en la columna de su día.
  *
  * La demostración está en Lima. Se avanza semana a semana hasta el próximo feriado, y no a
  * una fecha fija: el arnés tiene que pasar hoy y dentro de tres meses.
@@ -82,6 +85,13 @@ try {
     else if (enSuColumna !== 1)
       fallar(caso1, `el feriado del ${fecha} no está en la cabecera de su día`);
     else pasa(caso1, `${fecha}: «${texto}», ${semanas} semana(s) adelante`);
+
+    const caso5 = 'el feriado dice su regla de pago';
+    const pago = pagina.locator(`[data-testid="feriado-pago-${fecha}"]:visible`).first();
+    const textoDelPago = (await pago.count()) === 0 ? '' : ((await pago.textContent()) ?? '');
+    if (!/Pago triple si se trabaja/.test(textoDelPago))
+      fallar(caso5, `bajo el feriado del ${fecha} dice «${textoDelPago}»`);
+    else pasa(caso5, `«${textoDelPago}»`);
   }
   await ancho.close();
 
@@ -163,6 +173,50 @@ try {
     else pasa(caso4, `«${texto}»`);
   }
   await reportes.close();
+
+  /* ---------------------------------------------------------------- 6 */
+  const caso6 = 'con «Juguetería» en Ajustes, Horario marca sus fechas con más clientes';
+  const tienda = await navegador.newContext({ viewport: { width: 1440, height: 1600 } });
+  const enTienda = await tienda.newPage();
+  await entrarComoDemo(enTienda, base);
+  await irA(enTienda, base, '/schedule', { asentar: 600 });
+  const antes = await enTienda.locator('[data-testid^="fecha-comercial-"]').count();
+  await irA(enTienda, base, '/settings');
+  // Las tarjetas de Ajustes son plegables y arrancan cerradas: ver `empresas-check`.
+  const titulo = enTienda.getByText('Organización', { exact: true }).first();
+  if (await titulo.isVisible().catch(() => false)) await titulo.click();
+  await enTienda.locator('[data-testid="org-store-type-jugueteria"]').click();
+  const avance = sinGlifos(
+    (await enTienda.locator('[data-testid="org-store-type-preview"]').textContent()) ?? '',
+  );
+  await enTienda.locator('[data-testid="org-save"]').click();
+  await enTienda.waitForTimeout(800);
+  await irA(enTienda, base, '/schedule', { asentar: 600 });
+  let marcadas = 0;
+  for (let semana = 0; semana <= SEMANAS_COMO_MUCHO && marcadas === 0; semana += 1) {
+    marcadas = await enTienda.locator('[data-testid^="fecha-comercial-"]:visible').count();
+    if (marcadas === 0) {
+      await enTienda.locator('[data-testid="week-next"]').first().click();
+      await enTienda.waitForTimeout(250);
+    }
+  }
+  if (antes !== 0) fallar(caso6, `sin tipo de tienda ya salían ${antes} fechas comerciales`);
+  else if (!/Día del Niño|Halloween|Navidad|Reyes|Black Friday/.test(avance))
+    fallar(caso6, `Ajustes no enseña qué fechas marcará: «${avance}»`);
+  else if (marcadas === 0)
+    fallar(caso6, `en ${SEMANAS_COMO_MUCHO} semanas Horario no marcó ninguna fecha comercial`);
+  else {
+    const chip = enTienda.locator('[data-testid^="fecha-comercial-"]:visible').first();
+    const dia = (await chip.getAttribute('data-testid')).slice('fecha-comercial-'.length);
+    const enSuColumna = await enTienda
+      .locator(`[data-testid="grid-day-${dia}"] [data-testid="fecha-comercial-${dia}"]`)
+      .count();
+    const texto = sinGlifos((await chip.textContent()) ?? '');
+    await enTienda.screenshot({ path: 'capturas/fechas-comerciales-horario.png' });
+    if (enSuColumna !== 1) fallar(caso6, `la fecha del ${dia} no está en la cabecera de su día`);
+    else pasa(caso6, `${dia}: «${texto}»`);
+  }
+  await tienda.close();
 } catch (error) {
   fallar('el arnés no pudo completar la medida', error.message.split('\n')[0]);
 } finally {
@@ -175,5 +229,5 @@ if (problemas.length > 0) {
   process.exit(1);
 }
 console.log(
-  '\nFERIADOS — OK: Horario los marca en su día, en el teléfono también, el vendedor los ve y Reportes los cuenta.',
+  '\nFERIADOS — OK: Horario los marca en su día con su pago, en el teléfono también, el vendedor los ve, Reportes los cuenta y el tipo de tienda marca sus fechas.',
 );
