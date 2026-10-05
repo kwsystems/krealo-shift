@@ -95,6 +95,23 @@ try {
     if (personasVivo !== personasVivoHoras) {
       problemas.push(`dentro ahora: Reportes ${personasVivo}, Horas ${personasVivoHoras}`);
     }
+    /*
+     * EL NÚMERO GRANDE VA EN VIVO (5-oct): lo cerrado —«Horas netas» de Horas— más lo en
+     * curso —«Dentro ahora»—, y si hay algo en curso lo dice debajo con su cifra.
+     */
+    const totalVivo = aMinutos(await texto(pagina, 'report-total-vivo'));
+    const esperado = (netoHoras ?? 0) + (minutosVivoHoras ?? 0);
+    if (totalVivo !== esperado) {
+      problemas.push(
+        `el número grande de Reportes dice ${totalVivo} min y Horas netas + Dentro ahora son ${esperado}`,
+      );
+    }
+    if ((minutosVivo ?? 0) > 0) {
+      const nota = (await texto(pagina, 'report-total-nota')) ?? '';
+      if (aMinutos(nota) !== minutosVivo) {
+        problemas.push(`la línea de lo en curso no dice ${minutosVivo} min: «${nota}»`);
+      }
+    }
     const programado = aMinutos(
       /de (\d+:\d\d)/.exec((await texto(pagina, 'report-hero')) ?? '')?.[1] ?? null,
     );
@@ -123,7 +140,7 @@ try {
         problemas.push(`${nombreDeLaFila}: la tabla dice ${trabajado} y el ranking no`);
       }
       // La segunda cifra que no es «en curso» es lo programado.
-      const sinEnCurso = fila.texto.replace(/\+\d+:\d\d[^\n]*/g, '');
+      const sinEnCurso = fila.texto.replace(/(\+|incluye )\d+:\d\d[^\n]*/g, '');
       const plan = [...sinEnCurso.matchAll(/(\d+):(\d\d)/g)].map((m) => m[0])[1];
       sumaProgramado += aMinutos(plan) ?? 0;
     }

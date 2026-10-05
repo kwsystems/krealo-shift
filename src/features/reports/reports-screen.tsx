@@ -432,16 +432,36 @@ export function ReportsScreen() {
     );
 
   // --------------------------------------------------------------- ranking
-  const filasRanking: RankingRow[] = ranking.map((fila) => ({
+  /*
+   * EN VIVO, COMO EL TOTAL DE ARRIBA (5-oct): lo cerrado y, en verde, lo que lleva quien está
+   * dentro ahora. Con el ranking en cerrado y la tabla en vivo, la misma persona tenía dos
+   * cifras en la misma página. Quien solo tiene una jornada abierta también sale.
+   */
+  const conLoEnCurso = [...new Set([...ranking.map((fila) => fila.employeeId), ...dentro.keys()])]
+    .map((employeeId) => {
+      const fila = rankingPorPersona.get(employeeId);
+      const cerrado = fila?.netMinutes ?? 0;
+      const vivo = dentro.get(employeeId)?.minutos ?? 0;
+      return { employeeId, cerrado, vivo, dias: fila?.days ?? 0, total: cerrado + vivo };
+    })
+    .filter((fila) => fila.total > 0)
+    .sort((a, b) => b.total - a.total);
+  const filasRanking: RankingRow[] = conLoEnCurso.map((fila) => ({
     id: fila.employeeId,
     label: nombre(fila.employeeId),
-    valueText: minutesToHHmm(fila.netMinutes),
-    hint: t('reports.daysWorked', { count: fila.days }),
+    valueText: minutesToHHmm(fila.total),
+    hint:
+      fila.vivo > 0
+        ? t('reports.attendance.live', { hours: minutesToHHmm(fila.vivo) })
+        : t('reports.daysWorked', { count: fila.dias }),
     segments: [
-      { value: fila.netMinutes, color: chart(colors).series1, label: t('reports.worked') },
+      { value: fila.cerrado, color: chart(colors).series1, label: t('reports.worked') },
+      ...(fila.vivo > 0
+        ? [{ value: fila.vivo, color: colors.success600, label: t('reports.liveSegment') }]
+        : []),
     ],
   }));
-  const maxRanking = ranking[0]?.netMinutes ?? 0;
+  const maxRanking = conLoEnCurso[0]?.total ?? 0;
 
   // ------------------------------------------------------------ horas extra
   const filasExtra: RankingRow[] = conExtra.map((fila) => ({

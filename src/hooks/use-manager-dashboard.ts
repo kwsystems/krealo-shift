@@ -12,7 +12,11 @@ import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { OPEN_SESSION_ALERT_MINUTES } from '@/features/timesheets/alerts';
 import { conLasAbiertas, useJornadasAbiertas } from '@/features/timesheets/jornadas-abiertas';
 import { fetchWorkSessions } from '@/features/timesheets/api';
-import { minutosEnCurso } from '@/features/timesheets/en-curso';
+import {
+  dentroAhoraEnTotal,
+  enCursoPorSesionDe,
+  minutosEnCurso,
+} from '@/features/timesheets/en-curso';
 import {
   cubreElTurno,
   estadoDeFalta,
@@ -171,6 +175,11 @@ export type ManagerDashboard = {
   pendingSyncCount: number;
   scheduledMinutesThisWeek: number;
   workedMinutesThisWeek: number;
+  /**
+   * Lo que llevan quienes están dentro ahora (5-oct): la barra de la semana lo suma a lo
+   * cerrado y lo dice aparte, como el total de Reportes. Ver `dentroAhoraEnTotal`.
+   */
+  liveThisWeek: { personas: number; minutos: number };
   rightNow: RightNowEntry[];
   franjas: FranjaDeHoy[];
 };
@@ -548,6 +557,7 @@ export function useManagerDashboard(params: {
 
     let workedMinutesThisWeek = 0;
     for (const session of sessions) workedMinutesThisWeek += session.net_minutes ?? 0;
+    const liveThisWeek = dentroAhoraEnTotal(sessions, enCursoPorSesionDe(workingNow.data), nowISO);
 
     return {
       isPending: workingNow.isPending || weekShifts.isPending,
@@ -570,6 +580,7 @@ export function useManagerDashboard(params: {
       pendingSyncCount: localPending,
       scheduledMinutesThisWeek,
       workedMinutesThisWeek,
+      liveThisWeek,
       rightNow,
       franjas,
     };

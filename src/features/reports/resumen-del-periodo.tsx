@@ -8,6 +8,8 @@ import { estilosDelTema } from '@/theme/estilos';
 import { chart, radii, spacing } from '@/theme/tokens';
 import { minutesToHHmm } from '@/utils/time';
 
+import { notaDeEnCurso } from '@/features/timesheets/textos-de-en-curso';
+
 import type { Programado } from './programado';
 
 /**
@@ -23,8 +25,11 @@ import type { Programado } from './programado';
  * (`dentroPorEmpleado`), y al lado de lo que se programó, que es lo que hace que una cifra
  * signifique algo.
  *
- * El total de jornadas cerradas sigue siendo el número grande —`report-total`—, y es el
- * mismo de Horas: lo en curso va aparte y dicho, nunca sumado en silencio.
+ * EL NÚMERO GRANDE VA EN VIVO (5-oct): lo cerrado MÁS lo que va en curso. Andree vio
+ * «00:00 trabajadas» con una persona dentro desde hacía una hora y, en la misma tarjeta,
+ * «Va al 122 %»: el porcentaje contaba lo en curso y el número no. Ahora los dos cuentan lo
+ * mismo, y debajo se dice cuánto sigue abierto (`notaDeEnCurso`), sumado a la vista y no en
+ * silencio. Lo cerrado —`report-total`, el mismo total de Horas— queda en la leyenda.
  */
 export function ResumenDelPeriodo({
   titulo,
@@ -61,6 +66,8 @@ export function ResumenDelPeriodo({
       clave: 'trabajado',
       estilo: estilos.muestraTrabajado,
       texto: t('reports.hero.worked', { hours: minutesToHHmm(trabajado) }),
+      // Lo cerrado: el que los arneses comparan con «Horas netas» de Horas.
+      testID: 'report-total',
     },
     ...(enCursoVisible > 0
       ? [
@@ -106,16 +113,26 @@ export function ResumenDelPeriodo({
         ) : null}
       </Row>
 
-      <Row gap={spacing.sm} align="flex-end" wrap>
-        <AppText variant="title" tabular testID="report-total">
-          {minutesToHHmm(trabajado)}
-        </AppText>
-        <AppText variant="body" tone="muted" style={estilos.encoge}>
-          {programado.total > 0
-            ? t('reports.hero.ofPlanned', { hours: minutesToHHmm(programado.total) })
-            : t('reports.hero.workedOnly')}
-        </AppText>
-      </Row>
+      <Stack gap={spacing.xs}>
+        <Row gap={spacing.sm} align="flex-end" wrap>
+          <AppText variant="title" tabular testID="report-total-vivo">
+            {minutesToHHmm(hecho)}
+          </AppText>
+          <AppText variant="body" tone="muted" style={estilos.encoge}>
+            {programado.total > 0
+              ? t('reports.hero.ofPlanned', { hours: minutesToHHmm(programado.total) })
+              : t('reports.hero.workedOnly')}
+          </AppText>
+        </Row>
+        {enCursoVisible > 0 ? (
+          <Row gap={spacing.xs} align="center">
+            <View style={[estilos.muestra, estilos.muestraEnCurso]} />
+            <AppText variant="help" tone="muted" style={estilos.encoge} testID="report-total-nota">
+              {notaDeEnCurso(t, { personas: enCurso.personas, minutos: enCursoVisible })}
+            </AppText>
+          </Row>
+        ) : null}
+      </Stack>
 
       <Medidor
         trabajado={trabajado}
@@ -131,7 +148,7 @@ export function ResumenDelPeriodo({
         {leyenda.map((item) => (
           <Row key={item.clave} gap={spacing.xs} align="center">
             <View style={[estilos.muestra, item.estilo]} />
-            <AppText variant="label" tone="muted" tabular>
+            <AppText variant="label" tone="muted" tabular testID={item.testID}>
               {item.texto}
             </AppText>
           </Row>

@@ -49,6 +49,7 @@ import {
 import { dateKeyOf } from '@/features/schedules/week';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { CLAVE_DE_ESTADO, estadoVisible, ICONO_DE_ESTADO } from '@/features/timesheets/en-curso';
+import { notaDeEnCurso } from '@/features/timesheets/textos-de-en-curso';
 
 /**
  * Inicio administrativo (§11.1).
@@ -331,15 +332,25 @@ export default function ManagerHomeScreen() {
                   )}
                   {franjasDeHoy.length > 0 ? <LeyendaDeFranja testID="band-legend" /> : null}
 
+                  {/*
+                    LA SEMANA EN VIVO (5-oct), como el total de Reportes: lo cerrado más lo que
+                    llevan quienes están dentro, y debajo cuánto de eso sigue abierto. Decía
+                    «Registradas 00:00» con gente trabajando desde hacía una hora.
+                  */}
                   <LimitBar
                     label={`${t('admin.workedHours')} · ${t('admin.scheduledHours')}`}
-                    value={dashboard.workedMinutesThisWeek}
+                    value={dashboard.workedMinutesThisWeek + dashboard.liveThisWeek.minutos}
                     limit={dashboard.scheduledMinutesThisWeek}
-                    valueLabel={`${minutesToHHmm(dashboard.workedMinutesThisWeek)} / ${minutesToHHmm(
-                      dashboard.scheduledMinutesThisWeek,
-                    )}`}
+                    valueLabel={`${minutesToHHmm(
+                      dashboard.workedMinutesThisWeek + dashboard.liveThisWeek.minutos,
+                    )} / ${minutesToHHmm(dashboard.scheduledMinutesThisWeek)}`}
                     testID="scheduled-vs-worked"
                   />
+                  {dashboard.liveThisWeek.minutos > 0 ? (
+                    <AppText variant="help" tone="muted" testID="scheduled-vs-worked-nota">
+                      {notaDeEnCurso(t, dashboard.liveThisWeek)}
+                    </AppText>
+                  ) : null}
                   <SecondaryButton
                     label={t('admin.openSchedule')}
                     onPress={() => router.push('/(manager)/schedule')}

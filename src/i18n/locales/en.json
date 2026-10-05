@@ -462,6 +462,7 @@
     "people": "People who clocked in",
     "onTime": "Arrived on time",
     "whoWorkedMost": "Who logged the most hours",
+    "liveSegment": "In progress",
     "whoWorkedMostHint": "Most to least, for the period shown. Tap someone to see just theirs.",
     "hoursAreNotOutput": "These are clocked hours, not output. Two people with the same hours may have done very different work.",
     "noHours": "Nobody logged completed hours in this period.",
@@ -569,7 +570,7 @@
       "inside_other": "{{count}} people in now · {{hours}} in progress",
       "ofPlanned": "worked of {{hours}} scheduled",
       "workedOnly": "worked, with no published shifts to compare",
-      "worked": "Worked {{hours}}",
+      "worked": "Closed {{hours}}",
       "live": "In progress {{hours}}",
       "planned": "Scheduled {{hours}}",
       "plannedSoFar": "Scheduled so far {{hours}}",
@@ -577,7 +578,7 @@
       "notStarted": "No scheduled shift has started yet.",
       "soFar": "At {{percent}} % of what was scheduled so far.",
       "done": "{{percent}} % of what was scheduled was worked.",
-      "howItCounts": "Net hours, with clocked meal breaks deducted. A workday is added when the person clocks out; until then it shows as in progress, as in Hours. Scheduled means published shifts."
+      "howItCounts": "Net hours, with clocked meal breaks deducted. Hours of people working right now count too (in green): they become «closed» when the person clocks out. Hours shows them the same way, as «In right now» and «Net hours». Scheduled means published shifts."
     },
     "attendance": {
       "title": "Attendance by person",
@@ -590,7 +591,7 @@
       "onTime": "On time",
       "absences": "Absences",
       "overtime": "Overtime",
-      "live": "+{{hours}} in progress",
+      "live": "includes {{hours}} in progress",
       "onTimeOf_one": "{{onTime}} of {{count}}",
       "onTimeOf_other": "{{onTime}} of {{count}}",
       "meterLabel": "{{name}}: {{worked}} worked of {{planned}} scheduled"
@@ -1544,6 +1545,8 @@
     "live": "so far",
     "paused": "paused",
     "liveTile": "In right now",
+    "liveIncluded_one": "Includes {{hours}} from {{count}} person still working: it closes when they clock out.",
+    "liveIncluded_other": "Includes {{hours}} from {{count}} people still working: they close when they clock out.",
     "sessionTitle": "{{name}} · {{day}}",
     "nothingChanged": "You did not change the start or the end time. Write the new time in the field you want to fix.",
     "livePeople_one": "{{count}} person",

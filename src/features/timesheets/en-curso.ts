@@ -244,3 +244,19 @@ export function dentroPorEmpleado(
   }
   return map;
 }
+
+/**
+ * LO QUE LLEVA TODA LA GENTE QUE ESTÁ DENTRO AHORA, sumado (5-oct): la parte «en curso» del
+ * total en vivo de Reportes y de Inicio. La misma cuenta que «Dentro ahora» de Horas.
+ */
+export function dentroAhoraEnTotal(
+  sessions: readonly WorkSession[],
+  enCursoPorSesion: Map<string, EnCurso>,
+  nowISO: string,
+): { personas: number; minutos: number } {
+  const dentro = [...dentroPorEmpleado(sessions, enCursoPorSesion, nowISO).values()];
+  return {
+    personas: dentro.length,
+    minutos: dentro.reduce((suma, persona) => suma + persona.minutos, 0),
+  };
+}

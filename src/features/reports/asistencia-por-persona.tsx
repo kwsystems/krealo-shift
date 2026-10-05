@@ -135,7 +135,8 @@ function useTextos(fila: FilaDeAsistencia, diferencia: number, incluyeHoy: boole
   const { t } = useTranslation();
   const signo = diferencia > 0 ? '+' : diferencia < 0 ? '−' : '';
   return {
-    trabajado: minutesToHHmm(fila.trabajado),
+    // En vivo, como el total de arriba (5-oct): lo cerrado más lo que va en curso, dicho debajo.
+    trabajado: minutesToHHmm(fila.trabajado + fila.enCurso),
     enCurso:
       fila.enCurso > 0
         ? t('reports.attendance.live', { hours: minutesToHHmm(fila.enCurso) })

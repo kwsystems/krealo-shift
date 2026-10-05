@@ -130,6 +130,17 @@ try {
     if (programadoInicio !== programadoReportes) {
       problemas.push(`programado: Inicio ${programadoInicio} min, Reportes ${programadoReportes}`);
     }
+    /*
+     * LA SEMANA EN VIVO, IGUAL EN INICIO Y EN REPORTES (5-oct): las dos suman lo cerrado y lo
+     * que va en curso. Inicio decía «Registradas 00:00» con gente trabajando.
+     */
+    const trabajadoInicio = aMinutos(semanaInicio.split('/')[0] ?? '');
+    const trabajadoReportes = aMinutos(await texto(pagina, '[data-testid="report-total-vivo"]'));
+    if (trabajadoInicio !== trabajadoReportes) {
+      problemas.push(
+        `trabajado esta semana: Inicio ${trabajadoInicio} min, Reportes ${trabajadoReportes}`,
+      );
+    }
     const vivoReportes = await texto(pagina, '[data-testid="report-live"]');
     const personasReportes = Number(/(\d+)\s+person/.exec(vivoReportes)?.[1] ?? 0);
 

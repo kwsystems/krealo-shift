@@ -93,7 +93,7 @@
     "upcoming": "Próximos a entrar",
     "rightNow": "Ahora mismo",
     "scheduledHours": "Programadas",
-    "workedHours": "Registradas",
+    "workedHours": "Trabajadas",
     "bandLegendShift": "Turno",
     "bandLegendWorked": "Trabajado",
     "bandLegendLate": "Llegó tarde",
@@ -462,6 +462,7 @@
     "people": "Personas que ficharon",
     "onTime": "Llegó a tiempo",
     "whoWorkedMost": "Quién acumuló más horas",
+    "liveSegment": "En curso",
     "whoWorkedMostHint": "De más a menos, en el periodo elegido. Toca a alguien para ver solo lo suyo.",
     "hoursAreNotOutput": "Son horas fichadas, no producción. Dos personas con las mismas horas pueden haber hecho cosas muy distintas.",
     "noHours": "Nadie fichó horas completas en este periodo.",
@@ -569,7 +570,7 @@
       "inside_other": "{{count}} personas dentro ahora · {{hours}} en curso",
       "ofPlanned": "trabajadas de {{hours}} programadas",
       "workedOnly": "trabajadas, sin turnos publicados con qué comparar",
-      "worked": "Trabajado {{hours}}",
+      "worked": "Cerrado {{hours}}",
       "live": "En curso {{hours}}",
       "planned": "Programado {{hours}}",
       "plannedSoFar": "Programado hasta ahora {{hours}}",
@@ -577,7 +578,7 @@
       "notStarted": "Todavía no empieza ningún turno programado.",
       "soFar": "Va al {{percent}} % de lo programado hasta ahora.",
       "done": "Se trabajó el {{percent}} % de lo programado.",
-      "howItCounts": "Horas netas, con el refrigerio marcado descontado. Una jornada se suma al marcar la salida; mientras tanto va «en curso», igual que en Horas. Lo programado son los turnos publicados."
+      "howItCounts": "Horas netas, con el refrigerio marcado descontado. Cuentan también las de quien está trabajando ahora (en verde): pasan a «cerrado» cuando marca su salida. En Horas se ven igual, como «Dentro ahora» y «Horas netas». Lo programado son los turnos publicados."
     },
     "attendance": {
       "title": "Asistencia por persona",
@@ -590,7 +591,7 @@
       "onTime": "A tiempo",
       "absences": "Faltas",
       "overtime": "Extra",
-      "live": "+{{hours}} en curso",
+      "live": "incluye {{hours}} en curso",
       "onTimeOf_one": "{{onTime}} de {{count}}",
       "onTimeOf_other": "{{onTime}} de {{count}}",
       "meterLabel": "{{name}}: {{worked}} trabajadas de {{planned}} programadas"
@@ -1544,6 +1545,8 @@
     "live": "en curso",
     "paused": "en pausa",
     "liveTile": "Dentro ahora",
+    "liveIncluded_one": "Incluye {{hours}} de {{count}} persona que sigue trabajando: se cierra cuando marque su salida.",
+    "liveIncluded_other": "Incluye {{hours}} de {{count}} personas que siguen trabajando: se cierran cuando marquen su salida.",
     "sessionTitle": "{{name}} · {{day}}",
     "nothingChanged": "No cambiaste ni la entrada ni la salida. Escribe la hora nueva en el campo que quieras corregir.",
     "livePeople_one": "{{count}} persona",
