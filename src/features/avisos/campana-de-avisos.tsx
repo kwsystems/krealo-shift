@@ -1,15 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import { Modal, Pressable, ScrollView, Switch, View, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
 
 import { AppText } from '@/components/ui/app-text';
-import { GhostButton } from '@/components/ui/buttons';
 import { useRespuestaAlPuntero } from '@/components/ui/layout';
-import { ToggleField } from '@/components/schedule/fields';
 import { useManagerScope } from '@/hooks/use-manager-scope';
-import { useResponsive } from '@/hooks/use-responsive';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { estilosDelTema } from '@/theme/estilos';
 import { borderWidth, fontFamily, radii, shadows, sizes, spacing } from '@/theme/tokens';
@@ -29,8 +26,18 @@ import { BaldosaDelAviso, useDescribirAviso } from './piezas-del-aviso';
  *
  * EL PANEL CUELGA DE LA CAMPANA en pantalla ancha y ocupa el ancho en el teléfono, siempre
  * arriba: se abre donde se pulsó y no tapa la pantalla de abajo a arriba como una hoja.
+ *
+ * ES PEQUEÑO SIEMPRE, también con cincuenta marcas (6-oct). Andree: «no quiero que sea grande
+ * y se vea todo». La lista tiene un alto fijo de unas seis filas y se desplaza dentro; la
+ * cabecera dice cuántas hay hoy y el pie cabe en una línea.
+ *
+ * CADA DÍA EMPIEZA VACÍA, a medianoche de la sede (ver `useVigiaDeAvisos`): es lo que pasa
+ * HOY, no un archivo. El historial de todas las marcas, de todos los días, ya existe y no se
+ * borra nunca: es Horas. La campana lo dice al final de la lista y lleva allí.
  */
-const ANCHO_DEL_PANEL = 384;
+const ANCHO_DEL_PANEL = 360;
+/** Unas seis filas: lo que se ve sin desplazar. Más, y el panel deja de ser un vistazo. */
+const ALTO_DE_LA_LISTA = 300;
 /** Desde aquí el panel cuelga de la campana; por debajo, de borde a borde. */
 const ANCHO_PARA_COLGAR = 600;
 
@@ -141,7 +148,6 @@ function PanelDeAvisos({
   const estilos = useEstilos();
   const router = useRouter();
   const { height } = useWindowDimensions();
-  const { useSidebar } = useResponsive();
   const { location } = useManagerScope();
   const describir = useDescribirAviso();
   const marcas = useAvisosStore((s) => s.marcas);
@@ -155,6 +161,18 @@ function PanelDeAvisos({
     ? { top: arriba, right: ancla?.derecha ?? spacing.xl, width: ANCHO_DEL_PANEL }
     : { top: arriba, left: spacing.sm, right: spacing.sm };
   const recientes = [...marcas].reverse();
+  /*
+   * LA LISTA, COMO MUCHO SEIS FILAS; en una ventana bajita, lo que quepa debajo de la cabecera
+   * del panel y encima del pie (los 130 px de los dos), sin que el panel se salga.
+   */
+  const altoDeLaLista = Math.max(
+    120,
+    Math.min(ALTO_DE_LA_LISTA, height - arriba - 130 - spacing.base),
+  );
+  const irAlHistorial = () => {
+    onClose();
+    router.navigate('/(manager)/hours');
+  };
 
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
@@ -165,24 +183,21 @@ function PanelDeAvisos({
         accessibilityLabel={t('alerts.close')}
         testID="avisos-fondo"
       />
-      <View
-        style={[
-          estilos.panel,
-          posicion,
-          { maxHeight: Math.max(280, height - arriba - spacing.base) },
-        ]}
-        testID="avisos-panel"
-        accessibilityViewIsModal
-      >
+      <View style={[estilos.panel, posicion]} testID="avisos-panel" accessibilityViewIsModal>
         <View style={estilos.cabecera}>
           <View style={estilos.cabeceraTexto}>
             <AppText variant="section" style={estilos.titulo}>
               {t('alerts.title')}
             </AppText>
-            <AppText variant="help" tone="subtle" numberOfLines={1}>
-              {location === null
-                ? t('alerts.subtitleNoLocation')
-                : t('alerts.subtitle', { location: location.name })}
+            <AppText variant="help" tone="subtle" numberOfLines={1} testID="avisos-subtitulo">
+              {[
+                location === null
+                  ? t('alerts.today')
+                  : t('alerts.todayAt', { location: location.name }),
+                recientes.length > 0 ? t('alerts.marks', { count: recientes.length }) : null,
+              ]
+                .filter((parte): parte is string => parte !== null)
+                .join(' · ')}
             </AppText>
           </View>
           <Pressable
@@ -196,7 +211,11 @@ function PanelDeAvisos({
           </Pressable>
         </View>
 
-        <ScrollView style={estilos.lista} contentContainerStyle={estilos.listaContenido}>
+        <ScrollView
+          style={[estilos.lista, { maxHeight: altoDeLaLista }]}
+          contentContainerStyle={estilos.listaContenido}
+          testID="avisos-lista"
+        >
           {recientes.length === 0 ? (
             <View
               style={estilos.vacio}
@@ -223,7 +242,7 @@ function PanelDeAvisos({
                   accessibilityLabel={`${aviso.texto}, ${aviso.hora}${nueva ? `. ${t('alerts.unseen')}` : ''}`}
                   testID={`aviso-fila-${marca.id}`}
                 >
-                  <BaldosaDelAviso clase={aviso.clase} />
+                  <BaldosaDelAviso clase={aviso.clase} lado={32} />
                   <View style={estilos.filaTexto}>
                     <AppText variant="body" style={estilos.frase}>
                       {aviso.texto}
@@ -244,25 +263,67 @@ function PanelDeAvisos({
               );
             })
           )}
+          {/* Lo que Andree preguntó, dicho donde se pregunta: ¿se borra?, ¿dónde está lo de antes? */}
+          {recientes.length === 0 ? null : (
+            <AppText
+              variant="help"
+              tone="subtle"
+              style={estilos.finDelDia}
+              testID="avisos-fin-del-dia"
+            >
+              {t('alerts.endOfDay')}
+            </AppText>
+          )}
         </ScrollView>
 
+        {/*
+          EL PIE, EN UNA LÍNEA: el aviso de arriba sí o no, y el historial. La explicación del
+          interruptor va en su nombre accesible y no en un párrafo que ocupe medio panel.
+        */}
         <View style={estilos.pie}>
-          <ToggleField
-            label={t('alerts.popups')}
-            hint={t('alerts.popupsHelp')}
-            value={emergentes}
-            onChange={(valor) => void setAvisosEmergentes(valor)}
+          <Pressable
+            onPress={() => void setAvisosEmergentes(!emergentes)}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: emergentes }}
+            accessibilityLabel={t('alerts.popups')}
+            accessibilityHint={t('alerts.popupsHelp')}
+            style={estilos.interruptor}
             testID="avisos-interruptor"
-          />
-          <GhostButton
-            label={t('alerts.seeWhoIsIn')}
-            onPress={() => {
-              onClose();
-              router.navigate('/(manager)');
-            }}
-            fullWidth={!useSidebar}
-            testID="avisos-ver-inicio"
-          />
+          >
+            {/*
+              EL INTERRUPTOR NO RECIBE EL TOQUE: lo recibe la fila entera, que es más fácil de
+              acertar. Si recibiera los dos, un clic encima cambiaría el valor dos veces y no
+              haría nada.
+            */}
+            <View pointerEvents="none">
+              <Switch
+                value={emergentes}
+                trackColor={{ false: colors.border, true: colors.primary200 }}
+                thumbColor={emergentes ? colors.primary600 : colors.surface}
+                {...({ activeThumbColor: colors.primary600 } as object)}
+                importantForAccessibility="no"
+                accessibilityElementsHidden
+              />
+            </View>
+            <AppText variant="label" tone="muted">
+              {t('alerts.popupsShort')}
+            </AppText>
+          </Pressable>
+          <Pressable
+            onPress={irAlHistorial}
+            accessibilityRole="link"
+            style={estilos.historial}
+            testID="avisos-historial"
+          >
+            {/*
+              `primary700` Y NO EL TONO `primary`: sobre el fondo elevado del panel, en oscuro,
+              el violeta de siempre se quedaba en 4,26:1 (medido por avisos-check).
+            */}
+            <AppText variant="label" style={{ color: colors.primary700 }}>
+              {t('alerts.history')}
+            </AppText>
+            <Ionicons name="chevron-forward" size={14} color={colors.primary700} />
+          </Pressable>
         </View>
       </View>
     </Modal>
@@ -326,7 +387,7 @@ const useEstilos = estilosDelTema((colors) => ({
     borderBottomColor: colors.border,
   },
   cabeceraTexto: { flex: 1, minWidth: 0 },
-  titulo: { fontSize: 18 },
+  titulo: { fontSize: 17 },
   cerrar: {
     width: sizes.touchTargetMin,
     height: sizes.touchTargetMin,
@@ -347,20 +408,44 @@ const useEstilos = estilosDelTema((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.md,
-    paddingVertical: spacing.sm,
+    minHeight: 48,
+    paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.base,
   },
   filaNueva: { backgroundColor: colors.primary50 },
   filaTexto: { flex: 1, minWidth: 0 },
-  frase: { fontSize: 15, lineHeight: 20 },
+  frase: { fontSize: 14, lineHeight: 19 },
   filaHora: { alignItems: 'flex-end', gap: spacing.xs, flexShrink: 0 },
   punto: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary600 },
-  pie: {
-    gap: spacing.xs,
+  finDelDia: {
     paddingHorizontal: spacing.base,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.xs,
+  },
+  pie: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    columnGap: spacing.md,
+    paddingHorizontal: spacing.sm,
     borderTopWidth: borderWidth.hairline,
     borderTopColor: colors.border,
+  },
+  interruptor: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    minHeight: sizes.touchTargetMin,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.input,
+  },
+  historial: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    minHeight: sizes.touchTargetMin,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radii.input,
   },
 }));

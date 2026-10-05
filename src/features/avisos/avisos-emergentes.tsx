@@ -29,6 +29,7 @@ const ANCHO_PARA_COLGAR = 600;
 
 export function AvisosEmergentes({ arriba }: { arriba: number }) {
   const { t } = useTranslation();
+  const { colors } = useTheme();
   const estilos = useEstilos();
   const { width } = useWindowDimensions();
   const emergentes = useAvisosStore((s) => s.emergentes);
@@ -66,7 +67,8 @@ export function AvisosEmergentes({ arriba }: { arriba: number }) {
           style={estilos.mas}
           testID="avisos-mas"
         >
-          <AppText variant="label" tone="primary">
+          {/* Sobre el fondo elevado, el violeta más contrastado: ver el pie de la campana. */}
+          <AppText variant="label" style={{ color: colors.primary700 }}>
             {t('alerts.more', { count: sinMostrar })}
           </AppText>
         </Pressable>

@@ -11,7 +11,9 @@
  *   2. CADA MARCA NUEVA SALE ARRIBA con su frase, debajo de la cabecera, dentro de la
  *      pantalla; como mucho tres, y «y 1 aviso más» con la cuarta.
  *   3. AL ABRIR LA CAMPANA están las cuatro, la más nueva arriba, marcadas como nuevas; al
- *      cerrarla el número se va, y recargar no lo trae de vuelta.
+ *      cerrarla el número se va, y recargar no lo trae de vuelta. Con todas las del día el
+ *      panel sigue pequeño (la lista se desplaza), dice cuántas hay, que se vacía cada día y
+ *      que el historial está en Horas, adonde lleva su enlace (6-oct).
  *   4. EN TODAS LAS VISTAS DEL PANEL está la campana.
  *   5. EN EL TELÉFONO (390 y 320 px): campana de 44 px, la empresa y la sede no se cortan a
  *      390, los avisos de borde a borde, el panel dentro de la pantalla, nada se sale. En
@@ -167,8 +169,10 @@ try {
       minimoGrande: 3,
       tamanoGrande: 24,
     });
-    const enAvisos = contraste.fallos.filter((f) =>
-      FRASES.some((frase) => String(f.texto ?? f).includes(frase.slice(0, 10))),
+    const enAvisos = contraste.fallos.filter(
+      (f) =>
+        FRASES.some((frase) => String(f.texto ?? f).includes(frase.slice(0, 10))) ||
+        /aviso más|avisos más/.test(String(f.texto ?? f)),
     );
     if (enAvisos.length > 0) fallar(`${etiqueta} contraste`, JSON.stringify(enAvisos.slice(0, 2)));
     else pasa(`${etiqueta} contraste`, `${contraste.medidos} textos medidos`);
@@ -204,11 +208,90 @@ try {
       fallar(`${etiqueta} panel`, `se sale de la pantalla: ${JSON.stringify(panel)}`);
     else pasa(`${etiqueta} panel`, `${Math.round(panel.ancho)} px, cuelga de la campana`);
 
+    /*
+     * PEQUEÑO AUNQUE HAYA MUCHAS (6-oct). Andree: «no quiero que sea grande y se vea todo».
+     * Con todas las marcas del día sembradas, el panel no pasa de ~480 px y la lista se
+     * desplaza dentro; arriba dice cuántas hay y al final, dónde está el historial.
+     */
+    const lista = await pagina
+      .locator('[data-testid="avisos-lista"]')
+      .evaluate((n) => ({ alto: n.clientHeight, contenido: n.scrollHeight }));
+    const subtitulo = await pagina.locator('[data-testid="avisos-subtitulo"]').innerText();
+    if (panel.alto > 480)
+      fallar(
+        `${etiqueta} tamaño`,
+        `con ${filas.length} marcas el panel mide ${Math.round(panel.alto)} px`,
+      );
+    else if (lista.contenido <= lista.alto)
+      fallar(
+        `${etiqueta} tamaño`,
+        `con ${filas.length} marcas la lista no se desplaza: ¿se ven todas?`,
+      );
+    else if (!subtitulo.includes(`${filas.length} marcas`))
+      fallar(`${etiqueta} tamaño`, `arriba no dice cuántas hay hoy: «${subtitulo}»`);
+    else
+      pasa(
+        `${etiqueta} tamaño`,
+        `${Math.round(panel.alto)} px de alto con ${filas.length} marcas; la lista se desplaza; «${subtitulo}»`,
+      );
+    /*
+     * CON LA RUEDA, como lo haría una persona: `scrollTo` desde fuera no movía la lista de
+     * react-native-web y la nota del final se «leía» sin haberse visto nunca.
+     */
+    const cajaLista = await caja(pagina, '[data-testid="avisos-lista"]');
+    await pagina.mouse.move(cajaLista.x + cajaLista.ancho / 2, cajaLista.y + cajaLista.alto / 2);
+    await pagina.mouse.wheel(0, 3000);
+    await pagina.waitForTimeout(400);
+    const notaVisible = await pagina.evaluate(() => {
+      const nota = document
+        .querySelector('[data-testid="avisos-fin-del-dia"]')
+        ?.getBoundingClientRect();
+      const lista = document.querySelector('[data-testid="avisos-lista"]')?.getBoundingClientRect();
+      return (
+        nota !== undefined &&
+        lista !== undefined &&
+        nota.top >= lista.top - 1 &&
+        nota.bottom <= lista.bottom + 1
+      );
+    });
+    const fin = await pagina
+      .locator('[data-testid="avisos-fin-del-dia"]')
+      .innerText()
+      .catch(() => '');
+    if (!notaVisible)
+      fallar(
+        `${etiqueta} historial`,
+        'desplazando la lista hasta el final no se llega a ver la nota',
+      );
+    else if (!/cada día/.test(fin) || !/Horas/.test(fin))
+      fallar(
+        `${etiqueta} historial`,
+        `al final de la lista no dice que se vacía cada día ni dónde está lo de antes: «${fin}»`,
+      );
+    else pasa(`${etiqueta} historial`, fin);
+
     await pagina.locator('[data-testid="avisos-cerrar"]').click();
     await pagina.waitForTimeout(400);
     if ((await pagina.locator('[data-testid="avisos-contador"]').count()) > 0)
       fallar(`${etiqueta} visto`, 'al cerrar la campana el número sigue');
     else pasa(`${etiqueta} visto`, 'al cerrar, sin número');
+
+    // 3c. «Historial en Horas» lleva a Horas.
+    if (esquema === 'light') {
+      await pagina.locator('[data-testid="avisos-campana"]').click();
+      await pagina.locator('[data-testid="avisos-historial"]').click();
+      const llego = await esperarPantalla(pagina, MARCADORES['/hours'], {
+        asentar: 300,
+        obligatorio: false,
+      });
+      const cerrado = (await pagina.locator('[data-testid="avisos-panel"]').count()) === 0;
+      if (!llego || !cerrado)
+        fallar(
+          'historial',
+          `«Historial en Horas» ${llego ? 'no cerró la campana' : 'no llevó a Horas'}`,
+        );
+      else pasa('historial', '«Historial en Horas» cierra la campana y abre Horas');
+    }
 
     // 4. En todas las vistas del panel.
     if (esquema === 'light') {
@@ -289,9 +372,28 @@ try {
     await pagina.locator('[data-testid="avisos-panel"]').waitFor({ timeout: 5000 });
     await pagina.waitForTimeout(300);
     const panel = await caja(pagina, '[data-testid="avisos-panel"]');
+    const pie = await pagina.evaluate(() =>
+      ['avisos-interruptor', 'avisos-historial'].map((id) => {
+        const r = document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
+        return r === undefined ? null : { izquierda: r.left, derecha: r.right, abajo: r.bottom };
+      }),
+    );
+    const pieFuera = pie.some(
+      (r) =>
+        r === null ||
+        r.izquierda < panel.x - 1 ||
+        r.derecha > panel.derecha + 1 ||
+        r.abajo > panel.abajo + 1,
+    );
     if (panel.x < 0 || panel.derecha > ancho || panel.abajo > 900)
       fallar(`${etiqueta} panel`, `se sale: ${JSON.stringify(panel)}`);
-    else pasa(`${etiqueta} panel`, `de ${Math.round(panel.x)} a ${Math.round(panel.derecha)} px`);
+    else if (pieFuera)
+      fallar(`${etiqueta} panel`, `el pie no cabe en el panel: ${JSON.stringify(pie)}`);
+    else
+      pasa(
+        `${etiqueta} panel`,
+        `de ${Math.round(panel.x)} a ${Math.round(panel.derecha)} px, ${Math.round(panel.alto)} de alto, pie dentro`,
+      );
     if (esquema === 'dark' || ancho === 320) {
       const contraste = await medirContraste(pagina, {
         minimo: 4.5,
@@ -299,7 +401,9 @@ try {
         tamanoGrande: 24,
       });
       const enPanel = contraste.fallos.filter((f) =>
-        /marcó|salió|volvió|Avisos|Aviso emergente/.test(String(f.texto ?? f)),
+        /marcó|salió|volvió|Avisos|Aviso arriba|Historial|Hoy en|cada día/.test(
+          String(f.texto ?? f),
+        ),
       );
       if (enPanel.length > 0) fallar(`${etiqueta} contraste`, JSON.stringify(enPanel.slice(0, 2)));
       else
