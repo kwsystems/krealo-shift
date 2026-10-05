@@ -42,6 +42,46 @@ describe('cuenta sin acceso a ninguna empresa', () => {
     expect(screen.getByTestId('sin-acceso-sign-out')).toBeTruthy();
   });
 
+  /*
+   * Y POR QUÉ NO SE UNIÓ A SU FICHA (5-oct): el motivo viaja en el código del error. Con
+   * el correo en dos fichas no se le habla de invitaciones: eso la mandaba a pedir lo que
+   * ya estaba hecho.
+   */
+  it('dice el motivo cuando el servidor lo sabe', async () => {
+    await renderWithProviders(
+      <ErrorDeMembresia
+        error={new AdminError('forbidden', 'NO_MEMBERSHIP', 'correo-repetido')}
+        onRetry={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('sin-acceso-motivo-correo-repetido')).toHaveTextContent(
+      /está en dos fichas[\s\S]*invitada@example\.com/,
+    );
+    expect(screen.queryByText(/Si te invitaron/)).toBeNull();
+  });
+
+  it('a quien se le quitó el acceso se lo dice', async () => {
+    await renderWithProviders(
+      <ErrorDeMembresia
+        error={new AdminError('forbidden', 'NO_MEMBERSHIP', 'acceso-retirado')}
+        onRetry={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('sin-acceso-motivo-acceso-retirado')).toHaveTextContent(
+      /Te quitaron el acceso/,
+    );
+  });
+
+  it('un motivo desconocido no rompe nada: queda el texto de siempre', async () => {
+    await renderWithProviders(
+      <ErrorDeMembresia
+        error={new AdminError('forbidden', 'NO_MEMBERSHIP', 'motivo-del-futuro')}
+        onRetry={() => {}}
+      />,
+    );
+    expect(screen.getByText(/Si te invitaron/)).toBeTruthy();
+  });
+
   it('cualquier otro fallo sigue siendo el error de siempre', async () => {
     await renderWithProviders(
       <ErrorDeMembresia error={new AdminError('offline')} onRetry={() => {}} />,

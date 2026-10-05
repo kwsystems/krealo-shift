@@ -353,8 +353,10 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
    * Se intenta UNA vez. Si no hay invitación, la función lo dice sin error y se cae al
    * mismo `forbidden` de siempre: quien no está invitado ve lo que veía antes.
    */
+  let motivo = '';
   if (membership === undefined) {
-    const { data } = await callFunction<{ claimed: boolean }>('claimInvitation');
+    const { data } = await callFunction<{ claimed: boolean; reason?: string }>('claimInvitation');
+    motivo = typeof data?.reason === 'string' ? data.reason : '';
     if (data?.claimed === true) {
       const reintento = await selectRows(z.array(membershipSchema), (client) => {
         const query = client
@@ -372,7 +374,8 @@ async function fetchManagerScope(organizationIdElegida: string | null): Promise<
     // Sin membresía activa no hay panel que mostrar. Se trata como acceso
     // denegado para que la pantalla diga qué hacer —pedir que te agreguen al
     // equipo— en lugar de quedarse cargando para siempre.
-    throw new AdminError('forbidden', 'NO_MEMBERSHIP');
+    // Con el motivo de por qué no se unió a su ficha, si lo hay: la pantalla lo dice (5-oct).
+    throw new AdminError('forbidden', 'NO_MEMBERSHIP', motivo);
   }
 
   const organization = await selectRows(organizationSchema, (client) =>

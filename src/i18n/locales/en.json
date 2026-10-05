@@ -1127,6 +1127,14 @@
     "memberRole": "Role",
     "memberUnknown": "(account with no email)",
     "memberYou": "That's you",
+    "memberSuspended": "No access",
+    "memberReactivate": "Reactivate",
+    "memberLinkedTo": "Linked to {{name}}'s record",
+    "memberLinkedUnknown": "someone no longer in Team",
+    "memberUnlink": "Unlink record",
+    "memberUnlinkTitle": "Unlink {{name}}'s record?",
+    "memberUnlinkBodyEmployee": "{{email}} will stop seeing {{name}}'s schedule and hours, and will be signed out. The next account that signs in with the record's email will be linked to it. You can reactivate this account later.",
+    "memberUnlinkBody": "{{email}} keeps using the panel, but no longer as {{name}}. The next account that signs in with the record's email will be linked to it.",
     "members": "Who has access",
     "membersHint": "The people who can sign in to the panel, and with which role. Employees do not need access: they clock in with their PIN at the kiosk.",
     "membersOnlyAdmin": "Only the owner and administrators can see and grant access.",
@@ -1792,6 +1800,31 @@
       "blackFriday": "Black Friday",
       "campanaNavidad": "Christmas season",
       "nochevieja": "New Year's Eve"
+    }
+  },
+  "access": {
+    "linkReason": {
+      "yourEmail": "your email",
+      "sin-invitacion": {
+        "title": "Your email is not on any team record",
+        "body": "You signed in as {{email}}. Ask an administrator to type that exact email on your record in Team, then try again."
+      },
+      "correo-repetido": {
+        "title": "Your email is on two records",
+        "body": "{{email}} is on more than one team record, so the app cannot tell which one is you. Ask an administrator to keep it only on yours."
+      },
+      "ya-ligada": {
+        "title": "Your record is linked to another account",
+        "body": "Another account already uses your record, not {{email}}. If you changed email, ask an administrator to unlink it in Settings, under «Who has access», then try again."
+      },
+      "ficha-inactiva": {
+        "title": "Your record is deactivated",
+        "body": "{{email}} is on a record that is no longer active. If you still work here, ask an administrator to activate it in Team."
+      },
+      "acceso-retirado": {
+        "title": "Your access was removed",
+        "body": "An administrator removed access for {{email}}. If that is a mistake, ask them to reactivate you in Settings, under «Who has access»."
+      }
     }
   }
 }

@@ -1127,6 +1127,14 @@
     "memberRole": "Rol",
     "memberUnknown": "(cuenta sin correo)",
     "memberYou": "Eres tú",
+    "memberSuspended": "Sin acceso",
+    "memberReactivate": "Reactivar",
+    "memberLinkedTo": "Unida a la ficha de {{name}}",
+    "memberLinkedUnknown": "una persona que ya no está en Equipo",
+    "memberUnlink": "Desligar ficha",
+    "memberUnlinkTitle": "¿Desligar la ficha de {{name}}?",
+    "memberUnlinkBodyEmployee": "{{email}} dejará de ver el horario y las horas de {{name}}, y se cerrará su sesión. La próxima cuenta que entre con el correo de la ficha quedará unida a ella. Esta cuenta la puedes reactivar después.",
+    "memberUnlinkBody": "{{email}} sigue entrando al panel, pero ya no como {{name}}. La próxima cuenta que entre con el correo de la ficha quedará unida a ella.",
     "members": "Quién tiene acceso",
     "membersHint": "Las personas que pueden entrar al panel, y con qué rol. Los empleados no necesitan acceso: fichan con su PIN en el reloj.",
     "membersOnlyAdmin": "Solo el propietario y los administradores pueden ver y repartir accesos.",
@@ -1792,6 +1800,31 @@
       "blackFriday": "Black Friday",
       "campanaNavidad": "Campaña de Navidad",
       "nochevieja": "Fin de año"
+    }
+  },
+  "access": {
+    "linkReason": {
+      "yourEmail": "tu correo",
+      "sin-invitacion": {
+        "title": "Tu correo no está en ninguna ficha",
+        "body": "Entraste como {{email}}. Pide a quien administra que escriba ese correo, tal cual, en tu ficha de Equipo, y vuelve a intentarlo."
+      },
+      "correo-repetido": {
+        "title": "Tu correo está en dos fichas",
+        "body": "{{email}} está escrito en más de una ficha del equipo, y la app no sabe cuál eres tú. Pide a quien administra que lo deje solo en la tuya."
+      },
+      "ya-ligada": {
+        "title": "Tu ficha ya está unida a otra cuenta",
+        "body": "Tu ficha ya la usa otra cuenta, no {{email}}. Si cambiaste de correo, pide a quien administra que la desligue en Ajustes, en «Quién tiene acceso», y vuelve a intentarlo."
+      },
+      "ficha-inactiva": {
+        "title": "Tu ficha está desactivada",
+        "body": "{{email}} está en una ficha que ya no está activa. Si sigues trabajando aquí, pide a quien administra que la active en Equipo."
+      },
+      "acceso-retirado": {
+        "title": "Te quitaron el acceso",
+        "body": "Quien administra retiró el acceso de {{email}}. Si es un error, pídele que te reactive en Ajustes, en «Quién tiene acceso»."
+      }
     }
   }
 }

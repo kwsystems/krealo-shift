@@ -5,6 +5,7 @@ import { callFunction } from '@/lib/firebase/functions';
 
 import { shiftRowSchema, type ShiftRow } from '@/features/schedules/api';
 import { workSessionSchema, type WorkSession } from '@/features/timesheets/api';
+import { motivoSinFicha, type MotivoSinFicha } from '@/features/acceso/motivo-sin-ficha';
 import type { DateKey } from '@/features/schedules/week';
 import { AdminError, requireClient, selectRows, toAdminError } from '@/hooks/use-admin-query';
 import { locationSchema, type ManagerLocation } from '@/hooks/use-manager-scope';
@@ -65,12 +66,19 @@ export type MiFicha = {
   tipoDeTienda: TipoDeTienda | null;
 };
 
+/** Sin ficha unida, y por qué si el servidor lo sabe (5-oct): ver `motivo-sin-ficha.ts`. */
+export type SinFicha = { sinFicha: true; motivo: MotivoSinFicha | null };
+
+export function esSinFicha(valor: MiFicha | SinFicha): valor is SinFicha {
+  return 'sinFicha' in valor;
+}
+
 /**
- * La ficha de quien entró. `null` si su cuenta no está ligada a ninguna —tiene membresía
- * de empleado pero sin ficha, p. ej. invitado a mano como `employee` en Ajustes—: la
- * pantalla lo explica en vez de enseñar un horario vacío.
+ * La ficha de quien entró, o `SinFicha` si su cuenta no está ligada a ninguna —tiene
+ * membresía de empleado pero sin ficha, p. ej. invitado a mano como `employee` en
+ * Ajustes—: la pantalla lo explica en vez de enseñar un horario vacío.
  */
-export async function fetchMiFicha(): Promise<MiFicha | null> {
+export async function fetchMiFicha(): Promise<MiFicha | SinFicha> {
   const db = getDataClient();
   const userId = db === null ? null : ((await db.auth.getUser()).data.user?.id ?? null);
   if (userId === null) throw new AdminError('forbidden', 'NO_SESSION');
@@ -84,6 +92,7 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
       .order('created_at', { ascending: true }),
   );
   let mia = membresias.find((m) => m.role === 'employee' && m.employee_id !== null);
+  let motivo: MotivoSinFicha | null = null;
   /*
    * SIN FICHA LIGADA, SE INTENTA LIGAR UNA VEZ (4-oct): si su correo ya está en una ficha
    * —se puso después de invitarla, o cambió de cuenta—, el servidor la liga ahora. Antes
@@ -91,7 +100,8 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
    * empleado sin ficha se quedaba con «pide que pongan este correo en tu ficha» para siempre.
    */
   if (mia === undefined) {
-    const { data } = await callFunction<{ claimed: boolean }>('claimInvitation');
+    const { data } = await callFunction<{ claimed: boolean; reason?: string }>('claimInvitation');
+    motivo = motivoSinFicha(data?.reason);
     if (data?.claimed === true) {
       const otraVez = await selectRows(z.array(miMembresiaSchema), (client) =>
         client
@@ -103,7 +113,8 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
       mia = otraVez.find((m) => m.role === 'employee' && m.employee_id !== null);
     }
   }
-  if (mia === undefined || mia.employee_id === null) return null;
+  const sinFicha: SinFicha = { sinFicha: true, motivo };
+  if (mia === undefined || mia.employee_id === null) return sinFicha;
   const organizationId = mia.organization_id;
   const employeeId = mia.employee_id;
 
@@ -119,7 +130,31 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
       .select('id, full_name, preferred_name, status')
       .eq('id', employeeId),
   );
-  if (organizacion === undefined || ficha === undefined) return null;
+  if (organizacion === undefined || ficha === undefined) return sinFicha;
+
+  const nombre =
+    ficha.preferred_name !== null && ficha.preferred_name.trim() !== ''
+      ? ficha.preferred_name
+      : ficha.full_name;
+
+  /*
+   * DESACTIVADA, NO SE SIGUE (5-oct): las reglas ya no le dejan leer nada suyo salvo la
+   * ficha, y la pantalla solo necesita saber que está desactivada para decírselo.
+   */
+  if (ficha.status !== 'active') {
+    return {
+      organizationId,
+      organizacion: organizacion.name,
+      employeeId,
+      nombre,
+      nombreCompleto: ficha.full_name,
+      activo: false,
+      sede: null,
+      timezone: organizacion.default_timezone,
+      weekStartsOn: organizacion.week_starts_on ?? 1,
+      tipoDeTienda: organizacion.business_type,
+    };
+  }
 
   const asignaciones = await selectRows(z.array(asignacionSchema), (client) =>
     client
@@ -138,11 +173,6 @@ export async function fetchMiFicha(): Promise<MiFicha | null> {
             .select('id, name, address, timezone, is_active, settings')
             .eq('id', principal.location_id),
         );
-
-  const nombre =
-    ficha.preferred_name !== null && ficha.preferred_name.trim() !== ''
-      ? ficha.preferred_name
-      : ficha.full_name;
 
   return {
     organizationId,

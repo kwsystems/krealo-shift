@@ -21,6 +21,8 @@ import {
   fetchMembers,
   inviteMember,
   revokeMember,
+  reactivateMember,
+  unlinkMemberEmployee,
   setMemberLocations,
   setMemberRole,
   type AppRoleName,
@@ -233,5 +235,17 @@ export function useMemberMutations(organizationId: string | null) {
     onSuccess: invalidar,
   });
 
-  return { invite, changeRole, changeLocations, revoke, cancelInvite };
+  const reactivate = useMutation({
+    mutationFn: (params: { userId: string }) =>
+      reactivateMember({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  const unlink = useMutation({
+    mutationFn: (params: { userId: string }) =>
+      unlinkMemberEmployee({ organizationId: organizationId ?? '', ...params }),
+    onSuccess: invalidar,
+  });
+
+  return { invite, changeRole, changeLocations, revoke, cancelInvite, reactivate, unlink };
 }

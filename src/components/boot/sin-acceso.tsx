@@ -5,7 +5,12 @@ import { AdminErrorState } from '@/components/schedule/data-states';
 import { AppText } from '@/components/ui/app-text';
 import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, Card, ResponsiveContainer, Stack } from '@/components/ui/layout';
-import { AdminError } from '@/hooks/use-admin-query';
+import {
+  motivoSinFicha,
+  textoDelMotivo,
+  type MotivoSinFicha,
+} from '@/features/acceso/motivo-sin-ficha';
+import { AdminError, adminErrorCode } from '@/hooks/use-admin-query';
 import { useSessionStore } from '@/stores/session-store';
 import { spacing } from '@/theme/tokens';
 
@@ -21,8 +26,17 @@ import { spacing } from '@/theme/tokens';
  *
  * Ahora dice lo que pasa, con qué correo entró, qué hacer, y ofrece las dos salidas:
  * volver a intentar —el canje se reintenta en cada carga— o entrar con otro correo.
+ *
+ * Y POR QUÉ NO SE UNIÓ A SU FICHA, si el servidor lo sabe (5-oct): su correo está en dos
+ * fichas, la ficha ya es de otra cuenta, o está desactivada. Ver `motivo-sin-ficha.ts`.
  */
-export function SinAccesoScreen({ onRetry }: { onRetry: () => void }) {
+export function SinAccesoScreen({
+  onRetry,
+  motivo = null,
+}: {
+  onRetry: () => void;
+  motivo?: MotivoSinFicha | null;
+}) {
   const { t } = useTranslation();
   const correo = useSessionStore((s) => s.user?.email ?? null);
   const signOut = useSessionStore((s) => s.signOut);
@@ -46,17 +60,30 @@ export function SinAccesoScreen({ onRetry }: { onRetry: () => void }) {
             </AppText>
           </Stack>
 
-          <Card>
-            <Stack gap={spacing.sm}>
-              <AppText variant="bodyStrong">{t('boot.noAccessInvitedTitle')}</AppText>
-              <AppText variant="body" tone="muted">
-                {t('boot.noAccessInvitedBody')}
-              </AppText>
-              <AppText variant="body" tone="muted">
-                {t('boot.noAccessAskAdmin')}
-              </AppText>
-            </Stack>
-          </Card>
+          {motivo === null ? null : (
+            <Card testID={`sin-acceso-motivo-${motivo}`}>
+              <Stack gap={spacing.sm}>
+                <AppText variant="bodyStrong">{textoDelMotivo(t, motivo, correo).titulo}</AppText>
+                <AppText variant="body" tone="muted">
+                  {textoDelMotivo(t, motivo, correo).cuerpo}
+                </AppText>
+              </Stack>
+            </Card>
+          )}
+
+          {motivo !== null && motivo !== 'sin-invitacion' ? null : (
+            <Card>
+              <Stack gap={spacing.sm}>
+                <AppText variant="bodyStrong">{t('boot.noAccessInvitedTitle')}</AppText>
+                <AppText variant="body" tone="muted">
+                  {t('boot.noAccessInvitedBody')}
+                </AppText>
+                <AppText variant="body" tone="muted">
+                  {t('boot.noAccessAskAdmin')}
+                </AppText>
+              </Stack>
+            </Card>
+          )}
 
           <Stack gap={spacing.sm}>
             <SecondaryButton
@@ -89,7 +116,9 @@ export function esSinMembresia(error: unknown): boolean {
  * que no hay ninguna, y el error de siempre para todo lo demás (red, servidor…).
  */
 export function ErrorDeMembresia({ error, onRetry }: { error: unknown; onRetry: () => void }) {
-  if (esSinMembresia(error)) return <SinAccesoScreen onRetry={onRetry} />;
+  if (esSinMembresia(error)) {
+    return <SinAccesoScreen onRetry={onRetry} motivo={motivoSinFicha(adminErrorCode(error))} />;
+  }
   return (
     <AppScreen tone="canvas">
       <AdminErrorState error={error} onRetry={onRetry} />

@@ -16,6 +16,7 @@ import { AppText } from '@/components/ui/app-text';
 import { GhostButton, PrimaryButton } from '@/components/ui/buttons';
 import { Card, Row, Stack } from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
+import { useEmployeeNames } from '@/features/team/hooks';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { spacing } from '@/theme/tokens';
 
@@ -58,8 +59,11 @@ export function MembersCard() {
   const organizationId = scope.organization?.id ?? null;
 
   const members = useMembers(organizationId);
-  const { invite, changeRole, changeLocations, revoke, cancelInvite } =
+  const { invite, changeRole, changeLocations, revoke, cancelInvite, reactivate, unlink } =
     useMemberMutations(organizationId);
+  /** El nombre de la ficha unida a cada cuenta (5-oct): «Unida a la ficha de Ana». */
+  const nombres = useEmployeeNames(organizationId);
+  const [aDesligar, setADesligar] = useState<Member | null>(null);
 
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<AppRoleName>('manager');
@@ -79,11 +83,26 @@ export function MembersCard() {
   const repartibles = rolesQuePuedeDar(scope.role);
   const correoValido = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
   const ocupado =
-    invite.isPending || changeRole.isPending || changeLocations.isPending || revoke.isPending;
+    invite.isPending ||
+    changeRole.isPending ||
+    changeLocations.isPending ||
+    revoke.isPending ||
+    reactivate.isPending ||
+    unlink.isPending;
 
-  /** El último error de cualquiera de las cuatro, para no repetir el bloque cuatro veces. */
+  /** El último error de cualquiera de ellas, para no repetir el bloque en cada una. */
   const error =
-    invite.error ?? changeRole.error ?? changeLocations.error ?? revoke.error ?? cancelInvite.error;
+    invite.error ??
+    changeRole.error ??
+    changeLocations.error ??
+    revoke.error ??
+    cancelInvite.error ??
+    reactivate.error ??
+    unlink.error;
+  const nombreDeLaFicha = (member: Member | null) =>
+    member === null || member.employeeId === null
+      ? ''
+      : (nombres.get(member.employeeId) ?? t('settings.memberLinkedUnknown'));
 
   if (!scope.isAdmin) {
     return (
@@ -99,7 +118,12 @@ export function MembersCard() {
   }
 
   return (
-    <FormCard collapsible title={t('settings.members')} description={t('settings.membersHint')}>
+    <FormCard
+      collapsible
+      title={t('settings.members')}
+      description={t('settings.membersHint')}
+      testID="members-card"
+    >
       <AsyncSection
         isPending={members.isPending}
         error={members.error}
@@ -170,6 +194,48 @@ export function MembersCard() {
                       disabled={ocupado}
                       fullWidth={false}
                       testID={`member-revoke-${member.userId}`}
+                    />
+                  </Row>
+                )}
+                {/*
+                  A QUIEN SE LE QUITÓ EL ACCESO, SE LE PUEDE DEVOLVER (5-oct). Antes la fila se
+                  quedaba en «retirada» sin ningún botón, y la única salida era invitarla con
+                  otro correo.
+                */}
+                {member.isSelf || member.status === 'active' ? null : (
+                  <Row gap={spacing.sm} wrap align="center">
+                    <AppText variant="help" tone="subtle">
+                      {t('settings.memberSuspended')}
+                    </AppText>
+                    <GhostButton
+                      label={t('settings.memberReactivate')}
+                      onPress={() => {
+                        setAviso(null);
+                        reactivate.mutate({ userId: member.userId });
+                      }}
+                      disabled={ocupado}
+                      fullWidth={false}
+                      testID={`member-reactivate-${member.userId}`}
+                    />
+                  </Row>
+                )}
+                {/*
+                  LA FICHA A LA QUE ESTÁ UNIDA, y cómo separarla (5-oct): para cuando quedó
+                  unida al Gmail equivocado o la persona cambió de cuenta.
+                */}
+                {member.employeeId === null ||
+                member.isSelf ||
+                member.status !== 'active' ? null : (
+                  <Row gap={spacing.sm} wrap align="center">
+                    <AppText variant="help" tone="subtle" testID={`member-linked-${member.userId}`}>
+                      {t('settings.memberLinkedTo', { name: nombreDeLaFicha(member) })}
+                    </AppText>
+                    <GhostButton
+                      label={t('settings.memberUnlink')}
+                      onPress={() => setADesligar(member)}
+                      disabled={ocupado}
+                      fullWidth={false}
+                      testID={`member-unlink-${member.userId}`}
                     />
                   </Row>
                 )}
@@ -320,6 +386,29 @@ export function MembersCard() {
           setARetirar(null);
         }}
         onCancel={() => setARetirar(null)}
+      />
+
+      <ConfirmSheet
+        visible={aDesligar !== null}
+        title={t('settings.memberUnlinkTitle', { name: nombreDeLaFicha(aDesligar) })}
+        body={
+          aDesligar?.role === 'employee'
+            ? t('settings.memberUnlinkBodyEmployee', {
+                email: aDesligar.email ?? aDesligar.displayName ?? '',
+                name: nombreDeLaFicha(aDesligar),
+              })
+            : t('settings.memberUnlinkBody', {
+                email: aDesligar?.email ?? aDesligar?.displayName ?? '',
+                name: nombreDeLaFicha(aDesligar),
+              })
+        }
+        confirmLabel={t('settings.memberUnlink')}
+        destructive
+        onConfirm={() => {
+          if (aDesligar !== null) unlink.mutate({ userId: aDesligar.userId });
+          setADesligar(null);
+        }}
+        onCancel={() => setADesligar(null)}
       />
     </FormCard>
   );

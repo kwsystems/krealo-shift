@@ -514,7 +514,12 @@ describe('reglas de Firestore', () => {
         managed_location_ids: [],
         created_at: '2026-09-30T12:00:00.000Z',
       });
-      await escribir('employees/emp-yo', { id: 'emp-yo', organization_id: ORG, full_name: 'Yo' });
+      await escribir('employees/emp-yo', {
+        id: 'emp-yo',
+        organization_id: ORG,
+        full_name: 'Yo',
+        status: 'active',
+      });
       await escribir('employees/emp-otra', {
         id: 'emp-otra',
         organization_id: ORG,
@@ -609,6 +614,46 @@ describe('reglas de Firestore', () => {
         ),
       );
       expect(porConfirmar.docs.map((d) => d.id)).toEqual(['turno-cambiando']);
+    });
+
+    /*
+     * DESACTIVADA O DADA DE BAJA, YA NO LEE NADA SUYO (5-oct): su celular lo decía, pero la
+     * cuenta seguía leyendo por la API. Su ficha sí: es lo que le explica por qué.
+     */
+    it('con la ficha desactivada no lee sus turnos ni sus jornadas, pero sí su ficha', async () => {
+      await escribir(`organization_memberships/${ORG}_cuenta-de-baja`, {
+        id: `${ORG}_cuenta-de-baja`,
+        organization_id: ORG,
+        user_id: 'cuenta-de-baja',
+        role: 'employee',
+        status: 'active',
+        employee_id: 'emp-baja',
+        managed_location_ids: [],
+        created_at: '2026-09-30T12:00:00.000Z',
+      });
+      await escribir('employees/emp-baja', {
+        id: 'emp-baja',
+        organization_id: ORG,
+        full_name: 'De baja',
+        status: 'inactive',
+      });
+      await turno('turno-baja', 'emp-baja');
+      await jornada('jornada-baja', 'emp-baja');
+      const db = entorno.authenticatedContext('cuenta-de-baja').firestore();
+
+      await assertSucceeds(getDoc(doc(db, 'employees', 'emp-baja')));
+      await assertFails(getDoc(doc(db, 'shifts', 'turno-baja')));
+      await assertFails(getDoc(doc(db, 'work_sessions', 'jornada-baja')));
+      await assertFails(
+        getDocs(
+          query(
+            collection(db, 'shifts'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-baja'),
+            where('status', '==', 'published'),
+          ),
+        ),
+      );
     });
 
     it('no lee el turno, la jornada ni la ficha de otra persona', async () => {
@@ -826,6 +871,12 @@ describe('reglas de Firestore', () => {
         employee_id: 'emp-yo',
         managed_location_ids: [],
         created_at: '2026-10-04T12:00:00.000Z',
+      });
+      await escribir('employees/emp-yo', {
+        id: 'emp-yo',
+        organization_id: ORG,
+        full_name: 'Yo',
+        status: 'active',
       });
       await escribir('shifts/turno-con-nota', {
         id: 'turno-con-nota',

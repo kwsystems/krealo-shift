@@ -2388,6 +2388,15 @@ function crearFunctions(almacen: Almacen) {
                 isSelf: false,
                 employeeId: DEMO_EMPLEADOS_DENTRO[0],
               },
+              {
+                // Una cuenta a la que se le quitó el acceso (5-oct): Ajustes ofrece «Reactivar».
+                userId: 'demo-ex-vendedor',
+                email: 'ex.vendedor@demostracion.pe',
+                displayName: 'Ex vendedor (demostración)',
+                role: 'employee',
+                status: 'suspended',
+                isSelf: false,
+              },
             ],
             invitations: [
               {
@@ -2402,6 +2411,8 @@ function crearFunctions(almacen: Almacen) {
         case 'setMemberRole':
         case 'setMemberLocations':
         case 'revokeMember':
+        case 'reactivateMember':
+        case 'unlinkMemberEmployee':
         case 'cancelInvitation':
           return sinError({ ok: true });
         default:

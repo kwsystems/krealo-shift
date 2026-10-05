@@ -62,6 +62,9 @@ export {
   setMemberRole,
   setMemberLocations,
   revokeMember,
+  // Reactivar a quien se le quitó el acceso y separar una cuenta de su ficha (5-oct).
+  reactivateMember,
+  unlinkMemberEmployee,
   cancelInvitation,
 } from './members';
 

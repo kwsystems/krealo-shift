@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import {
+  esSinFicha,
   fetchMiFicha,
   fetchMisJornadas,
   fetchMisTurnos,
@@ -63,6 +64,7 @@ import {
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
+import { textoDelMotivo } from '@/features/acceso/motivo-sin-ficha';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
@@ -97,6 +99,7 @@ import { disponibilidadDelDia, type Disponibilidad } from '@/features/availabili
 export function MiHorarioScreen() {
   const { t } = useTranslation();
   const ficha = useQuery({ queryKey: ['portal', 'ficha'], queryFn: fetchMiFicha });
+  const correo = useSessionStore((s) => s.user?.email ?? null);
 
   if (ficha.isPending) {
     return (
@@ -112,16 +115,25 @@ export function MiHorarioScreen() {
       </AppScreen>
     );
   }
-  if (ficha.data === null || !ficha.data.activo) {
+  if (esSinFicha(ficha.data) || !ficha.data.activo) {
+    // Por qué no hay ficha, si el servidor lo dijo (5-oct); si no, el texto de siempre.
+    const motivo = esSinFicha(ficha.data) ? ficha.data.motivo : null;
+    const conMotivo = motivo === null ? null : textoDelMotivo(t, motivo, correo);
     return (
       <AppScreen tone="canvas" scroll testID="mi-horario">
         <ResponsiveContainer width="form">
           <Stack gap={spacing.lg}>
             <EmptyState
               icon="person-outline"
-              title={ficha.data === null ? t('portal.noFileTitle') : t('portal.inactiveTitle')}
-              body={ficha.data === null ? t('portal.noFileBody') : t('portal.inactiveBody')}
-              testID="mi-horario-sin-ficha"
+              title={
+                conMotivo?.titulo ??
+                (esSinFicha(ficha.data) ? t('portal.noFileTitle') : t('portal.inactiveTitle'))
+              }
+              body={
+                conMotivo?.cuerpo ??
+                (esSinFicha(ficha.data) ? t('portal.noFileBody') : t('portal.inactiveBody'))
+              }
+              testID={motivo === null ? 'mi-horario-sin-ficha' : `mi-horario-sin-ficha-${motivo}`}
             />
             <Pie />
           </Stack>

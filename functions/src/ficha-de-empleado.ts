@@ -17,7 +17,7 @@ import { audit } from './shared/caller';
  * No hace falta una invitación aparte, ni un paso más en Ajustes: sería pedir el mismo
  * dato dos veces, y el día que no coincidieran nadie sabría cuál vale.
  *
- * LO QUE NO SE LIGA, y por qué:
+ * LO QUE NO SE LIGA, y por qué —y se le dice, con su motivo (5-oct)—:
  *   - una ficha INACTIVA: quien ya no trabaja no tiene por qué entrar;
  *   - un correo que está en DOS fichas de la misma empresa: no se sabe cuál de las dos es
  *     quien entra, y adivinar le enseñaría a una persona las horas de otra;
@@ -32,7 +32,11 @@ import { audit } from './shared/caller';
 
 export type ResultadoDeLaFicha =
   | { claimed: true; organizationId: string; role: 'employee' }
-  | { claimed: false; reason: 'sin-invitacion' | 'correo-repetido' | 'ya-ligada' };
+  | {
+      claimed: false;
+      reason:
+        'sin-invitacion' | 'correo-repetido' | 'ya-ligada' | 'ficha-inactiva' | 'acceso-retirado';
+    };
 
 export async function ligarFichaDeEmpleado(params: {
   uid: string;
@@ -42,15 +46,18 @@ export async function ligarFichaDeEmpleado(params: {
 }): Promise<ResultadoDeLaFicha> {
   const { uid, correo, proveedor, token } = params;
 
-  const fichas = await db
-    .collection(COLLECTIONS.employees)
-    .where('email', '==', correo)
-    .where('status', '==', 'active')
-    .get();
-  if (fichas.empty) return { claimed: false, reason: 'sin-invitacion' };
+  const todas = await db.collection(COLLECTIONS.employees).where('email', '==', correo).get();
+  const fichas = todas.docs.filter((ficha) => ficha.data().status === 'active');
+  /*
+   * SU CORREO ESTÁ, PERO EN UNA FICHA DESACTIVADA (5-oct): se le dice eso, y no «tu correo
+   * no está en ninguna ficha», que la mandaba a pedir algo que ya estaba hecho.
+   */
+  if (fichas.length === 0) {
+    return { claimed: false, reason: todas.empty ? 'sin-invitacion' : 'ficha-inactiva' };
+  }
 
-  const porEmpresa = new Map<string, typeof fichas.docs>();
-  for (const ficha of fichas.docs) {
+  const porEmpresa = new Map<string, typeof fichas>();
+  for (const ficha of fichas) {
     const org = ficha.data().organization_id as string;
     porEmpresa.set(org, [...(porEmpresa.get(org) ?? []), ficha]);
   }
@@ -59,9 +66,20 @@ export async function ligarFichaDeEmpleado(params: {
   const candidatas = [...porEmpresa].filter(([, docs]) => docs.length === 1);
   if (candidatas.length === 0) return { claimed: false, reason: 'correo-repetido' };
 
+  /*
+   * SU PROPIA CUENTA ESTÁ RETIRADA (5-oct): quien administra le quitó el acceso o desligó su
+   * ficha. Se le dice eso antes que nada —y no «tu ficha ya está unida a otra cuenta»—: es
+   * lo único que ella puede pedir que se arregle.
+   */
+  let retirada = false;
   const ligables: { org: string; employeeId: string }[] = [];
   for (const [org, [ficha]] of candidatas) {
     if (ficha === undefined) continue;
+    const propia = (await db.collection(COLLECTIONS.memberships).doc(`${org}_${uid}`).get()).data();
+    if (propia !== undefined && propia.status !== 'active') {
+      retirada = true;
+      continue;
+    }
     const otras = await db
       .collection(COLLECTIONS.memberships)
       .where('organization_id', '==', org)
@@ -71,7 +89,9 @@ export async function ligarFichaDeEmpleado(params: {
     if (otras.docs.some((m) => m.data().user_id !== uid && m.data().status === 'active')) continue;
     ligables.push({ org, employeeId: ficha.id });
   }
-  if (ligables.length === 0) return { claimed: false, reason: 'ya-ligada' };
+  if (ligables.length === 0) {
+    return { claimed: false, reason: retirada ? 'acceso-retirado' : 'ya-ligada' };
+  }
 
   // El secuestro previo, igual que al canjear una invitación: ver `acceso-por-correo.ts`.
   const contrasenaAnulada =
@@ -90,7 +110,11 @@ export async function ligarFichaDeEmpleado(params: {
          * ficha», aunque ya estuviera puesto. Un gerente o administrador no se toca.
          */
         const sinFicha = (previa.employee_id ?? null) === null;
-        if (previa.role !== 'employee' || previa.status !== 'active' || !sinFicha) return false;
+        if (previa.status !== 'active') {
+          retirada = true;
+          return false;
+        }
+        if (previa.role !== 'employee' || !sinFicha) return false;
         tx.update(ref, { employee_id: employeeId, updated_at: nowISO() });
         return true;
       }
@@ -134,6 +158,6 @@ export async function ligarFichaDeEmpleado(params: {
   }
 
   return primera === null
-    ? { claimed: false, reason: 'ya-ligada' }
+    ? { claimed: false, reason: retirada ? 'acceso-retirado' : 'ya-ligada' }
     : { claimed: true, organizationId: primera, role: 'employee' };
 }

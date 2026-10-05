@@ -68,10 +68,35 @@ describe('entrar con el correo de la ficha', () => {
     expect(await membresia(uid)).toMatchObject({ employee_id: 'emp-1' });
   });
 
-  it('una ficha inactiva no da acceso', async () => {
+  it('una ficha inactiva no da acceso, y lo dice', async () => {
     await ficha('emp-1', { status: 'inactive' });
-    expect(await entrar('uid-vendedora')).toMatchObject({ claimed: false });
+    // Su correo SÍ está: no se la manda a pedir que lo pongan (5-oct).
+    expect(await entrar('uid-vendedora')).toMatchObject({
+      claimed: false,
+      reason: 'ficha-inactiva',
+    });
     expect(await membresia('uid-vendedora')).toBeUndefined();
+  });
+
+  it('un correo que no está en ninguna ficha lo dice', async () => {
+    expect(await entrar('uid-vendedora')).toMatchObject({
+      claimed: false,
+      reason: 'sin-invitacion',
+    });
+  });
+
+  it('a quien se le quitó el acceso no se le dice que su ficha es de otra cuenta', async () => {
+    await ficha('emp-1');
+    await entrar('uid-vendedora');
+    await db
+      .collection(COLLECTIONS.memberships)
+      .doc(`${ORG}_uid-vendedora`)
+      .update({ status: 'suspended' });
+    expect(await entrar('uid-vendedora')).toMatchObject({
+      claimed: false,
+      reason: 'acceso-retirado',
+    });
+    expect(await membresia('uid-vendedora')).toMatchObject({ status: 'suspended' });
   });
 
   it('un correo en dos fichas de la misma empresa no liga ninguna', async () => {

@@ -94,8 +94,18 @@ service cloud.firestore {
         || (isMember(orgId) && locationId in membership(orgId).managed_location_ids);
     }
 
-    function isSelfEmployee(orgId, employeeId) {
+    // La cuenta unida a esa ficha, esté como esté la ficha.
+    function isSelfAccount(orgId, employeeId) {
       return isMember(orgId) && membership(orgId).employee_id == employeeId;
+    }
+
+    // Y CON LA FICHA ACTIVA (5-oct): a quien se desactiva o se da de baja, su celular ya le
+    // decía «Tu ficha está desactivada», pero la cuenta seguía pudiendo leer por la API sus
+    // turnos, jornadas y fichajes. La ficha se lee por el id de la MEMBRESÍA, que ya es
+    // igual al pedido: así la regla no depende del documento que se consulta.
+    function isSelfEmployee(orgId, employeeId) {
+      return isSelfAccount(orgId, employeeId)
+        && get(/databases/$(database)/documents/employees/$(membership(orgId).employee_id)).data.get('status', '') == 'active';
     }
 
     // -----------------------------------------------------------------------
@@ -156,8 +166,9 @@ service cloud.firestore {
     }
 
     match /employees/{employeeId} {
+      // Su propia ficha la lee aunque esté desactivada: es lo que le dice por qué no ve nada.
       allow read: if isStaff(resource.data.organization_id)
-        || isSelfEmployee(resource.data.organization_id, employeeId);
+        || isSelfAccount(resource.data.organization_id, employeeId);
       allow create: if isStaff(request.resource.data.organization_id);
       allow update: if isStaff(resource.data.organization_id);
       allow delete: if false;    // un empleado con fichajes no se borra: pasa a inactive

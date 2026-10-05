@@ -95,6 +95,22 @@ export function revokeMember(params: { organizationId: string; userId: string })
   return llamar('revokeMember', params, okSchema);
 }
 
+/** Devolver el acceso a quien se le quitó (5-oct). Ver `reactivateMember`. */
+export function reactivateMember(params: {
+  organizationId: string;
+  userId: string;
+}): Promise<unknown> {
+  return llamar('reactivateMember', params, okSchema);
+}
+
+/** Separar una cuenta de su ficha de empleado (5-oct). Ver `unlinkMemberEmployee`. */
+export function unlinkMemberEmployee(params: {
+  organizationId: string;
+  userId: string;
+}): Promise<unknown> {
+  return llamar('unlinkMemberEmployee', params, okSchema);
+}
+
 export function cancelInvitation(params: {
   organizationId: string;
   email: string;

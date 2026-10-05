@@ -261,6 +261,108 @@ export const revokeMember = onCall(async (request) => {
   return { ok: true };
 });
 
+/**
+ * DEVOLVER EL ACCESO A QUIEN SE LE QUITÓ (5-oct): «Reactivar» en Ajustes. Antes una cuenta
+ * retirada se quedaba así para siempre, y la única salida era invitarla otra vez con otro
+ * correo. Con las mismas guardas que quitarlo: nadie reactiva a alguien por encima.
+ *
+ * Si es la cuenta de un empleado y su ficha ya la usa OTRA cuenta activa, no se reactiva:
+ * dos cuentas leyendo la misma ficha es justo lo que `ficha-de-empleado.ts` impide.
+ */
+export const reactivateMember = onCall(async (request) => {
+  const uid = requireUid(request);
+  const organizationId = textoRequerido(request.data?.organizationId, 'organizationId');
+  const objetivo = textoRequerido(request.data?.userId, 'userId');
+
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin']);
+
+  const ref = db.collection(COLLECTIONS.memberships).doc(`${organizationId}_${objetivo}`);
+  const actual = (await ref.get()).data();
+  if (actual === undefined) throw new HttpsError('not-found', 'Esa persona no tiene acceso.');
+  if (actual.status === 'active') return { ok: true };
+  if (RANGO[actual.role as AppRole] > RANGO[membership.role]) {
+    throw new HttpsError('permission-denied', 'No puedes reactivar a alguien por encima.');
+  }
+
+  const fichaId = (actual.employee_id as string | null | undefined) ?? null;
+  if (fichaId !== null) {
+    const otras = await db
+      .collection(COLLECTIONS.memberships)
+      .where('organization_id', '==', organizationId)
+      .where('employee_id', '==', fichaId)
+      .get();
+    if (otras.docs.some((d) => d.id !== ref.id && d.data().status === 'active')) {
+      throw new HttpsError(
+        'failed-precondition',
+        'Su ficha ya está unida a otra cuenta activa. Desliga esa primero.',
+      );
+    }
+  }
+
+  await ref.update({ status: 'active', updated_at: nowISO() });
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'member_reactivated',
+    entityType: 'organization_membership',
+    entityId: ref.id,
+    before: { status: actual.status },
+    after: { status: 'active' },
+  });
+  return { ok: true };
+});
+
+/**
+ * SEPARAR UNA CUENTA DE SU FICHA (5-oct): «Desligar ficha» en Ajustes. Para cuando la ficha
+ * quedó unida al correo equivocado —entró con otro Gmail— o la persona cambió de cuenta:
+ * hasta ahora no había forma de deshacerlo, y la cuenta nueva se encontraba con «tu ficha ya
+ * está unida a otra cuenta».
+ *
+ * Una cuenta de EMPLEADO sin ficha no tiene nada que ver, así que además se retira y se le
+ * cierran las sesiones: si no, al volver a entrar se uniría otra vez sola a la misma ficha.
+ * A un gerente o administrador solo se le quita la ficha: su panel sigue igual.
+ */
+export const unlinkMemberEmployee = onCall(async (request) => {
+  const uid = requireUid(request);
+  const organizationId = textoRequerido(request.data?.organizationId, 'organizationId');
+  const objetivo = textoRequerido(request.data?.userId, 'userId');
+
+  const membership = await membershipOf(uid, organizationId);
+  requireRole(membership, ['owner', 'admin']);
+
+  const ref = db.collection(COLLECTIONS.memberships).doc(`${organizationId}_${objetivo}`);
+  const actual = (await ref.get()).data();
+  if (actual === undefined) throw new HttpsError('not-found', 'Esa persona no tiene acceso.');
+  if (RANGO[actual.role as AppRole] > RANGO[membership.role]) {
+    throw new HttpsError('permission-denied', 'No puedes cambiar a alguien por encima.');
+  }
+  const fichaId = (actual.employee_id as string | null | undefined) ?? null;
+  if (fichaId === null) return { ok: true };
+
+  const esEmpleado = actual.role === 'employee';
+  await ref.update({
+    employee_id: null,
+    ...(esEmpleado ? { status: 'suspended' } : {}),
+    updated_at: nowISO(),
+  });
+  if (esEmpleado) {
+    await auth.revokeRefreshTokens(objetivo).catch((error: unknown) => {
+      console.error('[krealo-shift] no se pudieron revocar las sesiones:', error);
+    });
+  }
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'member_employee_unlinked',
+    entityType: 'organization_membership',
+    entityId: ref.id,
+    before: { employee_id: fichaId, status: actual.status },
+    after: { employee_id: null, status: esEmpleado ? 'suspended' : actual.status },
+  });
+  return { ok: true };
+});
+
 export const cancelInvitation = onCall(async (request) => {
   const uid = requireUid(request);
   const organizationId = textoRequerido(request.data?.organizationId, 'organizationId');
