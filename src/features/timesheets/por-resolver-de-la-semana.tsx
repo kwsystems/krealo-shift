@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
@@ -19,12 +20,14 @@ import {
 import { adminErrorKind } from '@/hooks/use-admin-query';
 import type { SupportedLanguage } from '@/i18n';
 import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
-import { formatClockTime, type TimeFormatPreference } from '@/utils/time';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
+import { formatClockTime, formatShiftRange, type TimeFormatPreference } from '@/utils/time';
 
-import type { WorkSession } from './api';
+import { acknowledgeUnusualClock, type WorkSession } from './api';
 import { casosPorResolver, type CasoPorResolver } from './casos';
 import { duracion } from './duracion';
 import { CasoRechazado, useArreglarCaso } from './horas-debidas';
+import { useGuardarHoraExtra } from './horas-extra';
 
 /**
  * Los casos de la semana que mira Horas, escritos y con sus arreglos. La lógica de qué es
@@ -36,7 +39,9 @@ export function PorResolverDeLaSemana({
   turnos,
   nombres,
   personaFiltrada,
+  organizationId,
   locationId,
+  umbralExtra,
   nowISO,
   timezone,
   timeFormat,
@@ -48,7 +53,10 @@ export function PorResolverDeLaSemana({
   turnos: readonly ShiftRow[];
   nombres: ReadonlyMap<string, string>;
   personaFiltrada: string | null;
+  organizationId: string | null;
   locationId: string | null;
+  /** Desde cuántos minutos de más un día es «posible hora extra» (Ajustes). */
+  umbralExtra: number;
   nowISO: string;
   timezone: string;
   timeFormat: TimeFormatPreference;
@@ -59,6 +67,19 @@ export function PorResolverDeLaSemana({
 }) {
   const { t } = useTranslation();
   const arreglar = useArreglarCaso();
+  /*
+   * LA HORA EXTRA Y LAS MARCAS FUERA DE TURNO SE DECIDEN AQUÍ (6-oct), no en Horario. Las dos
+   * escriben lo mismo que su sitio de antes —la aprobación del día y `avisos_vistos`—, así que
+   * Horario, Reportes e Inicio se enteran igual.
+   */
+  const queryClient = useQueryClient();
+  const guardarExtra = useGuardarHoraExtra({ organizationId, locationId });
+  const darPorVisto = useMutation({
+    mutationFn: async (sesiones: readonly WorkSession[]) => {
+      for (const sesion of sesiones) await acknowledgeUnusualClock(sesion.id);
+    },
+    onSuccess: () => refrescarVistasDeHoras(queryClient),
+  });
   const [falta, setFalta] = useState<{
     caso: Extract<CasoPorResolver, { tipo: 'faltan_horas' }>;
     decision: 'debe' | 'justificado';
@@ -75,6 +96,7 @@ export function PorResolverDeLaSemana({
     ahoraISO: nowISO,
     timezone,
     aprobadas,
+    umbralExtra,
   }).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
   const hora = (iso: string) => formatClockTime(iso, timezone, timeFormat, language);
   const nombre = (caso: CasoPorResolver) =>
@@ -231,6 +253,68 @@ export function PorResolverDeLaSemana({
         },
       };
     }
+    /*
+     * FUERA DE TURNO (6-oct): trabajó de más, o entró o salió lejos de su turno. Con horas de
+     * más que llegan al aviso de la sede, la pregunta es la extra; sin ellas, solo si está bien.
+     */
+    if (caso.tipo === 'fuera_de_turno') {
+      const fin = caso.sesion.ends_at ?? caso.sesion.starts_at;
+      const marcas = `${hora(caso.entrada)}\u00a0–\u2060\u00a0${hora(fin)}`;
+      const que = caso.posibleExtra
+        ? caso.turno === null
+          ? t('timesheet.cases.workedNoShift', { hours: duracion(t, caso.deMas) })
+          : t('timesheet.cases.workedMore', { hours: duracion(t, caso.deMas) })
+        : caso.entroAntes >= caso.salioDespues
+          ? t('timesheet.cases.cameEarly', { hours: duracion(t, caso.entroAntes) })
+          : t('timesheet.cases.leftLate', { hours: duracion(t, caso.salioDespues) });
+      const ocupado = (guardarExtra.isPending || darPorVisto.isPending) && enCurso === caso.id;
+      const decidirExtra = (minutos: number) => {
+        setEnCurso(caso.id);
+        guardarExtra.mutate(
+          { employeeId: caso.sesion.employee_id, workDate: caso.dia, minutes: minutos },
+          { onSettled: () => setEnCurso(null) },
+        );
+      };
+      return {
+        ...base,
+        ocupada: ocupado,
+        que,
+        detalle:
+          caso.turno === null
+            ? t('timesheet.cases.outsideDetailNoShift', { marks: marcas })
+            : t('timesheet.cases.outsideDetail', {
+                shift: formatShiftRange(
+                  caso.turno.starts_at,
+                  caso.turno.ends_at,
+                  timezone,
+                  timeFormat,
+                  language,
+                ),
+                marks: marcas,
+              }),
+        principal: caso.posibleExtra
+          ? {
+              etiqueta: t('timesheet.cases.approveExtra', { hours: duracion(t, caso.deMas) }),
+              onPress: () => decidirExtra(caso.deMas),
+              testID: `caso-${caso.id}-extra`,
+            }
+          : {
+              etiqueta: t('timesheet.cases.fineAsIs'),
+              onPress: () => {
+                setEnCurso(caso.id);
+                darPorVisto.mutate(caso.conMarcas, { onSettled: () => setEnCurso(null) });
+              },
+              testID: `caso-${caso.id}-visto`,
+            },
+        alternativa: caso.posibleExtra
+          ? {
+              etiqueta: t('timesheet.cases.notExtra'),
+              onPress: () => decidirExtra(0),
+              testID: `caso-${caso.id}-no-extra`,
+            }
+          : null,
+      };
+    }
     const propuesta = caso.salidaPropuesta;
     return {
       ...base,
@@ -270,9 +354,11 @@ export function PorResolverDeLaSemana({
   });
 
   const error =
-    arreglar.error === null || falta !== null || salida !== null
-      ? null
-      : mensajeDelError(t, arreglar.error);
+    guardarExtra.error !== null || darPorVisto.error !== null
+      ? t('timesheet.cases.decisionFailed')
+      : arreglar.error === null || falta !== null || salida !== null
+        ? null
+        : mensajeDelError(t, arreglar.error);
 
   return (
     <>

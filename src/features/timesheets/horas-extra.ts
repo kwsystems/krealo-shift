@@ -46,7 +46,10 @@ export function claveDelDia(employeeId: string, workDate: string): string {
   return `${employeeId}_${workDate}`;
 }
 
-/** Minutos aprobados por persona y día. */
+/**
+ * Minutos aprobados por persona y día. Un día con 0 ESTÁ en el mapa: es «decidido, no es
+ * extra», y `has` lo distingue de un día que nadie ha mirado.
+ */
 export function aprobadasPorDia(filas: readonly HoraExtraAprobada[]): Map<string, number> {
   const mapa = new Map<string, number>();
   for (const fila of filas) {
@@ -121,21 +124,14 @@ export async function guardarHoraExtra(params: {
   locationId: string;
   employeeId: string;
   workDate: string;
+  /**
+   * 0 ES UNA DECISIÓN (6-oct): «ese día no es hora extra». Antes 0 borraba la aprobación —o
+   * no hacía nada si no había—, así que no quedaba decidido y la «posible hora extra» seguía
+   * pidiendo una respuesta para siempre, en Horas y en Horario. Ahora se guarda como 0.
+   */
   minutes: number;
-  /** Si ese día ya tenía una aprobación: quitar una que no existe no es nada que hacer. */
-  yaHabia: boolean;
 }): Promise<void> {
   const id = idDeLaAprobacion(params);
-  if (params.minutes <= 0) {
-    /*
-     * CERO SIN NADA APROBADO NO ES UN ERROR (auditoría, 4-oct). Borrar un documento que no
-     * existe lo niega la regla —mira la sede del documento, y no hay documento—, y la hoja
-     * decía «no se pudo guardar» a quien solo confirmaba que ese día no hubo horas extra.
-     */
-    if (!params.yaHabia) return;
-    await execute((db) => db.from(TABLES.overtimeApprovals).delete().eq('id', id));
-    return;
-  }
   const quien = useSessionStore.getState().user?.userId ?? null;
   await execute((db) =>
     db.from(TABLES.overtimeApprovals).upsert(
@@ -145,7 +141,7 @@ export async function guardarHoraExtra(params: {
         location_id: params.locationId,
         employee_id: params.employeeId,
         work_date: params.workDate,
-        minutes: Math.round(params.minutes),
+        minutes: Math.max(0, Math.round(params.minutes)),
         approved_by: quien,
         approved_at: new Date().toISOString(),
       },
@@ -181,12 +177,7 @@ export function useGuardarHoraExtra(params: {
 }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: {
-      employeeId: string;
-      workDate: string;
-      minutes: number;
-      yaHabia: boolean;
-    }) =>
+    mutationFn: (variables: { employeeId: string; workDate: string; minutes: number }) =>
       guardarHoraExtra({
         organizationId: params.organizationId ?? '',
         locationId: params.locationId ?? '',

@@ -329,9 +329,10 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     const mapa = new Map<string, HoraExtraDeLaFila>();
     for (const [clave, sesion] of ultima) {
       if (sesion.ends_at === null) continue; // quien sigue dentro todavía no ha trabajado «de más»
-      const aprobado = aprobadas.get(clave) ?? 0;
-      if (aprobado > 0) {
-        mapa.set(sesion.id, { tipo: 'aprobada', minutos: aprobado });
+      // Decidido —aprobada o «no es extra», que es 0—: ya no es «posible».
+      if (aprobadas.has(clave)) {
+        const aprobado = aprobadas.get(clave) ?? 0;
+        if (aprobado > 0) mapa.set(sesion.id, { tipo: 'aprobada', minutos: aprobado });
         continue;
       }
       const deMas = minutosDeMas(netosPorDia.get(clave) ?? 0, planificado.get(clave));
@@ -622,7 +623,9 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     turnos={turnosDeLaSemana.data ?? []}
                     nombres={names}
                     personaFiltrada={employeeFilter}
+                    organizationId={organizationId}
                     locationId={scope.locationId}
+                    umbralExtra={umbralDeAviso}
                     nowISO={nowISO}
                     timezone={scope.timezone}
                     timeFormat={scope.timeFormat}
@@ -994,6 +997,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 netosDelDia={netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0}
                 planificados={planificado.get(claveSeleccionada)}
                 aprobados={aprobadas.get(claveSeleccionada) ?? 0}
+                decidido={aprobadas.has(claveSeleccionada)}
                 refrigerioSinMarcar={refrigerioSinMarcar}
                 saving={guardarHoraExtra.isPending}
                 failed={guardarHoraExtra.isError}
@@ -1003,7 +1007,6 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                       employeeId: selected.employee_id,
                       workDate: dateKeyOf(selected.starts_at, scope.timezone),
                       minutes: minutos,
-                      yaHabia: aprobadas.has(claveSeleccionada),
                     },
                     {
                       onSuccess: () => {
@@ -1011,7 +1014,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                         setFeedback(
                           minutos > 0
                             ? t('timesheet.overtimeSaved')
-                            : t('timesheet.overtimeRemoved'),
+                            : t('timesheet.overtimeNotExtraSaved'),
                         );
                       },
                     },

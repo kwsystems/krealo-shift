@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import type { ShiftInput, ShiftRow } from './api';
@@ -20,9 +19,7 @@ import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import { esCumplidoEspecial } from '@/features/timesheets/textos-de-cumplido';
 import { esSalidaAutomatica } from '@/features/timesheets/textos-de-salida';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
-import { acknowledgeUnusualClock } from '@/features/timesheets/api';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
-import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import {
   MarcasFueraDelTurno,
   type FilaFueraDelTurno,
@@ -100,7 +97,7 @@ type EditingState =
   | { mode: 'edit'; shift: ShiftRow; values: ShiftFormValues };
 
 /** A qué jornada de Horas llevar desde un aviso de Horario. */
-export type IrAHoras = { semana: DateKey; persona: string; jornada: string };
+export type IrAHoras = { semana: DateKey; persona: string; jornada?: string };
 
 export function ScheduleScreen({
   onGoToTeam,
@@ -349,11 +346,10 @@ export function ScheduleScreen({
 
   /*
    * LAS MARCAS RARAS DE LA SEMANA (1-oct): quien entró una hora o más antes de su turno o
-   * salió una hora o más después. El reloj ya no lo impide; esto lo avisa, y solo aquí.
-   * Se van al cambiar el turno y publicar, al aprobar la extra de ese día en Horas o al
-   * decir «visto». Ver `marcas-raras.ts`.
+   * salió una hora o más después. El reloj ya no lo impide; esto lo avisa. Se van al
+   * cambiar el turno y publicar, o al decidir ese día en Horas, que es el único sitio
+   * donde se decide (6-oct). Ver `marcas-raras.ts`.
    */
-  const queryClient = useQueryClient();
   /*
    * Y LA SEMANA SE VUELVE A MEDIR AL MIRARLA, como en Horas, Reportes e Inicio: una
    * jornada guardada antes de que existieran estas marcas —o con un turno que cambió sin
@@ -378,10 +374,6 @@ export function ScheduleScreen({
     ),
     timezone: scope.timezone,
   });
-  const marcarVisto = useMutation({
-    mutationFn: (sessionId: string) => acknowledgeUnusualClock(sessionId),
-    onSuccess: () => refrescarVistasDeHoras(queryClient),
-  });
   const filasFueraDelTurno: FilaFueraDelTurno[] = marcasRaras.map((rara) =>
     filaDeLaMarcaRara(rara, {
       nombre: names.get(rara.sesion.employee_id) ?? t('team.unknownEmployee'),
@@ -390,7 +382,6 @@ export function ScheduleScreen({
       timeFormat: scope.timeFormat,
       t,
       puedeCambiarTurno: rara.turno !== null && !readOnly,
-      viendo: marcarVisto.isPending && marcarVisto.variables === rara.sesion.id,
     }),
   );
   const marcaRaraPorId = new Map(marcasRaras.map((rara) => [rara.id, rara]));
@@ -844,24 +835,18 @@ export function ScheduleScreen({
                 onVerEnHoras={(id) => {
                   const rara = marcaRaraPorId.get(id);
                   if (rara === undefined || onGoToHours === undefined) return;
+                  /*
+                   * Día cerrado: a la semana filtrada a esa persona, SIN abrir la jornada,
+                   * porque lo que hay que ver es su caso en «Por resolver» y el detalle lo
+                   * taparía. Día abierto: no hay caso todavía, así que se abre su jornada.
+                   */
                   onGoToHours({
                     semana: weekStart,
                     persona: rara.sesion.employee_id,
-                    jornada: rara.sesion.id,
+                    ...(rara.diaAbierto ? { jornada: rara.sesion.id } : {}),
                   });
                 }}
-                onVisto={(id) => {
-                  const rara = marcaRaraPorId.get(id);
-                  if (rara !== undefined) marcarVisto.mutate(rara.sesion.id);
-                }}
               />
-              {marcarVisto.isError ? (
-                <InlineNotice
-                  tone="late"
-                  body={t('schedule.unusual.seenFailed')}
-                  testID="marcas-raras-error"
-                />
-              ) : null}
 
               {/* Quién está en la tienda ahora mismo: solo tiene sentido en esta semana. */}
               {position === 'current' ? <EnTurnoAhora personas={enTurnoDeVerdad} /> : null}
@@ -1460,7 +1445,6 @@ function filaDeLaMarcaRara(
     timeFormat: Parameters<typeof formatClockTime>[2];
     t: ReturnType<typeof useTranslation>['t'];
     puedeCambiarTurno: boolean;
-    viendo: boolean;
   },
 ): FilaFueraDelTurno {
   const { t, timezone, timeFormat, language } = contexto;
@@ -1514,6 +1498,6 @@ function filaDeLaMarcaRara(
     que,
     detalle,
     puedeCambiarTurno: contexto.puedeCambiarTurno,
-    viendo: contexto.viendo,
+    diaAbierto: rara.diaAbierto,
   };
 }

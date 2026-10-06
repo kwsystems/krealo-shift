@@ -6,6 +6,8 @@ import {
   type DateKey,
 } from '@/features/schedules/week';
 
+import { esMarcaFueraDelTurno, minutosFueraDelTurno } from '@/domain/fuera-del-turno';
+
 import type { WorkSession } from './api';
 import { claveDelDia } from './horas-extra';
 
@@ -29,6 +31,11 @@ import { claveDelDia } from './horas-extra';
  *   - SALIDA AUTOMÁTICA (5-oct): no marcó la salida y la jornada se cerró sola a la hora
  *     de fin de su turno (`functions/src/cierre-automatico.ts`). «La salida está bien» o
  *     «Corregir salida». Corregirla también lo resuelve: deja de ser automática.
+ *   - FUERA DE TURNO (6-oct): trabajó bastante más que su turno —la «posible hora extra»—, o
+ *     entró o salió una hora o más fuera de él —lo que Horario llamaba «marcas raras»—. Era la
+ *     MISMA situación decidida en dos pantallas: «Visto» en Horario y la extra en Horas. Ahora
+ *     es un caso de aquí: «Aprobar como extra» o «No es extra»; y si no trabajó de más, «Está
+ *     bien así». Decidida la extra de ese día —aprobada o 0—, el caso se va.
  *   - SALIDA DUDOSA: la salida quedó en una hora que todavía no llegó, o la jornada pasa de
  *     dieciséis horas. Casi siempre es el día equivocado —una salida «de hoy a las 21:00»
  *     escrita pasada la medianoche—, y mientras siga así la jornada está viva en todas las
@@ -88,6 +95,26 @@ export type CasoPorResolver =
       dia: DateKey;
     }
   | {
+      tipo: 'fuera_de_turno';
+      id: string;
+      /** La última jornada del día: la de «Ver jornada» y la que lleva la extra. */
+      sesion: WorkSession;
+      /** El primer turno publicado del día, para decir su horario. `null` sin turno. */
+      turno: ShiftRow | null;
+      dia: DateKey;
+      /** Lo trabajado ese día sobre lo planificado (todo, sin turno). */
+      deMas: number;
+      /** Llega al umbral de la sede: se ofrece aprobarlo como extra. */
+      posibleExtra: boolean;
+      /** La primera entrada del día: con la salida de `sesion`, lo que marcó. */
+      entrada: string;
+      /** Cuánto antes de su turno entró y cuánto después salió (0 si no). */
+      entroAntes: number;
+      salioDespues: number;
+      /** Las jornadas con marcas fuera del turno sin ver: «Está bien así» las da por vistas. */
+      conMarcas: WorkSession[];
+    }
+  | {
       tipo: 'salida_dudosa';
       id: string;
       sesion: WorkSession;
@@ -112,6 +139,11 @@ export function casosPorResolver(params: {
    * refrigerio» cuando ya cuentan su hora como trabajada: ver abajo.
    */
   aprobadas?: ReadonlyMap<string, number>;
+  /**
+   * Desde cuántos minutos de más un día es «posible hora extra» (`overtimeNoticeMinutes`).
+   * Sin él no se buscan los casos «fuera de turno»: así los llama solo quien sabe decidirlos.
+   */
+  umbralExtra?: number;
 }): CasoPorResolver[] {
   /*
    * SOLO TURNOS PUBLICADOS (auditoría, 4-oct). Un borrador no se le dio a nadie: medir una
@@ -282,13 +314,18 @@ export function casosPorResolver(params: {
     }
   }
 
+  if (params.umbralExtra !== undefined) {
+    casos.push(...fueraDeTurno(params, turnoPorId, params.umbralExtra));
+  }
+
   // Primero lo que sigue abierto —se está pagando ahora mismo—, y luego por día.
   const orden = {
     sin_salida: 0,
     salida_dudosa: 1,
     salida_automatica: 2,
     sin_refrigerio: 3,
-    faltan_horas: 4,
+    fuera_de_turno: 4,
+    faltan_horas: 5,
   } as const;
   return casos.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),
@@ -313,4 +350,106 @@ function salidaDelDiaDeEntrada(
     return turno.ends_at;
   }
   return null;
+}
+
+/**
+ * LOS DÍAS FUERA DE TURNO (6-oct), por persona y día —la extra se aprueba por día—. Solo días
+ * cerrados: quien sigue dentro todavía no ha trabajado «de más». Un día con la extra decidida
+ * (aprobada o «no es extra», que es 0) ya no pregunta nada.
+ */
+function fueraDeTurno(
+  params: {
+    sesiones: readonly WorkSession[];
+    turnos: readonly ShiftRow[];
+    timezone: string;
+    aprobadas?: ReadonlyMap<string, number>;
+  },
+  turnoPorId: ReadonlyMap<string, ShiftRow>,
+  umbral: number,
+): Extract<CasoPorResolver, { tipo: 'fuera_de_turno' }>[] {
+  const porDia = new Map<string, { dia: DateKey; sesiones: WorkSession[] }>();
+  for (const sesion of params.sesiones) {
+    const dia = dateKeyOf(sesion.starts_at, params.timezone);
+    const clave = claveDelDia(sesion.employee_id, dia);
+    const grupo = porDia.get(clave) ?? { dia, sesiones: [] };
+    grupo.sesiones.push(sesion);
+    porDia.set(clave, grupo);
+  }
+
+  const casos: Extract<CasoPorResolver, { tipo: 'fuera_de_turno' }>[] = [];
+  for (const [clave, { dia, sesiones }] of porDia) {
+    if (sesiones.some((sesion) => sesion.ends_at === null)) continue;
+    if (params.aprobadas?.has(clave)) continue;
+    const ordenadas = [...sesiones].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const primera = ordenadas[0]!;
+    const ultima = ordenadas[ordenadas.length - 1]!;
+
+    const turnosDelDia = params.turnos
+      .filter(
+        (turno) =>
+          turno.status === 'published' &&
+          turno.employee_id === primera.employee_id &&
+          dateKeyOf(turno.starts_at, params.timezone) === dia,
+      )
+      .sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const planificado = turnosDelDia.reduce(
+      (suma, turno) =>
+        suma +
+        Math.max(
+          0,
+          minutos(turno.starts_at, turno.ends_at) - Math.max(0, turno.planned_unpaid_break_minutes),
+        ),
+      0,
+    );
+    const trabajado = ordenadas.reduce(
+      (suma, sesion) =>
+        suma +
+        (sesion.net_minutes ??
+          (sesion.gross_minutes ?? minutos(sesion.starts_at, sesion.ends_at ?? sesion.starts_at)) -
+            sesion.unpaid_break_minutes),
+      0,
+    );
+    const deMas = Math.max(0, trabajado - planificado);
+    const posibleExtra = deMas > 0 && deMas >= Math.max(1, umbral);
+
+    const conMarcas = ordenadas.filter((sesion) =>
+      sesion.flags.some(
+        (marca) => esMarcaFueraDelTurno(marca) && !sesion.avisos_vistos.includes(marca),
+      ),
+    );
+    if (!posibleExtra && conMarcas.length === 0) continue;
+
+    const turnoDe = (sesion: WorkSession) =>
+      sesion.shift_id === null ? null : (turnoPorId.get(sesion.shift_id) ?? null);
+    const turnoPrimera = turnoDe(primera);
+    const turnoUltima = turnoDe(ultima);
+    casos.push({
+      tipo: 'fuera_de_turno',
+      id: `${ultima.id}:fuera_de_turno`,
+      sesion: ultima,
+      turno: turnosDelDia[0] ?? turnoPrimera,
+      dia,
+      deMas,
+      posibleExtra,
+      entrada: primera.starts_at,
+      entroAntes:
+        turnoPrimera === null
+          ? 0
+          : minutosFueraDelTurno({
+              entrada: primera.starts_at,
+              salida: primera.ends_at,
+              turno: turnoPrimera,
+            }).antes,
+      salioDespues:
+        turnoUltima === null
+          ? 0
+          : minutosFueraDelTurno({
+              entrada: ultima.starts_at,
+              salida: ultima.ends_at,
+              turno: turnoUltima,
+            }).despues,
+      conMarcas,
+    });
+  }
+  return casos;
 }

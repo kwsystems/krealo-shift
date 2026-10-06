@@ -8,8 +8,12 @@
  * 1. HORARIO AVISA de quien entró una hora o más antes de su turno y de quien salió una
  *    hora o más después, con las dos clases de marca, y pliega lo que pasa de tres. Empieza
  *    plegado en una línea que dice cuántas y de quién; «Revisar» lo abre.
- * 2. «VER EN HORAS» LLEVA A SU JORNADA: Horas se abre en esa semana con la jornada abierta.
- * 3. «VISTO, ESTÁ BIEN ASÍ» quita ese aviso y solo ese.
+ * 2. «RESOLVER EN HORAS» LLEVA A SU CASO: Horas se abre en esa semana, filtrada a esa
+ *    persona, con el caso «fuera de turno» en «Por resolver» y SIN la jornada encima.
+ *    Horario ya no tiene «Visto»: decidir es solo en Horas (6-oct, «debería centrarse solo
+ *    en Horas»).
+ * 3. DECIDIDO EN HORAS, SE VA DE HORARIO: «No es extra» (o «Está bien así») quita el caso
+ *    de Horas y, al volver, el aviso de ese día en Horario, y solo ese.
  * 4. CAMBIAR SU TURNO Y PUBLICAR quita el aviso solo: la jornada se vuelve a medir contra
  *    el turno nuevo. Es la sincronización que Andree pidió en todas partes.
  * 5. AJUSTES ya no ofrece «Tolerancia de entrada temprana» —el reloj no frena a nadie— y sí
@@ -129,68 +133,86 @@ const esperar = (pagina, ms = 1200) => pagina.waitForTimeout(ms);
     path: 'capturas/marcas-horario.png',
   });
 
-  // --- 2. «Ver en Horas» abre su jornada.
+  // Horario ya no decide: ninguna fila tiene «Visto» (6-oct).
+  const vistos = await pagina
+    .locator('[data-testid^="marca-rara-"][data-testid$="-visto"]')
+    .count();
+  if (vistos > 0) {
+    problemas.push(`Horario sigue ofreciendo «Visto» en ${vistos} filas: se decide en Horas`);
+  }
+
+  // --- 2. «Resolver en Horas» lleva a su caso en «Por resolver», sin la jornada encima.
   const primera = todas[0];
+  /** «Ana lun 28»: quién y qué día. Decidir es por persona y día. */
+  const quienYDia = (fila) => fila.texto.split(/ (?:Entró|Salió) /)[0];
   if (primera !== undefined) {
     const jornada = primera.id.split(':')[0];
-    await pagina.locator(`[data-testid="marca-rara-${primera.id}-horas"]`).click();
+    const boton = pagina.locator(`[data-testid="marca-rara-${primera.id}-horas"]`);
+    const rotulo = (await boton.innerText()).trim();
+    // La semana anterior está entera cerrada: el botón resuelve, no solo mira.
+    if (rotulo !== 'Resolver en Horas') {
+      problemas.push(`con el día cerrado el botón dice «${rotulo}», no «Resolver en Horas»`);
+    }
+    await boton.click();
+    const idCaso = `${jornada}:fuera_de_turno`;
+    const caso = pagina.locator(`[data-testid="caso-${idCaso}"]`);
     try {
-      await pagina.locator('[data-testid="session-detail-sheet"]').waitFor({ timeout: 10000 });
+      await caso.waitFor({ timeout: 10000 });
     } catch {
-      problemas.push('«Ver en Horas» no abre la jornada en Horas');
+      problemas.push(`«Resolver en Horas» no enseña su caso en «Por resolver» (${idCaso})`);
     }
     const url = new URL(pagina.url());
-    if (!url.pathname.endsWith('/hours') || url.searchParams.get('jornada') !== jornada) {
-      problemas.push(`«Ver en Horas» lleva a ${url.pathname}${url.search}, no a su jornada`);
+    if (!url.pathname.endsWith('/hours') || url.searchParams.get('persona') === null) {
+      problemas.push(`«Resolver en Horas» lleva a ${url.pathname}${url.search}`);
     }
-    console.log(
-      `  ver en horas         ${url.pathname}?jornada=${url.searchParams.get('jornada')}`,
-    );
+    if ((await pagina.locator('[data-testid="session-detail-sheet"]').count()) > 0) {
+      problemas.push('«Resolver en Horas» abre la jornada encima del caso y lo tapa');
+    }
+    console.log(`  resolver en horas    ${url.pathname}${url.search}`);
     await pagina.screenshot({ path: 'capturas/marcas-horas.png' });
-    // Se cierra la jornada y se vuelve por la barra lateral, sin recargar: la
-    // demostración vive en memoria.
-    const cerrarHoja = pagina
-      .locator('[data-testid="session-detail-sheet"]')
-      .getByText('Cerrar', { exact: true });
-    if ((await cerrarHoja.count()) > 0) await cerrarHoja.first().click();
-    await pagina
-      .locator('[data-testid="session-detail-sheet"]')
-      .waitFor({ state: 'detached', timeout: 5000 })
-      .catch(() => undefined);
+
+    // --- 3. Se decide en Horas y el aviso se va de Horario.
+    let decision = null;
+    if ((await caso.count()) > 0) {
+      const noExtra = pagina.locator(`[data-testid="caso-${idCaso}-no-extra"]`);
+      const bienAsi = pagina.locator(`[data-testid="caso-${idCaso}-visto"]`);
+      decision = (await noExtra.count()) > 0 ? 'no es extra' : 'está bien así';
+      await (decision === 'no es extra' ? noExtra : bienAsi).first().click();
+      try {
+        await caso.waitFor({ state: 'detached', timeout: 8000 });
+      } catch {
+        problemas.push(`«${decision}» no quita el caso de «Por resolver»`);
+      }
+    }
     const aHorario = pagina.locator('a[href$="/schedule"]').first();
     if ((await aHorario.count()) > 0) await aHorario.click();
     else await pagina.goBack();
     await pagina.locator('[data-testid="schedule-view"]').waitFor({ timeout: 10000 });
     await esperar(pagina);
     // Si Horario se volvió a montar, está otra vez en esta semana.
-    if ((await filas(pagina)).every((f) => f.id !== primera.id)) {
+    const enEstaSemana = (lista) =>
+      lista.some((f) => todas.some((g) => g.id === f.id)) || lista.length === 0;
+    if (!enEstaSemana(await filas(pagina))) {
       await pagina.locator('[data-testid="week-previous"]').click();
       await esperar(pagina, 1500);
     }
-    if ((await plegar.count()) > 0 && (await filas(pagina)).length < todas.length) {
-      await plegar.click();
-      await esperar(pagina, 400);
-    }
-  }
-
-  // --- 3. «Visto» quita esa y solo esa.
-  const antes = await filas(pagina);
-  const vista = antes[0];
-  if (vista !== undefined) {
-    await pagina.locator(`[data-testid="marca-rara-${vista.id}-visto"]`).click();
-    await esperar(pagina, 1500);
-    if ((await plegar.count()) > 0 && (await filas(pagina)).length < antes.length - 1) {
+    // Desplegada entera, sea cual sea el estado en que se quedó: «Ver N más» la abre.
+    if ((await plegar.count()) > 0 && /Ver \d+ más/.test(await plegar.innerText())) {
       await plegar.click();
       await esperar(pagina, 400);
     }
     const despues = await filas(pagina);
-    if (despues.some((f) => f.id === vista.id)) {
-      problemas.push('«Visto, está bien así» no quita el aviso');
+    if (despues.some((f) => f.id.startsWith(`${jornada}:`))) {
+      problemas.push(`decidido en Horas («${decision}»), Horario sigue avisando de esa marca`);
     }
-    if (despues.length !== antes.length - 1) {
-      problemas.push(`«Visto» quitó ${antes.length - despues.length} avisos y no uno`);
+    const otras = todas.filter((f) => quienYDia(f) !== quienYDia(primera));
+    const perdidas = otras.filter((f) => !despues.some((g) => g.id === f.id));
+    if (perdidas.length > 0) {
+      problemas.push(
+        `decidir un día en Horas quitó también ${perdidas.length} avisos de otros días o personas`,
+      );
     }
-    console.log(`  visto                ${antes.length} → ${despues.length}`);
+    console.log(`  decidido en horas    «${decision}»: ${todas.length} → ${despues.length}`);
   }
 
   // --- 4. Cambiar su turno a la hora a la que entró, publicar, y el aviso se va.
@@ -214,7 +236,7 @@ const esperar = (pagina, ms = 1200) => pagina.waitForTimeout(ms);
     await pagina.locator('[data-testid="schedule-publish-all"]').click();
     await pagina.locator('[data-testid="confirm-sheet-confirm"]').click();
     await esperar(pagina, 2000);
-    if ((await plegar.count()) > 0) {
+    if ((await plegar.count()) > 0 && /Ver \d+ más/.test(await plegar.innerText())) {
       await plegar.click();
       await esperar(pagina, 400);
     }

@@ -14,13 +14,17 @@ import { dateKeyOf, type DateKey } from './week';
  *
  * El servidor apunta en cada jornada si entró una hora o más antes de su turno o salió una
  * hora o más después (`early_arrival`, `late_departure`: ver `src/domain/fuera-del-turno.ts`).
- * Esto decide cuáles quedan por mirar. Un aviso se va por cualquiera de las tres cosas que
+ * Esto decide cuáles quedan por mirar. Un aviso se va por cualquiera de las cosas que
  * Andree dijo que haría con él —«ya veo yo si cambio de horario o es hora extra»—:
  *
  *   - CAMBIAR EL HORARIO: al publicar, el servidor vuelve a medir la jornada contra el
  *     turno nuevo y la marca desaparece sola. Aquí no hay que hacer nada.
- *   - APROBAR LAS HORAS EXTRA de ese día en Horas: ya está decidido.
- *   - «VISTO, ESTÁ BIEN ASÍ»: queda en `avisos_vistos`, marca por marca.
+ *   - DECIDIR LA HORA EXTRA de ese día en Horas, sea cual sea: aprobarla o «no es extra»
+ *     (0 minutos). Cualquier fila de aprobación cuenta como decidido.
+ *   - «ESTÁ BIEN ASÍ», también en Horas: queda en `avisos_vistos`, marca por marca.
+ *
+ * DECIDIR ES SOLO EN HORAS (6-oct). «Debería centrarse solo en Horas», dijo Andree al ver
+ * el mismo caso pedir respuesta en dos pantallas. Horario avisa y lleva a «Por resolver».
  *
  * PURA, para poder probar cada salida sin una pantalla delante.
  */
@@ -35,6 +39,11 @@ export type MarcaRara = {
   /** Cuánto antes entró o cuánto después salió. 0 si no se sabe el turno. */
   minutos: number;
   dia: DateKey;
+  /**
+   * Si ese día de esa persona aún tiene una jornada sin salida. Mientras siga abierto no
+   * se sabe si habrá hora extra, así que Horas no lo pone en «Por resolver» todavía.
+   */
+  diaAbierto: boolean;
 };
 
 export function marcasRarasDeLaSemana(params: {
@@ -45,6 +54,13 @@ export function marcasRarasDeLaSemana(params: {
   timezone: string;
 }): MarcaRara[] {
   const turnoPorId = new Map(params.turnos.map((turno) => [turno.id, turno]));
+  const abiertos = new Set(
+    params.sesiones
+      .filter((sesion) => sesion.ends_at === null)
+      .map((sesion) =>
+        claveDelDia(sesion.employee_id, dateKeyOf(sesion.starts_at, params.timezone)),
+      ),
+  );
   const raras: MarcaRara[] = [];
 
   for (const sesion of params.sesiones) {
@@ -65,6 +81,7 @@ export function marcasRarasDeLaSemana(params: {
         marca,
         minutos: fuera === null ? 0 : marca === 'early_arrival' ? fuera.antes : fuera.despues,
         dia,
+        diaAbierto: abiertos.has(claveDelDia(sesion.employee_id, dia)),
       });
     }
   }

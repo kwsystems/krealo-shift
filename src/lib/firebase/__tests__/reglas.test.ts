@@ -450,7 +450,9 @@ describe('reglas de Firestore', () => {
         setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ approved_by: 'otra-cuenta' })),
       );
       await assertFails(setDoc(doc(db, 'overtime_approvals', 'id-inventado'), aprobacion()));
-      await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: 0 })));
+      // 0 es «no es hora extra» (6-oct): una decisión que se guarda. Negativo, nunca.
+      await assertSucceeds(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: 0 })));
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: -30 })));
       await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: '90' })));
     });
 

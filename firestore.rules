@@ -321,7 +321,9 @@ service cloud.firestore {
       return managesLocation(d.organization_id, d.location_id)
         && d.approved_by == request.auth.uid
         && d.minutes is int
-        && d.minutes > 0
+        // 0 = «decidido: ese día NO es hora extra» (6-oct). Antes no se podía guardar, y el
+        // aviso de posible hora extra no se iba nunca.
+        && d.minutes >= 0
         && d.minutes <= 1440
         && d.work_date is string
         && id == d.location_id + '_' + d.employee_id + '_' + d.work_date;

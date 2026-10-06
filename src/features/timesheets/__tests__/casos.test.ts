@@ -288,3 +288,82 @@ describe('la hora extra aprobada decide el refrigerio (6-oct)', () => {
     expect(conExtra(0)).toEqual(['sin_refrigerio']);
   });
 });
+
+/**
+ * FUERA DE TURNO (6-oct): la posible hora extra y las marcas fuera del turno, decididas en
+ * Horas y no en dos pantallas.
+ */
+describe('fuera de turno (6-oct)', () => {
+  const turnoLargo = { ...TURNO, ends_at: H(21) } as ShiftRow;
+  const dia = (sesiones: WorkSession[], extra: { aprobadas?: Map<string, number> } = {}) =>
+    casosPorResolver({
+      sesiones,
+      turnos: [turnoLargo],
+      ahoraISO: H(23),
+      timezone: TZ,
+      umbralExtra: 60,
+      aprobadas: extra.aprobadas,
+    }).filter((caso) => caso.tipo === 'fuera_de_turno');
+  // De 09:54 a 21:00 con su refrigerio de 1 h marcado: 10:06 netas sobre 10 h planificadas.
+  const largaConPausa = jornada({
+    starts_at: H(8, 30),
+    ends_at: H(21),
+    gross_minutes: 750,
+    unpaid_break_minutes: 60,
+    net_minutes: 690,
+    flags: ['early_arrival'],
+  });
+
+  it('trabajó 1:30 de más: se pregunta la extra, con lo que entró antes', () => {
+    const [caso, ...resto] = dia([largaConPausa]);
+    expect(resto).toEqual([]);
+    expect(caso).toMatchObject({ posibleExtra: true, deMas: 90, entroAntes: 90 });
+  });
+
+  it('con la extra decidida —aprobada o «no es extra» (0)— ya no pregunta', () => {
+    expect(dia([largaConPausa], { aprobadas: new Map([['e1_2026-09-29', 90]]) })).toEqual([]);
+    expect(dia([largaConPausa], { aprobadas: new Map([['e1_2026-09-29', 0]]) })).toEqual([]);
+  });
+
+  it('entró una hora antes y salió una hora antes: no hay extra, solo «está bien así»', () => {
+    const corrida = jornada({
+      starts_at: H(9),
+      ends_at: H(20),
+      gross_minutes: 660,
+      unpaid_break_minutes: 60,
+      net_minutes: 600,
+      flags: ['early_arrival'],
+    });
+    const [caso] = dia([corrida]);
+    expect(caso).toMatchObject({ posibleExtra: false, entroAntes: 60, deMas: 0 });
+    expect(caso?.tipo === 'fuera_de_turno' && caso.conMarcas.map((s) => s.id)).toEqual(['s1']);
+  });
+
+  it('una marca ya vista sin horas de más no es caso', () => {
+    const vista = jornada({
+      starts_at: H(9),
+      ends_at: H(20),
+      gross_minutes: 660,
+      unpaid_break_minutes: 60,
+      net_minutes: 600,
+      flags: ['early_arrival'],
+      avisos_vistos: ['early_arrival'],
+    });
+    expect(dia([vista])).toEqual([]);
+  });
+
+  it('quien sigue dentro todavía no trabajó «de más»', () => {
+    expect(dia([jornada({ ...largaConPausa, ends_at: null, net_minutes: null })])).toEqual([]);
+  });
+
+  it('sin umbral no se buscan (quien no sabe decidirlos no los pide)', () => {
+    expect(
+      casosPorResolver({
+        sesiones: [largaConPausa],
+        turnos: [turnoLargo],
+        ahoraISO: H(23),
+        timezone: TZ,
+      }).map((caso) => caso.tipo),
+    ).toEqual([]);
+  });
+});

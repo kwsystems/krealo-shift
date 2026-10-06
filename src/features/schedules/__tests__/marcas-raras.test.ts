@@ -99,6 +99,27 @@ describe('marcas raras de la semana', () => {
     expect(raras([jornada()], [claveDelDia('e1', '2026-09-28')])).toHaveLength(1);
   });
 
+  /*
+   * DECIDIR ES EN HORAS (6-oct): Horario solo avisa y lleva allí. Con el día aún abierto no
+   * hay caso en «Por resolver» todavía, así que el aviso tiene que saber si lo está.
+   */
+  it('dice si ese día sigue abierto: una jornada partida sin salida lo deja abierto', () => {
+    expect(raras([jornada()])[0]?.diaAbierto).toBe(false);
+    expect(raras([jornada({ ends_at: null, status: 'open' })])[0]?.diaAbierto).toBe(true);
+    // La mañana cerrada con su marca, la tarde aún sin salida: el día sigue abierto.
+    const manana = jornada({ ends_at: '2026-09-29T18:00:00.000Z' });
+    const tarde = jornada({
+      id: 's2',
+      starts_at: '2026-09-29T19:00:00.000Z',
+      ends_at: null,
+      status: 'open',
+      flags: [],
+    });
+    expect(raras([manana, tarde])[0]?.diaAbierto).toBe(true);
+    // La de otra persona sin salida no abre el día de esta.
+    expect(raras([manana, { ...tarde, employee_id: 'e2' }])[0]?.diaAbierto).toBe(false);
+  });
+
   it('el resto de las marcas no son avisos de Horario', () => {
     expect(raras([jornada({ flags: ['late_arrival', 'unscheduled', 'clock_drift'] })])).toEqual([]);
   });

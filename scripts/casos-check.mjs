@@ -19,7 +19,12 @@
  *    caso sin quitar la marca.
  * 8. LA HORA EXTRA APROBADA DECIDE EL REFRIGERIO (6-oct): la hoja de la extra del
  *    día sin refrigerio lo avisa; aprobar la extra con la hora de comer dentro quita el caso
- *    de «Por resolver», y quitar la extra lo devuelve.
+ *    de «Por resolver», y «No es extra» lo devuelve —0 minutos no cubren el refrigerio— y
+ *    deja la hoja diciendo que ese día está decidido.
+ * 9. FUERA DE TURNO, DECIDIDO SOLO EN HORAS (6-oct): la posible hora extra y las marcas
+ *    fuera del turno son un caso de «Por resolver», con «Aprobar … como extra», «No es
+ *    extra» o «Está bien así». Cualquiera lo quita, y el aviso de Horario de ese día se va
+ *    con él: lo que se decide en un sitio no se vuelve a preguntar en otro.
  *
  * La semana es la ANTERIOR: la demostración la siembra entera, así que el arnés no depende
  * del día de la semana en que se corra.
@@ -337,12 +342,110 @@ try {
         } catch {
           vuelve = false;
         }
-        if (!vuelve) problemas.push('8: quitar la extra no devuelve el caso del refrigerio');
+        if (!vuelve) problemas.push('8: «No es extra» no devuelve el caso del refrigerio');
+        // «No es extra» es una decisión guardada, no un borrado: la hoja lo dice al volver.
+        await fila.first().click();
+        await pagina.locator('[data-testid="overtime-section"]').waitFor({ timeout: 8000 });
+        const decidido = await pagina
+          .locator('[data-testid="overtime-not-extra"]')
+          .innerText()
+          .catch(() => '');
+        if (!/no es hora extra/.test(decidido)) {
+          problemas.push(`8: tras «No es extra» la hoja no dice que está decidido: «${decidido}»`);
+        }
       }
       console.log(
-        `  extra y refrigerio   aviso ${aviso ? 'sí' : 'no'}; aprobar quita el caso: ${fuera ? 'sí' : 'no'}; quitarla lo devuelve: ${vuelve === null ? 'sin fila' : vuelve ? 'sí' : 'no'}`,
+        `  extra y refrigerio   aviso ${aviso ? 'sí' : 'no'}; aprobar quita el caso: ${fuera ? 'sí' : 'no'}; «No es extra» lo devuelve: ${vuelve === null ? 'sin fila' : vuelve ? 'sí' : 'no'}`,
       );
     }
+    await contexto.close();
+  }
+
+  /* -------------------- 9: fuera de turno, decidido solo en Horas (6-oct) */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await horasDeLaSemanaPasada(pagina);
+    const fueraDeTurno = await pagina.locator('[data-testid^="caso-"]').evaluateAll((nodos) =>
+      nodos
+        .map((n) => ({ id: n.getAttribute('data-testid').slice('caso-'.length), n }))
+        .filter(({ id }) => id.endsWith(':fuera_de_turno'))
+        .map(({ id, n }) => ({ id, texto: (n.innerText || '').replace(/\s+/g, ' ').trim() })),
+    );
+    const boton = async (id, cual) =>
+      (await pagina.locator(`[data-testid="caso-${id}-${cual}"]`).count()) > 0;
+    const conExtra = [];
+    const sinExtra = [];
+    for (const caso of fueraDeTurno) {
+      if (await boton(caso.id, 'extra')) conExtra.push(caso);
+      else if (await boton(caso.id, 'visto')) sinExtra.push(caso);
+    }
+    console.log(
+      `  fuera de turno       ${fueraDeTurno.length} casos (${conExtra.length} con posible extra)`,
+    );
+    for (const caso of fueraDeTurno)
+      console.log(`                       ${caso.texto.slice(0, 110)}`);
+    if (fueraDeTurno.length === 0) {
+      problemas.push('9: Horas no tiene ningún caso «fuera de turno» en la semana anterior');
+    }
+    for (const caso of fueraDeTurno) {
+      if (
+        !/(Trabajó|Entró|Salió) .* (más que su turno|sin tener turno|antes de su turno|después de su turno)/.test(
+          caso.texto,
+        )
+      ) {
+        problemas.push(`9: el caso no dice qué pasó: «${caso.texto}»`);
+      }
+      if (!(await boton(caso.id, 'no-extra')) && !(await boton(caso.id, 'visto'))) {
+        problemas.push(`9: el caso ${caso.id} no ofrece «No es extra» ni «Está bien así»`);
+      }
+    }
+    await pagina.locator('[data-testid="por-resolver"]').screenshot({
+      path: 'capturas/casos-fuera-de-turno.png',
+    });
+
+    // Cada salida, una vez: aprobar, «no es extra» y «está bien así».
+    const decididos = [];
+    const decidir = async (caso, cual, nombre) => {
+      if (caso === undefined) return;
+      await clic(pagina, `caso-${caso.id}-${cual}`);
+      if (!(await seFue(pagina, caso.id))) problemas.push(`9: «${nombre}» no quita el caso`);
+      else decididos.push(caso.id.split(':')[0]);
+      await esperar(pagina, 600);
+    };
+    await decidir(conExtra[0], 'extra', 'Aprobar como extra');
+    await decidir(conExtra[1], 'no-extra', 'No es extra');
+    await decidir(sinExtra[0], 'visto', 'Está bien así');
+    console.log(`  decididos            ${decididos.length}`);
+
+    // Y Horario deja de avisar de esas jornadas: lo decidido en Horas no se repite allí.
+    await pagina.locator('a[href$="/schedule"]').first().click();
+    await pagina.locator('[data-testid="schedule-view"]').waitFor({ timeout: 10000 });
+    await esperar(pagina, 1200);
+    // Horas sigue montada detrás, con su propio «Semana anterior»: el de Horario.
+    await pagina.locator('[data-testid="manager-schedule"] [data-testid="week-previous"]').click();
+    await esperar(pagina, 1800);
+    const abrir = pagina.locator('[data-testid="marcas-fuera-del-turno-abrir"]');
+    if ((await abrir.count()) > 0 && /Revisar/.test(await abrir.innerText())) await abrir.click();
+    const todas = pagina.locator('[data-testid="marcas-fuera-del-turno-todas"]');
+    if ((await todas.count()) > 0 && /Ver \d+ más/.test(await todas.innerText())) {
+      await todas.click();
+    }
+    await esperar(pagina, 400);
+    const enHorario = await pagina
+      .locator('[data-testid^="marca-rara-"]')
+      .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('data-testid')));
+    const siguen = decididos.filter((jornada) =>
+      enHorario.some((id) => id.startsWith(`marca-rara-${jornada}:`)),
+    );
+    if (siguen.length > 0) {
+      problemas.push(`9: decididas en Horas, Horario sigue avisando de ${siguen.length} jornadas`);
+    }
+    if (enHorario.some((id) => id.endsWith('-visto'))) {
+      problemas.push('9: Horario sigue ofreciendo «Visto»: se decide en Horas');
+    }
+    console.log(`  horario tras decidir ${siguen.length} avisos de lo decidido`);
     await contexto.close();
   }
 

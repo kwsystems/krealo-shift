@@ -23,6 +23,7 @@ export function HoraExtraDelDia({
   netosDelDia,
   planificados,
   aprobados,
+  decidido = aprobados > 0,
   refrigerioSinMarcar = 0,
   saving,
   failed,
@@ -33,6 +34,8 @@ export function HoraExtraDelDia({
   /** Lo planificado en sus turnos publicados, o `undefined` si no tenía turno. */
   planificados: number | undefined;
   aprobados: number;
+  /** Si ese día ya está decidido: aprobado, o «no es extra» (0). */
+  decidido?: boolean;
   /**
    * El refrigerio de su turno que ese día no marcó (6-oct), o 0. Aprobar más de lo que
    * trabajó de más sin él cuenta esa hora como trabajada: se dice antes de guardar.
@@ -83,6 +86,10 @@ export function HoraExtraDelDia({
         <AppText variant="bodyStrong" tabular testID="overtime-approved">
           {t('timesheet.overtimeApprovedNow', { hours: minutesToHHmm(aprobados) })}
         </AppText>
+      ) : decidido ? (
+        <AppText variant="bodyStrong" testID="overtime-not-extra">
+          {t('timesheet.overtimeDecidedNone')}
+        </AppText>
       ) : null}
       <FormField
         label={t('timesheet.overtimeField')}
@@ -108,9 +115,13 @@ export function HoraExtraDelDia({
           fullWidth={false}
           testID="overtime-save"
         />
-        {aprobados > 0 ? (
+        {/*
+          «NO ES EXTRA» (6-oct): la otra respuesta, que antes no existía. Con una extra aprobada
+          es quitarla; sin decidir, es decir que no. Las dos quedan guardadas como 0.
+        */}
+        {aprobados > 0 || !decidido ? (
           <GhostButton
-            label={t('timesheet.overtimeRemove')}
+            label={t('timesheet.overtimeNotExtra')}
             onPress={() => onGuardar(0)}
             fullWidth={false}
             testID="overtime-remove"

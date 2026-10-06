@@ -15,21 +15,27 @@ import { useTheme } from '@/theme/use-theme';
  * «MARCAS FUERA DE SU HORARIO», en Horario (Andree, 1-oct).
  *
  * El reloj deja marcar a cualquier hora; esto es lo que lo compensa. Quien entró una hora o
- * más antes de su turno, o salió una hora o más después, sale aquí con lo que hizo y las
- * tres respuestas que Andree dijo que daría: «ya veo yo si cambio de horario o es hora
- * extra o lo que sea». Por eso cada fila trae su botón:
+ * más antes de su turno, o salió una hora o más después, sale aquí con lo que hizo. Andree:
+ * «ya veo yo si cambio de horario o es hora extra o lo que sea». Cada fila trae:
  *
  *   - CAMBIAR SU TURNO, aquí mismo: era su horario de verdad. Al publicar, el aviso se va.
- *   - VER EN HORAS, en su jornada: corregir la hora o aprobar la extra. Aprobada, se va.
- *   - VISTO, ESTÁ BIEN ASÍ: lo sabía y no hay nada que cambiar.
+ *   - RESOLVER EN HORAS: abre Horas en su semana, filtrada a esa persona, donde «Por
+ *     resolver» tiene el caso con sus respuestas (aprobar la extra, «no es extra», «está
+ *     bien así»). Decidido allí, este aviso se va solo.
  *
- * SOLO AQUÍ, y es a propósito: «solo avisar en horario». Horas y Reportes no lo repiten.
+ * AQUÍ YA NO SE DECIDE (6-oct). Había un «Visto, está bien así» en esta fila y, en Horas,
+ * la misma jornada como posible hora extra: dos pantallas pidiendo respuesta por lo mismo,
+ * y lo que se contestaba en una seguía preguntándose en la otra. Andree: «debería
+ * centrarse solo en Horas». Horario avisa, Horas decide.
+ *
+ * Mientras el día sigue abierto —aún no marcó la salida— no hay nada que decidir: no se
+ * sabe si habrá extra. El botón dice entonces «Ver en Horas» y abre su jornada.
  *
  * Ámbar y no rojo: no es un error de nadie —marcar temprano no está prohibido—, es algo
  * que quien gestiona tiene que mirar. Con icono y palabras, nunca solo color (§21).
  *
  * EL ÁMBAR VA EN EL BORDE Y EL ICONO, NO DE FONDO. Con fondo ámbar, los botones de texto
- * —«Ver en Horas», «Visto»— quedaban en tema oscuro a 4,36:1 y hace falta 4,5 (lo midió
+ * —«Ver en Horas»— quedaban en tema oscuro a 4,36:1 y hace falta 4,5 (lo midió
  * `contraste:check`). Sobre la superficie se leen en los dos temas.
  */
 
@@ -43,26 +49,25 @@ export type FilaFueraDelTurno = {
   /** «Turno 10:00 – 19:00 · entró 08:40» */
   detalle: string | null;
   puedeCambiarTurno: boolean;
-  viendo: boolean;
+  /** Aún sin salida ese día: nada que resolver todavía, solo verla. */
+  diaAbierto: boolean;
 };
 
 export function MarcasFueraDelTurno({
   filas,
   onCambiarTurno,
   onVerEnHoras,
-  onVisto,
 }: {
   filas: readonly FilaFueraDelTurno[];
   onCambiarTurno: (id: string) => void;
   onVerEnHoras: (id: string) => void;
-  onVisto: (id: string) => void;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const estilos = useEstilos();
   /*
    * Los botones al lado del texto solo desde 1024 px: en un iPad vertical, con la barra
-   * lateral, los tres no caben junto al texto y se salían 53 px (`responsive:check`).
+   * lateral, los botones no caben junto al texto y se salían 53 px (`responsive:check`).
    */
   const { density } = useResponsive();
   const isWide = density === 'extraWide';
@@ -75,7 +80,7 @@ export function MarcasFueraDelTurno({
    * EMPIEZA PLEGADO, EN UNA LÍNEA (1-oct). «Se ve muy grande», dijo Andree del Horario: este
    * aviso eran 320 px encima de la rejilla en un monitor, y 800 en un teléfono, antes del
    * primer turno. Plegado sigue avisando —el ámbar, cuántas son y de quién— y «Revisar»
-   * abre las marcas con sus tres salidas. Lo que se va es el sitio, no el aviso.
+   * abre las marcas con sus salidas. Lo que se va es el sitio, no el aviso.
    */
   const [abierto, setAbierto] = useState(false);
   const desplegado = abierto;
@@ -172,17 +177,14 @@ export function MarcasFueraDelTurno({
                     />
                   ) : null}
                   <GhostButton
-                    label={t('schedule.unusual.openHours')}
+                    label={
+                      fila.diaAbierto
+                        ? t('schedule.unusual.openHours')
+                        : t('schedule.unusual.resolveInHours')
+                    }
                     onPress={() => onVerEnHoras(fila.id)}
                     fullWidth={false}
                     testID={`marca-rara-${fila.id}-horas`}
-                  />
-                  <GhostButton
-                    label={t('schedule.unusual.seen')}
-                    onPress={() => onVisto(fila.id)}
-                    loading={fila.viendo}
-                    fullWidth={false}
-                    testID={`marca-rara-${fila.id}-visto`}
                   />
                 </Row>
               </View>
