@@ -41,6 +41,7 @@ export function PorResolverDeLaSemana({
   timezone,
   timeFormat,
   language,
+  aprobadas,
   onVerJornada,
 }: {
   sesiones: readonly WorkSession[];
@@ -52,6 +53,8 @@ export function PorResolverDeLaSemana({
   timezone: string;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
+  /** Las horas extra aprobadas: una que cuenta el refrigerio como trabajado decide su caso. */
+  aprobadas: ReadonlyMap<string, number>;
   onVerJornada: (sesion: WorkSession) => void;
 }) {
   const { t } = useTranslation();
@@ -66,9 +69,13 @@ export function PorResolverDeLaSemana({
   > | null>(null);
   const [enCurso, setEnCurso] = useState<string | null>(null);
 
-  const casos = casosPorResolver({ sesiones, turnos, ahoraISO: nowISO, timezone }).filter(
-    (caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada,
-  );
+  const casos = casosPorResolver({
+    sesiones,
+    turnos,
+    ahoraISO: nowISO,
+    timezone,
+    aprobadas,
+  }).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
   const hora = (iso: string) => formatClockTime(iso, timezone, timeFormat, language);
   const nombre = (caso: CasoPorResolver) =>
     nombres.get(caso.sesion.employee_id) ?? t('team.unknownEmployee');

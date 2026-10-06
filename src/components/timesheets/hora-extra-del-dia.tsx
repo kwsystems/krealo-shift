@@ -23,6 +23,7 @@ export function HoraExtraDelDia({
   netosDelDia,
   planificados,
   aprobados,
+  refrigerioSinMarcar = 0,
   saving,
   failed,
   onGuardar,
@@ -32,6 +33,11 @@ export function HoraExtraDelDia({
   /** Lo planificado en sus turnos publicados, o `undefined` si no tenía turno. */
   planificados: number | undefined;
   aprobados: number;
+  /**
+   * El refrigerio de su turno que ese día no marcó (6-oct), o 0. Aprobar más de lo que
+   * trabajó de más sin él cuenta esa hora como trabajada: se dice antes de guardar.
+   */
+  refrigerioSinMarcar?: number;
   saving: boolean;
   failed: boolean;
   onGuardar: (minutos: number) => void;
@@ -63,6 +69,16 @@ export function HoraExtraDelDia({
               })
             : t('timesheet.overtimeNotMore')}
       </AppText>
+      {refrigerioSinMarcar > 0 && deMas > 0 ? (
+        <InlineNotice
+          tone="info"
+          body={t('timesheet.overtimeNoBreak', {
+            breakHours: minutesToHHmm(refrigerioSinMarcar),
+            withoutBreak: minutesToHHmm(Math.max(0, deMas - refrigerioSinMarcar)),
+          })}
+          testID="overtime-no-break"
+        />
+      ) : null}
       {aprobados > 0 ? (
         <AppText variant="bodyStrong" tabular testID="overtime-approved">
           {t('timesheet.overtimeApprovedNow', { hours: minutesToHHmm(aprobados) })}

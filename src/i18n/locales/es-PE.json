@@ -1526,6 +1526,7 @@
     "overtimeWorkedMore": "Trabajó {{hours}} más que su turno ({{planned}} planificadas).",
     "overtimeNoShift": "No tenía turno este día: todo lo trabajado ({{hours}}) es de más.",
     "overtimeNotMore": "Trabajó lo de su turno: no hay tiempo de más.",
+    "overtimeNoBreak": "Ese día no marcó su refrigerio de {{breakHours}}. Sin contarlo, trabajó {{withoutBreak}} de más: si apruebas más que eso, la hora de comer cuenta como trabajada y el caso «sin refrigerio» de Por resolver queda decidido.",
     "overtimeApprovedNow": "Aprobado como hora extra: {{hours}}.",
     "overtimeField": "Cuenta como hora extra (horas:minutos)",
     "overtimeFieldHint": "Solo lo que decidas que es extra. El resto sigue contando como horas trabajadas.",

@@ -7,6 +7,7 @@ import {
 } from '@/features/schedules/week';
 
 import type { WorkSession } from './api';
+import { claveDelDia } from './horas-extra';
 
 /**
  * «POR RESOLVER» EN HORAS: los casos que hay que arreglar, cada uno con su arreglo a un
@@ -106,6 +107,11 @@ export function casosPorResolver(params: {
   turnos: readonly ShiftRow[];
   ahoraISO: string;
   timezone: string;
+  /**
+   * Las horas extra APROBADAS por persona y día (`aprobadasPorDia`). Deciden el caso «sin
+   * refrigerio» cuando ya cuentan su hora como trabajada: ver abajo.
+   */
+  aprobadas?: ReadonlyMap<string, number>;
 }): CasoPorResolver[] {
   /*
    * SOLO TURNOS PUBLICADOS (auditoría, 4-oct). Un borrador no se le dio a nadie: medir una
@@ -209,12 +215,37 @@ export function casosPorResolver(params: {
       (suma, sesion) => suma + (sesion.gross_minutes ?? minutos(sesion.starts_at, finDe(sesion))),
       0,
     );
+    const planificado = minutos(turno.starts_at, turno.ends_at) - refrigerio;
+    const trabajado = ordenadas.reduce(
+      (suma, sesion) =>
+        suma +
+        (sesion.net_minutes ??
+          (sesion.gross_minutes ?? minutos(sesion.starts_at, finDe(sesion))) -
+            sesion.unpaid_break_minutes),
+      0,
+    );
+    /*
+     * LA HORA EXTRA APROBADA YA DECIDIÓ ESTE CASO (6-oct). Una vendedora marcó de 09:54 a 21:00
+     * sin refrigerio: 1:06 más que su turno de 10 h netas, y quien gestiona aprobó esa 1:06
+     * como extra. Aprobarla ES decir que la hora de comer la trabajó —sin esa hora, lo de más
+     * serían 6 minutos—, y aun así Horas seguía preguntando «¿descontar 1 h de refrigerio?».
+     * Si lo descontaba, la jornada bajaba a 10:06 y la extra se quedaba en 1:06: pagaba una
+     * hora extra que ya no existía.
+     *
+     * Así que el caso se da por decidido cuando la extra aprobada pasa de lo que trabajó de
+     * más SIN contar el refrigerio. Una extra más pequeña —solo esos 6 minutos— no decide
+     * nada sobre la hora de comer, y el caso sigue. Quitar la extra lo vuelve a abrir.
+     */
+    const deMas = Math.max(0, trabajado - planificado);
+    const extraAprobada = params.aprobadas?.get(claveDelDia(primera.employee_id, dia)) ?? 0;
+    const refrigerioEnLaExtra = extraAprobada > Math.max(0, deMas - refrigerio);
     // Lo bastante larga para haberlo tomado: más del doble del refrigerio y más de 4 h.
     if (
       refrigerio > 0 &&
       pausas === 0 &&
       brutos > Math.max(refrigerio * 2, 240) &&
-      !resuelto('sin_refrigerio')
+      !resuelto('sin_refrigerio') &&
+      !refrigerioEnLaExtra
     ) {
       // La más larga: es la que se descuenta.
       const larga = ordenadas.reduce((a, b) =>
@@ -230,15 +261,6 @@ export function casosPorResolver(params: {
       });
     }
 
-    const planificado = minutos(turno.starts_at, turno.ends_at) - refrigerio;
-    const trabajado = ordenadas.reduce(
-      (suma, sesion) =>
-        suma +
-        (sesion.net_minutes ??
-          (sesion.gross_minutes ?? minutos(sesion.starts_at, finDe(sesion))) -
-            sesion.unpaid_break_minutes),
-      0,
-    );
     const faltan = planificado - trabajado;
     const salioAntes = Math.max(0, minutos(finDe(ultima), turno.ends_at));
     const llegoTarde = Math.max(0, minutos(turno.starts_at, primera.starts_at));

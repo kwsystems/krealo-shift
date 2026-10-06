@@ -54,6 +54,7 @@ import type { HoraExtraDeLaFila } from '@/components/timesheets/session-row';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
+import { casosPorResolver, type CasoPorResolver } from './casos';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
@@ -355,6 +356,26 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     selected === null
       ? ''
       : claveDelDia(selected.employee_id, dateKeyOf(selected.starts_at, scope.timezone));
+  /*
+   * EL REFRIGERIO QUE NO MARCÓ ESE DÍA (6-oct), para que la hoja de la hora extra lo diga:
+   * aprobar más de lo que trabajó de más sin él cuenta esa hora como trabajada, y con eso
+   * el caso «sin refrigerio» de «Por resolver» queda decidido. Se mira SIN las extras
+   * aprobadas: el caso existe aunque ya esté decidido por una.
+   */
+  const refrigerioSinMarcar =
+    selected === null
+      ? 0
+      : (casosPorResolver({
+          sesiones: paraResolver,
+          turnos: turnosDeLaSemana.data ?? [],
+          ahoraISO: nowISO,
+          timezone: scope.timezone,
+        }).find(
+          (caso): caso is Extract<CasoPorResolver, { tipo: 'sin_refrigerio' }> =>
+            caso.tipo === 'sin_refrigerio' &&
+            caso.sesion.employee_id === selected.employee_id &&
+            caso.dia === dateKeyOf(selected.starts_at, scope.timezone),
+        )?.refrigerio ?? 0);
 
   const visibleSessions = useMemo(() => {
     const filtradas = allSessions.filter((session) => {
@@ -606,6 +627,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     timezone={scope.timezone}
                     timeFormat={scope.timeFormat}
                     language={language}
+                    aprobadas={aprobadas}
                     onVerJornada={setSelected}
                   />
 
@@ -972,6 +994,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 netosDelDia={netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0}
                 planificados={planificado.get(claveSeleccionada)}
                 aprobados={aprobadas.get(claveSeleccionada) ?? 0}
+                refrigerioSinMarcar={refrigerioSinMarcar}
                 saving={guardarHoraExtra.isPending}
                 failed={guardarHoraExtra.isError}
                 onGuardar={(minutos) =>

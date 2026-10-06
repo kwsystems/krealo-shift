@@ -17,6 +17,9 @@
  * 7. LA SALIDA QUE PUSO EL SISTEMA (5-oct): sale en «Por resolver» con su hora, la fila de
  *    Horas y la tarjeta de Horario dicen «Salida automática», y «La salida está bien» quita el
  *    caso sin quitar la marca.
+ * 8. LA HORA EXTRA APROBADA DECIDE EL REFRIGERIO (6-oct): la hoja de la extra del
+ *    día sin refrigerio lo avisa; aprobar la extra con la hora de comer dentro quita el caso
+ *    de «Por resolver», y quitar la extra lo devuelve.
  *
  * La semana es la ANTERIOR: la demostración la siembra entera, así que el arnés no depende
  * del día de la semana en que se corra.
@@ -290,6 +293,56 @@ try {
     console.log(
       `  justificado y sin refrigerio: semana ${antes} → ${despues}; caja ${quedan ? 'sigue' : 'se fue'}`,
     );
+    await contexto.close();
+  }
+
+  /* ------------------------- 8: la extra aprobada decide el refrigerio (6-oct) */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await horasDeLaSemanaPasada(pagina);
+    const refrigerio = (await casos(pagina)).find((c) => c.id.endsWith(':sin_refrigerio'));
+    if (refrigerio === undefined) {
+      problemas.push('8: no hay caso de refrigerio con el que probar la extra');
+    } else {
+      const abrirExtra = async () => {
+        await clic(pagina, `caso-${refrigerio.id}-jornada`);
+        await pagina.locator('[data-testid="overtime-section"]').waitFor({ timeout: 8000 });
+      };
+      await abrirExtra();
+      const aviso = await pagina
+        .locator('[data-testid="overtime-no-break"]')
+        .innerText()
+        .catch(() => '');
+      if (!/no marcó su refrigerio/.test(aviso)) {
+        problemas.push(`8: la hoja de la extra no avisa del refrigerio sin marcar: «${aviso}»`);
+      }
+      // El campo viene con lo trabajado de más, refrigerio incluido: se aprueba tal cual.
+      await clic(pagina, 'overtime-save');
+      const fuera = await seFue(pagina, refrigerio.id);
+      if (!fuera)
+        problemas.push('8: aprobar la extra con la hora de comer dentro no quita el caso');
+      // Y quitarla lo devuelve: la decisión es la extra, no un borrado.
+      await esperar(pagina, 600);
+      const fila = pagina.locator(`[data-testid="session-${refrigerio.id.split(':')[0]}"]`);
+      let vuelve = null;
+      if ((await fila.count()) > 0) {
+        await fila.first().click();
+        await pagina.locator('[data-testid="overtime-section"]').waitFor({ timeout: 8000 });
+        await clic(pagina, 'overtime-remove');
+        try {
+          await pagina.locator(`[data-testid="caso-${refrigerio.id}"]`).waitFor({ timeout: 8000 });
+          vuelve = true;
+        } catch {
+          vuelve = false;
+        }
+        if (!vuelve) problemas.push('8: quitar la extra no devuelve el caso del refrigerio');
+      }
+      console.log(
+        `  extra y refrigerio   aviso ${aviso ? 'sí' : 'no'}; aprobar quita el caso: ${fuera ? 'sí' : 'no'}; quitarla lo devuelve: ${vuelve === null ? 'sin fila' : vuelve ? 'sí' : 'no'}`,
+      );
+    }
     await contexto.close();
   }
 

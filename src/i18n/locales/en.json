@@ -1526,6 +1526,7 @@
     "overtimeWorkedMore": "Worked {{hours}} more than the shift ({{planned}} planned).",
     "overtimeNoShift": "No shift this day: everything worked ({{hours}}) is extra time.",
     "overtimeNotMore": "Worked the shift: no extra time.",
+    "overtimeNoBreak": "That day they didn't clock their {{breakHours}} break. Without it, they worked {{withoutBreak}} more: approving more than that counts the break as worked, and the «no break» case in To resolve is settled.",
     "overtimeApprovedNow": "Approved as overtime: {{hours}}.",
     "overtimeField": "Counts as overtime (hours:minutes)",
     "overtimeFieldHint": "Only what you decide is overtime. The rest still counts as hours worked.",

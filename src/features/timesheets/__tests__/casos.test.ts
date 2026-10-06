@@ -247,3 +247,44 @@ describe('un turno con varias jornadas (auditoría, 4-oct)', () => {
     });
   });
 });
+
+/**
+ * LA HORA EXTRA APROBADA Y EL REFRIGERIO SIN MARCAR (6-oct). Una vendedora marcó de 09:54 a
+ * 21:00 sin refrigerio en un turno de 10:00 a 21:00 con 1 h de refrigerio: 11:06 netas,
+ * 1:06 más que sus 10 h planificadas. Quien gestiona aprobó esa 1:06 como extra, y Horas
+ * seguía preguntando si descontar la hora de comer.
+ */
+describe('la hora extra aprobada decide el refrigerio (6-oct)', () => {
+  const turnoLargo = { ...TURNO, ends_at: H(21) } as ShiftRow;
+  const deLaVendedora = jornada({
+    starts_at: H(9, 54),
+    ends_at: H(21),
+    gross_minutes: 666,
+    unpaid_break_minutes: 0,
+    net_minutes: 666,
+  });
+  const conExtra = (minutos: number | null) =>
+    casosPorResolver({
+      sesiones: [deLaVendedora],
+      turnos: [turnoLargo],
+      ahoraISO: H(23),
+      timezone: TZ,
+      aprobadas: new Map(minutos === null ? [] : [[`e1_2026-09-29`, minutos]]),
+    }).map((caso) => caso.tipo);
+
+  it('sin extra aprobada, el caso sigue', () => {
+    expect(conExtra(null)).toEqual(['sin_refrigerio']);
+  });
+
+  it('con la 1:06 aprobada, la hora de comer ya cuenta como trabajada: no hay caso', () => {
+    expect(conExtra(66)).toEqual([]);
+  });
+
+  it('una extra de solo lo de más sin el refrigerio (6 min) no decide nada sobre él', () => {
+    expect(conExtra(6)).toEqual(['sin_refrigerio']);
+  });
+
+  it('quitar la extra vuelve a abrir el caso', () => {
+    expect(conExtra(0)).toEqual(['sin_refrigerio']);
+  });
+});
