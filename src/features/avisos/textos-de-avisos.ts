@@ -82,3 +82,24 @@ export function textoDelAviso(
     }
   }
 }
+
+/**
+ * EL NOMBRE CORTO DE CADA CLASE (6-oct), el rótulo de encima de la frase en el aviso
+ * emergente: «Entrada», «Sale a comer»… Dice de un vistazo qué pasó antes de leer quién.
+ */
+export function etiquetaDeClase(t: TFunction, clase: ClaseDeAviso): string {
+  switch (clase) {
+    case 'entrada':
+      return t('alerts.kindEntrada');
+    case 'vuelta':
+      return t('alerts.kindVuelta');
+    case 'comida':
+      return t('alerts.kindComida');
+    case 'descanso':
+      return t('alerts.kindDescanso');
+    case 'pausa':
+      return t('alerts.kindPausa');
+    case 'salida':
+      return t('alerts.kindSalida');
+  }
+}

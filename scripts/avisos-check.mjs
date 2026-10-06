@@ -145,6 +145,57 @@ try {
       fallar(`${etiqueta} emergente`, `no cuelga a la derecha: acaba en ${primero.derecha}`);
     else pasa(`${etiqueta} emergente`, `«${primero.texto}» arriba a la derecha`);
 
+    /*
+     * EL DISEÑO DEL AVISO (6-oct): sello de hora del color de la marca, rótulo de qué pasó,
+     * y la línea que se vacía y se PARA con el puntero encima.
+     */
+    {
+      const tarjeta = pagina
+        .locator('[data-testid^="aviso-emergente-"]')
+        .filter({ hasText: FRASES[0] })
+        .first();
+      const id = ((await tarjeta.getAttribute('data-testid')) ?? '').replace(
+        'aviso-emergente-',
+        '',
+      );
+      const sello = await pagina.locator(`[data-testid="aviso-sello-${id}"]`).evaluate((n) => ({
+        texto: n.innerText,
+        fondo: getComputedStyle(n).backgroundColor,
+      }));
+      const texto = await tarjeta.innerText();
+      const escala = () =>
+        pagina.locator(`[data-testid="aviso-progreso-${id}"]`).evaluate((n) => {
+          const m = /matrix\(([^,]+)/.exec(getComputedStyle(n).transform);
+          return m === null ? 1 : Number(m[1]);
+        });
+      await pagina.mouse.move(5, 500);
+      const e1 = await escala();
+      await pagina.waitForTimeout(700);
+      const e2 = await escala();
+      await tarjeta.hover({ position: { x: 150, y: 20 } });
+      await pagina.waitForTimeout(150);
+      const e3 = await escala();
+      await pagina.waitForTimeout(800);
+      const e4 = await escala();
+      await pagina.mouse.move(5, 500);
+      if (!/\d{1,2}:\d{2}/.test(sello.texto) || /rgba\(0, 0, 0, 0\)|transparent/.test(sello.fondo))
+        fallar(
+          `${etiqueta} diseño`,
+          `el sello no lleva la hora con su color: ${JSON.stringify(sello)}`,
+        );
+      else if (!texto.includes('SALE A COMER'))
+        fallar(`${etiqueta} diseño`, `falta el rótulo «SALE A COMER»: «${texto}»`);
+      else if (!(e2 < e1 - 0.03))
+        fallar(`${etiqueta} diseño`, `la línea de tiempo no se vacía: ${e1} → ${e2}`);
+      else if (Math.abs(e4 - e3) > 0.02)
+        fallar(`${etiqueta} diseño`, `con el puntero encima la línea sigue: ${e3} → ${e4}`);
+      else
+        pasa(
+          `${etiqueta} diseño`,
+          `sello ${sello.texto.replace(/\s+/g, ' ').trim()} en ${sello.fondo}, rótulo, línea ${e1.toFixed(2)}→${e2.toFixed(2)} y quieta encima (${e3.toFixed(2)}→${e4.toFixed(2)})`,
+        );
+    }
+
     const numero = await pagina
       .locator('[data-testid="avisos-contador"]')
       .innerText()

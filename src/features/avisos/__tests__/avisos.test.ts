@@ -9,7 +9,7 @@ import {
   MAXIMO_EN_LA_CAMPANA,
   useAvisosStore,
 } from '../avisos-store';
-import { claseDeAviso, textoDelAviso } from '../textos-de-avisos';
+import { claseDeAviso, etiquetaDeClase, textoDelAviso } from '../textos-de-avisos';
 import { inicioDelDia } from '../use-vigia-de-avisos';
 
 /**
@@ -79,6 +79,16 @@ describe('qué dice cada aviso', () => {
       break_reason: 'meal',
     });
     expect(textoDelAviso(t, salida, 'Ana')).toBe('Ana salió a comer');
+  });
+
+  it('el rótulo del aviso dice qué pasó, en corto (6-oct)', () => {
+    const rotulo = (m: MarcaDeAviso) => etiquetaDeClase(t, claseDeAviso(m));
+    expect(rotulo(marca('1', 'x'))).toBe('Entrada');
+    expect(rotulo(marca('1', 'x', { event_type: 'break_start', break_reason: 'meal' }))).toBe(
+      'Sale a comer',
+    );
+    expect(rotulo(marca('1', 'x', { event_type: 'break_end' }))).toBe('Vuelve');
+    expect(rotulo(marca('1', 'x', { event_type: 'clock_out' }))).toBe('Salida');
   });
 
   it('sin nombre conocido, «Alguien del equipo»', () => {

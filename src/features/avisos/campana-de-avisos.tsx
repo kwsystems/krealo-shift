@@ -1,5 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, Switch, View, useWindowDimensions } from 'react-native';
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Modal,
+  Pressable,
+  ScrollView,
+  Switch,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
@@ -13,7 +23,7 @@ import { borderWidth, fontFamily, radii, shadows, sizes, spacing } from '@/theme
 import { useTheme } from '@/theme/use-theme';
 
 import { contarSinVer, useAvisosStore } from './avisos-store';
-import { BaldosaDelAviso, useDescribirAviso } from './piezas-del-aviso';
+import { PildoraDeHora, useDescribirAviso } from './piezas-del-aviso';
 
 /**
  * LA CAMPANA DE AVISOS (5-oct), arriba a la derecha de la cabecera del panel: en TODAS las
@@ -75,6 +85,44 @@ export function CampanaDeAvisos() {
     cerrarPanel();
   };
 
+  /*
+   * LA CAMPANA SUENA (6-oct): se balancea medio segundo cuando llega una marca, como una
+   * campana de verdad, y así el ojo va adonde queda guardada —también con el aviso de
+   * arriba apagado, que es cuando más falta hace—. La primera carga no suena: eso ya pasó.
+   * Con «reducir movimiento», quieta.
+   */
+  const cargado = useAvisosStore((s) => s.cargado);
+  const ultimaId = marcas[marcas.length - 1]?.id;
+  const [giro] = useState(() => new Animated.Value(0));
+  const base = useRef<string | undefined | null>(null);
+  useEffect(() => {
+    if (!cargado) {
+      base.current = null;
+      return undefined;
+    }
+    if (base.current === null) {
+      base.current = ultimaId;
+      return undefined;
+    }
+    if (ultimaId === undefined || ultimaId === base.current) return undefined;
+    base.current = ultimaId;
+    if (abierto) return undefined;
+    let vivo = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((reducir) => {
+      if (!vivo || reducir) return;
+      giro.setValue(0);
+      Animated.timing(giro, {
+        toValue: 1,
+        duration: 650,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: false,
+      }).start();
+    });
+    return () => {
+      vivo = false;
+    };
+  }, [cargado, ultimaId, abierto, giro]);
+
   // Se abre desde la campana o desde un emergente: en los dos casos se mide aquí.
   useEffect(() => {
     if (!abierto) return;
@@ -102,11 +150,25 @@ export function CampanaDeAvisos() {
       >
         {({ pressed }) => (
           <View style={[estilos.campana, ...respuesta.estilo(pressed)]}>
-            <Ionicons
-              name={sinVer > 0 ? 'notifications' : 'notifications-outline'}
-              size={22}
-              color={sinVer > 0 ? colors.primary600 : colors.ink700}
-            />
+            <Animated.View
+              style={{
+                transformOrigin: 'top',
+                transform: [
+                  {
+                    rotate: giro.interpolate({
+                      inputRange: [0, 0.15, 0.35, 0.55, 0.75, 1],
+                      outputRange: ['0deg', '-16deg', '13deg', '-8deg', '4deg', '0deg'],
+                    }),
+                  },
+                ],
+              }}
+            >
+              <Ionicons
+                name={sinVer > 0 ? 'notifications' : 'notifications-outline'}
+                size={22}
+                color={sinVer > 0 ? colors.primary600 : colors.ink700}
+              />
+            </Animated.View>
             {sinVer > 0 ? (
               <View style={estilos.contador} testID="avisos-contador">
                 <AppText style={estilos.contadorTexto} tabular>
@@ -242,7 +304,7 @@ function PanelDeAvisos({
                   accessibilityLabel={`${aviso.texto}, ${aviso.hora}${nueva ? `. ${t('alerts.unseen')}` : ''}`}
                   testID={`aviso-fila-${marca.id}`}
                 >
-                  <BaldosaDelAviso clase={aviso.clase} lado={32} />
+                  <PildoraDeHora clase={aviso.clase} hora={aviso.hora} />
                   <View style={estilos.filaTexto}>
                     <AppText variant="body" style={estilos.frase}>
                       {aviso.texto}
@@ -253,10 +315,8 @@ function PanelDeAvisos({
                       </AppText>
                     ) : null}
                   </View>
-                  <View style={estilos.filaHora}>
-                    <AppText variant="help" tone="muted" tabular>
-                      {aviso.hora}
-                    </AppText>
+                  {/* El punto de «sin ver» ocupa su sitio aunque no esté: las frases no bailan. */}
+                  <View style={estilos.filaPunto}>
                     {nueva ? <View style={estilos.punto} testID="aviso-sin-ver" /> : null}
                   </View>
                 </View>
@@ -407,7 +467,7 @@ const useEstilos = estilosDelTema((colors) => ({
   fila: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.md,
+    gap: spacing.sm + 2,
     minHeight: 48,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.base,
@@ -415,7 +475,7 @@ const useEstilos = estilosDelTema((colors) => ({
   filaNueva: { backgroundColor: colors.primary50 },
   filaTexto: { flex: 1, minWidth: 0 },
   frase: { fontSize: 14, lineHeight: 19 },
-  filaHora: { alignItems: 'flex-end', gap: spacing.xs, flexShrink: 0 },
+  filaPunto: { width: 8, alignItems: 'center', flexShrink: 0 },
   punto: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.primary600 },
   finDelDia: {
     paddingHorizontal: spacing.base,
