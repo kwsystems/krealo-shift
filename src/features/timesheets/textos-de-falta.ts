@@ -52,19 +52,43 @@ export function iconoDeFalta(falta: Pick<Falta, 'resolucion'>): keyof typeof Ion
 }
 
 /**
- * La línea pequeña bajo el número de faltas, igual en Horas y en Reportes: «1 justificada ·
- * 2 sin revisar». Sin ninguna de las dos, nada: el número ya lo dice todo.
+ * La línea pequeña bajo el número de faltas, igual en Horas, Equipo y Reportes: «2 sin
+ * revisar · 1 sin justificar · 1 justificada». Sin ninguna, nada: el número ya lo dice todo.
+ *
+ * LOS TRES ESTADOS, SIEMPRE EN ESTE ORDEN (6-oct). Esta línea decía solo justificadas y sin
+ * revisar, así que con tres faltas —una de cada— se leía «1 justificada · 1 sin revisar» bajo
+ * un 3; y el resumen de Reportes tenía su propia copia, con los tres estados y en otro orden,
+ * en la misma pantalla. Ahora los dos salen de aquí. Primero lo que pide algo.
  */
+export function detalleDeCuentaDeFaltas(
+  t: TFunction,
+  cuenta: {
+    sinRevisar: number;
+    /** Revisadas y sin justificar: cuentan en contra, pero ya no piden nada. */
+    injustificadas: number;
+    justificadas: number;
+  },
+): string | undefined {
+  const partes = [
+    cuenta.sinRevisar > 0 ? t('absence.pendingCount', { count: cuenta.sinRevisar }) : null,
+    cuenta.injustificadas > 0
+      ? t('absence.unjustifiedCount', { count: cuenta.injustificadas })
+      : null,
+    cuenta.justificadas > 0 ? t('absence.justifiedCount', { count: cuenta.justificadas }) : null,
+  ].filter((parte): parte is string => parte !== null);
+  return partes.length === 0 ? undefined : partes.join(' · ');
+}
+
 export function detalleDeFaltas(
   t: TFunction,
   faltas: readonly Pick<Falta, 'resolucion'>[],
 ): string | undefined {
   const cuenta = contarFaltas(faltas);
-  const partes = [
-    cuenta.justificadas > 0 ? t('absence.justifiedCount', { count: cuenta.justificadas }) : null,
-    cuenta.sinRevisar > 0 ? t('absence.pendingCount', { count: cuenta.sinRevisar }) : null,
-  ].filter((parte): parte is string => parte !== null);
-  return partes.length === 0 ? undefined : partes.join(' · ');
+  return detalleDeCuentaDeFaltas(t, {
+    sinRevisar: cuenta.sinRevisar,
+    injustificadas: cuenta.sinJustificar - cuenta.sinRevisar,
+    justificadas: cuenta.justificadas,
+  });
 }
 
 /** Rojo si alguna cuenta en contra; ámbar si todas están justificadas; nada si no hay. */

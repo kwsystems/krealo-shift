@@ -10,7 +10,11 @@ import { StatusBadge } from '@/components/ui/states';
 import { formatDateKeyShort, formatWeekdayShort, type DateKey } from '@/features/schedules/week';
 import { duracion } from '@/features/timesheets/duracion';
 import { etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
-import { etiquetaDeFalta, tonoDeFalta } from '@/features/timesheets/textos-de-falta';
+import {
+  detalleDeCuentaDeFaltas,
+  etiquetaDeFalta,
+  tonoDeFalta,
+} from '@/features/timesheets/textos-de-falta';
 import type { SupportedLanguage } from '@/i18n';
 import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
 import { estilosDelTema } from '@/theme/estilos';
@@ -270,26 +274,15 @@ function useTextosDeResumen() {
     /*
      * CON LAS MISMAS PALABRAS QUE EL DÍA POR DÍA (auditoría, 4-oct): la fila decía «1 sin
      * justificar» de una falta que debajo salía «Sin revisar». Son tres estados y se dicen
-     * los tres, con los textos de `absence` que usan Horas, Horario y Equipo.
+     * los tres. Y con la MISMA función que la casilla de Faltas de al lado (6-oct): tenían
+     * cada una su copia y lo decían en distinto orden. Ver `textos-de-falta.ts`.
      */
     faltas: (fila: ResumenDeIncidencias): string | null =>
-      fila.faltas === 0
-        ? null
-        : [
-            fila.faltasSinRevisar > 0
-              ? t('absence.pendingCount', { count: fila.faltasSinRevisar })
-              : null,
-            fila.faltasEnContra - fila.faltasSinRevisar > 0
-              ? t('reports.incidents.against', {
-                  count: fila.faltasEnContra - fila.faltasSinRevisar,
-                })
-              : null,
-            fila.faltasJustificadas > 0
-              ? t('absence.justifiedCount', { count: fila.faltasJustificadas })
-              : null,
-          ]
-            .filter((parte): parte is string => parte !== null)
-            .join(' · '),
+      detalleDeCuentaDeFaltas(t, {
+        sinRevisar: fila.faltasSinRevisar,
+        injustificadas: fila.faltasEnContra - fila.faltasSinRevisar,
+        justificadas: fila.faltasJustificadas,
+      }) ?? null,
     debe: (fila: ResumenDeIncidencias): string | null => {
       const partes = [
         fila.debeCompensado > 0

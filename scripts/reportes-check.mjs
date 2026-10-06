@@ -668,8 +668,17 @@ function soloHoras(texto) {
   if ((await tarjeta.count()) === 0) {
     problemas.push('Reportes no tiene el resumen de faltas, tardanzas y salidas antes');
   } else {
+    /*
+     * EL VALOR, NO EL PRIMER NÚMERO DEL TEXTO (6-oct): en la casilla el detalle va antes que
+     * la cifra, así que con una falta justificada se leía el «1» de «1 justificada · 1 sin
+     * revisar» en vez del 2. La casilla dice su valor en `aria-label` («Faltas: 2, …»).
+     */
     const numero = async (selector) => {
-      const texto = await pagina.locator(selector).first().innerText();
+      const nodo = pagina.locator(selector).first();
+      const etiqueta = (await nodo.getAttribute('aria-label')) ?? '';
+      const delValor = /:\s*(\d+)/.exec(etiqueta);
+      if (delValor !== null) return Number(delValor[1]);
+      const texto = await nodo.innerText();
       const m = texto.replace(/[-]/g, '').match(/(\d+)/);
       return m === null ? null : Number(m[1]);
     };
@@ -678,6 +687,19 @@ function soloHoras(texto) {
     if (faltasResumen !== faltasCasilla) {
       problemas.push(
         `el resumen cuenta ${faltasResumen} faltas y la casilla de Faltas ${faltasCasilla}`,
+      );
+    }
+    // Y lo DICEN igual (6-oct): «1 sin revisar · 1 justificada» sale de un solo módulo.
+    const detalle = async (selector) =>
+      ((await pagina.locator(selector).first().innerText()) || '')
+        .split('\n')
+        .map((linea) => linea.trim())
+        .find((linea) => /justificad|sin revisar/.test(linea)) ?? null;
+    const detalleResumen = await detalle('[data-testid="report-incidents-absences"]');
+    const detalleCasilla = await detalle('[data-testid="report-absences"]');
+    if (detalleResumen !== detalleCasilla) {
+      problemas.push(
+        `el resumen dice «${detalleResumen}» de las faltas y la casilla «${detalleCasilla}»`,
       );
     }
     const tardanzasResumen = await numero('[data-testid="report-incidents-late"]');

@@ -612,8 +612,6 @@
       "showDays_one": "Ver día por día ({{count}})",
       "showDays_other": "Ver día por día ({{count}})",
       "hideDays": "Ocultar día por día",
-      "against_one": "{{count}} sin justificar",
-      "against_other": "{{count}} sin justificar",
       "compensated": "{{time}} compensadas",
       "forgiven": "{{time}} perdonadas",
       "absenceLine": "Faltó a su turno de {{start}} a {{end}}",
@@ -1779,7 +1777,9 @@
     "pendingCount_one": "{{count}} sin revisar",
     "pendingCount_other": "{{count}} sin revisar",
     "justifiedCount_one": "{{count}} justificada",
-    "justifiedCount_other": "{{count}} justificadas"
+    "justifiedCount_other": "{{count}} justificadas",
+    "unjustifiedCount_one": "{{count}} sin justificar",
+    "unjustifiedCount_other": "{{count}} sin justificar"
   },
   "holidays": {
     "label": "Feriado",

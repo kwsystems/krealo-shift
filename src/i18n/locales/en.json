@@ -612,8 +612,6 @@
       "showDays_one": "See day by day ({{count}})",
       "showDays_other": "See day by day ({{count}})",
       "hideDays": "Hide day by day",
-      "against_one": "{{count}} unexcused",
-      "against_other": "{{count}} unexcused",
       "compensated": "{{time}} made up",
       "forgiven": "{{time}} forgiven",
       "absenceLine": "Missed their shift from {{start}} to {{end}}",
@@ -1779,7 +1777,9 @@
     "pendingCount_one": "{{count}} not reviewed",
     "pendingCount_other": "{{count}} not reviewed",
     "justifiedCount_one": "{{count}} excused",
-    "justifiedCount_other": "{{count}} excused"
+    "justifiedCount_other": "{{count}} excused",
+    "unjustifiedCount_one": "{{count}} unexcused",
+    "unjustifiedCount_other": "{{count}} unexcused"
   },
   "holidays": {
     "label": "Holiday",
