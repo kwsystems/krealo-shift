@@ -350,6 +350,8 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   let contadorEvento = 0;
   /** La jornada que el sistema cerró sola (5-oct), para su fila en las correcciones. */
   let salidaAutomatica: { sesion: string; evento: string; salida: Date } | null = null;
+  /** La jornada de corrido (7-oct): se ata a su turno cuando ese turno exista, más abajo. */
+  let jornadaDeCorrido: Fila | null = null;
 
   // Días cerrados: del lunes de la semana ANTERIOR hasta ayer, saltando domingos. Ver
   // el porqué de las dos semanas en el bloque de turnos.
@@ -396,7 +398,14 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       const diaDeLaSemanaDelCaso = ((dia % 7) + 7) % 7;
       const enferma = persona === 1 && diaDeLaSemanaDelCaso === 1;
       const sinRefrigerio = persona === 4 && diaDeLaSemanaDelCaso === 4;
-      const sinPausa = enferma || sinRefrigerio;
+      /*
+       * UNA JORNADA DE CORRIDO (7-oct): el sábado de la semana anterior la quinta persona no
+       * almuerza y se va a las 13:30 de un turno de 8:00 a 14:00 con 30 min de refrigerio.
+       * Trabajó sus 5 h 30 min: no es «salió antes» ni «sin refrigerio» en ninguna pantalla.
+       * Sin marca de salida antes, como la deja el servidor (`src/domain/de-corrido.ts`).
+       */
+      const deCorrido = dia < 0 && persona === 4 && diaDeLaSemanaDelCaso === 5;
+      const sinPausa = enferma || sinRefrigerio || deCorrido;
       /*
        * UNA SALIDA QUE PUSO EL SISTEMA (5-oct): el lunes de la semana anterior la segunda
        * persona no marcó la salida y la jornada se cerró sola a las 14:00, fin de su turno
@@ -406,11 +415,13 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       const salidaSola = dia < 0 && persona === 1 && diaDeLaSemanaDelCaso === 0;
       const salida = enferma
         ? conHora(fecha, 10, 20)
-        : cierra === 'tarde'
-          ? conHora(fecha, 19, 30)
-          : cierra === 'pronto'
-            ? conHora(fecha, 17, 10)
-            : conHora(fecha, 14, persona % 3 === 0 ? 12 : 0);
+        : deCorrido
+          ? conHora(fecha, 13, 30)
+          : cierra === 'tarde'
+            ? conHora(fecha, 19, 30)
+            : cierra === 'pronto'
+              ? conHora(fecha, 17, 10)
+              : conHora(fecha, 14, persona % 3 === 0 ? 12 : 0);
       const brutos = Math.round((salida.getTime() - entrada.getTime()) / 60000);
       /*
        * CADA PERSONA SE AUSENTA POR UN MOTIVO DISTINTO, y de ahí sale si esos minutos
@@ -469,7 +480,7 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
               umbralMinutos: MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
             });
 
-      sesiones.push({
+      const fila: Fila = {
         id: sesionId(contadorSesion),
         organization_id: DEMO_ORG_ID,
         employee_id: empleadoId(persona + 1),
@@ -493,7 +504,9 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
         departure_reason: enferma ? 'medical' : null,
         auto_clock_out: salidaSola,
         updated_at: aISO(salida),
-      });
+      };
+      sesiones.push(fila);
+      if (deCorrido) jornadaDeCorrido = fila;
 
       resumenDiario.push({
         employee_id: empleadoId(persona + 1),
@@ -1078,6 +1091,21 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
       ),
       updated_at: aISO(sumarDias(lunes, -2)),
     });
+  }
+
+  /*
+   * SU TURNO ES UNO DE ESTOS: la quinta persona no tiene turno de mañana los sábados y se le
+   * hace aquí, como a las demás jornadas sin turno. Atada a él, Horas la mide contra su
+   * refrigerio y comprueba que de corrido no es un caso.
+   */
+  const jornadaAtada = jornadaDeCorrido as Fila | null;
+  if (jornadaAtada !== null) {
+    const suyo = turnosDeSusJornadas.find(
+      (turno) =>
+        turno.employee_id === jornadaAtada.employee_id &&
+        turno.starts_at === jornadaAtada.starts_at,
+    );
+    if (suyo !== undefined) jornadaAtada.shift_id = suyo.id;
   }
 
   const turnosCoherentes = [

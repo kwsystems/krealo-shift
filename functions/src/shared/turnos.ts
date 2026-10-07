@@ -1,5 +1,10 @@
 import { COLLECTIONS, db, nowISO } from './admin';
-import { marcasDeLaSesion, marcasDentroDelTurno, type MarcaDeSesion } from './marcas';
+import {
+  marcasDeLaSesion,
+  marcasDentroDelTurno,
+  sinSalidaAntesSiEsDeCorrido,
+  type MarcaDeSesion,
+} from './marcas';
 import { politicasDe } from './politicas';
 
 /**
@@ -17,7 +22,19 @@ import { politicasDe } from './politicas';
  * —todavía no es un turno que la persona conozca— ni uno de otra sede.
  */
 
-export type TurnoDeJornada = { id: string; starts_at: string; ends_at: string };
+export type TurnoDeJornada = {
+  id: string;
+  starts_at: string;
+  ends_at: string;
+  /** El refrigerio planificado: con él se sabe si una jornada fue de corrido (7-oct). */
+  planned_unpaid_break_minutes?: number;
+};
+
+/** El refrigerio de un turno guardado, en minutos: 0 si no lo trae o no es un número. */
+function refrigerioDe(turno: Record<string, unknown>): number {
+  const minutos = Number(turno.planned_unpaid_break_minutes);
+  return Number.isFinite(minutos) && minutos > 0 ? minutos : 0;
+}
 
 const HORA_MS = 3600_000;
 /** Lo más lejos que puede empezar un turno de la entrada para contar como suyo sin solaparse. */
@@ -80,6 +97,7 @@ export async function turnoDeLaJornada(params: {
         id: params.turnoElegido,
         starts_at: String(elegido.starts_at),
         ends_at: String(elegido.ends_at),
+        planned_unpaid_break_minutes: refrigerioDe(elegido),
       };
     }
   }
@@ -103,6 +121,7 @@ export async function turnoDeLaJornada(params: {
         id: String(fila.id),
         starts_at: String(fila.starts_at),
         ends_at: String(fila.ends_at),
+        planned_unpaid_break_minutes: refrigerioDe(fila),
       })),
     params.entrada,
     params.salida,
@@ -174,6 +193,7 @@ async function revisarSesiones(
     antes: string[];
     marcas: MarcaDeSesion[];
     turnoId: string | null;
+    turno: TurnoDeJornada | null;
     mismoTurno: boolean;
   }[] = [];
   for (const doc of docs) {
@@ -205,6 +225,7 @@ async function revisarSesiones(
       antes,
       marcas,
       turnoId: turno?.id ?? null,
+      turno,
       mismoTurno: ((sesion.shift_id as string | null) ?? null) === (turno?.id ?? null),
     });
   }
@@ -225,6 +246,22 @@ async function revisarSesiones(
         esLaUltima: i === grupo.length - 1,
       });
     });
+    // De corrido no es salir antes (7-oct): con todas las jornadas del turno, que un hueco
+    // entre dos ya es su almuerzo. Así una jornada ya guardada se corrige al mirar la semana.
+    const ultima = grupo[grupo.length - 1]!;
+    ultima.marcas = sinSalidaAntesSiEsDeCorrido(
+      ultima.marcas,
+      ultima.turno,
+      grupo.map(({ doc }) => {
+        const sesion = doc.data();
+        return {
+          starts_at: String(sesion.starts_at),
+          ends_at: (sesion.ends_at as string | null) ?? null,
+          paid_break_minutes: Number(sesion.paid_break_minutes ?? 0),
+          unpaid_break_minutes: Number(sesion.unpaid_break_minutes ?? 0),
+        };
+      }),
+    );
   }
 
   let cambiadas = 0;

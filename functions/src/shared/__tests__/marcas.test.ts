@@ -1,4 +1,4 @@
-import { DERIVA_MAXIMA_MINUTOS, marcasDeLaSesion } from '../marcas';
+import { DERIVA_MAXIMA_MINUTOS, marcasDeLaSesion, sinSalidaAntesSiEsDeCorrido } from '../marcas';
 
 /**
  * Las marcas de la hoja de horas (§11.4).
@@ -167,5 +167,57 @@ describe('fuera del turno: entrar mucho antes o salir mucho después', () => {
 
   it('sin turno no hay «antes de su turno»: es «sin turno programado»', () => {
     expect(sesion({ turno: null, entrada: '2026-09-22T05:00:00.000Z' })).toEqual(['unscheduled']);
+  });
+});
+
+/**
+ * DE CORRIDO NO ES SALIR ANTES (7-oct). Turno de 10:00 a 19:00 en Lima (15:00 a 00:00 Z) con
+ * 1 h de refrigerio: quien marca de 09:53 a 18:01 sin pausa trabajó sus 8 h y se fue antes
+ * por no almorzar. Andree: «valen las 8 horas, haz que sea normal».
+ */
+describe('jornada de corrido', () => {
+  const turno = {
+    starts_at: '2026-10-06T15:00:00.000Z',
+    ends_at: '2026-10-07T00:00:00.000Z',
+    planned_unpaid_break_minutes: 60,
+  };
+  const deCorrido = {
+    starts_at: '2026-10-06T14:53:00.000Z',
+    ends_at: '2026-10-06T23:01:00.000Z',
+    paid_break_minutes: 0,
+    unpaid_break_minutes: 0,
+  };
+  const marcas = marcasDeLaSesion({
+    turno,
+    entrada: deCorrido.starts_at,
+    salida: deCorrido.ends_at,
+    politicas: POLITICAS,
+  });
+
+  it('la marca suelta la ve salir antes; de corrido, se le quita', () => {
+    expect(marcas).toContain('early_departure');
+    expect(sinSalidaAntesSiEsDeCorrido(marcas, turno, [deCorrido])).not.toContain(
+      'early_departure',
+    );
+  });
+
+  it('con el almuerzo marcado, salir una hora antes sigue siendo salir antes', () => {
+    expect(
+      sinSalidaAntesSiEsDeCorrido(marcas, turno, [{ ...deCorrido, unpaid_break_minutes: 60 }]),
+    ).toContain('early_departure');
+  });
+
+  it('sin refrigerio en el turno no hay nada que compensar', () => {
+    expect(
+      sinSalidaAntesSiEsDeCorrido(marcas, { ...turno, planned_unpaid_break_minutes: 0 }, [
+        deCorrido,
+      ]),
+    ).toContain('early_departure');
+  });
+
+  it('las demás marcas se quedan como estaban', () => {
+    const conDeriva = [...marcas, 'clock_drift' as const];
+    expect(sinSalidaAntesSiEsDeCorrido(conDeriva, turno, [deCorrido])).toContain('clock_drift');
+    expect(sinSalidaAntesSiEsDeCorrido(conDeriva, null, [deCorrido])).toEqual(conDeriva);
   });
 });

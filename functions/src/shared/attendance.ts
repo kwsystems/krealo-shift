@@ -9,7 +9,12 @@ import {
 import { COLLECTIONS, db, nowISO } from './admin';
 import { tipoEfectivo } from './eventos';
 import { enOrden, jornadaVigente, recorrer } from './secuencia';
-import { marcasDeLaSesion, marcasDentroDelTurno, type MarcaDeSesion } from './marcas';
+import {
+  marcasDeLaSesion,
+  marcasDentroDelTurno,
+  sinSalidaAntesSiEsDeCorrido,
+  type MarcaDeSesion,
+} from './marcas';
 import { politicasDe } from './politicas';
 import { turnoDeLaJornada } from './turnos';
 
@@ -413,10 +418,28 @@ export async function rebuildWorkSession(
     sinConexion: inicio.is_offline === true || salida?.is_offline === true,
     politicas: politicasDe(sedeDoc ?? {}),
   });
-  const marcas = marcasDentroDelTurno(marcasSueltas, {
-    esLaPrimera: antes.length === 0,
-    esLaUltima: despues.length === 0,
-  });
+  /*
+   * Y DE CORRIDO NO ES SALIR ANTES (7-oct): sin almorzar, sus horas completas y se fue antes lo
+   * que dura el refrigerio. Solo si está sola en su turno: con hermanas, el rato entre una y
+   * otra es su almuerzo. Ver `sinSalidaAntesSiEsDeCorrido`.
+   */
+  const marcas = sinSalidaAntesSiEsDeCorrido(
+    marcasDentroDelTurno(marcasSueltas, {
+      esLaPrimera: antes.length === 0,
+      esLaUltima: despues.length === 0,
+    }),
+    turno,
+    hermanas.length === 0 && endsAt !== null
+      ? [
+          {
+            starts_at: startsAt,
+            ends_at: endsAt,
+            paid_break_minutes: pagados,
+            unpaid_break_minutes: noPagados,
+          },
+        ]
+      : [],
+  );
   for (const [hermana, quitar] of [
     ...antes.map((doc) => [doc, 'early_departure'] as const),
     ...despues.map((doc) => [doc, 'late_arrival'] as const),

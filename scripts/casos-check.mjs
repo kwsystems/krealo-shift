@@ -21,6 +21,10 @@
  *    día sin refrigerio lo avisa; aprobar la extra con la hora de comer dentro quita el caso
  *    de «Por resolver», y «No es extra» lo devuelve —0 minutos no cubren el refrigerio— y
  *    deja la hoja diciendo que ese día está decidido.
+ * 10. LA JORNADA DE CORRIDO ES NORMAL (7-oct): sin almorzar, sus horas completas y se fue
+ *    antes lo que dura el refrigerio. No es un caso de «Por resolver», su fila de Horas no
+ *    dice «Salida anticipada», el filtro «Necesita revisión» no la trae y el día por día de
+ *    Reportes no la cuenta como salida antes.
  * 9. FUERA DE TURNO, DECIDIDO SOLO EN HORAS (6-oct): la posible hora extra y las marcas
  *    fuera del turno son un caso de «Por resolver», con «Aprobar … como extra», «No es
  *    extra» o «Está bien así». Cualquiera lo quita, y el aviso de Horario de ese día se va
@@ -446,6 +450,75 @@ try {
       problemas.push('9: Horario sigue ofreciendo «Visto»: se decide en Horas');
     }
     console.log(`  horario tras decidir ${siguen.length} avisos de lo decidido`);
+    await contexto.close();
+  }
+
+  /* ------------------------------ 10: la jornada de corrido es normal (7-oct) */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    await entrar(pagina);
+    await horasDeLaSemanaPasada(pagina);
+    // La de la demostración: Ele, el sábado, de 8:00 a 13:30 en un turno de 8 a 14 con 30 min.
+    const deEle = (texto) => /\bEle\b/.test(texto) && /s[áa]b 3/.test(texto);
+    const casosDeEle = await pagina
+      .locator('[data-testid^="caso-"]')
+      .evaluateAll((nodos) =>
+        nodos
+          .filter((n) => /^caso-[^-]+.*:[a-z_]+$/.test(n.getAttribute('data-testid') ?? ''))
+          .map((n) => (n.innerText || '').replace(/\s+/g, ' ').trim()),
+      );
+    const suyos = casosDeEle.filter(deEle);
+    if (suyos.length > 0) {
+      problemas.push(`10: la jornada de corrido sale en «Por resolver»: «${suyos[0]}»`);
+    }
+    const filas = async () =>
+      pagina
+        .locator('[data-testid^="session-"]')
+        .evaluateAll((nodos) =>
+          nodos
+            .filter((n) => /^session-[0-9a-f-]{36}$/.test(n.getAttribute('data-testid') ?? ''))
+            .map((n) => (n.innerText || '').replace(/\s+/g, ' ').trim()),
+        );
+    const fila = (await filas()).find((texto) => /\bEle\b/.test(texto) && /13:30/.test(texto));
+    if (fila === undefined) {
+      problemas.push('10: Horas no enseña la jornada de corrido de la semana anterior');
+    } else if (/Salida anticipada|Salió antes/.test(fila)) {
+      problemas.push(`10: la fila de Horas la da por salida anticipada: «${fila}»`);
+    }
+    // El filtro «Necesita revisión» no la trae.
+    await pagina.locator('[data-testid="timesheet-status-filter-needsReview"]').first().click();
+    await esperar(pagina, 800);
+    const enRevision = (await filas()).some(
+      (texto) => /\bEle\b/.test(texto) && /13:30/.test(texto),
+    );
+    if (enRevision) problemas.push('10: «Necesita revisión» trae la jornada de corrido');
+    await pagina.locator('[data-testid="timesheet-status-filter-all"]').first().click();
+    console.log(
+      `  de corrido           casos ${suyos.length}; fila ${fila === undefined ? 'no está' : /Salida anticipada/.test(fila) ? 'salida anticipada' : 'normal'}; en revisión ${enRevision ? 'sí' : 'no'}`,
+    );
+
+    // Reportes, el mes: el día por día no la cuenta como salida antes.
+    await irA(pagina, base, '/reports', { asentar: 800 });
+    await pagina.locator('[data-testid="report-period-mes"]').click();
+    await esperar(pagina, 2500);
+    const abrirDias = pagina.locator('[data-testid="report-incidents-toggle"]');
+    if ((await abrirDias.count()) > 0) {
+      await abrirDias.first().click();
+      await esperar(pagina, 600);
+    }
+    const dias = await pagina
+      .locator('[data-testid="report-incidents-days"]')
+      .innerText()
+      .catch(() => '');
+    if (!/Llegó|Salió|Faltó|Debe/.test(dias)) {
+      problemas.push('10: no se pudo leer el día por día de Reportes');
+    } else if (/Salió [^\n]*antes: a las 13:30/.test(dias)) {
+      problemas.push('10: Reportes cuenta la jornada de corrido como salida antes');
+    }
+    console.log(
+      `  de corrido reportes  ${/a las 13:30/.test(dias) ? 'la cuenta' : 'no la cuenta'}`,
+    );
     await contexto.close();
   }
 

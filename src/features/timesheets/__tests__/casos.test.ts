@@ -290,6 +290,48 @@ describe('la hora extra aprobada decide el refrigerio (6-oct)', () => {
 });
 
 /**
+ * DE CORRIDO (7-oct): sin almorzar, trabajó sus 8 h y se fue una hora antes. Andree: «valen
+ * las 8 horas, haz que sea normal». Ni «sin refrigerio» ni «le faltan».
+ */
+describe('la jornada de corrido no es un caso (7-oct)', () => {
+  const tipos = (sesion: WorkSession, extra: { umbralExtra?: number } = {}) =>
+    casosPorResolver({
+      sesiones: [sesion],
+      turnos: [TURNO],
+      ahoraISO: H(23),
+      timezone: TZ,
+      ...extra,
+    }).map((caso) => caso.tipo);
+
+  it('de 09:53 a 18:01 sin pausa en un turno de 10 a 19 con 1 h: nada que resolver', () => {
+    const deCorrido = jornada({
+      starts_at: H(9, 53),
+      ends_at: H(18, 1),
+      gross_minutes: 488,
+      unpaid_break_minutes: 0,
+      net_minutes: 488,
+    });
+    expect(tipos(deCorrido)).toEqual([]);
+    // Tampoco con la posible hora extra puesta: 8 min de más no llegan al aviso.
+    expect(tipos(deCorrido, { umbralExtra: 60 })).toEqual([]);
+  });
+
+  it('el turno entero sin almorzar sigue preguntando: ahí sí pudo comer sin marcarlo', () => {
+    expect(
+      tipos(jornada({ gross_minutes: 540, unpaid_break_minutes: 0, net_minutes: 540 })),
+    ).toEqual(['sin_refrigerio']);
+  });
+
+  it('irse dos horas antes sin almorzar sigue siendo «le faltan»', () => {
+    expect(
+      tipos(
+        jornada({ ends_at: H(17), gross_minutes: 420, unpaid_break_minutes: 0, net_minutes: 420 }),
+      ),
+    ).toEqual(['sin_refrigerio', 'faltan_horas']);
+  });
+});
+
+/**
  * FUERA DE TURNO (6-oct): la posible hora extra y las marcas fuera del turno, decididas en
  * Horas y no en dos pantallas.
  */

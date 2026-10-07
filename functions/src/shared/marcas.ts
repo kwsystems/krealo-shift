@@ -1,3 +1,4 @@
+import { esJornadaDeCorrido, type JornadaDeCorrido } from '../../../src/domain/de-corrido';
 import {
   MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO,
   marcasFueraDelTurno,
@@ -167,4 +168,26 @@ export function marcasDentroDelTurno(
       !(marca === 'late_arrival' && !posicion.esLaPrimera) &&
       !(marca === 'early_departure' && !posicion.esLaUltima),
   );
+}
+
+/**
+ * DE CORRIDO NO ES SALIR ANTES (7-oct). Sin almorzar, trabajó lo planificado y se fue antes lo
+ * que dura el refrigerio: Andree, «hizo 8 horas de corrido, entonces valen las 8 horas; haz
+ * que sea normal». Quitándole `early_departure` aquí, deja de salir como «salió antes» en
+ * Horas, Reportes, el bono, Inicio, Equipo y el celular, que leen esta marca. La regla vive en
+ * `src/domain/de-corrido.ts`, la misma con la que Horas no abre el caso «sin refrigerio».
+ *
+ * Recibe TODAS las jornadas del turno: dos son una salida a almorzar, y eso ya es pausa.
+ */
+export function sinSalidaAntesSiEsDeCorrido(
+  marcas: readonly MarcaDeSesion[],
+  turno: { starts_at: string; ends_at: string; planned_unpaid_break_minutes?: number } | null,
+  jornadas: readonly JornadaDeCorrido[],
+): MarcaDeSesion[] {
+  if (turno === null || !marcas.includes('early_departure')) return [...marcas];
+  const deCorrido = esJornadaDeCorrido({
+    turno: { ...turno, planned_unpaid_break_minutes: turno.planned_unpaid_break_minutes ?? 0 },
+    jornadas,
+  });
+  return deCorrido ? marcas.filter((marca) => marca !== 'early_departure') : [...marcas];
 }

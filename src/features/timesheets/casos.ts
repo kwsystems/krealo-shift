@@ -6,6 +6,7 @@ import {
   type DateKey,
 } from '@/features/schedules/week';
 
+import { esJornadaDeCorrido } from '@/domain/de-corrido';
 import { esMarcaFueraDelTurno, minutosFueraDelTurno } from '@/domain/fuera-del-turno';
 
 import type { WorkSession } from './api';
@@ -271,13 +272,21 @@ export function casosPorResolver(params: {
     const deMas = Math.max(0, trabajado - planificado);
     const extraAprobada = params.aprobadas?.get(claveDelDia(primera.employee_id, dia)) ?? 0;
     const refrigerioEnLaExtra = extraAprobada > Math.max(0, deMas - refrigerio);
+    /*
+     * DE CORRIDO NO ES UN CASO (7-oct): sin almorzar, trabajó lo planificado y se fue antes lo
+     * que dura el refrigerio. Andree: «hizo 8 horas de corrido, entonces valen las 8 horas».
+     * Descontarle el refrigerio la dejaría debiendo una hora que no tomó. La regla es la del
+     * servidor, que por lo mismo no la marca «salió antes»: ver `src/domain/de-corrido.ts`.
+     */
+    const deCorrido = esJornadaDeCorrido({ turno, jornadas: ordenadas });
     // Lo bastante larga para haberlo tomado: más del doble del refrigerio y más de 4 h.
     if (
       refrigerio > 0 &&
       pausas === 0 &&
       brutos > Math.max(refrigerio * 2, 240) &&
       !resuelto('sin_refrigerio') &&
-      !refrigerioEnLaExtra
+      !refrigerioEnLaExtra &&
+      !deCorrido
     ) {
       // La más larga: es la que se descuenta.
       const larga = ordenadas.reduce((a, b) =>
