@@ -250,6 +250,9 @@ try {
     await pagina.locator('[data-testid="confirm-sheet-confirm"]').click();
     await pagina.waitForTimeout(1200);
     const cancelada = (await tarjetas(pagina)).find((t) => t.id === otra.id);
+    console.log(
+      `  cancelado            ${cancelada === undefined ? 'ya no está en la rejilla' : `sigue en la rejilla: «${cancelada.partes.join('. ')}»`}`,
+    );
     if (cancelada !== undefined && !cancelada.partes.includes('Cancelado')) {
       problemas.push(`el turno cancelado no dice «Cancelado»: «${cancelada.partes.join('. ')}»`);
     }
