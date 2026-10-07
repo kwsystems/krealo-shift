@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 
 import { BarraDeAlcance } from '@/components/layout/barra-de-alcance';
+import { AvisoDeVersion } from '@/components/layout/aviso-de-version';
 import { AvisosEmergentes } from '@/features/avisos/avisos-emergentes';
 import { useVigiaDeAvisos } from '@/features/avisos/use-vigia-de-avisos';
 import { MenuLateral, type PropsDelMenu } from '@/components/layout/menu-lateral';
@@ -13,6 +14,7 @@ import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
+import { useDatosAlDia } from '@/hooks/use-datos-al-dia';
 import { ManagerScopeProvider, useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { borderWidth, fontFamily, fontSize, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
@@ -121,6 +123,8 @@ function PanelConMarca() {
   const [altoDeCabecera, setAltoDeCabecera] = useState(0);
   // UN vigía para todo el panel: la campana y el emergente leen lo que deja.
   useVigiaDeAvisos();
+  // Y lo que se está mirando se pone al día solo, sin F5 (7-oct).
+  useDatosAlDia();
 
   return (
     /*
@@ -377,6 +381,7 @@ function PanelConMarca() {
         />
       </Tabs>
       <AvisosEmergentes arriba={altoDeCabecera + spacing.sm} />
+      <AvisoDeVersion />
     </View>
   );
 }

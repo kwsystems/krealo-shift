@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
 import { Platform } from 'react-native';
+import { useQueryClient } from '@tanstack/react-query';
 
 import { dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 import { useManagerScope } from '@/hooks/use-manager-scope';
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import { isDemoMode } from '@/lib/demo/config';
 import { usePreferencesStore } from '@/stores/preferences-store';
 
@@ -49,6 +51,7 @@ function pestanaOculta(): boolean {
 export function useVigiaDeAvisos(): void {
   const { organization, locationId, timezone } = useManagerScope();
   const organizationId = organization?.id ?? null;
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     if (organizationId === null || locationId === null) return undefined;
@@ -79,6 +82,12 @@ export function useVigiaDeAvisos(): void {
           desde,
           avisar: !primera && usePreferencesStore.getState().avisosEmergentes,
         });
+        /*
+         * Y LAS VISTAS SE PONEN AL DÍA CON ELLA (7-oct): quien acaba de marcar sale en Inicio,
+         * Horario y Horas sin esperar al minuto de `useDatosAlDia` ni a un F5. Sin lecturas de
+         * más: esta pregunta ya se hacía. Aunque los emergentes estén apagados.
+         */
+        if (!primera && llegadas.length > 0) refrescarVistasDeHoras(queryClient);
         primera = false;
       } catch {
         if (vivo) useAvisosStore.getState().fallo(locationId);
@@ -100,5 +109,5 @@ export function useVigiaDeAvisos(): void {
       clearInterval(reloj);
       if (conDocumento) document.removeEventListener('visibilitychange', alVolver);
     };
-  }, [organizationId, locationId, timezone]);
+  }, [organizationId, locationId, timezone, queryClient]);
 }

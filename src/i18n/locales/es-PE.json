@@ -113,7 +113,9 @@
     "tabManual": "Manual"
   },
   "app": {
-    "name": "Krealo Shift"
+    "name": "Krealo Shift",
+    "newVersion": "Hay una versión nueva de Krealo Shift.",
+    "newVersionReload": "Actualizar"
   },
   "attendance": {
     "statusOffShift": "Fuera de turno",

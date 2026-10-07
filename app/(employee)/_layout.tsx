@@ -1,10 +1,13 @@
+import { View } from 'react-native';
 import { Redirect, Stack } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
+import { AvisoDeVersion } from '@/components/layout/aviso-de-version';
 import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { useBootResolution } from '@/features/boot/use-boot-resolution';
+import { useDatosAlDia } from '@/hooks/use-datos-al-dia';
 
 /**
  * La vista del vendedor (30-sep): su horario, sus horas y su puntualidad, en el celular.
@@ -17,6 +20,8 @@ import { useBootResolution } from '@/features/boot/use-boot-resolution';
 export default function EmployeeLayout() {
   const { t } = useTranslation();
   const { destination, retry } = useBootResolution();
+  // Su horario se pone al día solo, sin recargar: un turno cambiado le llega (7-oct).
+  useDatosAlDia();
 
   if (destination.kind === 'resolving') {
     return (
@@ -30,5 +35,10 @@ export default function EmployeeLayout() {
   }
   if (destination.kind !== 'employeePortal') return <Redirect href="/" />;
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <View style={{ flex: 1 }}>
+      <Stack screenOptions={{ headerShown: false }} />
+      <AvisoDeVersion />
+    </View>
+  );
 }
