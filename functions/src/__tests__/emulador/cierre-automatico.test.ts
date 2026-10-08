@@ -1,6 +1,7 @@
 import { cerrarJornadasOlvidadas } from '../../cierre-automatico';
 import { tipoDeCorreccion } from '../../correcciones';
-import { managerAdjustTime } from '../../manager';
+import { managerAddTimeEvent, managerAdjustTime } from '../../manager';
+import { reviewTimeEditRequest } from '../../solicitudes';
 import { COLLECTIONS, db } from '../../shared/admin';
 import { attendanceStateAt, recordTimeEvent } from '../../shared/attendance';
 
@@ -179,5 +180,95 @@ describe('cerrar sola la jornada sin salida', () => {
       ends_at: H(21, 18),
       auto_clock_out: false,
     });
+  });
+});
+
+/*
+ * LA SALIDA DE VERDAD LLEGA DESPUÉS (8-oct). Se fue a las 19:30 sin marcar, el sistema la
+ * cerró a las 19:00 —fin del turno— y al día siguiente se aprueba su «olvidé marcar la
+ * salida» o se añade a mano. Se rechazaba: «a esa hora ya estaba en otro estado».
+ */
+describe('después del cierre automático', () => {
+  async function cerradaALas19() {
+    await turno('t-tarde', H(21, 10), H(21, 19));
+    await entrar(H(21, 10));
+    await cerrarJornadasOlvidadas(ms(H(22, 8)));
+    const [cerrada] = await jornadas();
+    expect(cerrada).toMatchObject({ ends_at: H(21, 19), auto_clock_out: true });
+    return cerrada!;
+  }
+
+  it('aprobar «olvidé marcar la salida» mueve la del sistema a la hora pedida', async () => {
+    const cerrada = await cerradaALas19();
+    await db
+      .collection(COLLECTIONS.timeEditRequests)
+      .doc('sol-salida')
+      .set({
+        organization_id: ORG,
+        employee_id: PERSONA,
+        location_id: SEDE,
+        work_session_id: null,
+        target_date: '2026-09-21',
+        kind: 'forgot_clock_out',
+        proposed_value: {},
+        reason: 'Me fui a las 19:30 y no marqué',
+        status: 'pending',
+        created_at: H(22, 9),
+        updated_at: H(22, 9),
+      });
+    const r = (await correr(reviewTimeEditRequest, {
+      p_request_id: 'sol-salida',
+      p_decision: 'approved',
+      p_comment: null,
+      p_events: [{ type: 'clock_out', occurred_at: H(21, 19, 30) }],
+    })) as Record<string, unknown>;
+    expect(r).toMatchObject({ status: 'approved', applied: true, workSessionId: cerrada.id });
+
+    const [despues, ...otras] = await jornadas();
+    expect(otras).toEqual([]);
+    expect(despues).toMatchObject({
+      id: cerrada.id,
+      ends_at: H(21, 19, 30),
+      gross_minutes: 570,
+      auto_clock_out: false,
+    });
+    // Una sola salida: la del sistema, movida; no dos.
+    const salidas = (await db.collection(COLLECTIONS.timeEvents).get()).docs
+      .map((d) => d.data())
+      .filter((e) => e.event_type === 'clock_out');
+    expect(salidas).toHaveLength(1);
+    expect(
+      (await db.collection(COLLECTIONS.timeEditRequests).doc('sol-salida').get()).data(),
+    ).toMatchObject({ status: 'approved', work_session_id: cerrada.id });
+  });
+
+  it('añadir la salida a mano también', async () => {
+    const cerrada = await cerradaALas19();
+    await correr(managerAddTimeEvent, {
+      p_employee_id: PERSONA,
+      p_location_id: SEDE,
+      p_event_type: 'clock_out',
+      p_occurred_at: H(21, 19, 30),
+      p_reason: 'Se fue a las 19:30',
+    });
+    expect((await jornadas())[0]).toMatchObject({
+      id: cerrada.id,
+      ends_at: H(21, 19, 30),
+      auto_clock_out: false,
+    });
+  });
+
+  it('una salida al día siguiente no mueve la de ayer, y dice por qué no cabe', async () => {
+    await cerradaALas19();
+    await expect(
+      correr(managerAddTimeEvent, {
+        p_employee_id: PERSONA,
+        p_location_id: SEDE,
+        p_event_type: 'clock_out',
+        p_occurred_at: H(22, 7),
+        p_reason: 'Error',
+      }),
+    ).rejects.toMatchObject({ details: { motivo: 'NO_ENCAJA' } });
+    expect((await jornadas())[0]).toMatchObject({ ends_at: H(21, 19) });
   });
 });

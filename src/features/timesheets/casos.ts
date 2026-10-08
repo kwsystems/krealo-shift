@@ -200,7 +200,13 @@ export function casosPorResolver(params: {
         turno,
         dia,
         futura,
-        salidaPropuesta: salidaDelDiaDeEntrada(sesion, turno, dia, params.timezone),
+        salidaPropuesta: salidaDelDiaDeEntrada(
+          sesion,
+          turno,
+          dia,
+          params.timezone,
+          params.ahoraISO,
+        ),
       });
       // Lo demás se mide con la salida buena: con esta, cualquier otro caso mentiría.
       continue;
@@ -351,13 +357,23 @@ function salidaDelDiaDeEntrada(
   turno: ShiftRow | null,
   dia: DateKey,
   timezone: string,
+  ahoraISO: string,
 ): string | null {
   if (sesion.ends_at === null) return null;
-  const mismaHora = localDateTimeToInstant(dia, localTimeOf(sesion.ends_at, timezone), timezone);
-  if (mismaHora !== null && Date.parse(mismaHora) > Date.parse(sesion.starts_at)) return mismaHora;
-  if (turno !== null && Date.parse(turno.ends_at) > Date.parse(sesion.starts_at)) {
-    return turno.ends_at;
-  }
+  const salida = sesion.ends_at;
+  /*
+   * Y SOLO SI ARREGLA ALGO (8-oct): en una jornada larga del mismo día, «la misma hora el día
+   * en que entró» es la misma salida, y proponerla no cambiaba nada —«lo arreglé y sigue
+   * ahí»—; y una hora que todavía no llegó la rechaza el servidor.
+   */
+  const sirve = (propuesta: string | null) =>
+    propuesta !== null &&
+    Date.parse(propuesta) > Date.parse(sesion.starts_at) &&
+    Math.abs(Date.parse(propuesta) - Date.parse(salida)) >= 60_000 &&
+    Date.parse(propuesta) <= Date.parse(ahoraISO) + MARGEN_FUTURO_MS;
+  const mismaHora = localDateTimeToInstant(dia, localTimeOf(salida, timezone), timezone);
+  if (sirve(mismaHora)) return mismaHora;
+  if (turno !== null && sirve(turno.ends_at)) return turno.ends_at;
   return null;
 }
 

@@ -215,8 +215,19 @@ export function PorResolverDeLaSemana({
                   }),
                 testID: `caso-${caso.id}-salida`,
               },
-        alternativa:
-          propuesta === null
+        /*
+         * «LA SALIDA ESTÁ BIEN» (8-oct): una jornada larga de verdad —inventario, cierre de
+         * noche— no tenía cómo darse por buena; solo se iba poniendo una salida falsa. Para
+         * otra hora queda «Ver jornada».
+         */
+        alternativa: !caso.futura
+          ? {
+              etiqueta: t('timesheet.cases.autoExitOk'),
+              onPress: () =>
+                lanzar(caso.id, { tipo: 'salida_dudosa_ok', sessionId: caso.sesion.id }),
+              testID: `caso-${caso.id}-ok`,
+            }
+          : propuesta === null
             ? null
             : {
                 etiqueta: t('timesheet.cases.otherTime'),

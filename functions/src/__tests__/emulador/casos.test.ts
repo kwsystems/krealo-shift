@@ -180,6 +180,35 @@ describe('no marcó el refrigerio', () => {
     });
   });
 
+  it('si la pausa que se puso quedó fuera tras corregir la salida, se mueve y vuelve a contar', async () => {
+    await fichar('clock_in', H(10));
+    await fichar('clock_out', H(18, 50));
+    const { id } = await jornada();
+    await correr(applyPlannedBreak, { p_work_session_id: id }); // 14:00 a 15:00
+    // La salida se corrige a las 14:30: la vuelta de las 15:00 cae fuera.
+    await correr(managerAdjustTime, {
+      p_work_session_id: id,
+      p_new_starts_at: null,
+      p_new_ends_at: H(14, 30),
+      p_reason: 'Se fue a las 14:30',
+    });
+    await correr(managerAdjustTime, {
+      p_work_session_id: id,
+      p_new_starts_at: null,
+      p_new_ends_at: H(18, 50),
+      p_reason: 'No, se fue a las 18:50',
+    });
+    const r = (await correr(applyPlannedBreak, { p_work_session_id: id }).catch(
+      (e: unknown) => e,
+    )) as { desde?: string; details?: { motivo?: string } };
+    // O ya tenía su pausa (y lo dice), o la vuelve a poner: nunca «hecho» sin descontar.
+    if (r.details?.motivo === 'YA_TIENE_PAUSA') {
+      expect((await jornada()).unpaid_break_minutes).toBe(60);
+    } else {
+      expect(await jornada()).toMatchObject({ unpaid_break_minutes: 60, net_minutes: 470 });
+    }
+  });
+
   it('«trabajó sin refrigerio» lo deja como está y lo da por resuelto', async () => {
     await fichar('clock_in', H(10));
     await fichar('clock_out', H(18, 50));
@@ -193,6 +222,21 @@ describe('no marcó el refrigerio', () => {
       net_minutes: 530,
       casos_resueltos: ['sin_refrigerio'],
     });
+  });
+});
+
+describe('salida dudosa', () => {
+  // Una jornada larga de verdad (8-oct): se da por buena y no vuelve.
+  it('«la salida está bien» la deja como está y la da por resuelta', async () => {
+    await fichar('clock_in', H(6, 30));
+    await fichar('clock_out', H(23));
+    const { id } = await jornada();
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'salida_dudosa',
+      p_decision: 'confirmed',
+    });
+    expect(await jornada()).toMatchObject({ ends_at: H(23), casos_resueltos: ['salida_dudosa'] });
   });
 });
 

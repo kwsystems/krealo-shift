@@ -30,13 +30,16 @@ import { refrigerioCentrado } from './horario-cumplido';
  */
 
 // `salida_automatica` (5-oct): la jornada que se cerró sola; «la salida está bien».
-const CASOS = ['faltan_horas', 'sin_refrigerio', 'salida_automatica'] as const;
+// `salida_dudosa` (8-oct): una jornada de verdad larga —inventario, cierre de noche— se
+// quedaba en Por resolver para siempre: solo se iba poniendo una salida falsa.
+const CASOS = ['faltan_horas', 'sin_refrigerio', 'salida_automatica', 'salida_dudosa'] as const;
 type Caso = (typeof CASOS)[number];
 
 const DECISIONES: Record<Caso, readonly string[]> = {
   faltan_horas: ['owes', 'justified'],
   sin_refrigerio: ['worked_through'],
   salida_automatica: ['confirmed'],
+  salida_dudosa: ['confirmed'],
 };
 
 /** Más de una jornada entera no puede deberse por un solo día. */
@@ -259,8 +262,22 @@ export const applyPlannedBreak = onCall(async (request) => {
     // Las dos o ninguna: una pausa sin vuelta dejaría a la persona «en descanso» para siempre.
     await lote.commit();
   } catch (error) {
-    // ALREADY_EXISTS: otra pulsación llegó antes y la pausa ya está.
+    // ALREADY_EXISTS: la pausa del turno ya se puso una vez.
     if ((error as { code?: unknown }).code !== 6) throw error;
+    /*
+     * Y SI YA NO CUENTA, SE MUEVE (8-oct): puesta antes de que se corrigiera la salida, puede
+     * caer fuera de la jornada —la vuelta después de la salida— y no descontar nada. Aquí se
+     * respondía «hecho» sin hacer nada y el caso no se iba. Esta jornada no tiene pausa (se
+     * comprobó arriba), así que esas dos marcas, que son nuestras, van a su sitio.
+     */
+    const mover = db.batch();
+    marcas.forEach((marca) => {
+      const id = `${organizationId}_refrigerio_${sessionId}_${marca.tipo}`;
+      mover.update(db.collection(COLLECTIONS.timeEvents).doc(id), {
+        occurred_at: marca.instante,
+      });
+    });
+    await mover.commit();
   }
 
   // Desde la entrada FICHADA: con una entrada corregida más temprana, la reconstrucción

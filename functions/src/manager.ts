@@ -24,7 +24,11 @@ import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/tur
 import { instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
-import { corregirSalidaConFichaje, noEnElFuturo } from './shared/salida-a-mano';
+import {
+  corregirSalidaConFichaje,
+  jornadaCerradaSolaEn,
+  noEnElFuturo,
+} from './shared/salida-a-mano';
 import { exigirQueSeaDeLaSede } from './shared/persona-de-la-sede';
 import { anotarCambioTrasAprobar, SIN_CAMBIOS_TRAS_APROBAR } from './shared/periodo-aprobado';
 
@@ -691,6 +695,19 @@ export async function ajustarSesion(
  * en el actual, porque una correccion casi siempre se pone en el pasado: comprobar
  * contra «ahora» rechazaria una entrada de ayer por alguien que ya salio.
  */
+/** El estado y el fichaje en palabras, para el «no cabe» de un fichaje añadido a mano (8-oct). */
+const ESTADO_EN_PALABRAS: Record<string, string> = {
+  OFF_SHIFT: 'fuera',
+  WORKING: 'dentro',
+  ON_BREAK: 'en descanso',
+};
+const FICHAJE_EN_PALABRAS: Record<string, string> = {
+  clock_in: 'una entrada',
+  clock_out: 'una salida',
+  break_start: 'un inicio de descanso',
+  break_end: 'una vuelta de descanso',
+};
+
 export const managerAddTimeEvent = onCall(async (request) => {
   const uid = requireUid(request);
   const employeeId = textoRequerido(request.data?.p_employee_id, 'p_employee_id');
@@ -711,12 +728,52 @@ export const managerAddTimeEvent = onCall(async (request) => {
   requireManagesLocation(membership, locationId);
   await exigirQueSeaDeLaSede(employeeId, location.organization_id as string, locationId);
 
+  /*
+   * UNA SALIDA EN UNA JORNADA QUE CERRÓ EL SISTEMA mueve esa salida (8-oct): la persona
+   * figuraba fuera desde la hora de fin del turno y la salida de verdad se rechazaba.
+   */
+  if (eventType === 'clock_out') {
+    const cerradaSola = await jornadaCerradaSolaEn(employeeId, occurredAt);
+    if (
+      cerradaSola !== null &&
+      cerradaSola.datos.location_id === locationId &&
+      (await corregirSalidaConFichaje(cerradaSola.id, cerradaSola.datos, {
+        uid,
+        reason,
+        newEndsAt: occurredAt,
+      }))
+    ) {
+      await audit({
+        organizationId: location.organization_id as string,
+        actorUserId: uid,
+        action: 'manager_added_time_event',
+        entityType: 'work_session',
+        entityId: cerradaSola.id,
+      });
+      await anotarCambioTrasAprobar({
+        organizationId: location.organization_id as string,
+        locationId,
+        instante: occurredAt,
+        uid,
+        motivo: 'manager_added_time_event',
+      });
+      const movida = (
+        await db.collection(COLLECTIONS.workSessions).doc(cerradaSola.id).get()
+      ).data();
+      return {
+        eventId: String(movida?.clock_out_event_id ?? ''),
+        workSessionId: null,
+      };
+    }
+  }
+
   const estado = await attendanceStateAt(employeeId, occurredAt);
   const resultado = transition(estado, eventType);
   if (!resultado.allowed) {
     throw new HttpsError(
       'failed-precondition',
-      `En ese momento la persona estaba en «${estado}»: no cabe un «${eventType}».`,
+      `A esa hora la persona ya estaba ${ESTADO_EN_PALABRAS[estado] ?? `en «${estado}»`}: no cabe ${FICHAJE_EN_PALABRAS[eventType] ?? `un «${eventType}»`}.`,
+      { motivo: 'NO_ENCAJA', estado, tipo: eventType },
     );
   }
 

@@ -291,3 +291,33 @@ export async function repararSalidasPuestasAMano(
 export function cerradaDeHecho(data: Record<string, unknown>): boolean {
   return typeof data.ends_at === 'string' && Date.parse(data.ends_at) <= Date.now();
 }
+
+/**
+ * LA JORNADA QUE CERRÓ EL SISTEMA Y EN LA QUE CAE ESTA SALIDA (8-oct), o `null`.
+ *
+ * El cierre automático de la noche pone la salida a la hora de fin del turno. Si al día
+ * siguiente se aprueba «olvidé marcar la salida» a las 19:30 —o se añade a mano—, esa salida
+ * llegaba con la persona ya «fuera» y se rechazaba («a esa hora ya estaba en otro estado»):
+ * la única forma de arreglarlo era «Corregir hora» en Horas. Ahora quien la pide o la añade
+ * mueve ESA salida, la del sistema, que no la marcó nadie.
+ */
+/** La jornada más larga que se toma por una sola: la misma alerta de 16 h de «sin cerrar». */
+const JORNADA_MAS_LARGA_MS = 16 * 60 * 60_000;
+
+export async function jornadaCerradaSolaEn(
+  employeeId: string,
+  instante: string,
+): Promise<{ id: string; datos: Record<string, unknown> } | null> {
+  const suyas = (
+    await db.collection(COLLECTIONS.workSessions).where('employee_id', '==', employeeId).get()
+  ).docs
+    .map((doc) => ({ id: doc.id, datos: doc.data() as Record<string, unknown> }))
+    .filter((j) => Date.parse(String(j.datos.starts_at)) < Date.parse(instante))
+    .sort((a, b) => String(b.datos.starts_at).localeCompare(String(a.datos.starts_at)));
+  // La última que empezó antes de esa salida: si no la cerró el sistema, no es este caso.
+  const ultima = suyas[0];
+  if (ultima === undefined || ultima.datos.auto_clock_out !== true) return null;
+  // Y de esa misma jornada: una salida añadida por error al día siguiente no mueve la de ayer.
+  const desdeQueEntro = Date.parse(instante) - Date.parse(String(ultima.datos.starts_at));
+  return desdeQueEntro <= JORNADA_MAS_LARGA_MS ? ultima : null;
+}

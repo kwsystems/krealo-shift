@@ -155,6 +155,31 @@ describe('por resolver', () => {
     expect(caso).toMatchObject({ tipo: 'salida_dudosa', futura: false, salidaPropuesta: H(19) });
   });
 
+  // 8-oct: proponer la misma salida no arreglaba nada; se propone el fin del turno.
+  it('en una jornada larga del mismo día no propone la misma hora que ya tiene', () => {
+    const [caso] = casos(
+      [jornada({ starts_at: H(6, 30), ends_at: H(23), gross_minutes: 990, net_minutes: 990 })],
+      new Date(Date.UTC(2026, 8, 30, 12 + 5)).toISOString(),
+    );
+    expect(caso).toMatchObject({ tipo: 'salida_dudosa', futura: false, salidaPropuesta: H(19) });
+  });
+
+  it('dada por buena, no vuelve', () => {
+    const lista = casos(
+      [
+        jornada({
+          starts_at: H(6, 30),
+          ends_at: H(23),
+          gross_minutes: 990,
+          net_minutes: 990,
+          casos_resueltos: ['salida_dudosa'],
+        }),
+      ],
+      new Date(Date.UTC(2026, 8, 30, 12 + 5)).toISOString(),
+    );
+    expect(lista.map((c) => c.tipo)).not.toContain('salida_dudosa');
+  });
+
   it('lo abierto va primero', () => {
     const lista = casos([
       jornada({

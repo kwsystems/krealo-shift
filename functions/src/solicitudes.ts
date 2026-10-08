@@ -14,7 +14,11 @@ import { audit, membershipOf, requireManagesLocation, requireUid } from './share
 import { politicasDe } from './shared/politicas';
 import { enOrden, recorrer } from './shared/secuencia';
 import { zonaSegura } from './shared/zonas';
-import { noEnElFuturo } from './shared/salida-a-mano';
+import {
+  corregirSalidaConFichaje,
+  jornadaCerradaSolaEn,
+  noEnElFuturo,
+} from './shared/salida-a-mano';
 
 /**
  * RESOLVER UNA SOLICITUD DE LA BANDEJA (30-sep).
@@ -340,6 +344,45 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
   const nuevos = fichajesPedidos(kind, request.data?.p_events, requestId, organizationId);
   // Un fichaje que falta es de antes, nunca de una hora que no llegó (1-oct).
   for (const nuevo of nuevos) noEnElFuturo(nuevo.occurred_at, 'fichaje');
+
+  /*
+   * «OLVIDÉ MARCAR LA SALIDA» DE UNA JORNADA QUE YA CERRÓ EL SISTEMA (8-oct): se mueve esa
+   * salida a la hora pedida, como «Corregir hora». Con un fichaje nuevo se rechazaba, porque
+   * a esa hora la persona ya figuraba fuera. Ver `jornadaCerradaSolaEn`.
+   */
+  const unaSalida =
+    kind === 'forgot_clock_out' && nuevos.length === 1 && nuevos[0]!.tipo === 'clock_out';
+  const cerradaSola = unaSalida
+    ? await jornadaCerradaSolaEn(employeeId, nuevos[0]!.occurred_at)
+    : null;
+  if (
+    cerradaSola !== null &&
+    (await corregirSalidaConFichaje(cerradaSola.id, cerradaSola.datos, {
+      uid,
+      reason: motivo,
+      newEndsAt: nuevos[0]!.occurred_at,
+      requestId,
+    }))
+  ) {
+    await db.runTransaction(async (tx) => {
+      if (!pendiente((await tx.get(requestRef)).data()?.status)) throw yaResuelta();
+      tx.update(requestRef, { ...resolucion, work_session_id: cerradaSola.id });
+    });
+    await audit({
+      organizationId,
+      actorUserId: uid,
+      action: 'time_edit_request_approved',
+      entityType: 'time_edit_request',
+      entityId: requestId,
+      after: { moved_auto_clock_out: cerradaSola.id },
+    });
+    return {
+      status: 'approved',
+      applied: true,
+      eventIds: [] as string[],
+      workSessionId: cerradaSola.id,
+    };
+  }
 
   const location = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data() ?? {};
   const zona = zonaSegura(location.timezone ?? 'America/Lima', 'reviewTimeEditRequest');
