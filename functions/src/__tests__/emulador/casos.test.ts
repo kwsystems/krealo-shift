@@ -131,7 +131,11 @@ describe('no marcó el refrigerio', () => {
     expect((await jornada()).unpaid_break_minutes).toBe(60);
   });
 
-  it('no se aplica sobre una hora corregida a mano: la borraría', async () => {
+  /*
+   * Antes se rechazaba (AJUSTADA) porque volver a calcular la jornada borraba la corrección.
+   * Desde el 4-oct se conserva, y el rechazo dejaba el caso imposible de cerrar (8-oct).
+   */
+  it('sobre una hora corregida a mano descuenta el refrigerio y conserva la corrección', async () => {
     await fichar('clock_in', H(10));
     await fichar('clock_out', H(18, 50));
     const { id } = await jornada();
@@ -141,10 +145,39 @@ describe('no marcó el refrigerio', () => {
       p_new_ends_at: H(19),
       p_reason: 'Se quedó cerrando',
     });
-    await expect(correr(applyPlannedBreak, { p_work_session_id: id })).rejects.toMatchObject({
-      details: { motivo: 'AJUSTADA' },
+    const r = (await correr(applyPlannedBreak, { p_work_session_id: id })) as {
+      desde: string;
+      hasta: string;
+    };
+    // En el centro de lo que marcó (10:00 a 18:50), no de la jornada corregida.
+    expect([r.desde, r.hasta]).toEqual([H(14), H(15)]);
+    expect(await jornada()).toMatchObject({
+      id,
+      ends_at: H(19),
+      gross_minutes: 540,
+      unpaid_break_minutes: 60,
+      net_minutes: 480,
     });
-    expect((await jornada()).ends_at).toBe(H(19));
+  });
+
+  it('con la entrada corregida, también: la entrada sigue corregida', async () => {
+    await fichar('clock_in', H(10, 20));
+    await fichar('clock_out', H(19, 1));
+    const { id } = await jornada();
+    await correr(managerAdjustTime, {
+      p_work_session_id: id,
+      p_new_starts_at: H(10),
+      p_new_ends_at: null,
+      p_reason: 'Entró a su hora y marcó tarde',
+    });
+    await correr(applyPlannedBreak, { p_work_session_id: id });
+    expect(await jornada()).toMatchObject({
+      id,
+      starts_at: H(10),
+      ends_at: H(19, 1),
+      unpaid_break_minutes: 60,
+      net_minutes: 481,
+    });
   });
 
   it('«trabajó sin refrigerio» lo deja como está y lo da por resuelto', async () => {

@@ -180,29 +180,25 @@ export const applyPlannedBreak = onCall(async (request) => {
     });
   }
   /*
-   * NI SOBRE UNA HORA CORREGIDA EN HORAS: esa corrección vive en la jornada y no en los
-   * fichajes (`managerAdjustTime`), así que volver a calcular la jornada la borraría.
+   * TAMBIÉN SOBRE UNA HORA CORREGIDA EN HORAS (8-oct). Aquí se rechazaba —«añade la pausa con
+   * Agregar fichaje manual»— porque volver a calcular la jornada borraba la corrección. Eso
+   * dejó de pasar el 4-oct (`correccionesDeLaJornada`: lo corregido se conserva al
+   * reconstruir), y el rechazo se quedó: Andree corrigió la jornada de una vendedora, pulsó
+   * «Descontar 1 h de refrigerio» y el caso no se iba. La pausa se pone dentro de lo que
+   * marcó la persona, para que sus fichajes la encierren y la reconstrucción la cuente.
    */
-  const ajustes = await db
-    .collection(COLLECTIONS.timeAdjustments)
-    .where('work_session_id', '==', sessionId)
-    .get();
-  // Solo cuenta la hora corregida EN LA JORNADA; un fichaje añadido o lo registrado desde
-  // el horario son fichajes, y volver a calcular los respeta.
-  const corregida = ajustes.docs.some((doc) => {
-    const fila = doc.data();
-    const despues = (fila.after_value ?? {}) as Record<string, unknown>;
-    return fila.target_type === 'work_session' && despues.origen !== 'horario';
-  });
-  if (corregida) {
-    throw new HttpsError(
-      'failed-precondition',
-      'Esta jornada tiene una hora corregida a mano: añade la pausa con «Agregar fichaje manual».',
-      { motivo: 'AJUSTADA' },
-    );
-  }
-
-  const pausa = refrigerioCentrado(desde, hasta, minutos);
+  const fichaje = async (id: unknown) =>
+    typeof id === 'string'
+      ? ((await db.collection(COLLECTIONS.timeEvents).doc(id).get()).data()?.occurred_at as
+          string | undefined)
+      : undefined;
+  const entroSegunFichaje = (await fichaje(sesion.clock_in_event_id)) ?? desde;
+  const salioSegunFichaje = (await fichaje(sesion.clock_out_event_id)) ?? hasta;
+  const pausa = refrigerioCentrado(
+    Date.parse(desde) > Date.parse(entroSegunFichaje) ? desde : entroSegunFichaje,
+    Date.parse(hasta) < Date.parse(salioSegunFichaje) ? hasta : salioSegunFichaje,
+    minutos,
+  );
   if (pausa === null) {
     throw new HttpsError('failed-precondition', 'La jornada es más corta que su refrigerio.', {
       motivo: 'CORTA',
@@ -267,7 +263,9 @@ export const applyPlannedBreak = onCall(async (request) => {
     if ((error as { code?: unknown }).code !== 6) throw error;
   }
 
-  await rebuildJornadaDe(organizationId, String(sesion.employee_id), locationId, desde);
+  // Desde la entrada FICHADA: con una entrada corregida más temprana, la reconstrucción
+  // tomaba la entrada de verdad por «la siguiente jornada» y no rehacía esta.
+  await rebuildJornadaDe(organizationId, String(sesion.employee_id), locationId, entroSegunFichaje);
   await audit({
     organizationId,
     actorUserId: uid,
