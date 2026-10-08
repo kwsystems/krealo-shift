@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/app-text';
 import { GhostButton, SecondaryButton } from '@/components/ui/buttons';
 import { FormField } from '@/components/ui/form-field';
 import { Row, Stack } from '@/components/ui/layout';
+import { duracion } from '@/features/timesheets/duracion';
 import { leerHorasYMinutos, minutosDeMas } from '@/features/timesheets/horas-extra';
 import { spacing } from '@/theme/tokens';
 import { minutesToHHmm } from '@/utils/time';
@@ -104,6 +105,15 @@ export function HoraExtraDelDia({
         }
         testID="overtime-input"
       />
+      {/*
+        CÓMO LO VA A GUARDAR (8-oct): «1» era un minuto y nadie lo veía. Ahora es una hora, y
+        se dice aquí antes de pulsar, sea lo que sea lo que se escribió.
+      */}
+      {minutos !== null && minutos > 0 && valido ? (
+        <AppText variant="label" tone="primary" tabular testID="overtime-read-as">
+          {t('common.savedAs', { duration: duracion(t, minutos) })}
+        </AppText>
+      ) : null}
       <AppText variant="help" tone="subtle">
         {t('timesheet.overtimeFieldHint')}
       </AppText>

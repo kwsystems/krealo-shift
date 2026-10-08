@@ -12,11 +12,17 @@ describe('los minutos de refrigerio, como se escriben', () => {
     ['1h30', 90],
     ['1,5 h', 90],
     ['1.5h', 90],
+    // 8-oct: un número suelto del 1 al 4 son horas; nadie apunta un refrigerio de 1 minuto.
+    ['1', 60],
+    ['1,5', 90],
+    ['1.5', 90],
+    ['30', 30],
+    ['5', 5],
   ])('«%s» son %i minutos', (texto, esperado) => {
     expect(minutosDeRefrigerio(texto)).toBe(esperado);
   });
 
-  it.each(['', '  ', 'una hora', '1:75', '1.5', 'abc', '-30'])('«%s» no se entiende', (texto) => {
+  it.each(['', '  ', 'una hora', '1:75', 'abc', '-30'])('«%s» no se entiende', (texto) => {
     expect(minutosDeRefrigerio(texto)).toBeNull();
   });
 });

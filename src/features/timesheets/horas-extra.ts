@@ -6,6 +6,7 @@ import { dateKeyOf } from '@/features/schedules/week';
 import { ADMIN_LIST_STALE_MS, execute, selectRows } from '@/hooks/use-admin-query';
 import { TABLES } from '@/lib/firebase/tables';
 import { useSessionStore } from '@/stores/session-store';
+import { minutosEscritos } from '@/domain/duracion-escrita';
 import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 
 /**
@@ -189,15 +190,11 @@ export function useGuardarHoraExtra(params: {
 }
 
 /**
- * Lo que se escribe en el campo: «1:30» o «90» son 90 minutos; «0» o vacío, quitarla.
- * `null` si no se entiende. Sin «h» ni decimales: con «1.5» no se sabe si es hora y
- * media o una hora y cinco, y esto decide horas que se pagan.
+ * Lo que se escribe en el campo: «1:30», «90» o «1,5» son 90 minutos, «1» es una hora (8-oct:
+ * antes era un minuto); «0» o vacío, nada de extra. `null` si no se entiende. Como esto decide
+ * horas que se pagan, la hoja dice debajo cómo lo va a guardar.
  */
 export function leerHorasYMinutos(texto: string): number | null {
-  const limpio = texto.trim();
-  if (limpio === '') return 0;
-  const conDosPuntos = /^(\d{1,2}):([0-5]\d)$/.exec(limpio);
-  if (conDosPuntos !== null) return Number(conDosPuntos[1]) * 60 + Number(conDosPuntos[2]);
-  if (/^\d{1,4}$/.test(limpio)) return Number(limpio);
-  return null;
+  // Vacío es «nada de extra»; lo demás, el lector común (8-oct: «1» es una hora, no un minuto).
+  return texto.trim() === '' ? 0 : minutosEscritos(texto);
 }

@@ -5,7 +5,8 @@
  * preguntó «¿se actualiza en todos lados?». Lo que se comprueba, en la demostración, con lo
  * mismo que hizo él:
  *
- * 1. EDITAR UN TURNO PUBLICADO a 12:00 – 21:00 con 1 h de refrigerio lo deja «cambiado» hasta
+ * 1. EDITAR UN TURNO PUBLICADO a 12:00 – 21:00 con «1» de refrigerio —una hora, no un minuto
+ *    (8-oct)— lo deja «cambiado» hasta
  *    publicar, y «Publicar solo los cambios» lo publica: la tarjeta dice sus horas nuevas.
  * 2. LO PROGRAMADO DE LA SEMANA cambia exactamente lo que cambió el turno, igual en Inicio y
  *    en Reportes.
@@ -186,7 +187,15 @@ try {
     await pagina.locator('[data-testid="shift-form-sheet"]').waitFor({ timeout: 10000 });
     await pagina.locator('[data-testid="shift-start"]').fill('12:00');
     await pagina.locator('[data-testid="shift-end"]').fill('21:00');
-    await pagina.locator('[data-testid="shift-break"]').fill('60');
+    // «1» es una hora (8-oct): antes se guardaba 1 minuto de refrigerio.
+    await pagina.locator('[data-testid="shift-break"]').fill('1');
+    const leido = await pagina
+      .locator('[data-testid="shift-break-read-as"]')
+      .innerText()
+      .catch(() => '');
+    if (!/Se guarda: 1 h\b/.test(leido)) {
+      problemas.push(`con «1» de refrigerio la hoja no dice que guarda 1 h: «${leido}»`);
+    }
     await pagina.locator('[data-testid="shift-form-save"]').click();
     await pagina.locator('[data-testid="shift-form-sheet"]').waitFor({ state: 'detached' });
     await pagina.waitForTimeout(800);

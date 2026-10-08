@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { ShiftInput } from './api';
 import { JORNADA_MAXIMA_MINUTOS } from './conflicts';
+import { duracion as textoDeDuracion } from '@/features/timesheets/duracion';
 import { minutosDeRefrigerio } from './refrigerio';
 import { isValidLocalTime, localTimeToMinutes, type DateKey } from './week';
 import { formatDateKeyShort } from './week';
@@ -320,6 +321,12 @@ export function ShiftFormSheet({
             error={submitted && !breakValid ? t('schedule.invalidBreak') : undefined}
             testID="shift-break"
           />
+          {/* Cómo lo va a guardar (8-oct): «1» era un minuto y nadie lo veía. Ahora, una hora. */}
+          {breakMinutes !== null && breakMinutes > 0 && breakValid ? (
+            <AppText variant="label" tone="primary" tabular testID="shift-break-read-as">
+              {t('common.savedAs', { duration: textoDeDuracion(t, breakMinutes) })}
+            </AppText>
+          ) : null}
 
           <FormField
             label={t('schedule.employeeNote')}

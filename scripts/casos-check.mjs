@@ -18,7 +18,8 @@
  *    Horas y la tarjeta de Horario dicen «Salida automática», y «La salida está bien» quita el
  *    caso sin quitar la marca.
  * 8. LA HORA EXTRA APROBADA DECIDE EL REFRIGERIO (6-oct): la hoja de la extra del
- *    día sin refrigerio lo avisa; aprobar la extra con la hora de comer dentro quita el caso
+ *    día sin refrigerio lo avisa; escribir «1» se guarda como 1 h (8-oct, antes 1 minuto) y
+ *    aprobarla quita el caso
  *    de «Por resolver», y «No es extra» lo devuelve —0 minutos no cubren el refrigerio— y
  *    deja la hoja diciendo que ese día está decidido.
  * 10. LA JORNADA DE CORRIDO ES NORMAL (7-oct): sin almorzar, sus horas completas y se fue
@@ -327,7 +328,18 @@ try {
       if (!/no marcó su refrigerio/.test(aviso)) {
         problemas.push(`8: la hoja de la extra no avisa del refrigerio sin marcar: «${aviso}»`);
       }
-      // El campo viene con lo trabajado de más, refrigerio incluido: se aprueba tal cual.
+      /*
+       * «1» ES UNA HORA (8-oct). Andree escribía «1» y se guardaba un minuto, y el caso no se
+       * iba. La hoja tiene que decir cómo lo guarda, y aprobarlo tiene que decidir el caso.
+       */
+      await pagina.locator('[data-testid="overtime-input"]').fill('1');
+      const leido = await pagina
+        .locator('[data-testid="overtime-read-as"]')
+        .innerText()
+        .catch(() => '');
+      if (!/Se guarda: 1 h\b/.test(leido)) {
+        problemas.push(`8: con «1» la hoja no dice que guarda 1 h: «${leido}»`);
+      }
       await clic(pagina, 'overtime-save');
       const fuera = await seFue(pagina, refrigerio.id);
       if (!fuera)

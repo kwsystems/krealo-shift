@@ -280,8 +280,11 @@ describe('la hora extra aprobada decide el refrigerio (6-oct)', () => {
     expect(conExtra(66)).toEqual([]);
   });
 
-  it('una extra de solo lo de más sin el refrigerio (6 min) no decide nada sobre él', () => {
-    expect(conExtra(6)).toEqual(['sin_refrigerio']);
+  // 8-oct: CUALQUIER extra aprobada decide el día. Con «más que lo de más sin el refrigerio»,
+  // Andree aprobaba la hora que veía y el caso no se iba nunca.
+  it('una extra aprobada, aunque sea solo lo de más sin el refrigerio, decide el caso', () => {
+    expect(conExtra(6)).toEqual([]);
+    expect(conExtra(60)).toEqual([]);
   });
 
   it('quitar la extra vuelve a abrir el caso', () => {

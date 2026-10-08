@@ -258,20 +258,20 @@ export function casosPorResolver(params: {
       0,
     );
     /*
-     * LA HORA EXTRA APROBADA YA DECIDIÓ ESTE CASO (6-oct). Una vendedora marcó de 09:54 a 21:00
-     * sin refrigerio: 1:06 más que su turno de 10 h netas, y quien gestiona aprobó esa 1:06
-     * como extra. Aprobarla ES decir que la hora de comer la trabajó —sin esa hora, lo de más
-     * serían 6 minutos—, y aun así Horas seguía preguntando «¿descontar 1 h de refrigerio?».
-     * Si lo descontaba, la jornada bajaba a 10:06 y la extra se quedaba en 1:06: pagaba una
-     * hora extra que ya no existía.
+     * LA HORA EXTRA APROBADA YA DECIDIÓ ESTE CASO (6-oct, ajustado el 8-oct). Una vendedora
+     * marcó de 09:54 a 21:00 sin refrigerio y quien gestiona aprobó la extra de ese día:
+     * aprobarla ES decidir el día —cuánto de lo trabajado se paga como extra—, y Horas seguía
+     * preguntando «¿descontar 1 h de refrigerio?». Si lo descontaba, la jornada bajaba y la
+     * extra se quedaba: pagaba una hora extra que ya no existía.
      *
-     * Así que el caso se da por decidido cuando la extra aprobada pasa de lo que trabajó de
-     * más SIN contar el refrigerio. Una extra más pequeña —solo esos 6 minutos— no decide
-     * nada sobre la hora de comer, y el caso sigue. Quitar la extra lo vuelve a abrir.
+     * Hasta el 8-oct solo decidía una extra MAYOR que lo trabajado de más sin el refrigerio, y
+     * Andree aprobaba la hora que veía de más y el caso no se iba nunca («cuando pongo 1 igual
+     * no se arregla»). Ahora cualquier extra aprobada lo decide: la hora de comer cuenta como
+     * trabajada, que es lo que la hoja de la extra avisa antes de guardar. «No es extra» (0)
+     * no decide nada sobre la comida, y el caso sigue.
      */
-    const deMas = Math.max(0, trabajado - planificado);
     const extraAprobada = params.aprobadas?.get(claveDelDia(primera.employee_id, dia)) ?? 0;
-    const refrigerioEnLaExtra = extraAprobada > Math.max(0, deMas - refrigerio);
+    const refrigerioEnLaExtra = extraAprobada > 0;
     /*
      * DE CORRIDO NO ES UN CASO (7-oct): sin almorzar, trabajó lo planificado y se fue antes lo
      * que dura el refrigerio. Andree: «hizo 8 horas de corrido, entonces valen las 8 horas».

@@ -128,9 +128,23 @@ describe('lo que se escribe en el campo', () => {
     expect(leerHorasYMinutos(' ')).toBe(0);
   });
 
-  it('lo ambiguo no se adivina: «1.5» o «1:75» no valen', () => {
-    expect(leerHorasYMinutos('1.5')).toBeNull();
+  /*
+   * «1» ES UNA HORA (8-oct). Andree escribía «1» y se guardaba un minuto: el caso «sin
+   * refrigerio» de una vendedora no se iba nunca. «1,5» es hora y media; la hoja dice debajo cómo lo
+   * guarda, así que ya no se adivina en silencio.
+   */
+  it('«1» es una hora y «1,5» hora y media, no minutos', () => {
+    expect(leerHorasYMinutos('1')).toBe(60);
+    expect(leerHorasYMinutos('2')).toBe(120);
+    expect(leerHorasYMinutos('1,5')).toBe(90);
+    expect(leerHorasYMinutos('1.5')).toBe(90);
+    expect(leerHorasYMinutos('1 h')).toBe(60);
+    expect(leerHorasYMinutos('45')).toBe(45);
+  });
+
+  it('lo que no es una duración no vale', () => {
     expect(leerHorasYMinutos('1:75')).toBeNull();
     expect(leerHorasYMinutos('una hora')).toBeNull();
+    expect(leerHorasYMinutos('-30')).toBeNull();
   });
 });
