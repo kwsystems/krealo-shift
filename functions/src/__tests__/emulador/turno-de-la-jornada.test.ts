@@ -282,11 +282,19 @@ describe('el turno de la jornada', () => {
     expect(otra.cambiadas).toBe(0);
   });
 
-  it('ni un borrador ni el turno de otra sede cuentan como su turno', async () => {
-    await turno('t-borrador', H(10), H(19), { status: 'draft' });
+  it('ni un borrador nunca publicado ni el turno de otra sede cuentan como su turno', async () => {
+    await turno('t-borrador', H(10), H(19), { status: 'draft', publication_version: 0 });
     await turno('t-otra', H(10), H(19), { location_id: OTRA });
     await fichar('clock_in', H(10));
     expect((await jornada()).flags).toEqual(['unscheduled']);
+  });
+
+  // 8-oct: lo editó quien gestiona y no lo volvió a publicar; sigue siendo su turno.
+  it('el publicado que se editó sin republicar sí cuenta, con sus horas nuevas', async () => {
+    await turno('t-editado', H(9), H(18), { status: 'draft', publication_version: 1 });
+    await fichar('clock_in', H(9));
+    await fichar('clock_out', H(18));
+    expect(await jornada()).toMatchObject({ shift_id: 't-editado', flags: [] });
   });
 });
 

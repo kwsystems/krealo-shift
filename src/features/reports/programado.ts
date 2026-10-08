@@ -1,5 +1,6 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import { dateKeyOf, type DateKey } from '@/features/schedules/week';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 /**
  * LO PROGRAMADO DEL PERIODO, para compararlo con lo trabajado (2-oct).
@@ -79,7 +80,7 @@ export function programadoDelPeriodo(params: {
   };
 
   for (const turno of params.turnos) {
-    if (turno.status !== 'published') continue;
+    if (!turnoEnPie(turno)) continue;
     const dia = dateKeyOf(turno.starts_at, params.timezone);
     if (!dias.has(dia)) continue;
     const total = minutosDelTurno(turno);

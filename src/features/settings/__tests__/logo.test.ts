@@ -1,4 +1,10 @@
-import { LOGO_BUCKET, LOGO_MAX_BYTES, logoStoragePath, validateLogo, type LogoMimeType } from '../logo';
+import {
+  LOGO_BUCKET,
+  LOGO_MAX_BYTES,
+  logoStoragePath,
+  validateLogo,
+  type LogoMimeType,
+} from '../logo';
 import { formatMegabytes } from '../logo-field';
 
 /**

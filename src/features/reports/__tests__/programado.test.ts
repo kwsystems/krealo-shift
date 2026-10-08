@@ -46,7 +46,7 @@ describe('lo programado', () => {
       starts_at: '2026-10-02T15:00:00.000Z',
       ends_at: '2026-10-02T23:00:00.000Z',
     });
-    const borrador = turno({ id: 't3', status: 'draft' });
+    const borrador = turno({ id: 't3', status: 'draft', publication_version: 0 });
     const deBea = turno({ id: 't4', employee_id: 'bea', planned_unpaid_break_minutes: 0 });
     const p = programadoDelPeriodo({
       turnos: [turno(), otroDia, borrador, deBea],

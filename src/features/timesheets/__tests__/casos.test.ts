@@ -191,7 +191,34 @@ describe('por resolver', () => {
       }),
       jornada({ id: 'b', ends_at: null, gross_minutes: null, net_minutes: null }),
     ]);
-    expect(lista.map((c) => c.tipo)).toEqual(['sin_salida', 'faltan_horas']);
+    // Con una jornada del turno abierta, lo que le falta no se sabe todavía (8-oct).
+    expect(lista.map((c) => c.tipo)).toEqual(['sin_salida']);
+  });
+
+  it('sin salida, no propone el fin de un turno anterior a su entrada', () => {
+    const [caso] = casos(
+      [jornada({ starts_at: H(19, 30), ends_at: null, gross_minutes: null, net_minutes: null })],
+      H(23, 50),
+    );
+    expect(caso).toMatchObject({ tipo: 'sin_salida', salidaPropuesta: null });
+  });
+
+  // 8-oct: salió a almorzar a las 14:00; a las 14:20 no le falta nada ni le sobra refrigerio.
+  it('a medio turno, quien salió a almorzar no tiene casos', () => {
+    const lista = casos(
+      [
+        jornada({
+          id: 'manana',
+          starts_at: H(9),
+          ends_at: H(14),
+          gross_minutes: 300,
+          unpaid_break_minutes: 0,
+          net_minutes: 300,
+        }),
+      ],
+      H(14, 20),
+    );
+    expect(lista).toEqual([]);
   });
 });
 
@@ -237,7 +264,7 @@ describe('un turno con varias jornadas (auditoría, 4-oct)', () => {
   });
 
   it('un turno en borrador no se usa para medir', () => {
-    const borrador = { ...TURNO, status: 'draft' } as ShiftRow;
+    const borrador = { ...TURNO, status: 'draft', publication_version: 0 } as ShiftRow;
     const temprano = jornada({ ends_at: H(12), gross_minutes: 120, net_minutes: 120 });
     expect(
       casosPorResolver({

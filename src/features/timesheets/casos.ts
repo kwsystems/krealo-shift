@@ -11,6 +11,7 @@ import { esMarcaFueraDelTurno, minutosFueraDelTurno } from '@/domain/fuera-del-t
 
 import type { WorkSession } from './api';
 import { claveDelDia } from './horas-extra';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 /**
  * «POR RESOLVER» EN HORAS: los casos que hay que arreglar, cada uno con su arreglo a un
@@ -151,11 +152,13 @@ export function casosPorResolver(params: {
    * jornada contra él pedía horas de un turno que la persona nunca vio.
    */
   const turnoPorId = new Map(
-    params.turnos.filter((turno) => turno.status === 'published').map((turno) => [turno.id, turno]),
+    params.turnos.filter((turno) => turnoEnPie(turno)).map((turno) => [turno.id, turno]),
   );
   const casos: CasoPorResolver[] = [];
   /** Las jornadas cerradas y con turno, por persona y turno: se miden juntas, abajo. */
   const porTurno = new Map<string, { turno: ShiftRow; sesiones: WorkSession[] }>();
+  /** Los turnos con una jornada todavía abierta: su cuenta no está cerrada. */
+  const turnosConJornadaAbierta = new Set<string>();
 
   for (const sesion of params.sesiones) {
     const turno = sesion.shift_id === null ? null : (turnoPorId.get(sesion.shift_id) ?? null);
@@ -163,6 +166,9 @@ export function casosPorResolver(params: {
     const resuelto = (caso: string) => sesion.casos_resueltos.includes(caso);
 
     if (sesion.ends_at === null) {
+      if (sesion.shift_id !== null) {
+        turnosConJornadaAbierta.add(`${sesion.employee_id}|${sesion.shift_id}`);
+      }
       const abierta =
         turno !== null
           ? minutos(turno.ends_at, params.ahoraISO) >= MINUTOS_SIN_SALIDA
@@ -174,7 +180,15 @@ export function casosPorResolver(params: {
           sesion,
           turno,
           dia,
-          salidaPropuesta: turno?.ends_at ?? null,
+          /*
+           * El fin de su turno, si cae después de que entró (8-oct): quien entró a las 16:30 en
+           * un turno que acababa a las 16:00 tenía «Marcar salida a las 16:00», y el servidor lo
+           * rechazaba porque a esa hora no estaba dentro.
+           */
+          salidaPropuesta:
+            turno !== null && Date.parse(turno.ends_at) > Date.parse(sesion.starts_at)
+              ? turno.ends_at
+              : null,
         });
       }
       continue;
@@ -227,7 +241,19 @@ export function casosPorResolver(params: {
    * como su refrigerio. El caso cuelga de la última jornada; resuelto en cualquiera de
    * ellas, resuelto en el turno.
    */
-  for (const { turno, sesiones } of porTurno.values()) {
+  for (const [clave, { turno, sesiones }] of porTurno) {
+    /*
+     * NI A MEDIO TURNO (8-oct). Quien marca salida para almorzar tenía a las 14:20 «salió a
+     * las 14:00, le faltan 5 h» y «sin refrigerio» en Por resolver, mientras comía. Y si se
+     * decidía ahí, quedaba una deuda o un descuento que no existían. El turno se mide cuando
+     * acabó y no le queda ninguna jornada abierta.
+     */
+    if (
+      turnosConJornadaAbierta.has(clave) ||
+      Date.parse(turno.ends_at) > Date.parse(params.ahoraISO)
+    ) {
+      continue;
+    }
     const ordenadas = [...sesiones].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     const primera = ordenadas[0]!;
     const ultima = ordenadas[ordenadas.length - 1]!;
@@ -412,7 +438,7 @@ function fueraDeTurno(
     const turnosDelDia = params.turnos
       .filter(
         (turno) =>
-          turno.status === 'published' &&
+          turnoEnPie(turno) &&
           turno.employee_id === primera.employee_id &&
           dateKeyOf(turno.starts_at, params.timezone) === dia,
       )

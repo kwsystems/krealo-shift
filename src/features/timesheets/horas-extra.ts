@@ -8,6 +8,7 @@ import { TABLES } from '@/lib/firebase/tables';
 import { useSessionStore } from '@/stores/session-store';
 import { minutosEscritos } from '@/domain/duracion-escrita';
 import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 /**
  * LAS HORAS EXTRA LAS DECIDE QUIEN GESTIONA, NO UN UMBRAL (30-sep).
@@ -67,7 +68,7 @@ export function aprobadasPorDia(filas: readonly HoraExtraAprobada[]): Map<string
 export function planificadoPorDia(turnos: readonly ShiftRow[], zona: string): Map<string, number> {
   const mapa = new Map<string, number>();
   for (const turno of turnos) {
-    if (turno.status !== 'published') continue;
+    if (!turnoEnPie(turno)) continue;
     const brutos = Math.floor((Date.parse(turno.ends_at) - Date.parse(turno.starts_at)) / 60000);
     const netos = Math.max(0, brutos - Math.max(0, turno.planned_unpaid_break_minutes));
     const clave = claveDelDia(turno.employee_id, dateKeyOf(turno.starts_at, zona));

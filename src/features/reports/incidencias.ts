@@ -4,6 +4,7 @@ import type { WorkSession } from '@/features/timesheets/api';
 import { estadoDeFalta, type EstadoDeFalta, type Falta } from '@/features/timesheets/faltas';
 import type { HoraDebida } from '@/features/timesheets/horas-debidas';
 import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 /**
  * TODO LO QUE PASÓ EN EL PERIODO, Y CÓMO QUEDÓ (4-oct).
@@ -112,7 +113,7 @@ function turnoDeLaSesion(
   const entrada = Date.parse(sesion.starts_at);
   return (porPersona.get(sesion.employee_id) ?? []).find(
     (turno) =>
-      turno.status === 'published' &&
+      turnoEnPie(turno) &&
       Date.parse(turno.starts_at) - ANTES_DEL_TURNO_MS <= entrada &&
       entrada < Date.parse(turno.ends_at),
   );

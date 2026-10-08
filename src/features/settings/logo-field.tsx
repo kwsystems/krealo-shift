@@ -159,9 +159,7 @@ export function OrganizationLogoField({
       setEstado({
         fase: 'error',
         mensaje:
-          tipo === 'forbidden'
-            ? t('settings.logoForbidden')
-            : t('settings.logoRemoveFailed'),
+          tipo === 'forbidden' ? t('settings.logoForbidden') : t('settings.logoRemoveFailed'),
       });
     }
   };

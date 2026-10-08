@@ -16,7 +16,10 @@ import { toAdminError } from '@/hooks/use-admin-query';
  */
 describe('la clasificación de un fallo de Storage', () => {
   it('«no tienes permiso» NO se cuenta como problema de conexión', () => {
-    const error = toAdminError({ code: 'storage/unauthorized', message: 'User does not have permission.' });
+    const error = toAdminError({
+      code: 'storage/unauthorized',
+      message: 'User does not have permission.',
+    });
     expect(error.kind).toBe('forbidden');
     expect(claveDelFallo(error).clave).toBe('settings.logoForbidden');
   });

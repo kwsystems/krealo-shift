@@ -63,8 +63,14 @@ describe('lo planificado de cada persona cada día', () => {
     expect(plan.get(claveDelDia('ana', '2026-09-21'))).toBe(180 + 240);
   });
 
-  it('un borrador no es plan de nadie', () => {
-    expect(planificadoPorDia([turno({ status: 'draft' })], LIMA).size).toBe(0);
+  it('un borrador nunca publicado no es plan de nadie', () => {
+    expect(planificadoPorDia([turno({ status: 'draft', publication_version: 0 })], LIMA).size).toBe(
+      0,
+    );
+    // El publicado que se editó sin republicar sí (8-oct): el servidor lo mide contra él.
+    expect(planificadoPorDia([turno({ status: 'draft', publication_version: 1 })], LIMA).size).toBe(
+      1,
+    );
   });
 });
 

@@ -19,7 +19,8 @@ import { politicasDe } from './politicas';
  * Ahora vale el que ELIGIÓ si sigue en pie, y si no —no eligió ninguno, o se canceló— el
  * turno PUBLICADO que le corresponde: el que más se solapa con la jornada, o, si ninguno
  * se solapa, el que empieza más cerca de su entrada dentro de tres horas. Ni un borrador
- * —todavía no es un turno que la persona conozca— ni uno de otra sede.
+ * nunca publicado —todavía no es un turno que la persona conozca— ni uno de otra sede; el
+ * publicado que se editó sin republicar, sí (8-oct).
  */
 
 export type TurnoDeJornada = {
@@ -103,18 +104,29 @@ export async function turnoDeLaJornada(params: {
   }
 
   const inicio = Date.parse(params.entrada);
-  const candidatos = await db
-    .collection(COLLECTIONS.shifts)
-    .where('employee_id', '==', params.employeeId)
-    // Con `status` en la consulta usa el índice (employee_id, status, starts_at), que ya
-    // existe: sin él, producción pediría uno nuevo y el emulador —que no los exige— no avisa.
-    .where('status', '==', 'published')
-    .where('starts_at', '>=', new Date(inicio - VENTANA_DE_BUSQUEDA_MS).toISOString())
-    .where('starts_at', '<=', new Date(inicio + VENTANA_DE_BUSQUEDA_MS).toISOString())
-    .get();
+  /*
+   * Los publicados y los que, ya publicados, se editaron sin volver a publicar (8-oct): las
+   * pantallas los cuentan como turno (`src/features/schedules/turno-en-pie.ts`), y el elegido
+   * al fichar ya valía aunque estuviera así. Un borrador nunca publicado, no.
+   */
+  const consulta = (estado: 'published' | 'draft') =>
+    db
+      .collection(COLLECTIONS.shifts)
+      .where('employee_id', '==', params.employeeId)
+      // Con `status` en la consulta usa el índice (employee_id, status, starts_at), que ya
+      // existe: sin él, producción pediría uno nuevo y el emulador —que no los exige— no avisa.
+      .where('status', '==', estado)
+      .where('starts_at', '>=', new Date(inicio - VENTANA_DE_BUSQUEDA_MS).toISOString())
+      .where('starts_at', '<=', new Date(inicio + VENTANA_DE_BUSQUEDA_MS).toISOString())
+      .get();
+  const [publicados, editados] = await Promise.all([consulta('published'), consulta('draft')]);
+  const candidatos = [
+    ...publicados.docs,
+    ...editados.docs.filter((doc) => Number(doc.data().publication_version ?? 0) > 0),
+  ];
 
   return elegirTurno(
-    candidatos.docs
+    candidatos
       .map((doc) => ({ id: doc.id, ...doc.data() }) as Record<string, unknown>)
       .filter((fila) => fila.location_id === params.locationId)
       .map((fila) => ({
