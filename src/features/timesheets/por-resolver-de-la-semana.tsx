@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -17,7 +16,6 @@ import {
   localDateTimeToInstant,
   localTimeOf,
 } from '@/features/schedules/week';
-import { adminErrorKind } from '@/hooks/use-admin-query';
 import type { SupportedLanguage } from '@/i18n';
 import { departureReasonLabelKey } from '@/i18n/break-reason-labels';
 import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
@@ -26,7 +24,7 @@ import { formatClockTime, formatShiftRange, type TimeFormatPreference } from '@/
 import { acknowledgeUnusualClock, type WorkSession } from './api';
 import { casosPorResolver, type CasoPorResolver } from './casos';
 import { duracion } from './duracion';
-import { CasoRechazado, useArreglarCaso } from './horas-debidas';
+import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
 import { useGuardarHoraExtra } from './horas-extra';
 
 /**
@@ -358,7 +356,7 @@ export function PorResolverDeLaSemana({
       ? t('timesheet.cases.decisionFailed')
       : arreglar.error === null || falta !== null || salida !== null
         ? null
-        : mensajeDelError(t, arreglar.error);
+        : porQueNoSeArreglo(t, arreglar.error);
 
   return (
     <>
@@ -371,7 +369,7 @@ export function PorResolverDeLaSemana({
           faltanLegible={duracion(t, falta.caso.faltan)}
           decisionInicial={falta.decision}
           guardando={arreglar.isPending}
-          error={arreglar.error === null ? null : mensajeDelError(t, arreglar.error)}
+          error={arreglar.error === null ? null : porQueNoSeArreglo(t, arreglar.error)}
           onGuardar={({ decision, minutos, nota }) =>
             lanzar(
               falta.caso.id,
@@ -396,7 +394,7 @@ export function PorResolverDeLaSemana({
             salida.salidaPropuesta === null ? '' : localTimeOf(salida.salidaPropuesta, timezone)
           }
           guardando={arreglar.isPending}
-          error={arreglar.error === null ? null : mensajeDelError(t, arreglar.error)}
+          error={arreglar.error === null ? null : porQueNoSeArreglo(t, arreglar.error)}
           onGuardar={(horaElegida) => {
             const elDia = localDateTimeToInstant(salida.dia, horaElegida, timezone);
             if (elDia === null) return;
@@ -434,13 +432,4 @@ export function PorResolverDeLaSemana({
       ) : null}
     </>
   );
-}
-
-function mensajeDelError(t: TFunction, error: unknown): string {
-  const motivo = error instanceof CasoRechazado ? error.motivo : null;
-  if (motivo === 'AJUSTADA') return t('timesheet.cases.errorAdjusted');
-  if (motivo === 'YA_TIENE_PAUSA') return t('timesheet.cases.errorHasBreak');
-  if (adminErrorKind(error) === 'conflict') return t('errors.concurrentEdit');
-  if (adminErrorKind(error) === 'forbidden') return t('states.noAccessBody');
-  return t('timesheet.cases.errorGeneric');
 }

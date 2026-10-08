@@ -1,10 +1,5 @@
-import {
-  addDaysToKey,
-  dateKeyOf,
-  localDateTimeToInstant,
-  localTimeToMinutes,
-  minutesToLocalTime,
-} from '@/features/schedules/week';
+import { horaEscrita } from '@/domain/hora-escrita';
+import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 
 /**
  * «14:30» COMO INSTANTE, en la zona de la tienda (30-sep).
@@ -50,12 +45,7 @@ export function horaPropuestaComoInstante(
   return localDateTimeToInstant(addDaysToKey(hoy, -1), hora, timezone);
 }
 
-/** «14:30», «8.30» o «0830» como «HH:MM»; `null` si no es una hora. */
+/** «14:30», «8.30» o «0830» como «HH:MM»; `null` si no es una hora. Ver `hora-escrita.ts`. */
 export function horaTecleada(tecleada: string): string | null {
-  const limpia = tecleada.trim().replace(/[.h]/, ':');
-  const minutos = localTimeToMinutes(
-    /^\d{3,4}$/.test(limpia) ? `${limpia.slice(0, -2)}:${limpia.slice(-2)}` : limpia,
-  );
-  if (minutos === null || minutos >= 24 * 60) return null;
-  return minutesToLocalTime(minutos);
+  return horaEscrita(tecleada);
 }

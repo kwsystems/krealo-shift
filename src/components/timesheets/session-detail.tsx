@@ -37,6 +37,7 @@ import {
 } from '@/features/timesheets/textos-de-salida';
 import { spacing } from '@/theme/tokens';
 import { formatClockTime, minutesToHHmm, type TimeFormatPreference } from '@/utils/time';
+import { horaEscrita } from '@/domain/hora-escrita';
 
 /**
  * Detalle diario y corrección de una sesión (§11.4).
@@ -148,18 +149,24 @@ export function SessionDetailSheet({
   const [reclasificando, setReclasificando] = useState<string | null>(null);
 
   const reasonValid = reason.trim().length >= 3;
+  // Una hora que no se entiende (8-oct): «18.30» ya vale, pero «18:3» o «abc» no, y antes
+  // pulsar no hacía nada y no decía nada.
+  const horaMala =
+    horaEscrita(startTime) === null || (endTime.trim() !== '' && horaEscrita(endTime) === null);
   /* Lo primero que impide corregir, para decirlo junto al botón. */
-  const porQueNo = sinCambios
-    ? t('timesheet.nothingChanged')
-    : futura
-      ? t('timesheet.futureTime')
-      : !reasonValid
-        ? t('timesheet.reasonRequired')
-        : null;
+  const porQueNo = horaMala
+    ? t('schedule.invalidTime')
+    : sinCambios
+      ? t('timesheet.nothingChanged')
+      : futura
+        ? t('timesheet.futureTime')
+        : !reasonValid
+          ? t('timesheet.reasonRequired')
+          : null;
 
   const handleSubmit = () => {
     setSubmitted(true);
-    if (!reasonValid) return;
+    if (horaMala || !reasonValid) return;
 
     /*
      * SOLO SE MANDA LO QUE SE TOCO (auditoría, 4-oct). La hoja enseña las horas sin segundos
@@ -169,8 +176,8 @@ export function SessionDetailSheet({
      * esa jornada, porque ya estaba «ajustada». `null` es «como estaba», también para el
      * servidor.
      */
-    const tocoLaEntrada = startTime.trim() !== entradaComoEstaba;
-    const tocoLaSalida = endTime.trim() !== '' && endTime.trim() !== salidaComoEstaba;
+    const tocoLaEntrada = horaEscrita(startTime) !== entradaComoEstaba;
+    const tocoLaSalida = endTime.trim() !== '' && horaEscrita(endTime) !== salidaComoEstaba;
     setSinCambios(!tocoLaEntrada && !tocoLaSalida);
     if (!tocoLaEntrada && !tocoLaSalida) return;
 
@@ -596,7 +603,9 @@ export function ManualEntrySheet({
 
   const reasonValid = reason.trim().length >= 3;
   const futura = kind !== 'correction' && isFuture(day, time);
-  const canSubmit = employeeId !== null && reasonValid && !futura;
+  // Una corrección para la Bandeja puede ir sin hora: la propone quien la revisa.
+  const horaMala = !(kind === 'correction' && time.trim() === '') && horaEscrita(time) === null;
+  const canSubmit = employeeId !== null && reasonValid && !futura && !horaMala;
   const opcionesDeDia = days.some((d) => d.value === day)
     ? days
     : [...days, { value: day, label: day }];
@@ -619,9 +628,11 @@ export function ManualEntrySheet({
             >
               {employeeId === null
                 ? t('timesheet.pickEmployee')
-                : futura
-                  ? t('timesheet.futureTime')
-                  : t('timesheet.reasonRequired')}
+                : horaMala
+                  ? t('schedule.invalidTime')
+                  : futura
+                    ? t('timesheet.futureTime')
+                    : t('timesheet.reasonRequired')}
             </AppText>
           ) : null}
           <PrimaryButton

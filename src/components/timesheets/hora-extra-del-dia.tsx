@@ -28,6 +28,7 @@ export function HoraExtraDelDia({
   refrigerioSinMarcar = 0,
   refrigerioPendiente = 0,
   decidiendoRefrigerio = false,
+  errorDelRefrigerio = null,
   onDecidirRefrigerio,
   saving,
   failed,
@@ -52,6 +53,8 @@ export function HoraExtraDelDia({
    */
   refrigerioPendiente?: number;
   decidiendoRefrigerio?: boolean;
+  /** Por qué no se pudo decidir el refrigerio, o `null`: se dice aquí, no en Por resolver. */
+  errorDelRefrigerio?: string | null;
   onDecidirRefrigerio?: (tipo: 'descontar_refrigerio' | 'sin_refrigerio_ok') => void;
   saving: boolean;
   failed: boolean;
@@ -180,6 +183,16 @@ export function HoraExtraDelDia({
             </Row>
           }
         />
+      ) : null}
+      {errorDelRefrigerio !== null ? (
+        <AppText
+          variant="help"
+          tone="danger"
+          accessibilityRole="alert"
+          testID="overtime-break-error"
+        >
+          {errorDelRefrigerio}
+        </AppText>
       ) : null}
       {failed ? (
         <InlineNotice tone="late" icon="alert-circle" title={t('timesheet.overtimeFailed')} />

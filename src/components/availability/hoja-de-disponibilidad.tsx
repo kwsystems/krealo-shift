@@ -23,6 +23,7 @@ import type { Disponibilidad, TipoDeDisponibilidad } from '@/features/availabili
 import type { DateKey } from '@/features/schedules/week';
 import type { SupportedLanguage } from '@/i18n';
 import { spacing } from '@/theme/tokens';
+import { horaEscrita } from '@/domain/hora-escrita';
 
 /**
  * AGREGAR O CAMBIAR UNA DISPONIBILIDAD (1-oct). La misma hoja en Equipo —quien gestiona,
@@ -40,8 +41,6 @@ export type ValoresIniciales = {
   weekday?: number | null;
   date?: DateKey | null;
 };
-
-const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 /** «lunes», «martes»…: el nombre del día ISO, en el idioma de la app. */
 export function nombreDelDiaDeSemana(iso: number, language: SupportedLanguage, corto = false) {
@@ -108,9 +107,11 @@ export function HojaDeDisponibilidad({
   const [intentado, setIntentado] = useState(false);
 
   const conHoras = type === 'preferred' || (type === 'unavailable' && !todoElDia);
+  // «9:00», «9», «18.30» o «6pm» valen y se guardan como «HH:MM» (8-oct: «9:00» no valía).
+  const desdeLeida = horaEscrita(desde);
+  const hastaLeida = horaEscrita(hasta);
   const horasMal =
-    conHoras &&
-    (!HORA.test(desde.trim()) || !HORA.test(hasta.trim()) || hasta.trim() <= desde.trim());
+    conHoras && (desdeLeida === null || hastaLeida === null || hastaLeida <= desdeLeida);
   const notaFalta = type === 'note' && nota.trim() === '';
   const valido = persona !== null && !horasMal && !notaFalta;
 
@@ -137,8 +138,8 @@ export function HojaDeDisponibilidad({
         weekday: kind === 'weekly' ? weekday : null,
         date: kind === 'date' ? date : null,
         type,
-        from: conHoras ? desde.trim() : null,
-        to: conHoras ? hasta.trim() : null,
+        from: conHoras ? desdeLeida : null,
+        to: conHoras ? hastaLeida : null,
         note: nota.trim() === '' ? null : nota.trim(),
       },
       { onSuccess: onClose },

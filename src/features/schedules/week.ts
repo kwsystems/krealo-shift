@@ -3,6 +3,7 @@ import { format, isValid, parseISO } from 'date-fns';
 import { enUS, es } from 'date-fns/locale';
 
 import type { SupportedLanguage } from '@/i18n';
+import { horaEscrita } from '@/domain/hora-escrita';
 
 /**
  * Aritmética de semanas y de fechas locales del editor de horarios (§11.3, §13).
@@ -139,17 +140,19 @@ export function weekPosition(
   return weekStart < current ? 'past' : 'future';
 }
 
-const TIME_PATTERN = /^([01]?\d|2[0-3]):([0-5]\d)$/;
-
+/*
+ * Las horas se leen con `horaEscrita` (8-oct): «18.30», «1830» o «6pm» valen en todos los
+ * campos, no solo en el reloj. Ver `src/domain/hora-escrita.ts`.
+ */
 export function isValidLocalTime(value: string): boolean {
-  return TIME_PATTERN.test(value.trim());
+  return horaEscrita(value) !== null;
 }
 
-/** Minutos desde medianoche de una hora local `HH:mm`. */
+/** Minutos desde medianoche de una hora local («HH:mm», «18.30», «6pm»…). */
 export function localTimeToMinutes(value: string): number | null {
-  const match = TIME_PATTERN.exec(value.trim());
-  if (match === null) return null;
-  return Number(match[1]) * 60 + Number(match[2]);
+  const hora = horaEscrita(value);
+  if (hora === null) return null;
+  return Number(hora.slice(0, 2)) * 60 + Number(hora.slice(3));
 }
 
 export function minutesToLocalTime(minutes: number): string {

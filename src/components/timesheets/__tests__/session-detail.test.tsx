@@ -116,4 +116,25 @@ describe('detalle de una jornada', () => {
     expect(enviar).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('session-correct-why')).toBeNull();
   });
+
+  /* «18.30» es una hora (8-oct): antes no pasaba nada al pulsar; «18:3» dice por qué no. */
+  it('acepta «16.30» como hora y dice por qué no cuando no se entiende', async () => {
+    const enviar = await pintar(
+      sesion({ ends_at: '2026-09-29T22:00:00.000Z', net_minutes: 421, gross_minutes: 421 }),
+      DE_NOCHE,
+    );
+    await fireEvent.changeText(screen.getByTestId('session-correct-reason'), 'Se fue antes');
+    await fireEvent.changeText(screen.getByTestId('session-correct-end'), '16:3');
+    await fireEvent.press(screen.getByTestId('session-correct-submit'));
+    expect(enviar).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-correct-why')).toHaveTextContent(/no se entiende/);
+
+    await fireEvent.changeText(screen.getByTestId('session-correct-end'), '16.30');
+    await fireEvent.press(screen.getByTestId('session-correct-submit'));
+    expect(enviar).toHaveBeenCalledWith({
+      newStartsAt: null,
+      newEndsAt: '2026-09-29T21:30:00.000Z',
+      reason: 'Se fue antes',
+    });
+  });
 });

@@ -55,7 +55,7 @@ import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { casosPorResolver, type CasoPorResolver } from './casos';
-import { useArreglarCaso } from './horas-debidas';
+import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
@@ -170,6 +170,9 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     mutations.adjust.reset();
     mutations.reclassify.reset();
     mutacionesDeFaltas.deshacerCumplido.reset();
+    // Ni el de la hora extra ni el del refrigerio (8-oct): salían en otro día que nadie tocó.
+    guardarHoraExtra.reset();
+    decidirRefrigerio.reset();
     setSelected(null);
     setPedida(null);
   };
@@ -1019,6 +1022,11 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 refrigerioSinMarcar={refrigerioSinMarcar}
                 refrigerioPendiente={refrigerioPendiente?.refrigerio ?? 0}
                 decidiendoRefrigerio={decidirRefrigerio.isPending}
+                errorDelRefrigerio={
+                  decidirRefrigerio.error === null
+                    ? null
+                    : porQueNoSeArreglo(t, decidirRefrigerio.error)
+                }
                 onDecidirRefrigerio={(tipo) => {
                   if (refrigerioPendiente === undefined) return;
                   decidirRefrigerio.mutate(

@@ -1,13 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { z } from 'zod';
 
+import type { TFunction } from 'i18next';
+
+import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import {
+  adminErrorKind,
   ADMIN_LIST_STALE_MS,
   requireClient,
   selectRows,
   toAdminError,
 } from '@/hooks/use-admin-query';
-import { refrescarVistasDeHoras } from '@/hooks/refrescar-vistas';
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
 import { addManualTimeEvent, adjustWorkSession } from './api';
@@ -270,4 +273,24 @@ export function useSaldarHorasDebidas() {
       llamar(RPC.settleOwedHours, { p_owed_id: params.id, p_status: params.estado }),
     onSuccess: () => refrescarVistasDeHoras(queryClient),
   });
+}
+
+/**
+ * Por qué no se pudo arreglar un caso, en palabras (8-oct). Uno solo para «Por resolver» y
+ * para la hoja de la jornada: la hoja no decía nada cuando fallaba.
+ */
+export function porQueNoSeArreglo(t: TFunction, error: unknown): string {
+  const motivo = error instanceof CasoRechazado ? error.motivo : null;
+  if (motivo === 'YA_TIENE_PAUSA') return t('timesheet.cases.errorHasBreak');
+  if (adminErrorKind(error) === 'conflict') return t('errors.concurrentEdit');
+  if (adminErrorKind(error) === 'forbidden') return t('states.noAccessBody');
+  if (adminErrorKind(error) === 'offline') return t('errors.network');
+  /*
+   * Lo demás lo dice el servidor, y lo dice en palabras (8-oct): «Esa hora todavía no
+   * llegó», «La jornada sigue abierta», «A esa hora la persona ya estaba fuera». Antes todo
+   * acababa en «No se pudo», y quien lo veía no sabía qué cambiar.
+   */
+  const mensaje = error instanceof Error ? error.message.trim() : '';
+  if (mensaje.includes(' ') && !/^(internal|unknown|INTERNAL)\b/.test(mensaje)) return mensaje;
+  return t('timesheet.cases.errorGeneric');
 }
