@@ -80,6 +80,14 @@ apunta a su reemplazo. No fue posible moverlas: `companyName` no es editable en
 **Cuando se arregle la empresa Krealo Shift**, volver a `companyName: "Krealo Shift"`,
 quitar el prefijo del título y recrear allí las tareas que sigan abiertas.
 
+**Pista medida el 2026-10-08** (Andree pidió una tarea en Krealo Shift y no la vio): la
+tarea `Hz3mFo475KL2rIUJukSL` existe con `companyId: HcLRs8dMbMoviZ3XUWRR` y el API la
+devuelve entera, pero en `list_companies` esa empresa tiene `workspaceOwnerId: null`, igual
+que otras cinco (Acceso Crediticio, BonSommeil, Krealo Accounting, Krealo Menu, Printz
+Experts); las 46 restantes —Universo Tutu incluida— lo tienen puesto. Es la única diferencia
+a la vista y la causa más probable; arreglarla es un cambio de datos en el Publisher (otro
+repositorio), no de este. Sin confirmar en la UI. Mientras tanto, la regla de arriba sigue.
+
 ### Ciclo de vida
 
 Sincronizado con el trabajo real: se crea en `not_started` → al empezar a
