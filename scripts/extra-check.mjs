@@ -109,11 +109,18 @@ try {
   mkdirSync('capturas', { recursive: true });
   await pagina.screenshot({ path: 'capturas/extra-hoja.png' });
   const propuesto = await pagina.locator('[data-testid="overtime-input"]').inputValue();
+  // «1.5» ya se entiende (8-oct): hora y media, y la hoja lo dice antes de guardar.
   await pagina.locator('[data-testid="overtime-input"]').fill('1.5');
+  const leido = await pagina
+    .locator('[data-testid="overtime-read-as"]')
+    .innerText()
+    .catch(() => '');
+  if (!/1 h 30 min/.test(leido)) fallar(caso3, `«1.5» no se lee como 1 h 30 min: «${leido}»`);
+  await pagina.locator('[data-testid="overtime-input"]').fill('una hora');
   await pagina.locator('[data-testid="overtime-save"]').click();
   await pagina.waitForTimeout(400);
   const hoja = sinGlifos(await pagina.locator('[data-testid="overtime-section"]').innerText());
-  if (!/por ejemplo 1:30/.test(hoja)) fallar(caso3, 'no explicó cómo escribirlo');
+  if (!/Escribe horas \(1, 1:30\)/.test(hoja)) fallar(caso3, 'no explicó cómo escribirlo');
   else if ((await pagina.locator('[data-testid="overtime-section"]').count()) === 0)
     fallar(caso3, 'la hoja se cerró como si se hubiera guardado');
   else pasa(caso3, `el campo venía con «${propuesto}», lo trabajado de más`);
