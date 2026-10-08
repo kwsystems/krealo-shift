@@ -80,13 +80,20 @@ apunta a su reemplazo. No fue posible moverlas: `companyName` no es editable en
 **Cuando se arregle la empresa Krealo Shift**, volver a `companyName: "Krealo Shift"`,
 quitar el prefijo del título y recrear allí las tareas que sigan abiertas.
 
-**Pista medida el 2026-10-08** (Andree pidió una tarea en Krealo Shift y no la vio): la
-tarea `Hz3mFo475KL2rIUJukSL` existe con `companyId: HcLRs8dMbMoviZ3XUWRR` y el API la
-devuelve entera, pero en `list_companies` esa empresa tiene `workspaceOwnerId: null`, igual
-que otras cinco (Acceso Crediticio, BonSommeil, Krealo Accounting, Krealo Menu, Printz
-Experts); las 46 restantes —Universo Tutu incluida— lo tienen puesto. Es la única diferencia
-a la vista y la causa más probable; arreglarla es un cambio de datos en el Publisher (otro
-repositorio), no de este. Sin confirmar en la UI. Mientras tanto, la regla de arriba sigue.
+**LA CAUSA, MEDIDA EL 2026-10-08 — y la pista anterior era falsa.** No es la empresa: es
+QUIÉN crea la tarea. Las tareas de Krealo Shift que Andree sí ve (las del logo, 5-oct) tienen
+`createdBy: Andree Chira` y `createdVia: "api"`/`"mcp"`; las que no ve —las diez de agosto y
+la del 8-oct— tienen `createdBy: null` y `createdVia: "agent:agente-asistente"`, porque se
+crearon con el token OpenClaw y la cabecera `X-OpenClaw-Agent`. Una primera lectura culpó al
+`workspaceOwnerId: null` de la empresa; Andree lo desmintió («otros agentes sí ponen Krealo
+Shift y aparece»), y tenía razón.
+
+**Por eso las tareas se crean con las herramientas MCP del Publisher (`create_task`,
+`update_task`, `get_task`), que actúan con la cuenta de Andree**: `companyId`
+`HcLRs8dMbMoviZ3XUWRR` (Krealo Shift), sin el prefijo «Krealo Shift · », etiquetas
+`g3as5pZcgs58Q7gdLO9C` (Claude) y `KRQuAXc4QDzFO1TOPxYw` (Krealo Shift). La primera así,
+`KfXrKVUB0C4CfmgnQuZn`, salió con `createdBy: Andree Chira`; que se ve en el tablero queda
+por confirmar con Andree. El `create` de OpenClaw ya no se usa para tareas nuevas.
 
 ### Ciclo de vida
 
