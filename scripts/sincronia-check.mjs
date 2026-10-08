@@ -102,6 +102,27 @@ try {
     }
     const entrada = await pagina.locator('[data-testid="session-correct-start"]').inputValue();
 
+    /*
+     * --- 0. «Le di Corregir fichaje y nunca se cierra» (8-oct): sin motivo, el botón se ponía
+     * gris y lo que faltaba se decía abajo del todo. Tiene que decirlo junto al botón, y el
+     * botón seguir vivo.
+     */
+    await pagina.locator('[data-testid="session-correct-end"]').fill(sumarUnMinuto(entrada));
+    await pagina.locator('[data-testid="session-correct-submit"]').click();
+    await esperar(pagina, 400);
+    const porQue = await pagina
+      .locator('[data-testid="session-correct-why"]')
+      .innerText()
+      .catch(() => '');
+    if (!/motivo/i.test(porQue)) {
+      problemas.push(
+        `sin motivo, «Corregir fichaje» no dice junto al botón qué falta: «${porQue}»`,
+      );
+    }
+    if (await pagina.locator('[data-testid="session-correct-submit"]').isDisabled()) {
+      problemas.push('sin motivo, «Corregir fichaje» se queda gris');
+    }
+
     // --- 2. Una hora antes de la entrada es la madrugada siguiente: todavía no llegó.
     await pagina.locator('[data-testid="session-correct-end"]').fill(restarUnMinuto(entrada));
     await pagina.locator('[data-testid="session-correct-reason"]').fill('Se fue sin marcar');
@@ -118,11 +139,22 @@ try {
     // --- 1. La salida buena: un minuto después de entrar.
     await pagina.locator('[data-testid="session-correct-end"]').fill(sumarUnMinuto(entrada));
     await pagina.locator('[data-testid="session-correct-submit"]').click();
-    await esperar(pagina, 1500);
-    const cerrarHoja = pagina
-      .locator('[data-testid="session-detail-sheet"]')
-      .getByText('Cerrar', { exact: true });
-    if ((await cerrarHoja.count()) > 0) await cerrarHoja.first().click();
+    // Guardada la corrección, la hoja se cierra SOLA (8-oct): antes se cerraba aquí a mano.
+    try {
+      await pagina
+        .locator('[data-testid="session-detail-sheet"]')
+        .waitFor({ state: 'detached', timeout: 8000 });
+    } catch {
+      const error = await pagina
+        .locator('[data-testid="session-detail-error"]')
+        .innerText()
+        .catch(() => '');
+      problemas.push(`guardada la corrección, la hoja no se cierra${error ? `: «${error}»` : ''}`);
+      const cerrarHoja = pagina
+        .locator('[data-testid="session-detail-sheet"]')
+        .getByText('Cerrar', { exact: true });
+      if ((await cerrarHoja.count()) > 0) await cerrarHoja.first().click();
+    }
     await esperar(pagina, 600);
 
     await irPorElMenu(pagina, '/schedule');

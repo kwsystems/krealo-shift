@@ -148,6 +148,14 @@ export function SessionDetailSheet({
   const [reclasificando, setReclasificando] = useState<string | null>(null);
 
   const reasonValid = reason.trim().length >= 3;
+  /* Lo primero que impide corregir, para decirlo junto al botón. */
+  const porQueNo = sinCambios
+    ? t('timesheet.nothingChanged')
+    : futura
+      ? t('timesheet.futureTime')
+      : !reasonValid
+        ? t('timesheet.reasonRequired')
+        : null;
 
   const handleSubmit = () => {
     setSubmitted(true);
@@ -197,7 +205,22 @@ export function SessionDetailSheet({
       testID="session-detail-sheet"
       footer={
         <Stack gap={spacing.sm}>
-          {/* En el pie, junto al botón: ahí mira quien acaba de tocar «Corregir». */}
+          {/*
+            EN EL PIE, JUNTO AL BOTÓN, TODO LO QUE IMPIDE CORREGIR (8-oct). El motivo que falta,
+            «no cambiaste ninguna hora» o una hora que todavía no llegó salían junto a sus campos,
+            abajo del todo de la hoja: Andree pulsaba «Corregir fichaje», el botón se ponía gris y
+            «nunca se cierra». Ahora se dice aquí, donde se está mirando, y el botón sigue vivo.
+          */}
+          {submitted && porQueNo !== null ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="session-correct-why"
+            >
+              {porQueNo}
+            </AppText>
+          ) : null}
           {error !== null ? (
             <AppText
               variant="help"
@@ -212,7 +235,6 @@ export function SessionDetailSheet({
             label={t('timesheet.correctEntry')}
             onPress={handleSubmit}
             loading={saving}
-            disabled={submitted && !reasonValid}
             testID="session-correct-submit"
           />
         </Stack>
@@ -586,25 +608,41 @@ export function ManualEntrySheet({
       onClose={onClose}
       testID="manual-entry-sheet"
       footer={
-        <PrimaryButton
-          // El botón dice lo que pasa: una entrada o una salida se registran al momento; una
-          // corrección va a la Bandeja (4-oct). Decía siempre «Enviar fichaje manual».
-          label={
-            kind === 'forgot_clock_in'
-              ? t('timesheet.registerClockIn')
-              : kind === 'forgot_clock_out'
-                ? t('timesheet.registerClockOut')
-                : t('timesheet.sendToInbox')
-          }
-          onPress={() => {
-            setSubmitted(true);
-            if (!canSubmit || employeeId === null) return;
-            onSubmit({ employeeId, kind, dateKey: day, time, reason: reason.trim() });
-          }}
-          loading={saving}
-          disabled={submitted && !canSubmit}
-          testID="manual-entry-submit"
-        />
+        <Stack gap={spacing.sm}>
+          {/* Lo que impide enviarlo, junto al botón y con el botón vivo (8-oct). */}
+          {submitted && !canSubmit ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="manual-entry-why"
+            >
+              {employeeId === null
+                ? t('timesheet.pickEmployee')
+                : futura
+                  ? t('timesheet.futureTime')
+                  : t('timesheet.reasonRequired')}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            // El botón dice lo que pasa: una entrada o una salida se registran al momento; una
+            // corrección va a la Bandeja (4-oct). Decía siempre «Enviar fichaje manual».
+            label={
+              kind === 'forgot_clock_in'
+                ? t('timesheet.registerClockIn')
+                : kind === 'forgot_clock_out'
+                  ? t('timesheet.registerClockOut')
+                  : t('timesheet.sendToInbox')
+            }
+            onPress={() => {
+              setSubmitted(true);
+              if (!canSubmit || employeeId === null) return;
+              onSubmit({ employeeId, kind, dateKey: day, time, reason: reason.trim() });
+            }}
+            loading={saving}
+            testID="manual-entry-submit"
+          />
+        </Stack>
       }
     >
       {/*

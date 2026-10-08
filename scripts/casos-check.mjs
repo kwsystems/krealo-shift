@@ -351,7 +351,12 @@ try {
       if ((await fila.count()) > 0) {
         await fila.first().click();
         await pagina.locator('[data-testid="overtime-section"]').waitFor({ timeout: 8000 });
-        await clic(pagina, 'overtime-remove');
+        /*
+         * «PUSE 0 Y NO SALIÓ NADA» (8-oct): Andree escribe 0 —no es extra— y guarda. Es lo mismo
+         * que «No es extra», y tiene que comportarse igual.
+         */
+        await pagina.locator('[data-testid="overtime-input"]').fill('0');
+        await clic(pagina, 'overtime-save');
         try {
           await pagina.locator(`[data-testid="caso-${refrigerio.id}"]`).waitFor({ timeout: 8000 });
           vuelve = true;
@@ -368,6 +373,39 @@ try {
           .catch(() => '');
         if (!/no es hora extra/.test(decidido)) {
           problemas.push(`8: tras «No es extra» la hoja no dice que está decidido: «${decidido}»`);
+        }
+        /*
+         * Y EL REFRIGERIO SE DECIDE AHÍ MISMO (8-oct). Con 0 el caso sigue —0 no dice si comió—
+         * y la hoja no lo decía. Ahora pregunta, y «Descontar» quita el caso y la hora del total.
+         */
+        const pregunta = await pagina
+          .locator('[data-testid="overtime-break-pending"]')
+          .innerText()
+          .catch(() => '');
+        if (!/¿lo tomó\?/.test(pregunta)) {
+          problemas.push(
+            `8: con la extra en 0 la hoja no pregunta por el refrigerio: «${pregunta}»`,
+          );
+        } else {
+          const antes = await totalNeto(pagina);
+          await clic(pagina, 'overtime-break-apply');
+          if (!(await seFue(pagina, refrigerio.id))) {
+            problemas.push('8: «Descontar refrigerio» desde la hoja no quita el caso');
+          }
+          let despues = antes;
+          for (let i = 0; i < 10 && despues === antes; i += 1) {
+            await esperar(pagina, 500);
+            despues = await totalNeto(pagina);
+          }
+          if (antes === null || despues === null || despues >= antes) {
+            problemas.push(`8: descontar desde la hoja no baja el total: ${antes} → ${despues}`);
+          }
+          if ((await pagina.locator('[data-testid="overtime-break-pending"]').count()) > 0) {
+            problemas.push('8: decidido el refrigerio, la hoja lo sigue preguntando');
+          }
+          console.log(
+            `  0 y refrigerio       la hoja pregunta; descontar: total ${antes} → ${despues}`,
+          );
         }
       }
       console.log(

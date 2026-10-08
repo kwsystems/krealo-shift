@@ -94,4 +94,26 @@ describe('detalle de una jornada', () => {
     expect(enviar).not.toHaveBeenCalled();
     expect(screen.getByTestId('session-correct-unchanged')).toBeTruthy();
   });
+
+  /*
+   * «Le di Corregir fichaje y nunca se cierra» (8-oct): sin motivo el botón se ponía gris y el
+   * aviso salía abajo del todo, fuera de la vista. Ahora lo dice en el pie y el botón sigue vivo:
+   * se escribe el motivo, se pulsa otra vez y se manda.
+   */
+  it('sin motivo dice por qué junto al botón, y con el motivo puesto sí manda', async () => {
+    const enviar = await pintar(
+      sesion({ ends_at: '2026-09-29T22:00:00.000Z', net_minutes: 421, gross_minutes: 421 }),
+      DE_NOCHE,
+    );
+    await fireEvent.changeText(screen.getByTestId('session-correct-end'), '16:30');
+    await fireEvent.press(screen.getByTestId('session-correct-submit'));
+    expect(enviar).not.toHaveBeenCalled();
+    expect(screen.getByTestId('session-correct-why')).toHaveTextContent(/motivo/i);
+    expect(screen.getByTestId('session-correct-submit')).not.toBeDisabled();
+
+    await fireEvent.changeText(screen.getByTestId('session-correct-reason'), 'Se fue antes');
+    await fireEvent.press(screen.getByTestId('session-correct-submit'));
+    expect(enviar).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('session-correct-why')).toBeNull();
+  });
 });

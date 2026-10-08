@@ -26,6 +26,9 @@ export function HoraExtraDelDia({
   aprobados,
   decidido = aprobados > 0,
   refrigerioSinMarcar = 0,
+  refrigerioPendiente = 0,
+  decidiendoRefrigerio = false,
+  onDecidirRefrigerio,
   saving,
   failed,
   onGuardar,
@@ -42,6 +45,14 @@ export function HoraExtraDelDia({
    * trabajó de más sin él cuenta esa hora como trabajada: se dice antes de guardar.
    */
   refrigerioSinMarcar?: number;
+  /**
+   * El refrigerio de ese día que SIGUE sin decidir (8-oct), o 0. Con la extra en 0 —«no es
+   * extra»— el caso «sin refrigerio» de Por resolver sigue abierto, porque 0 no dice si comió.
+   * La hoja lo pregunta aquí con las mismas dos respuestas que Por resolver.
+   */
+  refrigerioPendiente?: number;
+  decidiendoRefrigerio?: boolean;
+  onDecidirRefrigerio?: (tipo: 'descontar_refrigerio' | 'sin_refrigerio_ok') => void;
   saving: boolean;
   failed: boolean;
   onGuardar: (minutos: number) => void;
@@ -138,6 +149,38 @@ export function HoraExtraDelDia({
           />
         ) : null}
       </Row>
+      {refrigerioPendiente > 0 &&
+      aprobados === 0 &&
+      (decidido || deMas <= 0) &&
+      onDecidirRefrigerio ? (
+        <InlineNotice
+          tone="warning"
+          icon="help-circle-outline"
+          title={t('timesheet.breakPending', { hours: duracion(t, refrigerioPendiente) })}
+          body={t('timesheet.breakPendingDetail')}
+          testID="overtime-break-pending"
+          action={
+            <Row gap={spacing.sm} wrap>
+              <SecondaryButton
+                label={t('timesheet.cases.applyBreak', {
+                  hours: duracion(t, refrigerioPendiente),
+                })}
+                onPress={() => onDecidirRefrigerio('descontar_refrigerio')}
+                loading={decidiendoRefrigerio}
+                fullWidth={false}
+                testID="overtime-break-apply"
+              />
+              <GhostButton
+                label={t('timesheet.cases.workedThrough')}
+                onPress={() => onDecidirRefrigerio('sin_refrigerio_ok')}
+                disabled={decidiendoRefrigerio}
+                fullWidth={false}
+                testID="overtime-break-worked"
+              />
+            </Row>
+          }
+        />
+      ) : null}
       {failed ? (
         <InlineNotice tone="late" icon="alert-circle" title={t('timesheet.overtimeFailed')} />
       ) : null}

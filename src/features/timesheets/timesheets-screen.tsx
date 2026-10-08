@@ -55,6 +55,7 @@ import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { casosPorResolver, type CasoPorResolver } from './casos';
+import { useArreglarCaso } from './horas-debidas';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
@@ -152,9 +153,17 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     toISO: range.toISO,
     cacheKey: { from, to },
   });
+  /*
+   * LA JORNADA ABIERTA, SIEMPRE AL DÍA (8-oct). Se guardaba la copia de cuando se tocó la fila,
+   * y «Corregir fichaje» mandaba SU `updated_at`: si mientras tanto la jornada cambió —decidir la
+   * extra o el refrigerio, volver a medirla, el refresco de cada minuto—, el servidor rechazaba
+   * la corrección por «alguien más la cambió». Se busca por id en lo último que llegó.
+   */
+  const idElegido = elegida?.id ?? pedida;
   const selected =
-    elegida ??
-    (pedida === null ? null : ((sessions.data ?? []).find((fila) => fila.id === pedida) ?? null));
+    idElegido === null
+      ? null
+      : ((sessions.data ?? []).find((fila) => fila.id === idElegido) ?? elegida ?? null);
   /* Cerrar el detalle cierra también la jornada pedida: si no, se volvería a abrir sola. */
   const cerrarDetalle = () => {
     // Lo que falló en esta jornada no se arrastra a la próxima que se abra.
@@ -363,20 +372,29 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
    * el caso «sin refrigerio» de «Por resolver» queda decidido. Se mira SIN las extras
    * aprobadas: el caso existe aunque ya esté decidido por una.
    */
-  const refrigerioSinMarcar =
+  const casoDeRefrigerio = (conAprobadas: boolean) =>
     selected === null
-      ? 0
-      : (casosPorResolver({
+      ? undefined
+      : casosPorResolver({
           sesiones: paraResolver,
           turnos: turnosDeLaSemana.data ?? [],
           ahoraISO: nowISO,
           timezone: scope.timezone,
+          ...(conAprobadas ? { aprobadas } : {}),
         }).find(
           (caso): caso is Extract<CasoPorResolver, { tipo: 'sin_refrigerio' }> =>
             caso.tipo === 'sin_refrigerio' &&
             caso.sesion.employee_id === selected.employee_id &&
             caso.dia === dateKeyOf(selected.starts_at, scope.timezone),
-        )?.refrigerio ?? 0);
+        );
+  const refrigerioSinMarcar = casoDeRefrigerio(false)?.refrigerio ?? 0;
+  /*
+   * Y SI SIGUE SIN DECIDIR, LA HOJA LO DEJA DECIDIR (8-oct). Andree puso 0 —«no es extra»— y el
+   * caso seguía en Por resolver sin que la hoja dijera por qué: 0 no dice si almorzó. Ahora la
+   * hoja pregunta eso mismo, con la misma acción que Por resolver (`useArreglarCaso`).
+   */
+  const refrigerioPendiente = casoDeRefrigerio(true);
+  const decidirRefrigerio = useArreglarCaso();
 
   const visibleSessions = useMemo(() => {
     const filtradas = allSessions.filter((session) => {
@@ -999,6 +1017,22 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 aprobados={aprobadas.get(claveSeleccionada) ?? 0}
                 decidido={aprobadas.has(claveSeleccionada)}
                 refrigerioSinMarcar={refrigerioSinMarcar}
+                refrigerioPendiente={refrigerioPendiente?.refrigerio ?? 0}
+                decidiendoRefrigerio={decidirRefrigerio.isPending}
+                onDecidirRefrigerio={(tipo) => {
+                  if (refrigerioPendiente === undefined) return;
+                  decidirRefrigerio.mutate(
+                    { tipo, sessionId: refrigerioPendiente.sesion.id },
+                    {
+                      onSuccess: () =>
+                        setFeedback(
+                          tipo === 'descontar_refrigerio'
+                            ? t('timesheet.breakDecidedApplied')
+                            : t('timesheet.breakDecidedWorked'),
+                        ),
+                    },
+                  );
+                }}
                 saving={guardarHoraExtra.isPending}
                 failed={guardarHoraExtra.isError}
                 onGuardar={(minutos) =>
