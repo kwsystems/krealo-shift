@@ -432,8 +432,20 @@ export async function rebuildWorkSession(
     turno: turno === null ? null : { starts_at: turno.starts_at, ends_at: turno.ends_at },
     entrada: startsAt,
     salida: endsAt,
-    entradaSegunElAparato: (inicio.occurred_at_device as string | null) ?? null,
-    salidaSegunElAparato: (salida?.occurred_at_device as string | null) ?? null,
+    /*
+     * LA HORA DEL APARATO SOLO CONTRA UNA HORA QUE NADIE CORRIGIÓ (8-oct). Se comparaba la
+     * entrada CORREGIDA (11:00) con la que marcó la tablet (11:30) y salía «Diferencia de
+     * reloj del dispositivo»: corregir el fichaje era justo lo que creaba el aviso. Una hora
+     * que puso quien gestiona no tiene reloj que comparar.
+     */
+    entradaSegunElAparato:
+      startsAt === String(inicio.occurred_at)
+        ? ((inicio.occurred_at_device as string | null) ?? null)
+        : null,
+    salidaSegunElAparato:
+      salida !== undefined && endsAt === String(salida.occurred_at)
+        ? ((salida.occurred_at_device as string | null) ?? null)
+        : null,
     sinConexion: inicio.is_offline === true || salida?.is_offline === true,
     politicas: politicasDe(sedeDoc ?? {}),
   });

@@ -37,6 +37,8 @@ export type SessionListProps = {
   sessions: WorkSession[];
   employeeNames: Map<string, string>;
   alertsBySession: Map<string, TimesheetAlert[]>;
+  /** Los avisos que son un dato y no piden decisión: en gris (8-oct). */
+  registroBySession?: Map<string, TimesheetAlert[]>;
   /** Quién está dentro ahora, por sesión. Vacío mientras no llega: las abiertas se pintan «trabajando». */
   enCursoPorSesion?: Map<string, EnCurso>;
   /** El minuto actual, para contar en vivo las jornadas abiertas. */
@@ -78,6 +80,7 @@ export function SessionList({
   sessions,
   employeeNames,
   alertsBySession,
+  registroBySession,
   enCursoPorSesion,
   nowISO,
   horaExtraPorSesion,
@@ -132,6 +135,7 @@ export function SessionList({
           session={item.sesion}
           employeeName={employeeNames.get(item.sesion.employee_id) ?? unknownEmployeeLabel}
           alerts={alertsBySession.get(item.sesion.id) ?? []}
+          registro={registroBySession?.get(item.sesion.id) ?? []}
           enCurso={enCursoPorSesion?.get(item.sesion.id)}
           horaExtra={horaExtraPorSesion?.get(item.sesion.id)}
           nowISO={nowISO}
@@ -146,6 +150,7 @@ export function SessionList({
       t,
       employeeNames,
       alertsBySession,
+      registroBySession,
       enCursoPorSesion,
       horaExtraPorSesion,
       nowISO,

@@ -20,7 +20,9 @@ import {
   type DateKey,
 } from '@/features/schedules/week';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
-import { alertsForSession } from '@/features/timesheets/alerts';
+import { alertsForSession, separarAvisos } from '@/features/timesheets/alerts';
+import { useDiasConCasoAbierto } from '@/features/timesheets/casos-abiertos';
+import { claveDelDia } from '@/features/timesheets/horas-extra';
 import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 import { useDailySummaries, useWorkSessions } from '@/features/timesheets/hooks';
 import { estadoDeFalta } from '@/features/timesheets/faltas';
@@ -94,7 +96,8 @@ export function HorasDeLaPersona({
   const { t } = useTranslation();
   const estilos = useEstilos();
   // Para marcar en cada día el feriado y las fechas con más clientes, como en Horario.
-  const tipoDeTienda = useManagerScope().organization?.business_type ?? null;
+  const scope = useManagerScope();
+  const tipoDeTienda = scope.organization?.business_type ?? null;
   const [vista, setVista] = useState<Vista>('dia');
   const [offset, setOffset] = useState(0);
 
@@ -114,6 +117,16 @@ export function HorasDeLaPersona({
     fromISO: periodo.fromISO,
     toISO: periodo.toISO,
     cacheKey: { from: periodo.from, to: periodo.to },
+  });
+
+  const diasAbiertos = useDiasConCasoAbierto({
+    organizationId,
+    locationId: vista === 'dia' ? locationId : null,
+    weekStart: periodo.from,
+    timezone,
+    nowISO,
+    sesiones: jornadas.data ?? [],
+    umbralExtra: scope.settings.overtimeNoticeMinutes,
   });
 
   /*
@@ -167,9 +180,13 @@ export function HorasDeLaPersona({
   // Tardanza y salida antes por turno, como en Horas: ver `puntualidad.ts`.
   const marcas = puntualidadPorJornada(suyas);
   for (const jornada of suyas) {
-    if (alertsForSession(jornada, nowISO, puntualidadDe(marcas, jornada)).length > 0) {
-      porRevisar.add(dateKeyOf(jornada.starts_at, timezone));
-    }
+    const dia = dateKeyOf(jornada.starts_at, timezone);
+    // Con la regla de Horas (8-oct): lo que es un dato no pide revisión. Ver `casos-abiertos.ts`.
+    const { porRevisar: avisos } = separarAvisos(
+      alertsForSession(jornada, nowISO, puntualidadDe(marcas, jornada)),
+      diasAbiertos.has(claveDelDia(employeeId, dia)),
+    );
+    if (avisos.length > 0) porRevisar.add(dia);
   }
   if (diaEnCurso !== null && enCurso !== undefined && periodo.dias.includes(diaEnCurso)) {
     minutosPorDia.set(diaEnCurso, (minutosPorDia.get(diaEnCurso) ?? 0) + enCurso.minutos);

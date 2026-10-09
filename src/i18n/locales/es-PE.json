@@ -1423,6 +1423,7 @@
     "approveHint": "Solo administradores",
     "approved": "Periodo aprobado",
     "pickEmployee": "Elige a quién es el fichaje.",
+    "clockDriftNote": "La hora de la tablet no coincidía con la del servidor. Las horas usan la del servidor: no hay nada que corregir.",
     "corrected": "Corrección guardada con su motivo",
     "exportFailedTitle": "No pudimos exportar",
     "exportFailedBody": "Revisa la conexión e inténtalo otra vez.",

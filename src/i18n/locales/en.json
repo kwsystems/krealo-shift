@@ -1423,6 +1423,7 @@
     "approveHint": "Administrators only",
     "approved": "Period approved",
     "pickEmployee": "Choose who the entry is for.",
+    "clockDriftNote": "The tablet's clock didn't match the server. Hours use the server time: there is nothing to fix.",
     "corrected": "Correction saved with its reason",
     "exportFailedTitle": "We could not export",
     "exportFailedBody": "Check your connection and try again.",

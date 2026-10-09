@@ -16,7 +16,6 @@ export type TimesheetAlert =
   | 'abnormalDuration'
   | 'lateArrival'
   | 'earlyDeparture'
-  | 'clockDrift'
   | 'unscheduled'
   /** Sin turno publicado, pero con uno en BORRADOR ese día: lo que falta es publicarlo. */
   | 'unpublishedShift'
@@ -27,10 +26,15 @@ export const OPEN_SESSION_ALERT_MINUTES = 16 * 60;
 /** Duración neta a partir de la cual conviene revisar el registro. */
 export const ABNORMAL_NET_MINUTES = 14 * 60;
 
+/*
+ * SIN «DIFERENCIA DE RELOJ» (8-oct). Es un aviso de la tablet, no de las horas: las horas usan
+ * siempre la del servidor, y no había nada que decidir. Salía en rojo, contaba en «Necesita
+ * revisión» y no se podía quitar; corregir el fichaje incluso lo creaba. Ahora solo se dice,
+ * en gris, dentro de la jornada (`session-detail.tsx`).
+ */
 const FLAG_TO_ALERT: Record<string, TimesheetAlert> = {
   late_arrival: 'lateArrival',
   early_departure: 'earlyDeparture',
-  clock_drift: 'clockDrift',
   unscheduled: 'unscheduled',
   missing_clock_out: 'missingClockOut',
   overlap: 'overlap',
@@ -121,4 +125,27 @@ export function conTurnoSinPublicar(
 ): TimesheetAlert[] {
   if (!hayBorrador || !alerts.includes('unscheduled')) return alerts;
   return alerts.map((alerta) => (alerta === 'unscheduled' ? 'unpublishedShift' : alerta));
+}
+
+/**
+ * LOS AVISOS QUE SON UN DATO, NO UNA DECISIÓN (8-oct): tarde, salió antes, sin turno, muy
+ * larga. Piden revisión —rojo, «Necesita revisión»— solo si ese día tiene un caso abierto en
+ * «Por resolver», que es donde se decide; si no, se dicen en gris. Ver `casos-abiertos.ts`.
+ */
+const AVISOS_DE_REGISTRO: readonly TimesheetAlert[] = [
+  'lateArrival',
+  'earlyDeparture',
+  'unscheduled',
+  'abnormalDuration',
+];
+
+export function separarAvisos(
+  alerts: readonly TimesheetAlert[],
+  conCasoAbierto: boolean,
+): { porRevisar: TimesheetAlert[]; registro: TimesheetAlert[] } {
+  if (conCasoAbierto) return { porRevisar: [...alerts], registro: [] };
+  return {
+    porRevisar: alerts.filter((alert) => !AVISOS_DE_REGISTRO.includes(alert)),
+    registro: alerts.filter((alert) => AVISOS_DE_REGISTRO.includes(alert)),
+  };
 }

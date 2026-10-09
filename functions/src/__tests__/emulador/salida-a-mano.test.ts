@@ -1,4 +1,5 @@
 import { viewEmployeesWorkingNow } from '../../views';
+import { applyPlannedBreak } from '../../casos';
 import { managerAddTimeEvent, managerAdjustTime } from '../../manager';
 import { COLLECTIONS, db } from '../../shared/admin';
 import { attendanceStateAt, recordTimeEvent } from '../../shared/attendance';
@@ -301,5 +302,60 @@ describe('corregir entrada y salida a la vez', () => {
     const [despues] = await jornadas();
     expect(despues).toMatchObject({ starts_at: H(21, 8), ends_at: H(21, 17), gross_minutes: 540 });
     expect(despues!.flags).not.toContain('late_arrival');
+  });
+});
+
+/*
+ * CORREGIR LA ENTRADA NO CREA «DIFERENCIA DE RELOJ» (8-oct). Fichó a las 11:30 con la tablet a
+ * la hora; se corrige a las 11:00 y después se descuenta el refrigerio, que rehace la jornada.
+ * Salía «Diferencia de reloj del dispositivo»: comparaba las 11:00 corregidas con las 11:30
+ * de la tablet.
+ */
+describe('diferencia de reloj tras corregir', () => {
+  it('una entrada corregida no tiene reloj que comparar', async () => {
+    await db
+      .collection(COLLECTIONS.shifts)
+      .doc('t-reloj')
+      .set({
+        id: 't-reloj',
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: PERSONA,
+        starts_at: H(21, 11),
+        ends_at: H(21, 20),
+        planned_unpaid_break_minutes: 60,
+        status: 'published',
+        publication_version: 1,
+      });
+    for (const [tipo, cuando] of [
+      ['clock_in', H(21, 11, 30)],
+      ['clock_out', H(21, 20, 1)],
+    ] as const) {
+      await recordTimeEvent({
+        organizationId: ORG,
+        employeeId: PERSONA,
+        locationId: SEDE,
+        eventType: tipo,
+        occurredAt: cuando,
+        occurredAtDevice: cuando,
+        idempotencyKey: `reloj-${tipo}`,
+        source: 'kiosk',
+      });
+    }
+    const [jornada] = await jornadas();
+    expect(jornada!.flags).not.toContain('clock_drift');
+
+    await correr(managerAdjustTime, {
+      p_work_session_id: jornada!.id,
+      p_new_starts_at: H(21, 11),
+      p_new_ends_at: null,
+      p_reason: 'Entró a su hora',
+    });
+    expect((await jornadas())[0]!.flags).not.toContain('clock_drift');
+
+    await correr(applyPlannedBreak, { p_work_session_id: jornada!.id });
+    const [rehecha] = await jornadas();
+    expect(rehecha).toMatchObject({ starts_at: H(21, 11), unpaid_break_minutes: 60 });
+    expect(rehecha!.flags).not.toContain('clock_drift');
   });
 });

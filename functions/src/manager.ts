@@ -642,7 +642,14 @@ export async function ajustarSesion(
       net_minutes: brutos === null ? null : brutos - noPagados,
     };
 
-    tx.update(sessionRef, { ...despues, updated_at: nowISO(), recomputed_at: nowISO() });
+    // Una hora corregida a mano ya no tiene «diferencia de reloj» que avisar (8-oct).
+    const marcas = Array.isArray(sesion.flags) ? (sesion.flags as string[]) : [];
+    tx.update(sessionRef, {
+      ...despues,
+      flags: marcas.filter((marca) => marca !== 'clock_drift'),
+      updated_at: nowISO(),
+      recomputed_at: nowISO(),
+    });
 
     /**
      * EL AJUSTE ES UNA FILA NUEVA, nunca una edicion del evento original: el evento

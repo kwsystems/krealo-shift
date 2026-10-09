@@ -48,7 +48,8 @@ describe('alertas de una sesión', () => {
     );
 
     expect(alerts).toContain('lateArrival');
-    expect(alerts).toContain('clockDrift');
+    // La diferencia de reloj ya no es un aviso (8-oct): se dice en gris dentro de la jornada.
+    expect(alerts).not.toContain('clockDrift' as never);
     expect(alerts).toContain('unscheduled');
   });
 
@@ -196,9 +197,9 @@ describe('totales del periodo', () => {
 
 describe('turno sin publicar', () => {
   it('«sin turno» con un borrador ese día pasa a decir que falta publicarlo', () => {
-    expect(conTurnoSinPublicar(['unscheduled', 'clockDrift'], true)).toEqual([
+    expect(conTurnoSinPublicar(['unscheduled', 'lateArrival'], true)).toEqual([
       'unpublishedShift',
-      'clockDrift',
+      'lateArrival',
     ]);
   });
 

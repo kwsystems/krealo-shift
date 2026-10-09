@@ -9,6 +9,7 @@ import { fetchExportRows, PeriodoBloqueado, type WorkSession } from './api';
 import { useJornadasAlDia } from './jornadas-al-dia';
 import {
   alertsForSession,
+  separarAvisos,
   conTurnoSinPublicar,
   overlappingSessionIds,
   type TimesheetAlert,
@@ -55,6 +56,7 @@ import { useWeekShifts } from '@/features/schedules/hooks';
 import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { casosPorResolver, type CasoPorResolver } from './casos';
+import { useDiasConCasoAbierto } from './casos-abiertos';
 import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
@@ -278,13 +280,24 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
    * «sin turno» a secas, justo después de haberle cambiado el turno, hace pensar que la app
    * no recogió el cambio. Lo que falta es publicarlo, y eso es lo que tiene que decir.
    */
-  const alertsBySession = useMemo(() => {
+  // Qué días tienen algo que decidir en Por resolver: lo demás es un dato, en gris (8-oct).
+  const diasAbiertos = useDiasConCasoAbierto({
+    organizationId,
+    locationId: scope.locationId,
+    weekStart,
+    timezone: scope.timezone,
+    nowISO,
+    sesiones: paraResolver,
+    umbralExtra: scope.settings.overtimeNoticeMinutes,
+  });
+  const { alertsBySession, registroBySession } = useMemo(() => {
     const borradores = new Set(
       (turnosDeLaSemana.data ?? [])
         .filter((turno) => turno.status === 'draft')
         .map((turno) => claveDelDia(turno.employee_id, dateKeyOf(turno.starts_at, scope.timezone))),
     );
     const map = new Map<string, TimesheetAlert[]>();
+    const registro = new Map<string, TimesheetAlert[]>();
     // «Llegó tarde» y «Salió antes» por turno, no por jornada: ver `puntualidad.ts`.
     const marcas = puntualidadPorJornada(allSessions);
     for (const session of allSessions) {
@@ -295,10 +308,17 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
         ),
       );
       if (overlapping.has(session.id) && !alerts.includes('overlap')) alerts.push('overlap');
-      map.set(session.id, alerts);
+      const separados = separarAvisos(
+        alerts,
+        diasAbiertos.has(
+          claveDelDia(session.employee_id, dateKeyOf(session.starts_at, scope.timezone)),
+        ),
+      );
+      map.set(session.id, separados.porRevisar);
+      registro.set(session.id, separados.registro);
     }
-    return map;
-  }, [allSessions, overlapping, nowISO, turnosDeLaSemana.data, scope.timezone]);
+    return { alertsBySession: map, registroBySession: registro };
+  }, [allSessions, overlapping, nowISO, turnosDeLaSemana.data, scope.timezone, diasAbiertos]);
 
   const visibleSummaries = useMemo(
     () =>
@@ -554,6 +574,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
               sessions={visibleSessions}
               employeeNames={names}
               alertsBySession={alertsBySession}
+              registroBySession={registroBySession}
               enCursoPorSesion={enCursoPorSesion}
               nowISO={nowISO}
               horaExtraPorSesion={horaExtraPorSesion}

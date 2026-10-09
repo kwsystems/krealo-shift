@@ -306,6 +306,11 @@ export function SessionDetailSheet({
         />
       ) : null}
 
+      {session.flags.includes('clock_drift') ? (
+        <AppText variant="help" tone="subtle" testID="session-clock-drift">
+          {t('timesheet.clockDriftNote')}
+        </AppText>
+      ) : null}
       {alerts.length > 0 ? (
         <Row gap={spacing.xs} wrap align="flex-start">
           {alerts.map((alert) => (

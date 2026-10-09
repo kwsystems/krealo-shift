@@ -195,7 +195,14 @@ async function revisarSesiones(
       sinConexion: true,
       politicas,
     });
-    if (antes.includes('clock_drift')) marcas.push('clock_drift');
+    /*
+     * La deriva se conserva, salvo en una jornada con la entrada corregida (8-oct): esa hora la
+     * puso una persona y no hay reloj que comparar. La entrada fichada es la del id.
+     */
+    const entradaFichada = doc.id.startsWith(`${sesion.employee_id}_`)
+      ? doc.id.slice(String(sesion.employee_id).length + 1)
+      : entrada;
+    if (antes.includes('clock_drift') && entradaFichada === entrada) marcas.push('clock_drift');
 
     medidas.push({
       doc,

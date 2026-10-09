@@ -38,7 +38,6 @@ const ALERT_ICONS: Record<TimesheetAlert, 'alert-circle' | 'time-outline' | 'war
   abnormalDuration: 'warning-outline',
   lateArrival: 'time-outline',
   earlyDeparture: 'time-outline',
-  clockDrift: 'warning-outline',
   unscheduled: 'alert-circle',
   unpublishedShift: 'alert-circle',
   needsReview: 'alert-circle',
@@ -56,8 +55,6 @@ export function alertLabelKey(alert: TimesheetAlert): string {
       return 'timesheet.flagLateArrival';
     case 'earlyDeparture':
       return 'timesheet.flagEarlyDeparture';
-    case 'clockDrift':
-      return 'timesheet.flagClockDrift';
     case 'unscheduled':
       return 'timesheet.flagUnscheduled';
     case 'unpublishedShift':
@@ -77,6 +74,7 @@ export function SessionRow({
   session,
   employeeName,
   alerts,
+  registro = [],
   enCurso,
   horaExtra,
   nowISO,
@@ -89,6 +87,8 @@ export function SessionRow({
   session: WorkSession;
   employeeName: string;
   alerts: TimesheetAlert[];
+  /** Avisos que son un dato y no piden decisión (8-oct): se dicen en gris, no en rojo. */
+  registro?: TimesheetAlert[];
   /** Si está dentro ahora mismo: trabajando o en descanso. Sale de la misma consulta que Inicio. */
   enCurso?: EnCurso;
   /** Solo en la última fila del día de esa persona: la aprobación es por día. */
@@ -270,7 +270,10 @@ export function SessionRow({
             </AppText>
           </Row>
 
-          {alerts.length > 0 || horaExtra !== undefined || feriado !== null ? (
+          {alerts.length > 0 ||
+          registro.length > 0 ||
+          horaExtra !== undefined ||
+          feriado !== null ? (
             <Row gap={spacing.xs} wrap align="flex-start">
               {/*
                 LA HORA EXTRA, CON PALABRA Y CIFRA. «Posible» en ámbar pide que alguien lo
@@ -309,6 +312,15 @@ export function SessionRow({
                   label={t(alertLabelKey(alert))}
                   // Rojo como en Inicio y el celular: el ámbar de `onBreak` es el de la pausa.
                   tone="late"
+                  icon={ALERT_ICONS[alert]}
+                  compact
+                />
+              ))}
+              {registro.map((alert) => (
+                <StatusBadge
+                  key={alert}
+                  label={t(alertLabelKey(alert))}
+                  tone="offShift"
                   icon={ALERT_ICONS[alert]}
                   compact
                 />
