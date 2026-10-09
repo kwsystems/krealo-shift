@@ -1,4 +1,13 @@
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
+import { elegirTurno, VENTANA_DE_BUSQUEDA_MS } from '@/domain/elegir-turno';
+import {
+  marcasDeLaSesion,
+  marcasDentroDelTurno,
+  sinSalidaAntesSiEsDeCorrido,
+  type MarcaDeSesion,
+} from '@/domain/marcas-de-sesion';
+import { politicasDe } from '@/domain/politicas-de-sede';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 import type { Almacen, Fila } from './postgrest';
 import { DEMO_ORG_ID } from './seed';
@@ -149,12 +158,89 @@ function reconstruir(almacen: Almacen, employeeId: string, locationId: string, z
   const netos = brutos === null ? null : brutos - noPagados;
   const sesionId = `demo-sesion-${employeeId}-${startsAt}`;
 
+  /*
+   * EL TURNO Y LAS MARCAS, COMO EL SERVIDOR (8-oct). Aquí se guardaba `shift_id: null` y
+   * `flags: []`: quien fichaba en vivo en la demo nunca llegaba tarde ni salía antes, no tenía
+   * turno y no abría ningún caso, mientras producción sí lo hacía. Las reglas son las mismas
+   * que usa `functions/src/shared/attendance.ts`, desde `src/domain`.
+   */
+  const entradaMs = Date.parse(startsAt);
+  const candidatos = filas(almacen, 'shifts').filter(
+    (turno) =>
+      turno.employee_id === employeeId &&
+      turno.location_id === locationId &&
+      turnoEnPie(turno as { status: string; publication_version?: number | null }) &&
+      Math.abs(Date.parse(String(turno.starts_at)) - entradaMs) <= VENTANA_DE_BUSQUEDA_MS,
+  );
+  const elegido = elegirTurno(
+    candidatos.map((turno) => ({
+      id: String(turno.id),
+      starts_at: String(turno.starts_at),
+      ends_at: String(turno.ends_at),
+      planned_unpaid_break_minutes: Number(turno.planned_unpaid_break_minutes ?? 0),
+    })),
+    startsAt,
+    endsAt,
+  );
+  const hermanas =
+    elegido === null
+      ? []
+      : filas(almacen, 'work_sessions').filter(
+          (fila) =>
+            fila.employee_id === employeeId && fila.shift_id === elegido.id && fila.id !== sesionId,
+        );
+  const antes = hermanas.filter((fila) => String(fila.starts_at) < startsAt);
+  const despues = hermanas.filter((fila) => String(fila.starts_at) > startsAt);
+  const sede = filas(almacen, 'locations').find((fila) => fila.id === locationId) ?? {};
+  const marcas = sinSalidaAntesSiEsDeCorrido(
+    marcasDentroDelTurno(
+      marcasDeLaSesion({
+        turno: elegido === null ? null : { starts_at: elegido.starts_at, ends_at: elegido.ends_at },
+        entrada: startsAt,
+        salida: endsAt,
+        politicas: politicasDe(sede),
+      }),
+      { esLaPrimera: antes.length === 0, esLaUltima: despues.length === 0 },
+    ),
+    elegido,
+    hermanas.length === 0 && endsAt !== null
+      ? [
+          {
+            starts_at: startsAt,
+            ends_at: endsAt,
+            paid_break_minutes: pagados,
+            unpaid_break_minutes: noPagados,
+          },
+        ]
+      : [],
+  );
+  // A las hermanas se les quita la marca que dejó de ser suya, como en el servidor.
+  if (hermanas.length > 0) {
+    almacen.set(
+      'work_sessions',
+      filas(almacen, 'work_sessions').map((fila) => {
+        const quitar = antes.includes(fila)
+          ? 'early_departure'
+          : despues.includes(fila)
+            ? 'late_arrival'
+            : null;
+        const suyas = (fila.flags as MarcaDeSesion[] | undefined) ?? [];
+        return quitar !== null && suyas.includes(quitar)
+          ? { ...fila, flags: suyas.filter((marca) => marca !== quitar) }
+          : fila;
+      }),
+    );
+  }
+
+  // Lo que ya se decidió sobre ella —casos, avisos vistos— se queda, como el `merge` del servidor.
+  const previa = filas(almacen, 'work_sessions').find((fila) => fila.id === sesionId) ?? {};
   const sesion: Fila = {
+    ...previa,
     id: sesionId,
     organization_id: DEMO_ORG_ID,
     employee_id: employeeId,
     location_id: locationId,
-    shift_id: null,
+    shift_id: elegido?.id ?? null,
     starts_at: startsAt,
     ends_at: endsAt,
     gross_minutes: brutos,
@@ -162,7 +248,7 @@ function reconstruir(almacen: Almacen, employeeId: string, locationId: string, z
     unpaid_break_minutes: noPagados,
     net_minutes: netos,
     status: abierta ? 'open' : 'complete',
-    flags: [],
+    flags: marcas,
     departure_reason: salida?.departure_reason ?? null,
     departure_note: salida?.departure_note ?? null,
     updated_at: new Date().toISOString(),
@@ -228,7 +314,7 @@ function reconstruir(almacen: Almacen, employeeId: string, locationId: string, z
             full_name: empleado?.full_name ?? 'Empleado',
             preferred_name: empleado?.preferred_name ?? null,
             starts_at: startsAt,
-            shift_id: null,
+            shift_id: elegido?.id ?? null,
             break_started_at: pausaAbierta === null ? null : String(pausaAbierta.occurred_at),
             // El motivo de la pausa, como lo devuelve el servidor: ver `viewEmployeesWorkingNow`.
             break_reason:

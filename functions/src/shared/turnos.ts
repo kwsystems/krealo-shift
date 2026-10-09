@@ -6,6 +6,13 @@ import {
   type MarcaDeSesion,
 } from './marcas';
 import { politicasDe } from './politicas';
+import {
+  elegirTurno,
+  VENTANA_DE_BUSQUEDA_MS,
+  type TurnoDeJornada,
+} from '../../../src/domain/elegir-turno';
+
+export { elegirTurno, type TurnoDeJornada };
 
 /**
  * EL TURNO DE UNA JORNADA, que no es siempre el que se eligió al fichar (30-sep).
@@ -23,52 +30,10 @@ import { politicasDe } from './politicas';
  * publicado que se editó sin republicar, sí (8-oct).
  */
 
-export type TurnoDeJornada = {
-  id: string;
-  starts_at: string;
-  ends_at: string;
-  /** El refrigerio planificado: con él se sabe si una jornada fue de corrido (7-oct). */
-  planned_unpaid_break_minutes?: number;
-};
-
 /** El refrigerio de un turno guardado, en minutos: 0 si no lo trae o no es un número. */
 function refrigerioDe(turno: Record<string, unknown>): number {
   const minutos = Number(turno.planned_unpaid_break_minutes);
   return Number.isFinite(minutos) && minutos > 0 ? minutos : 0;
-}
-
-const HORA_MS = 3600_000;
-/** Lo más lejos que puede empezar un turno de la entrada para contar como suyo sin solaparse. */
-const CERCANIA_MAXIMA_MS = 3 * HORA_MS;
-/** Cuánto antes y después de la entrada se buscan turnos: cubre el turno de noche. */
-const VENTANA_DE_BUSQUEDA_MS = 16 * HORA_MS;
-
-/** Elige entre turnos publicados de la persona. PURA, para poder probar cada caso. */
-export function elegirTurno(
-  turnos: readonly TurnoDeJornada[],
-  entrada: string,
-  salida: string | null,
-  ahora: string = nowISO(),
-): TurnoDeJornada | null {
-  const inicio = Date.parse(entrada);
-  // Una jornada abierta dura, de momento, hasta ahora; y nunca menos de un minuto.
-  const fin = Math.max(Date.parse(salida ?? ahora), inicio + 60_000);
-
-  let mejor: { turno: TurnoDeJornada; solape: number; distancia: number } | null = null;
-  for (const turno of turnos) {
-    const desde = Date.parse(turno.starts_at);
-    const hasta = Date.parse(turno.ends_at);
-    if (Number.isNaN(desde) || Number.isNaN(hasta)) continue;
-    const solape = Math.max(0, Math.min(fin, hasta) - Math.max(inicio, desde));
-    const distancia = Math.abs(desde - inicio);
-    if (solape === 0 && distancia > CERCANIA_MAXIMA_MS) continue;
-    const gana =
-      mejor === null ||
-      solape > mejor.solape ||
-      (solape === mejor.solape && distancia < mejor.distancia);
-    if (gana) mejor = { turno, solape, distancia };
-  }
-  return mejor?.turno ?? null;
 }
 
 /** El turno de la jornada: el elegido si sigue en pie; si no, el publicado que le toca. */
