@@ -302,9 +302,14 @@ export const undoShiftCredit = onCall(async (request) => {
       .collection(COLLECTIONS.timeAdjustments)
       .where('target_id', '==', sesionId)
       .get();
+    /*
+     * TODAS las de esa jornada, no solo la del cumplido (8-oct): una salida corregida sobre el
+     * cumplido se quedaba huérfana y caía sobre la próxima jornada con el mismo id —«vino y no
+     * marcó» de 08:00 a 17:00 acababa a las 16:00 sin que nadie lo pidiera—. La jornada entera
+     * desaparece; sus correcciones no tienen sobre qué estar.
+     */
     for (const doc of correcciones.docs) {
-      const despues = (doc.data().after_value ?? {}) as Record<string, unknown>;
-      if (despues.origen === 'especial') lote.delete(doc.ref);
+      if (doc.data().target_type === 'work_session') lote.delete(doc.ref);
     }
   }
   await lote.commit();

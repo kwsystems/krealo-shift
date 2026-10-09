@@ -1,4 +1,6 @@
 import { propuestaDelReloj } from '../../kiosk-api';
+import { resolveSessionCase } from '../../casos';
+import { managerAdjustTime } from '../../manager';
 import { reviewTimeEditRequest } from '../../solicitudes';
 import { COLLECTIONS, db } from '../../shared/admin';
 import { rebuildWorkSession } from '../../shared/attendance';
@@ -450,5 +452,59 @@ describe('con la jornada abierta de otro día (auditoría, 4-oct)', () => {
     expect(propuestaDelReloj('2026-09-19T23:30:00.000Z', 'America/Lima', ahora, entrada)).toBe(
       '2026-09-19T23:30:00.000Z',
     );
+  });
+});
+
+/*
+ * LO DECIDIDO SOBRE LA JORNADA SOBREVIVE A UNA ENTRADA ANTERIOR (8-oct). Marcó 11:00–19:00,
+ * se corrigió la salida a las 18:00 y se apuntó «le debe 3 h»; luego se aprueba que entró a
+ * las 08:00. La jornada de las 11:00 desaparece y con ella se iban la corrección (volvía a
+ * las 19:00), el caso resuelto y la deuda.
+ */
+describe('una entrada anterior funde la jornada', () => {
+  it('la que queda hereda la salida corregida, los casos y el «le debe»', async () => {
+    const correr = (fn: unknown, data: Datos) =>
+      (fn as { run: (r: unknown) => Promise<unknown> }).run({
+        data,
+        auth: { uid: GERENTE, token: {} },
+        rawRequest: {},
+      });
+    await fichaje('e-11', 'clock_in', L('11:00'));
+    await fichaje('s-19', 'clock_out', L('19:00'));
+    await proyectar(L('00:00'), L('23:59'));
+    const [antes] = await sesiones();
+    await correr(managerAdjustTime, {
+      p_work_session_id: antes!.id,
+      p_new_starts_at: null,
+      p_new_ends_at: L('18:00'),
+      p_reason: 'Se fue a las 18:00',
+    });
+    await correr(resolveSessionCase, {
+      p_work_session_id: antes!.id,
+      p_case: 'faltan_horas',
+      p_decision: 'owes',
+      p_minutes: 180,
+    });
+
+    await solicitud('sol-entrada', 'forgot_clock_in');
+    await aprobar('sol-entrada', [{ type: 'clock_in', occurred_at: L('08:00') }]);
+
+    const despues = await sesiones();
+    expect(despues).toHaveLength(1);
+    expect(despues[0]).toMatchObject({
+      starts_at: L('08:00'),
+      ends_at: L('18:00'),
+      casos_resueltos: ['faltan_horas'],
+    });
+    const deudas = (
+      await db.collection(COLLECTIONS.owedHours).where('employee_id', '==', PERSONA).get()
+    ).docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    expect(deudas).toEqual([
+      expect.objectContaining({
+        id: despues[0]!.id,
+        work_session_id: despues[0]!.id,
+        minutes: 180,
+      }),
+    ]);
   });
 });

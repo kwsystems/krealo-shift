@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-import { attendanceStateAt, recordTimeEvent } from './shared/attendance';
+import { attendanceStateAt, heredarJornada, recordTimeEvent } from './shared/attendance';
 import { getStorage } from 'firebase-admin/storage';
 
 import { auth, COLLECTIONS, db, nowISO } from './shared/admin';
@@ -1384,6 +1384,8 @@ export const managerReclassifyDeparture = onCall(async (request) => {
         ),
         departure_reason: null,
         departure_note: null,
+        // La salida es la de la segunda: si la puso el sistema, se sigue diciendo (8-oct).
+        auto_clock_out: b.auto_clock_out === true,
         recomputed_at: nowISO(),
         updated_at: nowISO(),
       });
@@ -1417,6 +1419,13 @@ export const managerReclassifyDeparture = onCall(async (request) => {
       channel: 'manager_app',
     });
   });
+
+  // Lo decidido sobre la jornada que desaparece pasa a la que queda (8-oct).
+  const cortada = sesionCortada.docs[0];
+  const fundida = sesionSiguiente.docs[0];
+  if (cortada !== undefined && fundida !== undefined) {
+    await heredarJornada(fundida.id, cortada.id, fundida.data());
+  }
 
   await audit({
     organizationId,

@@ -1,3 +1,4 @@
+import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError } from 'firebase-functions/v2/https';
 
 import {
@@ -253,8 +254,14 @@ export async function rebuildJornadaDe(
     .get();
   const desde = [
     new Date(Date.parse(instante) - HORAS_36_MS).toISOString(),
+    // Desde su entrada FICHADA, que es la del id (8-oct): con una entrada corregida más
+    // tarde, la de verdad quedaba fuera de la ventana y la jornada no se rehacía.
     ...abiertas.docs
-      .map((doc) => String(doc.data().starts_at))
+      .map((doc) =>
+        doc.id.startsWith(`${employeeId}_`)
+          ? doc.id.slice(employeeId.length + 1)
+          : String(doc.data().starts_at),
+      )
       .filter((inicio) => inicio <= instante),
   ].sort()[0] as string;
   const snapshot = await db
@@ -313,9 +320,21 @@ export async function rebuildWorkSession(
    * abre otra jornada. Ver `shared/secuencia.ts`.
    */
   const ordenados = enOrden(snapshot.docs.map((doc) => doc.data()));
-  await borrarJornadasDeEntradasQueYaNoCuentan(employeeId, ordenados);
+  const borradas = await borrarJornadasDeEntradasQueYaNoCuentan(employeeId, ordenados);
   const vigente = jornadaVigente(ordenados);
-  if (vigente === undefined) return;
+  // Las correcciones y la deuda, antes de medir: la heredera las aplica al reconstruirse.
+  for (const borrada of borradas) {
+    if (borrada.aId !== null) await heredarAjustesYDeuda(borrada.deId, borrada.aId);
+  }
+  const heredar = async () => {
+    for (const borrada of borradas) {
+      if (borrada.aId !== null) await heredarDecisiones(borrada.aId, borrada.datos);
+    }
+  };
+  if (vigente === undefined) {
+    await heredar();
+    return;
+  }
   const inicio = vigente.entrada;
   const desdeUltimaEntrada = vigente.desdeLaEntrada;
 
@@ -517,6 +536,8 @@ export async function rebuildWorkSession(
       },
       { merge: true },
     );
+
+  await heredar();
 }
 
 /**
@@ -535,15 +556,95 @@ export async function rebuildWorkSession(
 async function borrarJornadasDeEntradasQueYaNoCuentan(
   employeeId: string,
   ordenados: Record<string, unknown>[],
-): Promise<void> {
-  const sobrantes = recorrer(ordenados).filter((paso) => paso.tipo === 'clock_in' && !paso.cuenta);
-  for (const paso of sobrantes) {
-    const ref = db
-      .collection(COLLECTIONS.workSessions)
-      .doc(`${employeeId}_${String(paso.evento.occurred_at)}`);
+): Promise<{ deId: string; aId: string | null; datos: Record<string, unknown> }[]> {
+  const pasos = recorrer(ordenados);
+  const borradas: { deId: string; aId: string | null; datos: Record<string, unknown> }[] = [];
+  for (const [i, paso] of pasos.entries()) {
+    if (paso.tipo !== 'clock_in' || paso.cuenta) continue;
+    const deId = `${employeeId}_${String(paso.evento.occurred_at)}`;
+    const ref = db.collection(COLLECTIONS.workSessions).doc(deId);
     const sesion = (await ref.get()).data();
-    if (sesion !== undefined && sesion.clock_in_event_id === paso.evento.id) await ref.delete();
+    if (sesion === undefined || sesion.clock_in_event_id !== paso.evento.id) continue;
+    // Su heredera: la jornada de la entrada que cuenta justo antes, que ahora la contiene.
+    const anterior = pasos
+      .slice(0, i)
+      .reverse()
+      .find((previo) => previo.cuenta && previo.tipo === 'clock_in');
+    borradas.push({
+      deId,
+      aId: anterior === undefined ? null : `${employeeId}_${String(anterior.evento.occurred_at)}`,
+      datos: sesion,
+    });
+    await ref.delete();
   }
+  return borradas;
+}
+
+/**
+ * LO QUE SE DECIDIÓ SOBRE UNA JORNADA NO SE PIERDE CUANDO SE FUNDE EN OTRA (8-oct).
+ *
+ * Una jornada desaparece cuando su entrada deja de contar —se aprueba «olvidé marcar la
+ * entrada» antes de la que marcó— o cuando dos se funden en una al reclasificar una salida.
+ * Con ella se iban sus correcciones de hora (la salida corregida a las 18:00 volvía a las
+ * 19:00 y se pagaba una hora de más), sus casos resueltos y decisiones (volvían a Por
+ * resolver), los avisos vistos y su «le debe», que se quedaba colgado de un id que ya no
+ * existía —el celular seguía diciendo «debes 3 h» y resolverlo otra vez sumaba otras 3—.
+ * Todo pasa a la jornada que la contiene ahora.
+ */
+export async function heredarJornada(
+  deId: string,
+  aId: string,
+  datos: Record<string, unknown>,
+): Promise<void> {
+  await heredarAjustesYDeuda(deId, aId);
+  await heredarDecisiones(aId, datos);
+}
+
+/** Las correcciones de hora y el «le debe»: no necesitan que la heredera exista todavía. */
+async function heredarAjustesYDeuda(deId: string, aId: string): Promise<void> {
+  if (deId === aId) return;
+  const ajustes = await db
+    .collection(COLLECTIONS.timeAdjustments)
+    .where('target_id', '==', deId)
+    .get();
+  await Promise.all(
+    ajustes.docs
+      .filter((doc) => doc.data().target_type === 'work_session')
+      .map((doc) => doc.ref.update({ target_id: aId, work_session_id: aId })),
+  );
+
+  const debe = db.collection(COLLECTIONS.owedHours).doc(deId);
+  const deuda = (await debe.get()).data();
+  if (deuda !== undefined) {
+    const nueva = db.collection(COLLECTIONS.owedHours).doc(aId);
+    if (!(await nueva.get()).exists) {
+      await nueva.set({ ...deuda, id: aId, work_session_id: aId, updated_at: nowISO() });
+      await debe.delete();
+    }
+  }
+}
+
+/** Casos resueltos, decisiones y avisos vistos: en la heredera, si existe. */
+async function heredarDecisiones(aId: string, datos: Record<string, unknown>): Promise<void> {
+  const destino = db.collection(COLLECTIONS.workSessions).doc(aId);
+  const actual = (await destino.get()).data();
+  if (actual === undefined) return;
+
+  const lista = (valor: unknown) =>
+    Array.isArray(valor) ? (valor.filter((x) => typeof x === 'string') as string[]) : [];
+  const casos = lista(datos.casos_resueltos);
+  const vistos = lista(datos.avisos_vistos);
+  const decisiones = (datos.casos_decision ?? {}) as Record<string, unknown>;
+  if (casos.length === 0 && vistos.length === 0 && Object.keys(decisiones).length === 0) return;
+  await destino.update({
+    ...(casos.length > 0 ? { casos_resueltos: FieldValue.arrayUnion(...casos) } : {}),
+    ...(vistos.length > 0 ? { avisos_vistos: FieldValue.arrayUnion(...vistos) } : {}),
+    // Lo que ya decidió la que queda manda; lo de la que se va, si no lo tenía.
+    casos_decision: {
+      ...decisiones,
+      ...((actual.casos_decision ?? {}) as Record<string, unknown>),
+    },
+  });
 }
 
 /**

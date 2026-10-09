@@ -19,7 +19,9 @@ const VENDEDORA = 'uid-vendedora-especial';
 const PERSONA = 'emp-especial';
 
 // Lima, UTC-5. Ayer de 10:00 a 19:00, con 1 h de refrigerio: 8 h netas.
-const ayer = new Date(Date.now() - 24 * 3600_000).toISOString().slice(0, 10);
+// El «ayer» de LIMA (8-oct): con el de UTC, entre las 00:00 y las 05:00 UTC «ayer a las 22:00
+// de Lima» todavía no había llegado y la prueba fallaba según la hora a la que se corriera.
+const ayer = new Date(Date.now() - (24 + 5) * 3600_000).toISOString().slice(0, 10);
 const lima = (hora: number, minuto = 0) =>
   new Date(Date.parse(`${ayer}T00:00:00Z`) + (hora + 5) * 3600_000 + minuto * 60_000).toISOString();
 

@@ -70,8 +70,6 @@ type Correccion = {
   canal?: 'manager_app' | 'automatico';
 };
 
-const minutos = (desde: string, hasta: string) =>
-  Math.floor((Date.parse(hasta) - Date.parse(desde)) / 60_000);
 
 /**
  * Corrige la salida con un fichaje si toca —jornada sin salida, o salida puesta por
@@ -181,30 +179,6 @@ export async function corregirSalidaConFichaje(
       );
   }
 
-  await rebuildJornadaDe(organizationId, employeeId, locationId, horaDeEntrada);
-
-  /*
-   * UNA ENTRADA YA CORREGIDA EN LA JORNADA SE CONSERVA. Reconstruir parte del fichaje de
-   * entrada, así que sin esto una corrección anterior de la entrada se perdería al poner
-   * la salida.
-   */
-  const entradaCorregida =
-    correccion.newStartsAt ??
-    (String(previa.starts_at) !== horaDeEntrada ? String(previa.starts_at) : null);
-  if (entradaCorregida !== null) {
-    const ref = db.collection(COLLECTIONS.workSessions).doc(`${employeeId}_${horaDeEntrada}`);
-    const reconstruida = (await ref.get()).data();
-    const fin = (reconstruida?.ends_at as string | null | undefined) ?? correccion.newEndsAt;
-    const brutos = minutos(entradaCorregida, fin);
-    const sinPagar = Number(reconstruida?.unpaid_break_minutes ?? 0);
-    await ref.update({
-      starts_at: entradaCorregida,
-      gross_minutes: brutos,
-      net_minutes: brutos - sinPagar,
-      updated_at: nowISO(),
-    });
-  }
-
   const comun = {
     organization_id: organizationId,
     location_id: locationId,
@@ -216,6 +190,28 @@ export async function corregirSalidaConFichaje(
     created_at: ahora,
     channel: correccion.canal ?? 'manager_app',
   };
+  /*
+   * LA ENTRADA CORREGIDA VA ANTES DE RECONSTRUIR (8-oct). Se escribía después: la jornada se
+   * rehacía con la entrada vieja —tardanza, turno y jornadas hermanas medidos desde las 08:31
+   * cuando se había corregido a las 08:00— y luego se parcheaba solo la hora. Escrita antes,
+   * la reconstrucción la aplica (`correccionesDeLaJornada`, en cadena con las anteriores) y lo
+   * mide todo con ella.
+   */
+  if (
+    correccion.newStartsAt !== null &&
+    correccion.newStartsAt !== undefined &&
+    correccion.newStartsAt !== previa.starts_at
+  ) {
+    await db.collection(COLLECTIONS.timeAdjustments).add({
+      ...comun,
+      target_type: 'work_session',
+      target_id: sessionId,
+      before_value: { starts_at: previa.starts_at },
+      after_value: { starts_at: correccion.newStartsAt },
+    });
+  }
+  await rebuildJornadaDe(organizationId, employeeId, locationId, horaDeEntrada);
+
   await db.collection(COLLECTIONS.timeAdjustments).add({
     ...comun,
     target_type: 'time_event',
@@ -232,19 +228,6 @@ export async function corregirSalidaConFichaje(
       ...(correccion.origen === 'salida_automatica' ? { origen: 'salida_automatica' } : {}),
     },
   });
-  if (
-    correccion.newStartsAt !== null &&
-    correccion.newStartsAt !== undefined &&
-    correccion.newStartsAt !== previa.starts_at
-  ) {
-    await db.collection(COLLECTIONS.timeAdjustments).add({
-      ...comun,
-      target_type: 'work_session',
-      target_id: sessionId,
-      before_value: { starts_at: previa.starts_at },
-      after_value: { starts_at: correccion.newStartsAt },
-    });
-  }
   return true;
 }
 

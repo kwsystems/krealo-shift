@@ -268,3 +268,38 @@ describe('las jornadas que ya quedaron mal', () => {
     expect(await salidas()).toHaveLength(1);
   });
 });
+
+/*
+ * ENTRADA Y SALIDA A LA VEZ (8-oct): la jornada se reconstruía con la entrada vieja y
+ * conservaba «llegó tarde» aunque se hubiera corregido la entrada a su hora.
+ */
+describe('corregir entrada y salida a la vez', () => {
+  it('la jornada se mide con la entrada corregida: ya no llegó tarde', async () => {
+    await db
+      .collection(COLLECTIONS.shifts)
+      .doc('t-tarde')
+      .set({
+        id: 't-tarde',
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: PERSONA,
+        starts_at: H(21, 8),
+        ends_at: H(21, 17),
+        status: 'published',
+        publication_version: 1,
+      });
+    await fichar('clock_in', H(21, 8, 31));
+    const [abierta] = await jornadas();
+    expect(abierta!.flags).toEqual(expect.arrayContaining(['late_arrival']));
+
+    await correr(managerAdjustTime, {
+      p_work_session_id: abierta!.id,
+      p_new_starts_at: H(21, 8),
+      p_new_ends_at: H(21, 17),
+      p_reason: 'Llegó a su hora; el reloj estaba ocupado',
+    });
+    const [despues] = await jornadas();
+    expect(despues).toMatchObject({ starts_at: H(21, 8), ends_at: H(21, 17), gross_minutes: 540 });
+    expect(despues!.flags).not.toContain('late_arrival');
+  });
+});

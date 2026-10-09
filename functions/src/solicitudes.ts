@@ -488,15 +488,11 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
     });
   });
 
-  // La sesión de una entrada sustituida desaparece: su jornada ahora empieza antes.
-  for (const eventoId of plan.entradasReemplazadas) {
-    const sesiones = await db
-      .collection(COLLECTIONS.workSessions)
-      .where('clock_in_event_id', '==', eventoId)
-      .get();
-    await Promise.all(sesiones.docs.map((doc) => doc.ref.delete()));
-  }
-
+  /*
+   * La sesión de una entrada sustituida desaparece —su jornada ahora empieza antes—, y la
+   * borra la reconstrucción, que además pasa a la que queda sus correcciones, casos y «le
+   * debe» (8-oct, `heredarJornada`). Aquí se borraba a mano y todo eso se perdía.
+   */
   await rebuildWorkSession(organizationId, employeeId, locationId, {
     desde: plan.entrada,
     hasta:
