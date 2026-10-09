@@ -110,7 +110,8 @@ try {
       .textContent()
       .catch(() => '')) ?? '',
   );
-  if (!/HH:mm/.test(avisoHora)) fallar(caso3, `el aviso dice «${avisoHora}»`);
+  // El aviso de hora mala dice que no se entiende y cómo escribirla (8-oct: ya vale «18.30»).
+  if (!/no se entiende/.test(avisoHora)) fallar(caso3, `el aviso dice «${avisoHora}»`);
   else if ((await hoja(pagina).count()) === 0) fallar(caso3, 'la hoja se cerró');
   else pasa(caso3);
 
@@ -206,7 +207,7 @@ try {
   );
   const enviada = await enReloj.locator('[data-testid="forgot-sent"]:visible').count();
   if (enviada > 0) fallar(caso7, 'envió «8 y media» como si fuera una hora');
-  else if (!/HH:mm/.test(errorReloj)) fallar(caso7, `el aviso dice «${errorReloj}»`);
+  else if (!/no se entiende/.test(errorReloj)) fallar(caso7, `el aviso dice «${errorReloj}»`);
   else {
     await enReloj.locator('[data-testid="forgot-time"]:visible').fill('08:30');
     await enReloj.locator('[data-testid="forgot-submit"]:visible').click();

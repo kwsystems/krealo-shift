@@ -464,3 +464,59 @@ describe('fuera de turno (6-oct)', () => {
     ).toEqual([]);
   });
 });
+
+/*
+ * «LE DEBE» QUE YA NO CUADRA (8-oct): se apuntó la deuda y después se corrigió la jornada.
+ */
+describe('una deuda que ya no cuadra', () => {
+  const deuda = (minutos: number) => ({
+    id: 's1',
+    work_session_id: 's1',
+    minutes: minutos,
+    note: null,
+    status: 'pending',
+  });
+  const conDeuda = (sesion: WorkSession, minutos: number) =>
+    casosPorResolver({
+      sesiones: [sesion],
+      turnos: [TURNO],
+      ahoraISO: H(23),
+      timezone: TZ,
+      debidas: [deuda(minutos)],
+    });
+
+  it('se apuntó «debe 4 h» y la jornada corregida ya está completa: se dice', () => {
+    const lista = conDeuda(jornada({ casos_resueltos: ['faltan_horas'] }), 240);
+    expect(lista).toEqual([
+      expect.objectContaining({ tipo: 'deuda_que_no_cuadra', faltaAhora: 0 }),
+    ]);
+  });
+
+  it('si ahora le falta otra cantidad, también, con la nueva', () => {
+    const lista = conDeuda(
+      jornada({
+        ends_at: H(17),
+        gross_minutes: 420,
+        net_minutes: 360,
+        casos_resueltos: ['faltan_horas'],
+      }),
+      240,
+    );
+    expect(lista).toEqual([
+      expect.objectContaining({ tipo: 'deuda_que_no_cuadra', faltaAhora: 120 }),
+    ]);
+  });
+
+  it('si cuadra, nada', () => {
+    const lista = conDeuda(
+      jornada({
+        ends_at: H(17),
+        gross_minutes: 420,
+        net_minutes: 360,
+        casos_resueltos: ['faltan_horas'],
+      }),
+      120,
+    );
+    expect(lista).toEqual([]);
+  });
+});

@@ -152,12 +152,23 @@ export function AprobarSolicitudSheet({
       onClose={onClose}
       testID="approve-sheet"
       footer={
-        <PrimaryButton
-          label={t('requests.approveConfirm')}
-          onPress={confirmar}
-          loading={saving}
-          testID="approve-confirm"
-        />
+        <Stack gap={spacing.sm}>
+          {/* Junto al botón (8-oct): debajo del comentario no se veía en el teléfono. */}
+          {aviso !== null ? (
+            <InlineNotice
+              tone="late"
+              icon="alert-circle-outline"
+              body={aviso}
+              testID="approve-error"
+            />
+          ) : null}
+          <PrimaryButton
+            label={t('requests.approveConfirm')}
+            onPress={confirmar}
+            loading={saving}
+            testID="approve-confirm"
+          />
+        </Stack>
       }
     >
       <Stack gap={spacing.base}>
@@ -270,15 +281,6 @@ export function AprobarSolicitudSheet({
           multiline
           testID="approve-comment"
         />
-
-        {aviso !== null ? (
-          <InlineNotice
-            tone="late"
-            icon="alert-circle-outline"
-            body={aviso}
-            testID="approve-error"
-          />
-        ) : null}
       </Stack>
     </AdminSheet>
   );

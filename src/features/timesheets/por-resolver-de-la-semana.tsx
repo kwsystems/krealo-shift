@@ -24,7 +24,12 @@ import { formatClockTime, formatShiftRange, type TimeFormatPreference } from '@/
 import { acknowledgeUnusualClock, type WorkSession } from './api';
 import { casosPorResolver, type CasoPorResolver } from './casos';
 import { duracion } from './duracion';
-import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
+import {
+  porQueNoSeArreglo,
+  useArreglarCaso,
+  useHorasDebidasDeLaSede,
+  useSaldarHorasDebidas,
+} from './horas-debidas';
 import { useGuardarHoraExtra } from './horas-extra';
 
 /**
@@ -65,6 +70,9 @@ export function PorResolverDeLaSemana({
 }) {
   const { t } = useTranslation();
   const arreglar = useArreglarCaso();
+  // Las deudas pendientes: una que ya no cuadra con la jornada corregida es un caso (8-oct).
+  const debidas = useHorasDebidasDeLaSede({ organizationId, locationId });
+  const saldar = useSaldarHorasDebidas();
   /*
    * LA HORA EXTRA Y LAS MARCAS FUERA DE TURNO SE DECIDEN AQUÍ (6-oct), no en Horario. Las dos
    * escriben lo mismo que su sitio de antes —la aprobación del día y `avisos_vistos`—, así que
@@ -95,6 +103,7 @@ export function PorResolverDeLaSemana({
     timezone,
     aprobadas,
     umbralExtra,
+    debidas: debidas.data ?? [],
   }).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
   const hora = (iso: string) => formatClockTime(iso, timezone, timeFormat, language);
   const nombre = (caso: CasoPorResolver) =>
@@ -322,6 +331,57 @@ export function PorResolverDeLaSemana({
               testID: `caso-${caso.id}-no-extra`,
             }
           : null,
+      };
+    }
+    if (caso.tipo === 'deuda_que_no_cuadra') {
+      const debe = duracion(t, caso.deuda.minutos);
+      const ahora = duracion(t, caso.faltaAhora);
+      return {
+        ...base,
+        ocupada: (saldar.isPending || arreglar.isPending) && enCurso === caso.id,
+        que:
+          caso.faltaAhora === 0
+            ? t('timesheet.cases.debtStale', { owed: debe })
+            : t('timesheet.cases.debtChanged', { owed: debe, now: ahora }),
+        detalle: t('timesheet.cases.debtDetail', { owed: debe }),
+        principal:
+          caso.faltaAhora === 0
+            ? {
+                etiqueta: t('timesheet.cases.debtRemove'),
+                onPress: () => {
+                  setEnCurso(caso.id);
+                  saldar.mutate(
+                    { id: caso.deuda.id, estado: 'forgiven' },
+                    { onSettled: () => setEnCurso(null) },
+                  );
+                },
+                testID: `caso-${caso.id}-quitar`,
+              }
+            : {
+                etiqueta: t('timesheet.cases.debtUpdate', { now: ahora }),
+                onPress: () =>
+                  lanzar(caso.id, {
+                    tipo: 'debe',
+                    sessionId: caso.deuda.id,
+                    minutos: caso.faltaAhora,
+                    nota: caso.deuda.nota,
+                  }),
+                testID: `caso-${caso.id}-poner`,
+              },
+        alternativa:
+          caso.faltaAhora === 0
+            ? null
+            : {
+                etiqueta: t('timesheet.cases.debtRemove'),
+                onPress: () => {
+                  setEnCurso(caso.id);
+                  saldar.mutate(
+                    { id: caso.deuda.id, estado: 'forgiven' },
+                    { onSettled: () => setEnCurso(null) },
+                  );
+                },
+                testID: `caso-${caso.id}-quitar`,
+              },
       };
     }
     const propuesta = caso.salidaPropuesta;

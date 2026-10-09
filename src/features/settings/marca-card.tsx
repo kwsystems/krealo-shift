@@ -157,6 +157,14 @@ export function MarcaCard({
           />
         )}
 
+        {mutations.saveBrandColor.isError ? (
+          <InlineNotice
+            tone="late"
+            icon="warning-outline"
+            title={t('settings.saveFailed')}
+            testID="brand-color-error"
+          />
+        ) : null}
         {canEdit ? (
           <Row gap={spacing.sm}>
             <PrimaryButton
@@ -170,10 +178,11 @@ export function MarcaCard({
             {guardado === '' ? null : (
               <GhostButton
                 label={t('settings.brandClear')}
-                onPress={() => {
-                  setTexto('');
-                  mutations.saveBrandColor.mutate(null);
-                }}
+                onPress={() =>
+                  // El campo se vacía cuando se quitó de verdad (8-oct): si fallaba, quedaba
+                  // vacío mientras el color seguía guardado.
+                  mutations.saveBrandColor.mutate(null, { onSuccess: () => setTexto('') })
+                }
                 fullWidth={false}
                 testID="brand-color-clear"
               />

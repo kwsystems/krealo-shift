@@ -73,6 +73,17 @@ export function DarDeBajaSheet({
       testID="dar-de-baja-sheet"
       footer={
         <Stack gap={spacing.sm}>
+          {/* El fallo junto al botón (8-oct): debajo del calendario no se veía. */}
+          {error !== null ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="dar-de-baja-error"
+            >
+              {error}
+            </AppText>
+          ) : null}
           <DangerButton
             label={
               elegido === null
@@ -141,12 +152,6 @@ export function DarDeBajaSheet({
           }
           testID="dar-de-baja-resumen"
         />
-      ) : null}
-
-      {error !== null ? (
-        <AppText variant="help" tone="danger" accessibilityRole="alert" testID="dar-de-baja-error">
-          {error}
-        </AppText>
       ) : null}
     </AdminSheet>
   );

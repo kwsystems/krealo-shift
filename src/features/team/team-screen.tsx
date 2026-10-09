@@ -628,6 +628,8 @@ export function TeamScreen() {
           timeFormat={scope.timeFormat}
           language={language}
           busy={mutations.resetPin.isPending}
+          activando={mutations.changeStatus.isPending}
+          errorDeAccion={mutations.resetPin.error ?? mutations.changeStatus.error}
           onEdit={() =>
             setForm({
               mode: 'edit',
@@ -684,7 +686,12 @@ export function TeamScreen() {
                 }
               : undefined
           }
-          onClose={() => setSelectedId(null)}
+          onClose={() => {
+            // Lo que falló en esta ficha no se arrastra a la siguiente (8-oct).
+            mutations.resetPin.reset();
+            mutations.changeStatus.reset();
+            setSelectedId(null);
+          }}
         />
       ) : null}
 
@@ -705,7 +712,12 @@ export function TeamScreen() {
             )
           }
           onSubmit={submitForm}
-          onClose={() => setForm(null)}
+          onClose={() => {
+            // Igual con el formulario: «No se pudo guardar» no espera al siguiente (8-oct).
+            mutations.create.reset();
+            mutations.update.reset();
+            setForm(null);
+          }}
         />
       ) : null}
 

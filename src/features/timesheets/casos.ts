@@ -117,6 +117,22 @@ export type CasoPorResolver =
       conMarcas: WorkSession[];
     }
   | {
+      /*
+       * «LE DEBE» QUE YA NO CUADRA (8-oct). Se apuntó «le debe 4 h» y después se corrigió la
+       * jornada —la salida de verdad, un «olvidé marcar»—: Horas ya no ve que le falte nada (o
+       * le falta otra cosa), y el celular, Equipo y Reportes seguían diciendo «debe 4 h».
+       */
+      tipo: 'deuda_que_no_cuadra';
+      id: string;
+      sesion: WorkSession;
+      turno: ShiftRow;
+      dia: DateKey;
+      /** La deuda pendiente tal como se apuntó. */
+      deuda: { id: string; minutos: number; nota: string | null };
+      /** Lo que le falta ahora: 0 si ya no le falta nada. */
+      faltaAhora: number;
+    }
+  | {
       tipo: 'salida_dudosa';
       id: string;
       sesion: WorkSession;
@@ -146,6 +162,14 @@ export function casosPorResolver(params: {
    * Sin él no se buscan los casos «fuera de turno»: así los llama solo quien sabe decidirlos.
    */
   umbralExtra?: number;
+  /** Las horas debidas PENDIENTES de la sede: para ver si alguna ya no cuadra (8-oct). */
+  debidas?: readonly {
+    id: string;
+    work_session_id: string | null;
+    minutes: number;
+    note: string | null;
+    status: string;
+  }[];
 }): CasoPorResolver[] {
   /*
    * SOLO TURNOS PUBLICADOS (auditoría, 4-oct). Un borrador no se le dio a nadie: medir una
@@ -337,11 +361,29 @@ export function casosPorResolver(params: {
     const faltan = planificado - trabajado;
     const salioAntes = Math.max(0, minutos(finDe(ultima), turno.ends_at));
     const llegoTarde = Math.max(0, minutos(turno.starts_at, primera.starts_at));
-    if (
+    const faltaDeVerdad =
       faltan >= MINUTOS_MINIMOS_DE_UN_CASO &&
-      (salioAntes >= MINUTOS_MINIMOS_DE_UN_CASO || llegoTarde >= MINUTOS_MINIMOS_DE_UN_CASO) &&
-      !resuelto('faltan_horas')
-    ) {
+      (salioAntes >= MINUTOS_MINIMOS_DE_UN_CASO || llegoTarde >= MINUTOS_MINIMOS_DE_UN_CASO);
+    const idsDelTurno = new Set(ordenadas.map((sesion) => sesion.id));
+    const deuda = params.debidas?.find(
+      (fila) =>
+        fila.status === 'pending' &&
+        fila.work_session_id !== null &&
+        idsDelTurno.has(fila.work_session_id),
+    );
+    const faltaAhora = faltaDeVerdad ? faltan : 0;
+    if (deuda !== undefined && Math.abs(deuda.minutes - faltaAhora) >= MINUTOS_MINIMOS_DE_UN_CASO) {
+      casos.push({
+        tipo: 'deuda_que_no_cuadra',
+        id: `${ultima.id}:deuda`,
+        sesion: ultima,
+        turno,
+        dia,
+        deuda: { id: deuda.id, minutos: deuda.minutes, nota: deuda.note },
+        faltaAhora,
+      });
+    }
+    if (faltaDeVerdad && !resuelto('faltan_horas')) {
       casos.push({
         tipo: 'faltan_horas',
         id: `${ultima.id}:faltan_horas`,
@@ -367,6 +409,7 @@ export function casosPorResolver(params: {
     sin_refrigerio: 3,
     fuera_de_turno: 4,
     faltan_horas: 5,
+    deuda_que_no_cuadra: 6,
   } as const;
   return casos.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),

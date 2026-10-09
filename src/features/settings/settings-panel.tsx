@@ -683,9 +683,22 @@ function LocationCard({
   });
   const [saved, setSaved] = useState(false);
 
+  /*
+   * LOS NÚMEROS, COMO SE ESCRIBEN (8-oct). Se quitaba todo lo que no fuera un dígito: «1.5»
+   * se guardaba como 15 y un campo vacío como 0, sin decir nada. Ahora vacío deja lo que
+   * había, y lo que no es un número entero se dice en su campo y no deja guardar.
+   */
+  const numeroMal = (key: NumericSettingKey) => {
+    const texto = numbers[key].trim();
+    return texto !== '' && !/^\d+$/.test(texto);
+  };
+  const hayNumerosMal = NUMERIC_SETTINGS.some((setting) => numeroMal(setting.key));
   const parseNumber = (key: NumericSettingKey): number => {
-    const raw = Number(numbers[key].replace(/[^0-9]/g, ''));
-    return Number.isFinite(raw) ? raw : DEFAULT_LOCATION_SETTINGS[key];
+    const texto = numbers[key].trim();
+    if (texto === '' || numeroMal(key)) {
+      return location.settings[key] ?? DEFAULT_LOCATION_SETTINGS[key];
+    }
+    return Number(texto);
   };
 
   const buildSettings = (): LocationSettings => ({
@@ -835,6 +848,7 @@ function LocationCard({
           value={numbers[setting.key]}
           onChangeText={(value) => setNumbers((current) => ({ ...current, [setting.key]: value }))}
           keyboardType="number-pad"
+          error={numeroMal(setting.key) ? t('settings.numberInvalid') : undefined}
           testID={`location-${setting.key}`}
         />
       ))}
@@ -880,8 +894,18 @@ function LocationCard({
           );
         }}
         // Una zona que no existe no se guarda: rompería Horas y Reportes de esta sede.
-        disabled={!canEdit || name.trim().length < 2 || !zonaValida}
-        hint={zonaValida ? undefined : t('settings.timezoneInvalid')}
+        disabled={!canEdit || name.trim().length < 2 || !zonaValida || hayNumerosMal}
+        // Y POR QUÉ NO, junto al botón (8-oct): con el nombre corto o un número mal, el botón se
+        // apagaba sin decir nada.
+        hint={
+          !zonaValida
+            ? t('settings.timezoneInvalid')
+            : name.trim().length < 2
+              ? t('settings.locationNameShort')
+              : hayNumerosMal
+                ? t('settings.numberInvalid')
+                : undefined
+        }
         loading={mutations.saveLocation.isPending}
         testID="location-save"
       />
@@ -1459,6 +1483,15 @@ function NotificationsCard() {
             ))}
             {saved ? (
               <InlineNotice tone="working" icon="checkmark-circle" title={t('settings.saved')} />
+            ) : null}
+            {/* Si falla, se dice (8-oct): antes solo se avisaba lo que salía bien. */}
+            {mutations.saveNotifications.isError ? (
+              <InlineNotice
+                tone="late"
+                icon="warning-outline"
+                title={t('settings.saveFailed')}
+                testID="notifications-error"
+              />
             ) : null}
             <PrimaryButton
               label={t('common.save')}

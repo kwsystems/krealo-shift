@@ -153,13 +153,37 @@ export function HojaDeDisponibilidad({
       onClose={onClose}
       testID="disponibilidad-hoja"
       footer={
-        <PrimaryButton
-          label={t('availability.save')}
-          onPress={guardar}
-          loading={guardando}
-          disabled={intentado && !valido}
-          testID="disponibilidad-guardar"
-        />
+        <Stack gap={spacing.sm}>
+          {/*
+            JUNTO AL BOTÓN (8-oct): en el celular el error salía debajo del calendario y de la
+            nota, y el botón se apagaba sin que se viera por qué.
+          */}
+          {intentado && !valido ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="disponibilidad-por-que"
+            >
+              {persona === null
+                ? t('availability.errorPerson')
+                : horasMal
+                  ? t('availability.errorHours')
+                  : t('availability.errorNote')}
+            </AppText>
+          ) : null}
+          {error !== null ? (
+            <AppText variant="help" tone="danger" testID="disponibilidad-error">
+              {mensajeDelError(t, error)}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            label={t('availability.save')}
+            onPress={guardar}
+            loading={guardando}
+            testID="disponibilidad-guardar"
+          />
+        </Stack>
       }
     >
       {/* Quien gestiona la da por vista desde aquí mismo, sin cambiar nada. */}
@@ -307,12 +331,6 @@ export function HojaDeDisponibilidad({
         error={intentado && notaFalta ? t('availability.errorNote') : undefined}
         testID="disponibilidad-nota"
       />
-
-      {error !== null ? (
-        <AppText variant="help" tone="danger" testID="disponibilidad-error">
-          {mensajeDelError(t, error)}
-        </AppText>
-      ) : null}
 
       {fila === null ? null : (
         <DangerButton

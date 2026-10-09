@@ -129,6 +129,12 @@ export function ElegirDiasSheet({
       testID="report-days-sheet"
       footer={
         <Stack gap={spacing.sm}>
+          {/* Por qué no se aplica, junto al botón (8-oct): debajo del calendario no se veía. */}
+          {demasiado ? (
+            <AppText variant="help" tone="danger" accessibilityRole="alert">
+              {t('reports.pickDaysTooLong', { count: DIAS_MAXIMOS })}
+            </AppText>
+          ) : null}
           <PrimaryButton
             label={
               periodo === null

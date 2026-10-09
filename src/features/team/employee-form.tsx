@@ -92,6 +92,16 @@ export function EmployeeFormSheet({
   const duenoDelCorreo = correosOcupados?.get(values.email.trim().toLowerCase()) ?? null;
   const locationsValid = values.locationIds.length > 0;
   const canSubmit = nameValid && emailValid && duenoDelCorreo === null && locationsValid;
+  // Lo primero que impide guardar, junto al botón (8-oct): ver `shift-form.tsx`.
+  const porQueNo = !nameValid
+    ? t('team.fullNameRequired')
+    : !emailValid
+      ? t('auth.emailInvalid')
+      : duenoDelCorreo !== null
+        ? t('team.emailTaken', { name: duenoDelCorreo })
+        : !locationsValid
+          ? t('team.locationRequired')
+          : null;
 
   const handleSubmit = () => {
     setSubmitted(true);
@@ -135,11 +145,20 @@ export function EmployeeFormSheet({
               testID="employee-form-error"
             />
           )}
+          {submitted && porQueNo !== null ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="employee-form-why"
+            >
+              {porQueNo}
+            </AppText>
+          ) : null}
           <PrimaryButton
             label={t('common.save')}
             onPress={handleSubmit}
             loading={saving}
-            disabled={submitted && !canSubmit}
             testID="employee-form-save"
           />
         </Stack>

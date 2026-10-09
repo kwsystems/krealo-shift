@@ -147,13 +147,20 @@ export function RequestsPanel() {
     [requests.data, tabElegida, onlyPending],
   );
 
+  /*
+   * EL FALLO TAMBIÉN EN SU TARJETA (8-oct): solo salía arriba del panel, y quien aprobaba la
+   * tercera solicitud veía parar la rueda y nada más.
+   */
+  const [falloDe, setFalloDe] = useState<string | null>(null);
   const avisar = (mensaje: string) => {
     setFallo(null);
+    setFalloDe(null);
     setFeedback(mensaje);
   };
-  const fallar = (error: unknown) => {
+  const fallar = (error: unknown, requestId?: string) => {
     setFeedback(null);
     setFallo(mensajeDelFallo(t, error));
+    setFalloDe(requestId ?? null);
   };
 
   const decide = (request: TimeEditRequest, decision: 'approved' | 'rejected') => {
@@ -179,7 +186,7 @@ export function RequestsPanel() {
               : t('requests.rejected'),
           );
         },
-        onError: fallar,
+        onError: (error) => fallar(error, request.id),
       },
     );
   };
@@ -328,6 +335,14 @@ export function RequestsPanel() {
                       ? t('requests.impactApplies')
                       : t('requests.impactManual')}
                 </AppText>
+                {fallo !== null && falloDe === request.id ? (
+                  <InlineNotice
+                    tone="late"
+                    icon="alert-circle-outline"
+                    body={fallo}
+                    testID={`solicitud-error-${request.id}`}
+                  />
+                ) : null}
 
                 {request.status === 'pending' ? (
                   <Row gap={spacing.sm} wrap>

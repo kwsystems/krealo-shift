@@ -213,6 +213,54 @@ function crearRpc(almacen: Almacen) {
   const filas = (tabla: string): Fila[] => almacen.get(tabla) ?? [];
 
   /**
+   * EL RESUMEN DEL DÍA, REHECHO DESDE SUS JORNADAS (8-oct). En producción se calcula de las
+   * jornadas al leerlo; aquí es una tabla guardada, y corregir una salida, reclasificarla o
+   * marcarla desde Por resolver cambiaba la jornada y no el resumen: la fila decía 8:00 y el
+   * total de Horas, Reportes y Equipo seguía con lo de antes. Lo llaman todos los que tocan
+   * jornadas ya hechas.
+   */
+  const rehacerResumenDelDia = (sesion: Fila | undefined) => {
+    if (sesion === undefined) return;
+    const empleado = sesion.employee_id;
+    const sede = sesion.location_id;
+    const zona = String(
+      filas('locations').find((fila) => fila.id === sede)?.timezone ?? 'America/Lima',
+    );
+    const diaDe = (instante: unknown) =>
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: zona,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      }).format(new Date(String(instante)));
+    const dia = diaDe(sesion.starts_at);
+    const delDia = filas('work_sessions').filter(
+      (fila) =>
+        fila.employee_id === empleado && fila.location_id === sede && diaDe(fila.starts_at) === dia,
+    );
+    const previa = filas('daily_time_summary').find(
+      (fila) =>
+        fila.employee_id === empleado && fila.location_id === sede && fila.work_date === dia,
+    );
+    const suma = (campo: string) =>
+      delDia.reduce((total, fila) => total + Number(fila[campo] ?? 0), 0);
+    almacen.set('daily_time_summary', [
+      ...filas('daily_time_summary').filter((fila) => fila !== previa),
+      {
+        ...(previa ?? {}),
+        employee_id: empleado,
+        location_id: sede,
+        work_date: dia,
+        sessions: delDia.length,
+        gross_minutes: suma('gross_minutes'),
+        paid_break_minutes: suma('paid_break_minutes'),
+        unpaid_break_minutes: suma('unpaid_break_minutes'),
+        net_minutes: suma('net_minutes'),
+      },
+    ]);
+  };
+
+  /**
    * Un cambio de horas en una semana ya aprobada queda anotado en ella, como en el servidor
    * (`functions/src/shared/periodo-aprobado.ts`).
    */
@@ -459,6 +507,7 @@ function crearRpc(almacen: Almacen) {
         if (ajustada !== undefined) {
           anotarCambioTrasAprobar(ajustada.location_id, ajustada.starts_at);
         }
+        rehacerResumenDelDia(ajustada);
         return sinError(null);
       }
 
@@ -583,6 +632,11 @@ function crearRpc(almacen: Almacen) {
           );
         }
 
+        rehacerResumenDelDia(
+          cortada === undefined
+            ? undefined
+            : filas('work_sessions').find((fila) => fila.id === cortada.id),
+        );
         return sinError({ minutes: minutos, breakType: pagada ? 'paid' : 'unpaid' });
       }
 
@@ -738,6 +792,7 @@ function crearRpc(almacen: Almacen) {
               'employees_working_now',
               filas('employees_working_now').filter((fila) => fila.work_session_id !== abierta.id),
             );
+            rehacerResumenDelDia(filas('work_sessions').find((fila) => fila.id === abierta.id));
             return sinError({ eventId: idEvento, workSessionId: abierta.id });
           }
         }

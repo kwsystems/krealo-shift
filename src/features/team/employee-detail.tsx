@@ -5,7 +5,7 @@ import { HorasDeLaPersona } from './horas-de-la-persona';
 import { HorasQueDebe } from './horas-que-debe';
 import { useUpcomingShifts, type TeamMember } from './hooks';
 import { AsyncSection } from '@/components/schedule/data-states';
-import { AdminSheet, KeyValueRow } from '@/components/schedule/fields';
+import { AdminSheet, InlineNotice, KeyValueRow } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { Row, Stack } from '@/components/ui/layout';
@@ -38,6 +38,8 @@ export function EmployeeDetailSheet({
   timeFormat,
   language,
   busy,
+  activando = false,
+  errorDeAccion = null,
   onEdit,
   onToggleStatus,
   onDischarge,
@@ -68,6 +70,10 @@ export function EmployeeDetailSheet({
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
   busy: boolean;
+  /** «Activar» en curso (8-oct): antes no tenía carga y se podía pulsar varias veces. */
+  activando?: boolean;
+  /** Por qué falló «Reiniciar PIN» o «Activar» (8-oct): antes no se decía nada. */
+  errorDeAccion?: unknown;
   onEdit: () => void;
   onToggleStatus: () => void;
   /** «Dejó de trabajar»: abre la hoja que pide su último día. Ver `dar-de-baja-sheet.tsx`. */
@@ -105,6 +111,15 @@ export function EmployeeDetailSheet({
       testID="employee-detail-sheet"
       footer={
         <Stack gap={spacing.sm}>
+          {errorDeAccion === null || errorDeAccion === undefined ? null : (
+            <InlineNotice
+              tone="late"
+              icon="warning-outline"
+              title={t('team.saveFailed')}
+              body={errorDeAccion instanceof Error ? errorDeAccion.message : undefined}
+              testID="employee-detail-error"
+            />
+          )}
           <PrimaryButton
             label={t('team.resetPin')}
             hint={t('team.resetPinHint')}
@@ -136,6 +151,7 @@ export function EmployeeDetailSheet({
                 <SecondaryButton
                   label={t('team.activate')}
                   onPress={onToggleStatus}
+                  loading={activando}
                   testID="employee-activate"
                 />
               )}

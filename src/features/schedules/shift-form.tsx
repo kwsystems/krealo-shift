@@ -129,6 +129,23 @@ export function ShiftFormSheet({
   const breakValid = breakMinutes !== null && (duracion === null || breakMinutes < duracion);
 
   const canSubmit = startValid && endValid && !tooLong && breakValid && employeeValid;
+  /*
+   * LO QUE IMPIDE GUARDAR, JUNTO AL BOTÓN (8-oct). Un turno abierto desde el «+» de un día
+   * llega sin persona; se rellenaban las horas, se pulsaba «Guardar borrador» y el botón se
+   * ponía gris: «Elige un empleado» salía arriba del todo, fuera de la vista. Lo mismo que
+   * «Corregir fichaje» en Horas.
+   */
+  const porQueNo = !employeeValid
+    ? t('schedule.employeeRequired')
+    : esDescanso
+      ? null
+      : !startValid || !endValid
+        ? t('schedule.invalidTime')
+        : tooLong
+          ? t('schedule.shiftTooLong', { hours: minutesToHHmm(duracion ?? 0) })
+          : !breakValid
+            ? t('schedule.invalidBreak')
+            : null;
 
   const handleSubmit = () => {
     setSubmitted(true);
@@ -166,6 +183,11 @@ export function ShiftFormSheet({
       testID="shift-form-sheet"
       footer={
         <Stack gap={spacing.sm}>
+          {submitted && porQueNo !== null ? (
+            <AppText variant="help" tone="danger" accessibilityRole="alert" testID="shift-form-why">
+              {porQueNo}
+            </AppText>
+          ) : null}
           {error !== null ? (
             <AppText variant="help" tone="danger" testID="shift-form-error">
               {error}
@@ -176,7 +198,6 @@ export function ShiftFormSheet({
             hint={esDescanso ? t('schedule.markRestDayHint') : t('schedule.saveDraftHint')}
             onPress={handleSubmit}
             loading={saving}
-            disabled={submitted && !(esDescanso ? employeeValid : canSubmit)}
             testID="shift-form-save"
           />
           <Row gap={spacing.sm} wrap>

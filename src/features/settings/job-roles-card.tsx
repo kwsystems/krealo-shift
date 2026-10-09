@@ -132,11 +132,30 @@ export function JobRolesCard() {
                   label={t('settings.jobRolesSave', { count: cambiados.length })}
                   loading={renameRole.isPending}
                   onPress={() => {
-                    for (const [jobRoleId, nombre] of cambiados) {
-                      renameRole.mutate({ jobRoleId, name: nombre.trim() });
-                    }
-                    setBorradores({});
-                    setAviso(t('settings.jobRolesSaved'));
+                    /*
+                     * «GUARDADO» CUANDO SE GUARDÓ (8-oct): se lanzaban los cambios y se decía
+                     * «Guardado» y se borraba lo escrito al instante, antes de saber nada. Si
+                     * uno fallaba salían «Guardado» y el error juntos, y lo escrito se perdía.
+                     * Ahora uno tras otro, y solo se limpia lo que sí se guardó.
+                     */
+                    void (async () => {
+                      const guardados: string[] = [];
+                      try {
+                        for (const [jobRoleId, nombre] of cambiados) {
+                          await renameRole.mutateAsync({ jobRoleId, name: nombre.trim() });
+                          guardados.push(jobRoleId);
+                        }
+                        setAviso(t('settings.jobRolesSaved'));
+                      } catch {
+                        setAviso(null);
+                      } finally {
+                        setBorradores((actual) =>
+                          Object.fromEntries(
+                            Object.entries(actual).filter(([id]) => !guardados.includes(id)),
+                          ),
+                        );
+                      }
+                    })();
                   }}
                   testID="job-roles-save"
                 />

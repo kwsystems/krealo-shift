@@ -13,6 +13,7 @@ import { estilosDelTema } from '@/theme/estilos';
 import { borderWidth, radii, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 import { minutesToHHmm } from '@/utils/time';
+import { minutosEscritos } from '@/domain/duracion-escrita';
 
 /**
  * «POR RESOLVER», arriba de Horas: los casos de la semana con su arreglo a un toque
@@ -164,7 +165,8 @@ export function ResolverFaltaSheet({
   const [decision, setDecision] = useState(decisionInicial);
   const [horas, setHoras] = useState(minutesToHHmm(faltan));
   const [nota, setNota] = useState('');
-  const minutos = leerHoras(horas);
+  // «2», «2:30», «45» (min): el mismo lector que la hora extra (8-oct, `duracion-escrita.ts`).
+  const minutos = minutosEscritos(horas);
   const valido = decision === 'justificado' || (minutos !== null && minutos > 0);
 
   return (
@@ -174,20 +176,43 @@ export function ResolverFaltaSheet({
       onClose={onClose}
       testID="caso-falta-sheet"
       footer={
-        <PrimaryButton
-          label={
-            decision === 'debe'
-              ? t('timesheet.cases.saveOwed', { hours: horas })
-              : t('timesheet.cases.saveJustified')
-          }
-          onPress={() => {
-            if (!valido) return;
-            onGuardar({ decision, minutos: minutos ?? 0, nota: nota.trim() });
-          }}
-          disabled={!valido}
-          loading={guardando}
-          testID="caso-falta-guardar"
-        />
+        <Stack gap={spacing.sm}>
+          {/*
+            POR QUÉ NO Y LO QUE DIJO EL SERVIDOR, JUNTO AL BOTÓN (8-oct): con «0:00» el botón se
+            apagaba sin decir nada, y el error salía debajo de la nota.
+          */}
+          {!valido ? (
+            <AppText
+              variant="help"
+              tone="danger"
+              accessibilityRole="alert"
+              testID="caso-falta-por-que"
+            >
+              {t('timesheet.cases.owedInvalid')}
+            </AppText>
+          ) : null}
+          {error !== null ? (
+            <AppText variant="help" tone="danger" accessibilityRole="alert">
+              {error}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            label={
+              decision === 'debe'
+                ? t('timesheet.cases.saveOwed', {
+                    hours: minutos === null ? horas : minutesToHHmm(minutos),
+                  })
+                : t('timesheet.cases.saveJustified')
+            }
+            onPress={() => {
+              if (!valido) return;
+              onGuardar({ decision, minutos: minutos ?? 0, nota: nota.trim() });
+            }}
+            disabled={!valido}
+            loading={guardando}
+            testID="caso-falta-guardar"
+          />
+        </Stack>
       }
     >
       <AppText variant="body">{t('timesheet.cases.shortBody', { hours: faltanLegible })}</AppText>
@@ -207,7 +232,7 @@ export function ResolverFaltaSheet({
           value={horas}
           onChangeText={setHoras}
           keyboardType="numbers-and-punctuation"
-          error={minutos === null ? t('schedule.invalidTime') : undefined}
+          error={minutos === null || minutos === 0 ? t('timesheet.cases.owedInvalid') : undefined}
           testID="caso-falta-horas"
         />
       ) : null}
@@ -221,11 +246,6 @@ export function ResolverFaltaSheet({
       <AppText variant="help" tone="subtle">
         {decision === 'debe' ? t('timesheet.cases.owesHint') : t('timesheet.cases.justifiedHint')}
       </AppText>
-      {error !== null ? (
-        <AppText variant="help" tone="danger">
-          {error}
-        </AppText>
-      ) : null}
     </AdminSheet>
   );
 }
@@ -285,13 +305,6 @@ export function OtraSalidaSheet({
       ) : null}
     </AdminSheet>
   );
-}
-
-function leerHoras(texto: string): number | null {
-  const limpio = texto.trim();
-  const conDosPuntos = /^(\d{1,2}):([0-5]\d)$/.exec(limpio);
-  if (conDosPuntos !== null) return Number(conDosPuntos[1]) * 60 + Number(conDosPuntos[2]);
-  return null;
 }
 
 const useEstilos = estilosDelTema((colors) => ({

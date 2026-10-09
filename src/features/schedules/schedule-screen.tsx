@@ -1108,27 +1108,39 @@ export function ScheduleScreen({
         <AdminSheet
           visible
           title={t('schedule.publishChangesOnly')}
-          onClose={() => setPublishPickerOpen(false)}
+          onClose={() => {
+            // El fallo de esta vez no se arrastra a la próxima (8-oct).
+            mutations.publish.reset();
+            setPublishPickerOpen(false);
+          }}
           testID="publish-picker"
           footer={
-            <PrimaryButton
-              label={t('schedule.publishSelected', { count: pickedForPublish.length })}
-              onPress={() => {
-                mutations.publish.mutate(
-                  { shiftIds: pickedForPublish },
-                  {
-                    onSuccess: () => {
-                      setPublishPickerOpen(false);
-                      setPickedIds(null);
-                      setFeedback(t('schedule.published'));
+            <Stack gap={spacing.sm}>
+              {/* El fallo junto al botón (8-oct): arriba no lo veía quien bajó a elegir. */}
+              {mutations.publish.isError ? (
+                <AppText variant="help" tone="danger" accessibilityRole="alert">
+                  {t('errors.generic')}
+                </AppText>
+              ) : null}
+              <PrimaryButton
+                label={t('schedule.publishSelected', { count: pickedForPublish.length })}
+                onPress={() => {
+                  mutations.publish.mutate(
+                    { shiftIds: pickedForPublish },
+                    {
+                      onSuccess: () => {
+                        setPublishPickerOpen(false);
+                        setPickedIds(null);
+                        setFeedback(t('schedule.published'));
+                      },
                     },
-                  },
-                );
-              }}
-              disabled={pickedForPublish.length === 0}
-              loading={mutations.publish.isPending}
-              testID="publish-selected"
-            />
+                  );
+                }}
+                disabled={pickedForPublish.length === 0}
+                loading={mutations.publish.isPending}
+                testID="publish-selected"
+              />
+            </Stack>
           }
         >
           <AppText variant="help" tone="subtle">
@@ -1274,6 +1286,10 @@ export function ScheduleScreen({
             const fallo = () => {
               setPegando(false);
               setPegarFallo(true);
+              // El fallo es de pegar y se dice aquí; no se queda en las mutaciones que comparte
+              // con «Agregar turno», que abría después con «Algo salió mal» (8-oct).
+              mutations.markRestDays.reset();
+              mutations.unmarkRestDay.reset();
             };
             /*
              * LOS DESCANSOS SE MARCAN ANTES DE CREAR LOS TURNOS, y el orden importa si
