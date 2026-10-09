@@ -62,6 +62,7 @@ import {
   minutesBetween,
   minutesToHHmm,
 } from '@/utils/time';
+import { esJornadaDeCorrido } from '@/domain/de-corrido';
 
 /**
  * Flujo del empleado tras validar el PIN (§9.2 a §9.5).
@@ -385,11 +386,42 @@ export default function KioskActionsScreen() {
    */
   const finDelTurno = openSession?.shiftEndsAt ?? selectedShift?.endsAt ?? null;
 
-  const preguntarMotivoDeSalida = pideMotivoDeSalida({
-    ahora: now,
-    finDelTurno: finDelTurno === null ? null : new Date(finDelTurno),
-    umbralMinutos: policies.earlyDepartureReasonMinutes,
-  });
+  /*
+   * DE CORRIDO NO ES SALIR ANTES (8-oct): sin almorzar, trabajó lo planificado y se va antes lo
+   * que dura el refrigerio. El servidor no lo marca «salió antes» y ninguna pantalla lo dice;
+   * el reloj le preguntaba «¿por qué sales antes?». La regla es la de `src/domain/de-corrido.ts`.
+   */
+  const turnoDeSuJornada =
+    openSession?.shiftId === null || openSession?.shiftId === undefined
+      ? undefined
+      : verification?.eligibleShifts.find((shift) => shift.id === openSession.shiftId);
+  const saleDeCorrido =
+    openSession !== null &&
+    openSession !== undefined &&
+    turnoDeSuJornada !== undefined &&
+    esJornadaDeCorrido({
+      turno: {
+        starts_at: turnoDeSuJornada.startsAt,
+        ends_at: turnoDeSuJornada.endsAt,
+        planned_unpaid_break_minutes: turnoDeSuJornada.plannedUnpaidBreakMinutes,
+      },
+      jornadas: [
+        {
+          starts_at: openSession.startedAt,
+          ends_at: new Date(now).toISOString(),
+          paid_break_minutes: 0,
+          unpaid_break_minutes: openSession.takenBreakMinutes,
+        },
+      ],
+    });
+
+  const preguntarMotivoDeSalida =
+    !saleDeCorrido &&
+    pideMotivoDeSalida({
+      ahora: now,
+      finDelTurno: finDelTurno === null ? null : new Date(finDelTurno),
+      umbralMinutos: policies.earlyDepartureReasonMinutes,
+    });
 
   /**
    * El tramo final de una salida, desde donde se llega por los dos caminos.

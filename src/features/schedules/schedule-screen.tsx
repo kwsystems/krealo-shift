@@ -325,7 +325,7 @@ export function ScheduleScreen({
         : [],
     ),
   );
-  /** Los turnos cuya salida puso el sistema (5-oct): la tarjeta lo dice. */
+  /** Los turnos cuya salida puso el sistema (5-oct): la tarjeta lo dice, es un dato. */
   const salidasAutomaticas = new Set(
     (jornadasDeLaSemana.data ?? []).flatMap((jornada) =>
       jornada.shift_id !== null && esSalidaAutomatica(jornada) ? [jornada.shift_id] : [],

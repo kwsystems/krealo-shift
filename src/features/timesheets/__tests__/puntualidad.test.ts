@@ -1,3 +1,4 @@
+import { alertsForSession } from '../alerts';
 import { punctuality } from '@/features/reports/aggregate';
 
 import type { WorkSession } from '../api';
@@ -49,11 +50,13 @@ describe('puntualidad por turno', () => {
   it('almorzar marcando en el reloj no es ni tardanza ni salida antes', () => {
     const marcas = puntualidadPorJornada([tarde, manana]);
     expect(puntualidadDe(marcas, manana)).toEqual({
+      decidida: false,
       tarde: false,
       salioAntes: false,
       primera: true,
     });
     expect(puntualidadDe(marcas, tarde)).toEqual({
+      decidida: false,
       tarde: false,
       salioAntes: false,
       primera: false,
@@ -71,6 +74,7 @@ describe('puntualidad por turno', () => {
   it('una jornada sola se queda con sus marcas', () => {
     const sola = jornada({ id: 'sola', flags: ['late_arrival', 'early_departure'] });
     expect(puntualidadDe(puntualidadPorJornada([sola]), sola)).toEqual({
+      decidida: false,
       tarde: true,
       salioAntes: true,
       primera: true,
@@ -83,5 +87,15 @@ describe('puntualidad por turno', () => {
       late: 0,
       onTimePercent: 100,
     });
+  });
+
+  // 8-oct: decidida en Por resolver («le debe» / «está justificado»), ya no está por revisar.
+  it('una tardanza decidida en Por resolver ya no es un aviso que revisar', () => {
+    const decidida = { ...manana, flags: ['late_arrival'], casos_resueltos: ['faltan_horas'] };
+    const marcas = puntualidadPorJornada([decidida]);
+    expect(puntualidadDe(marcas, decidida)).toMatchObject({ tarde: true, decidida: true });
+    expect(
+      alertsForSession(decidida, decidida.starts_at, puntualidadDe(marcas, decidida)),
+    ).not.toContain('lateArrival');
   });
 });

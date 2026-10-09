@@ -28,6 +28,7 @@ import { ADMIN_LIST_STALE_MS, DASHBOARD_POLL_MS, selectRows } from '@/hooks/use-
 import { useNetworkStore } from '@/stores/network-store';
 import { minutesBetween } from '@/utils/time';
 import { VIEWS } from '@/lib/firebase/tables';
+import { puntualidadDe, puntualidadPorJornada } from '@/features/timesheets/puntualidad';
 
 /**
  * Inicio administrativo (§11.1).
@@ -512,10 +513,21 @@ export function useManagerDashboard(params: {
       });
     }
 
+    /*
+     * Y POR TURNO, NO SOLO LA PRIMERA DEL DÍA (8-oct): con turno partido —09:00 a 13:00 y
+     * 17:00 a 21:00—, llegar 40 min tarde a la tarde no salía en la banda, mientras el celular,
+     * Reportes y el bono la contaban. La regla es la de `puntualidad.ts`.
+     */
+    const marcasDeHoy = puntualidadPorJornada(sessions.filter((s) => deHoy(s.starts_at)));
+    const tardeHoy = new Set(
+      sessions
+        .filter((s) => deHoy(s.starts_at) && puntualidadDe(marcasDeHoy, s).tarde)
+        .map((s) => s.employee_id),
+    );
     const franjas = [...franjasPorEmpleado.values()]
       .map((franja) => {
         if (franja.estado === 'pausa') return franja;
-        const tarde = primeraDeHoy.get(franja.employeeId)?.flags.includes('late_arrival') === true;
+        const tarde = tardeHoy.has(franja.employeeId);
         return tarde ? { ...franja, estado: 'tarde' as const } : franja;
       })
       .sort((a, b) => {

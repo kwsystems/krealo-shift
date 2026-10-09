@@ -22,9 +22,15 @@ export type Puntualidad = {
    * Contar las demás medía la vuelta del almuerzo como una llegada.
    */
   primera: boolean;
+  /**
+   * Lo que faltó de ese turno ya se decidió en Por resolver —«le debe» o «está justificado»—
+   * (8-oct). Sigue siendo un dato (Reportes lo anota), pero ya no es algo que revisar: Horas y
+   * Equipo seguían contándolo en «Necesita revisión» después de decidirlo.
+   */
+  decidida: boolean;
 };
 
-const NADA: Puntualidad = { tarde: false, salioAntes: false, primera: true };
+const NADA: Puntualidad = { tarde: false, salioAntes: false, primera: true, decidida: false };
 
 export function puntualidadPorJornada(
   sesiones: readonly WorkSession[],
@@ -39,9 +45,11 @@ export function puntualidadPorJornada(
   const resultado = new Map<string, Puntualidad>();
   for (const grupo of grupos.values()) {
     const ordenadas = [...grupo].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    const decidida = ordenadas.some((sesion) => sesion.casos_resueltos.includes('faltan_horas'));
     ordenadas.forEach((sesion, indice) => {
       resultado.set(sesion.id, {
         primera: indice === 0,
+        decidida,
         tarde: indice === 0 && sesion.flags.includes('late_arrival'),
         salioAntes:
           indice === ordenadas.length - 1 &&

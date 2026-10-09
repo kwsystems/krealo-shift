@@ -12,6 +12,20 @@ export function esSalidaAutomatica(jornada: { auto_clock_out?: boolean | null })
   return jornada.auto_clock_out === true;
 }
 
+/**
+ * Y TODAVÍA NADIE LA DIO POR BUENA (8-oct). «La salida está bien» en Por resolver cerraba el
+ * caso, pero la hoja de la jornada y la tarjeta de Horario seguían avisando «corrige la salida
+ * aquí». El dato —que la puso el sistema— se sigue diciendo; el aviso, solo si falta decidir.
+ */
+export function salidaAutomaticaSinConfirmar(jornada: {
+  auto_clock_out?: boolean | null;
+  casos_resueltos?: readonly string[] | null;
+}): boolean {
+  return (
+    esSalidaAutomatica(jornada) && !(jornada.casos_resueltos ?? []).includes('salida_automatica')
+  );
+}
+
 /** «Salida automática». */
 export function etiquetaDeSalidaAutomatica(t: TFunction): string {
   return t('timesheet.autoExitLabel');

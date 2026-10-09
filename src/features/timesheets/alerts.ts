@@ -55,8 +55,9 @@ export function alertsForSession(
     const mapped = FLAG_TO_ALERT[flag];
     if (mapped !== undefined) alerts.add(mapped);
   }
-  if (puntualidad?.tarde === true) alerts.add('lateArrival');
-  if (puntualidad?.salioAntes === true) alerts.add('earlyDeparture');
+  // Decidido en Por resolver, ya no se revisa (8-oct): ver `Puntualidad.decidida`.
+  if (puntualidad?.tarde === true && !puntualidad.decidida) alerts.add('lateArrival');
+  if (puntualidad?.salioAntes === true && !puntualidad.decidida) alerts.add('earlyDeparture');
 
   if (session.status === 'needs_review') alerts.add('needsReview');
 

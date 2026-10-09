@@ -228,8 +228,12 @@ export function resumenDelMes(dias: readonly DiaDelVendedor[]): ResumenDelMes {
   return {
     minutosNetos: dias.reduce((suma, d) => suma + d.minutosNetos, 0),
     diasTrabajados: dias.filter((d) => d.jornadas.length > 0).length,
-    aTiempo: dias.filter((d) => d.estado === 'aTiempo').length,
-    antesDeHora: dias.filter((d) => d.estado === 'aTiempo' && d.minutosAntes !== null).length,
+    // Solo días con turno (8-oct): sin turno no hay hora a la que llegar, y Reportes no los
+    // cuenta. El celular decía «A tiempo 22» y Reportes 20 de 20 para la misma persona.
+    aTiempo: dias.filter((d) => d.estado === 'aTiempo' && d.turnos.length > 0).length,
+    antesDeHora: dias.filter(
+      (d) => d.estado === 'aTiempo' && d.turnos.length > 0 && d.minutosAntes !== null,
+    ).length,
     tarde: dias.filter((d) => d.estado === 'tarde').length,
     faltas: dias.reduce((suma, d) => suma + d.faltas.length, 0),
     faltasJustificadas: dias.reduce(

@@ -32,7 +32,7 @@ import { minutosVisibles, type EnCurso } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
 import { esCumplidoEspecial, etiquetaDeCumplido } from '@/features/timesheets/textos-de-cumplido';
 import {
-  esSalidaAutomatica,
+  salidaAutomaticaSinConfirmar,
   etiquetaDeSalidaAutomatica,
 } from '@/features/timesheets/textos-de-salida';
 import { spacing } from '@/theme/tokens';
@@ -296,7 +296,7 @@ export function SessionDetailSheet({
         LA SALIDA LA PUSO EL SISTEMA (5-oct): no marcó y se cerró sola a la hora de fin de su
         turno. Corregir la salida aquí la quita, porque entonces la hora ya la puso alguien.
       */}
-      {esSalidaAutomatica(session) ? (
+      {salidaAutomaticaSinConfirmar(session) ? (
         <InlineNotice
           tone="warning"
           icon="time-outline"
