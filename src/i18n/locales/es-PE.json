@@ -1408,7 +1408,6 @@
     "flagAbnormalDuration": "Duración inusual",
     "flagLateArrival": "Entrada tardía",
     "flagEarlyDeparture": "Salida anticipada",
-    "flagClockDrift": "Diferencia de reloj del dispositivo",
     "noEntries": "Sin fichajes en este periodo",
     "approveBlockedTitle": "No se pudo aprobar el periodo",
     "approveBlockedOpen_one": "{{names}} tiene la jornada abierta: sigue trabajando o no marcó la salida. Se aprueba cuando esté cerrada.",

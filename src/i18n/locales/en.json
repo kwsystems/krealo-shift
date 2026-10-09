@@ -1408,7 +1408,6 @@
     "flagAbnormalDuration": "Unusual duration",
     "flagLateArrival": "Late arrival",
     "flagEarlyDeparture": "Early departure",
-    "flagClockDrift": "Device clock drift",
     "noEntries": "No entries in this period",
     "approveBlockedTitle": "The period could not be approved",
     "approveBlockedOpen_one": "{{names}} has an open shift: still working or didn't clock out. It can be approved once it's closed.",
