@@ -61,12 +61,8 @@ import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
-import {
-  FaltasDeLaSemana,
-  JustificarFaltaSheet,
-  RegistrarQueVinoSheet,
-} from '@/components/timesheets/faltas-de-la-semana';
-import type { Falta } from './faltas';
+import { FaltasDeLaSemana } from '@/components/timesheets/faltas-de-la-semana';
+import { TodaviaNoHaMarcado, useResolverFalta } from '@/components/timesheets/resolver-falta';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
@@ -129,10 +125,6 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   /* La jornada que pidió el aviso, hasta que se cierre: se abre en cuanto llegan los datos. */
   const [pedida, setPedida] = useState<string | null>(destino?.jornada ?? null);
   const [manualOpen, setManualOpen] = useState(false);
-  /* La falta que se está arreglando porque sí vino: ver `faltas-de-la-semana.tsx`. */
-  const [faltaElegida, setFaltaElegida] = useState<Falta | null>(null);
-  /* La falta de la que se está diciendo por qué faltó. */
-  const [faltaAExplicar, setFaltaAExplicar] = useState<Falta | null>(null);
   const mutacionesDeFaltas = useMutacionesDeFaltas();
   const [feedback, setFeedback] = useState<string | null>(null);
 
@@ -194,10 +186,27 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     weekStart,
     timezone: scope.timezone,
     nowISO,
+    // La misma tolerancia que Inicio y Horario antes de decir «No ha llegado».
+    toleranciaMin: scope.settings.lateGraceMinutes,
   });
   const faltasVisibles = faltasDeLaSemana.faltas.filter(
     (falta) => employeeFilter === null || falta.employeeId === employeeFilter,
   );
+  const sinMarcarVisibles = faltasDeLaSemana.turnosSinLlegar.filter(
+    (turno) => employeeFilter === null || turno.employee_id === employeeFilter,
+  );
+  /*
+   * «VINO Y NO MARCÓ» Y «¿POR QUÉ FALTÓ?», con las hojas compartidas con Inicio (12-oct):
+   * sirven para una falta de ayer y para quien todavía no ha marcado hoy.
+   */
+  const resolverFalta = useResolverFalta({
+    nombres: names,
+    timezone: scope.timezone,
+    timeFormat: scope.timeFormat,
+    language,
+    nowISO,
+    onHecho: setFeedback,
+  });
   const team = useTeam({
     organizationId,
     locationIds: scope.locationId === null ? [] : [scope.locationId],
@@ -676,14 +685,23 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     onVerJornada={setSelected}
                   />
 
+                  <TodaviaNoHaMarcado
+                    turnos={sinMarcarVisibles}
+                    nombres={names}
+                    timezone={scope.timezone}
+                    timeFormat={scope.timeFormat}
+                    onVino={resolverFalta.abrirVino}
+                    onFalto={resolverFalta.abrirPorQue}
+                  />
+
                   <FaltasDeLaSemana
                     faltas={faltasVisibles}
                     nombres={names}
                     timezone={scope.timezone}
                     timeFormat={scope.timeFormat}
                     language={language}
-                    onVino={setFaltaElegida}
-                    onPorQue={setFaltaAExplicar}
+                    onVino={resolverFalta.abrirVino}
+                    onPorQue={resolverFalta.abrirPorQue}
                   />
 
                   {/*
@@ -1090,70 +1108,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
         />
       ) : null}
 
-      {faltaElegida === null ? null : (
-        <RegistrarQueVinoSheet
-          key={faltaElegida.id}
-          falta={faltaElegida}
-          nombre={names.get(faltaElegida.employeeId) ?? t('team.unknownEmployee')}
-          timezone={scope.timezone}
-          language={language}
-          ahoraISO={nowISO}
-          guardando={mutations.vino.isPending}
-          onGuardar={async ({ entradaISO, salidaISO, motivo }) => {
-            // Entrada y salida de una vez: ver `registrarQueVino`. La falta es del turno.
-            await mutations.vino.mutateAsync({
-              shiftId: faltaElegida.id,
-              startsAt: entradaISO,
-              endsAt: salidaISO,
-              reason: motivo,
-            });
-            setFaltaElegida(null);
-            setFeedback(t('timesheet.absences.registered'));
-          }}
-          onClose={() => setFaltaElegida(null)}
-        />
-      )}
-
-      {faltaAExplicar === null ? null : (
-        <JustificarFaltaSheet
-          key={faltaAExplicar.id}
-          falta={faltaAExplicar}
-          nombre={names.get(faltaAExplicar.employeeId) ?? t('team.unknownEmployee')}
-          timezone={scope.timezone}
-          timeFormat={scope.timeFormat}
-          language={language}
-          guardando={
-            mutacionesDeFaltas.justificar.isPending || mutacionesDeFaltas.darPorCumplido.isPending
-          }
-          quitando={mutacionesDeFaltas.quitar.isPending}
-          onGuardar={async (respuesta) => {
-            if (respuesta.kind === 'credit') {
-              await mutacionesDeFaltas.darPorCumplido.mutateAsync({
-                shiftId: faltaAExplicar.id,
-                reason: respuesta.reason,
-                note: respuesta.note,
-              });
-              setFaltaAExplicar(null);
-              setFeedback(t('absence.creditSaved'));
-              return;
-            }
-            await mutacionesDeFaltas.justificar.mutateAsync({
-              shiftId: faltaAExplicar.id,
-              kind: respuesta.kind,
-              reason: respuesta.reason,
-              note: respuesta.note,
-            });
-            setFaltaAExplicar(null);
-            setFeedback(t('absence.saved'));
-          }}
-          onQuitar={async () => {
-            await mutacionesDeFaltas.quitar.mutateAsync(faltaAExplicar.id);
-            setFaltaAExplicar(null);
-            setFeedback(t('absence.saved'));
-          }}
-          onClose={() => setFaltaAExplicar(null)}
-        />
-      )}
+      {resolverFalta.hojas}
 
       {manualOpen ? (
         <ManualEntrySheet

@@ -1473,15 +1473,16 @@ function crearRpc(almacen: Almacen) {
 
       /*
        * «¿POR QUÉ FALTÓ?» (2-oct), como `resolveAbsence` en el servidor: un turno publicado
-       * que ya terminó, un tipo y un motivo que vayan juntos, y la nota si es «Otro».
+       * que ya empezó (12-oct: no hace falta que haya terminado), un tipo y un motivo que
+       * vayan juntos, y la nota si es «Otro».
        */
       case 'resolve_absence': {
         const turno = filas('shifts').find((fila) => fila.id === argumentos.p_shift_id);
         if (turno === undefined || turno.status !== 'published') {
           return conError('Ese turno no está publicado.');
         }
-        if (Date.parse(String(turno.ends_at)) > Date.now()) {
-          return conError('Ese turno todavía no terminó.');
+        if (Date.parse(String(turno.starts_at)) > Date.now()) {
+          return conError('Ese turno todavía no empieza.');
         }
         if (!motivoValido(argumentos.p_kind, argumentos.p_reason)) {
           return conError('Ese motivo no vale para ese tipo de falta.');

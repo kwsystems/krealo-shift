@@ -56,8 +56,15 @@ export function situacionDeHoy(params: {
   const turnos = dia.turnos;
   const siguiente = turnos.find((t) => Date.parse(t.starts_at) > ahora) ?? null;
 
-  const sinLlegar = turnos.find((turno) =>
-    turnoSinLlegar({ turno, jornadas: dia.jornadas, ahoraISO: nowISO, toleranciaMin }),
+  /*
+   * Si quien gestiona ya dijo «faltó» mientras dura el turno (12-oct), es una falta: está en
+   * `dia.faltas` y sale como tal más abajo, no como «No has marcado».
+   */
+  const yaEsFalta = new Set(dia.faltas.map((falta) => falta.id));
+  const sinLlegar = turnos.find(
+    (turno) =>
+      !yaEsFalta.has(turno.id) &&
+      turnoSinLlegar({ turno, jornadas: dia.jornadas, ahoraISO: nowISO, toleranciaMin }),
   );
   if (sinLlegar !== undefined) return { tipo: 'sinLlegar', turno: sinLlegar };
 
@@ -68,6 +75,7 @@ export function situacionDeHoy(params: {
   const empezando =
     turnos.find(
       (t) =>
+        !yaEsFalta.has(t.id) &&
         Date.parse(t.starts_at) <= ahora &&
         ahora < Date.parse(t.ends_at) &&
         !cubreElTurno(t, dia.jornadas, ahora),

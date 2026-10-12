@@ -95,7 +95,7 @@ export function useMisJustificaciones(params: { organizationId: string; employee
   });
 }
 
-/** El servidor dijo que no y por qué (`MOTIVO`, `NOTA`, `NO_TERMINO`). */
+/** El servidor dijo que no y por qué (`MOTIVO`, `NOTA`, `NO_EMPEZO`, `NO_TERMINO`). */
 export class JustificacionRechazada extends Error {
   constructor(
     readonly motivo: string,

@@ -247,3 +247,57 @@ describe('no ha llegado (2-oct)', () => {
     ]);
   });
 });
+
+/**
+ * «FALTÓ», DICHO MIENTRAS EL TURNO DURA (12-oct). Andree: «si no marca al comienzo cuenta ya
+ * como posibilidad de marcar como falta, no esperar a todo el día».
+ */
+describe('la falta decidida antes de que termine el turno', () => {
+  const t = turno(); // 10:00–18:00 en Lima
+  const AHORA = '2026-09-30T17:00:00.000Z'; // 12:00: el turno está en curso
+  const falto: ResolucionDeFalta = {
+    id: 't1',
+    organization_id: 'o',
+    location_id: 'l1',
+    employee_id: 'ana',
+    shift_id: 't1',
+    work_date: '2026-09-30',
+    kind: 'unjustified',
+    reason: 'no_notice',
+    note: null,
+    decided_at: AHORA,
+  };
+  const conDecision = (jornadas: JornadaParaFaltas[], ahora = AHORA) =>
+    faltasDeLosTurnos({
+      turnos: [t],
+      jornadas,
+      relojDesde: () => '2026-09-29',
+      ahoraISO: ahora,
+      timezone: LIMA,
+      resoluciones: [falto],
+    });
+
+  it('sin decidir, un turno en curso todavía no es falta', () => {
+    expect(faltas([t], [], { ahora: AHORA })).toEqual([]);
+  });
+
+  it('decidido «faltó», es falta ya, con lo que se dijo', () => {
+    const [f] = conDecision([]);
+    expect(f).toMatchObject({ id: 't1', resolucion: { kind: 'unjustified' } });
+  });
+
+  it('y deja de ser «No ha llegado»: es una cosa o la otra, nunca las dos', () => {
+    const base = { turno: t, jornadas: [], ahoraISO: AHORA, toleranciaMin: 5 };
+    expect(turnoSinLlegar(base)).toBe(true);
+    expect(turnoSinLlegar({ ...base, resoluciones: [falto] })).toBe(false);
+  });
+
+  it('si después aparece y marca, la falta se va sola', () => {
+    const llego = jornada({ starts_at: '2026-09-30T17:30:00.000Z', ends_at: null });
+    expect(conDecision([llego], '2026-09-30T18:00:00.000Z')).toEqual([]);
+  });
+
+  it('decirlo de un turno que aún no empieza no lo vuelve falta', () => {
+    expect(conDecision([], '2026-09-30T14:00:00.000Z')).toEqual([]);
+  });
+});

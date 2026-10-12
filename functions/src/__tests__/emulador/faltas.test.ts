@@ -17,6 +17,7 @@ const AJENO = 'uid-gerente-otra-faltas';
 const VENDEDORA = 'uid-vendedora-faltas';
 const TURNO = 'turno-faltado';
 const TURNO_FUTURO = 'turno-futuro';
+const TURNO_EN_CURSO = 'turno-en-curso';
 
 const correr = (fn: unknown, data: Record<string, unknown>, uid: string): Promise<unknown> =>
   (fn as { run: (r: unknown) => Promise<unknown> }).run({
@@ -74,6 +75,12 @@ beforeEach(async () => {
   // 20:00 del 30 de septiembre en Lima: en UTC ya es el 1 de octubre.
   await turno(TURNO, '2026-10-01T01:00:00.000Z', '2026-10-01T04:00:00.000Z');
   await turno(TURNO_FUTURO, '2099-01-01T15:00:00.000Z', '2099-01-01T23:00:00.000Z');
+  // Empezó hace una hora y le quedan cinco: el «No ha llegado» de ahora mismo.
+  await turno(
+    TURNO_EN_CURSO,
+    new Date(Date.now() - 60 * 60_000).toISOString(),
+    new Date(Date.now() + 5 * 60 * 60_000).toISOString(),
+  );
 });
 
 describe('decir por qué faltó', () => {
@@ -127,8 +134,20 @@ describe('decir por qué faltó', () => {
           GERENTE,
         ),
       ),
-    ).toBe('failed-precondition:NO_TERMINO');
+    ).toBe('failed-precondition:NO_EMPEZO');
     expect(await leer()).toBeUndefined();
+  });
+
+  it('no hace falta esperar a que el turno termine: basta con que haya empezado (12-oct)', async () => {
+    await correr(
+      resolveAbsence,
+      { p_shift_id: TURNO_EN_CURSO, p_kind: 'unjustified', p_reason: 'no_notice' },
+      GERENTE,
+    );
+    const guardada = (
+      await db.collection(COLLECTIONS.absenceResolutions).doc(TURNO_EN_CURSO).get()
+    ).data();
+    expect(guardada).toMatchObject({ kind: 'unjustified', reason: 'no_notice' });
   });
 
   it('ni quien gestiona otra sede ni la propia persona pueden decirlo', async () => {

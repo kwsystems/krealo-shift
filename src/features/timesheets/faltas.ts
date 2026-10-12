@@ -18,8 +18,13 @@ import type { ResolucionDeFalta } from './justificaciones';
  *
  * ES FALTA un turno que cumple las cuatro cosas:
  *   1. PUBLICADO. Un borrador no se le llegó a dar a nadie.
- *   2. YA TERMINÓ. Mientras dura, la persona todavía puede llegar: eso es una tardanza, y
- *      lo dice Inicio.
+ *   2. YA TERMINÓ. Mientras dura, la persona todavía puede llegar: eso es «No ha llegado», y
+ *      lo dicen Inicio, Horario y Horas.
+ *      SALVO QUE QUIEN GESTIONA YA LO HAYA DECIDIDO (12-oct). Andree: «si no marca al
+ *      comienzo cuenta ya como posibilidad de marcar como falta, no esperar a todo el día».
+ *      Un turno que ya empezó, sin marcas, del que se dijo «faltó» (`justificaciones.ts`)
+ *      es falta desde ese momento, en todas las vistas: no hace falta esperar a que acabe
+ *      para que Horario, Reportes, el bono y su celular lo digan.
  *   3. DE UN DÍA DESDE QUE LA SEDE USA EL RELOJ (`relojDesde`). Antes de ese día un turno
  *      sin marcas no es que nadie viniera: es que la app no existía. Es la misma frontera
  *      que usa «Registrar como cumplido» en el servidor (`horario-cumplido.ts`), así que
@@ -108,7 +113,7 @@ export function faltasDeLosTurnos(params: {
   const faltas: Falta[] = [];
   for (const turno of params.turnos) {
     if (turno.status !== 'published') continue;
-    if (Date.parse(turno.ends_at) > ahora) continue;
+    if (Date.parse(turno.ends_at) > ahora && !decididaAntes(turno, resolucionDe, ahora)) continue;
     const desde = params.relojDesde(turno.location_id);
     if (desde === null || desde === undefined) continue;
     const dia = dateKeyOf(turno.starts_at, params.timezone);
@@ -123,6 +128,20 @@ export function faltasDeLosTurnos(params: {
     });
   }
   return faltas.sort((a, b) => a.turno.starts_at.localeCompare(b.turno.starts_at));
+}
+
+/**
+ * «FALTÓ», DICHO MIENTRAS EL TURNO DURA (12-oct): ya empezó y quien gestiona dijo por qué
+ * faltó. Lo que decide si es falta sigue siendo la regla 4 —sin jornada—: si después marca,
+ * la jornada lo cubre y deja de ser falta sola, igual que una falta de ayer con un fichaje
+ * manual.
+ */
+function decididaAntes(
+  turno: Pick<ShiftRow, 'id' | 'starts_at'>,
+  resolucionDe: ReadonlyMap<string, unknown>,
+  ahora: number,
+): boolean {
+  return resolucionDe.has(turno.id) && Date.parse(turno.starts_at) <= ahora;
 }
 
 /** Las faltas de cada persona, para las pantallas que cuentan por fila. */
@@ -167,7 +186,8 @@ export function contarFaltas(faltas: readonly Pick<Falta, 'resolucion'>[]) {
  *
  * Cuando el turno termina sin marca deja de ser esto y pasa a ser una FALTA
  * (`faltasDeLosTurnos`). Las dos reglas no se pisan: una mira turnos en curso, la otra
- * turnos terminados.
+ * turnos terminados. Y si mientras dura ya se dijo «faltó» (12-oct), es falta y no esto:
+ * por eso las resoluciones entran aquí también.
  */
 export function turnoSinLlegar(params: {
   turno: Pick<ShiftRow, 'id' | 'employee_id' | 'starts_at' | 'ends_at' | 'status'>;
@@ -175,9 +195,12 @@ export function turnoSinLlegar(params: {
   ahoraISO: string;
   /** La tolerancia de la sede para llegar tarde, en minutos. */
   toleranciaMin: number;
+  /** Lo que se dijo de cada falta: si ya se dijo «faltó», no es «no ha llegado». */
+  resoluciones?: readonly Pick<ResolucionDeFalta, 'shift_id'>[];
 }): boolean {
   const { turno, jornadas, ahoraISO, toleranciaMin } = params;
   if (turno.status !== 'published') return false;
+  if ((params.resoluciones ?? []).some((r) => r.shift_id === turno.id)) return false;
   const ahora = Date.parse(ahoraISO);
   if (Date.parse(turno.ends_at) <= ahora) return false;
   if (Date.parse(turno.starts_at) + Math.max(0, toleranciaMin) * 60_000 >= ahora) return false;

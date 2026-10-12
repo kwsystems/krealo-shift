@@ -1,5 +1,6 @@
 import type { ShiftRow } from '@/features/schedules/api';
 import type { WorkSession } from '@/features/timesheets/api';
+import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
 import { situacionDeHoy } from '../hoy';
 import { diasDelVendedor } from '../resumen';
 
@@ -68,6 +69,7 @@ function hoy(params: {
   turnos: ShiftRow[];
   jornadas?: WorkSession[];
   dia?: string;
+  resoluciones?: ResolucionDeFalta[];
 }) {
   const nowISO = new Date(
     `2026-10-${params.dia ?? '07'}T${params.ahora}:00.000-05:00`,
@@ -80,6 +82,7 @@ function hoy(params: {
     timezone: LIMA,
     nowISO,
     relojDesde: () => '2026-01-01',
+    resoluciones: params.resoluciones,
   });
   return situacionDeHoy({
     dia: dia!,
@@ -143,5 +146,34 @@ describe('situacionDeHoy', () => {
 
   it('sin turno ni jornada, día libre', () => {
     expect(hoy({ ahora: '12:00', turnos: [] })).toEqual({ tipo: 'libre' });
+  });
+});
+
+/**
+ * «FALTÓ», DICHO MIENTRAS SU TURNO DURA (12-oct): su celular dice falta desde ese momento,
+ * como Horario y Horas, y no «No has marcado» ni un turno «empezando».
+ */
+describe('la falta decidida antes de que termine el turno', () => {
+  it('con el turno en curso y «faltó» dicho, el celular dice falta', () => {
+    const t = turno('10:00', '19:00');
+    const falto: ResolucionDeFalta = {
+      id: t.id,
+      organization_id: 'o',
+      location_id: 'sede',
+      employee_id: 'yo',
+      shift_id: t.id,
+      work_date: '2026-10-07',
+      kind: 'unjustified',
+      reason: 'no_notice',
+      note: null,
+      decided_at: null,
+    };
+    expect(hoy({ ahora: '12:00', turnos: [t] }).tipo).toBe('sinLlegar');
+    expect(hoy({ ahora: '12:00', turnos: [t], resoluciones: [falto] })).toEqual({
+      tipo: 'falta',
+      faltas: [t],
+      justificada: false,
+      siguiente: null,
+    });
   });
 });

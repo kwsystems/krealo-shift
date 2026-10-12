@@ -206,6 +206,12 @@ const MARGEN_FUTURO_MS = 5 * 60_000;
  * «VINO Y NO MARCÓ»: su entrada y su salida, con las horas del turno ya puestas. Se pueden
  * cambiar —llegó a las 18:10—, y el motivo es obligatorio como en todo fichaje manual: sin
  * él, una falta convertida en horas es indistinguible de un fraude en una auditoría.
+ *
+ * CON EL TURNO TODAVÍA EN CURSO, SOLO LA ENTRADA (12-oct). Andree: «hoy no ha marcado
+ * porque se ha olvidado, ¿dónde lo arreglo?… y ya dejar que ella siga con todo». La salida
+ * aún no ha pasado: se registra la entrada, la jornada queda abierta y ella sigue en el
+ * reloj como cualquier día —refrigerio y salida—. Pedirle aquí una salida futura era
+ * inventarla.
  */
 export function RegistrarQueVinoSheet({
   falta,
@@ -223,10 +229,16 @@ export function RegistrarQueVinoSheet({
   language: SupportedLanguage;
   ahoraISO: string;
   guardando: boolean;
-  onGuardar: (params: { entradaISO: string; salidaISO: string; motivo: string }) => Promise<void>;
+  /** `salidaISO` es `null` con el turno en curso: solo se registra la entrada. */
+  onGuardar: (params: {
+    entradaISO: string;
+    salidaISO: string | null;
+    motivo: string;
+  }) => Promise<void>;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
+  const enCurso = Date.parse(falta.turno.ends_at) > Date.parse(ahoraISO);
   const [entrada, setEntrada] = useState(localTimeOf(falta.turno.starts_at, timezone));
   const [salida, setSalida] = useState(localTimeOf(falta.turno.ends_at, timezone));
   const [motivo, setMotivo] = useState('');
@@ -247,17 +259,23 @@ export function RegistrarQueVinoSheet({
         ? salidaElMismoDia
         : localDateTimeToInstant(addDaysToKey(falta.dia, 1), salida.trim(), timezone);
 
-  const horasMal = entradaISO === null || salidaISO === null;
-  const futura =
-    salidaISO !== null && Date.parse(salidaISO) > Date.parse(ahoraISO) + MARGEN_FUTURO_MS;
+  const horasMal = entradaISO === null || (!enCurso && salidaISO === null);
+  // Con el turno en curso la que no puede ser futura es la entrada; si no, la salida.
+  const ultima = enCurso ? entradaISO : salidaISO;
+  const futura = ultima !== null && Date.parse(ultima) > Date.parse(ahoraISO) + MARGEN_FUTURO_MS;
   const motivoFalta = motivo.trim().length < 3;
   const valido = !horasMal && !futura && !motivoFalta;
 
   const guardar = () => {
     setIntentado(true);
-    if (!valido || entradaISO === null || salidaISO === null) return;
+    if (!valido || entradaISO === null) return;
+    if (!enCurso && salidaISO === null) return;
     setFallo(false);
-    onGuardar({ entradaISO, salidaISO, motivo: motivo.trim() }).catch(() => setFallo(true));
+    onGuardar({
+      entradaISO,
+      salidaISO: enCurso ? null : salidaISO,
+      motivo: motivo.trim(),
+    }).catch(() => setFallo(true));
   };
 
   return (
@@ -267,19 +285,31 @@ export function RegistrarQueVinoSheet({
       onClose={onClose}
       testID="falta-vino-hoja"
       footer={
-        <PrimaryButton
-          label={t('timesheet.absences.save')}
-          onPress={guardar}
-          loading={guardando}
-          disabled={intentado && !valido}
-          testID="falta-vino-guardar"
-        />
+        <Stack gap={spacing.sm}>
+          {intentado && !valido ? (
+            <AppText variant="help" tone="danger" testID="falta-vino-por-que-no">
+              {horasMal
+                ? t('timesheet.absences.errorHours')
+                : futura
+                  ? t('timesheet.futureTime')
+                  : t('timesheet.absences.reasonRequired')}
+            </AppText>
+          ) : null}
+          <PrimaryButton
+            label={enCurso ? t('timesheet.absences.saveClockIn') : t('timesheet.absences.save')}
+            onPress={guardar}
+            loading={guardando}
+            testID="falta-vino-guardar"
+          />
+        </Stack>
       }
     >
       <AppText variant="body">
-        {t('timesheet.absences.sheetBody', {
-          day: formatDateKeyShort(falta.dia, language),
-        })}
+        {enCurso
+          ? t('timesheet.absences.sheetBodyNow')
+          : t('timesheet.absences.sheetBody', {
+              day: formatDateKeyShort(falta.dia, language),
+            })}
       </AppText>
       <Row gap={spacing.md} align="flex-start">
         <Mitad>
@@ -292,27 +322,20 @@ export function RegistrarQueVinoSheet({
             testID="falta-vino-entrada"
           />
         </Mitad>
-        <Mitad>
-          <FormField
-            label={t('timesheet.absences.clockOut')}
-            value={salida}
-            onChangeText={setSalida}
-            keyboardType="numbers-and-punctuation"
-            placeholder="21:00"
-            testID="falta-vino-salida"
-          />
-        </Mitad>
+        {enCurso ? null : (
+          <Mitad>
+            <FormField
+              label={t('timesheet.absences.clockOut')}
+              value={salida}
+              onChangeText={setSalida}
+              keyboardType="numbers-and-punctuation"
+              placeholder="21:00"
+              testID="falta-vino-salida"
+            />
+          </Mitad>
+        )}
       </Row>
-      {intentado && horasMal ? (
-        <AppText variant="help" tone="danger">
-          {t('timesheet.absences.errorHours')}
-        </AppText>
-      ) : null}
-      {futura ? (
-        <AppText variant="help" tone="danger" testID="falta-vino-futura">
-          {t('timesheet.futureTime')}
-        </AppText>
-      ) : null}
+      {/* Por qué no se guarda, junto al botón: ver el pie. */}
       <FormField
         label={t('timesheet.absences.reason')}
         value={motivo}
@@ -351,12 +374,18 @@ export function JustificarFaltaSheet({
   onGuardar,
   onQuitar,
   onClose,
+  enCurso = false,
 }: {
   falta: Falta;
   nombre: string;
   timezone: string;
   timeFormat: TimeFormatPreference;
   language: SupportedLanguage;
+  /**
+   * El turno todavía dura (12-oct): «faltó» se puede decir ya, pero «Cumplió su horario»
+   * no —todavía no lo ha cumplido—, así que esa opción no sale.
+   */
+  enCurso?: boolean;
   guardando: boolean;
   quitando: boolean;
   onGuardar: (
@@ -461,7 +490,7 @@ export function JustificarFaltaSheet({
         options={[
           { value: 'justified', label: t('absence.justified') },
           { value: 'unjustified', label: t('absence.unjustified') },
-          { value: 'credit', label: t('absence.creditOption') },
+          ...(enCurso ? [] : [{ value: 'credit' as const, label: t('absence.creditOption') }]),
         ]}
         testID="justificar-falta-tipo"
       />

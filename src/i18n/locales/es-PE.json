@@ -1470,7 +1470,18 @@
       "save": "Registrar entrada y salida",
       "failed": "No se pudo registrar. Revisa las horas y vuelve a intentarlo.",
       "registered": "Registrado: ya no cuenta como falta.",
-      "tile": "Faltas"
+      "tile": "Faltas",
+      "sheetBodyNow": "Su turno sigue en curso: se registra solo su entrada, con tu motivo. Después sigue en el reloj como cualquier día: refrigerio y salida.",
+      "saveClockIn": "Registrar entrada",
+      "registeredClockIn": "Entrada registrada: ya figura trabajando y marca su salida en el reloj."
+    },
+    "notClockedIn": {
+      "title_one": "{{count}} persona no ha marcado su entrada",
+      "title_other": "{{count}} personas no han marcado su entrada",
+      "body": "Su turno ya empezó y no hay ninguna marca. Si vino y olvidó marcar, registra su entrada y sigue con el reloj como siempre. Si no vino, márcalo como falta ahora: no saldrá nada más de ese día.",
+      "what": "Turno de {{range}}, sin ninguna marca.",
+      "cameAnyway": "Vino y no marcó",
+      "absent": "Faltó"
     },
     "cases": {
       "oddExitFuture": "Su salida quedó para el {{day}} a las {{time}}, que todavía no llega",
@@ -1637,7 +1648,7 @@
     "adminTeamTitle": "Equipo",
     "adminTeamBody": "Aquí se da de alta a cada persona y se reinician los PIN. El PIN lo genera la app: nadie lo elige, y quien administra lo ve una sola vez para entregarlo. Cada fila enseña su semana día por día, con el total; al abrir la ficha ves a qué hora entró y salió cada día y cuánto hizo cada semana del mes. En «Disponibilidad», dentro de Equipo, está lo que cada persona dijo de sus días (qué días no puede, qué horas prefiere, sus comentarios), con lo nuevo marcado para darlo por visto. Sale también en el Horario, y un turno que choca con un «no puede» lo avisa en rojo. En la ficha, «Celular» dice si la persona ya entró a su celular con su correo: sin entrar no ve su horario ni puede poner su disponibilidad. Cuando alguien deja de trabajar, «Dejó de trabajar» pide su último día: se guarda todo lo de antes (horas, faltas, reportes, bono) y sus turnos de después se quitan del horario.",
     "adminHoursTitle": "Horas",
-    "adminHoursBody": "Lo que marcaron, día por día, con sus totales. Arriba, «Casos por resolver» junta lo que necesita que decidas: quien se fue antes de su hora («Le debe» o «Está justificado»), quien no marcó su refrigerio («Descontar refrigerio» o «Trabajó sin refrigerio»), quien sigue dentro pasado su turno («Marcar salida») y quien trabajó más que su turno o marcó fuera de él («Aprobar como extra», «No es extra» o «Está bien así»). Todo se decide aquí: Horario solo avisa, y lo que resuelves deja de salir en todas las pantallas. Debajo, las faltas de la semana: un turno publicado que terminó sin ninguna marca cuenta como falta desde que tu tienda usa el reloj, y sale igual en Horario, Equipo, Reportes, el bono y el celular de la persona. Si de verdad faltó, «¿Por qué faltó?» deja decir si está justificada o no y el motivo (descanso médico, emergencia familiar, permiso avisado, no avisó, avisó tarde u otro, con un comentario): sale en todas esas pantallas, y una falta justificada no le quita el bono. Si vino y no marcó, «Vino y no marcó» registra su entrada y su salida con tu motivo y la falta se quita sola en todas partes. Las horas que alguien debe quedan en su ficha de Equipo, donde las das por compensadas o las perdonas, y la persona las ve en su celular. «Agregar fichaje manual» registra lo que faltó, con motivo obligatorio, y queda auditado con tu nombre y no como si lo hubiera marcado la persona.",
+    "adminHoursBody": "Lo que marcaron, día por día, con sus totales. Arriba, «Casos por resolver» junta lo que necesita que decidas: quien se fue antes de su hora («Le debe» o «Está justificado»), quien no marcó su refrigerio («Descontar refrigerio» o «Trabajó sin refrigerio»), quien sigue dentro pasado su turno («Marcar salida») y quien trabajó más que su turno o marcó fuera de él («Aprobar como extra», «No es extra» o «Está bien así»). Todo se decide aquí: Horario solo avisa, y lo que resuelves deja de salir en todas las pantallas. Debajo, las faltas de la semana: un turno publicado que terminó sin ninguna marca cuenta como falta desde que tu tienda usa el reloj, y sale igual en Horario, Equipo, Reportes, el bono y el celular de la persona. Si de verdad faltó, «¿Por qué faltó?» deja decir si está justificada o no y el motivo (descanso médico, emergencia familiar, permiso avisado, no avisó, avisó tarde u otro, con un comentario): sale en todas esas pantallas, y una falta justificada no le quita el bono. Si vino y no marcó, «Vino y no marcó» registra su entrada y su salida con tu motivo y la falta se quita sola en todas partes. Y no hace falta esperar a que termine el turno: en cuanto alguien pasa su hora de entrada sin marcar, sale arriba en Horas y en Inicio, en «no ha marcado su entrada». «Vino y no marcó» registra solo su entrada y la persona sigue en el reloj como siempre; «Faltó» la deja como falta en ese momento, en todas las pantallas, y ese día no sale nada más. Las horas que alguien debe quedan en su ficha de Equipo, donde las das por compensadas o las perdonas, y la persona las ve en su celular. «Agregar fichaje manual» registra lo que faltó, con motivo obligatorio, y queda auditado con tu nombre y no como si lo hubiera marcado la persona.",
     "adminInboxTitle": "Bandeja",
     "adminInboxBody": "Las solicitudes de «olvidé marcar» esperan tu sí o tu no. Al aprobar confirmas el día y la hora, y el fichaje queda registrado en Horas. Mientras no las resuelvas, esas horas no se cuentan.",
     "adminAlertsTitle": "Avisos de la campana",

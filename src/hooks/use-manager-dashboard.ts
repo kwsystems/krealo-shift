@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { docId } from '@/lib/firebase/ids';
 
 import { countPendingRequests } from '@/features/requests/api';
-import { fetchWeekShifts } from '@/features/schedules/api';
+import { fetchWeekShifts, type ShiftRow } from '@/features/schedules/api';
 import { currentWeekStart, dateKeyOf, weekRangeInstants } from '@/features/schedules/week';
 import { shiftScheduledMinutes } from '@/features/schedules/conflicts';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
@@ -182,6 +182,12 @@ export type ManagerDashboard = {
    */
   liveThisWeek: { personas: number; minutos: number };
   rightNow: RightNowEntry[];
+  /**
+   * Los turnos de quien «No ha llegado», enteros (12-oct): Inicio los pone arriba con «Vino
+   * y no marcó» y «Faltó», para resolverlo en el momento. Son los mismos que cuenta
+   * `lateCount`.
+   */
+  turnosSinLlegar: ShiftRow[];
   franjas: FranjaDeHoy[];
 };
 
@@ -308,6 +314,7 @@ export function useManagerDashboard(params: {
     let upcomingCount = 0;
     let lateCount = 0;
     let absentCount = 0;
+    const turnosSinLlegar: ShiftRow[] = [];
 
     const todaysShifts = shifts.filter(
       (shift) => shift.status === 'published' && dateKeyOf(shift.starts_at, timezone) === todayKey,
@@ -386,7 +393,12 @@ export function useManagerDashboard(params: {
         continue;
       }
 
-      if (shift.ends_at < nowISO) {
+      /*
+       * «FALTÓ», DICHO MIENTRAS EL TURNO DURA (12-oct), es falta ya: se trata como una
+       * terminada. Si quedó justificada no se atiende, igual que las de antes.
+       */
+      const decidida = (justificaciones.data ?? []).some((r) => r.shift_id === shift.id);
+      if (shift.ends_at < nowISO || decidida) {
         // Terminado y sin cubrir, pero de antes del reloj o ya justificado: no se atiende.
         if (!faltasDeHoy.has(shift.id)) continue;
         absentCount += 1;
@@ -409,9 +421,11 @@ export function useManagerDashboard(params: {
           jornadas: sessions,
           ahoraISO: nowISO,
           toleranciaMin: lateGraceMinutes,
+          resoluciones: justificaciones.data ?? [],
         })
       ) {
         lateCount += 1;
+        turnosSinLlegar.push(shift);
         rightNow.push({
           employeeId: shift.employee_id,
           name: '',
@@ -594,6 +608,7 @@ export function useManagerDashboard(params: {
       workedMinutesThisWeek,
       liveThisWeek,
       rightNow,
+      turnosSinLlegar,
       franjas,
     };
   }, [

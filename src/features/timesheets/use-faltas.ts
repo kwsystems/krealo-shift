@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import type { ShiftRow } from '@/features/schedules/api';
 import { useInicioDelReloj } from '@/features/schedules/horario-cumplido';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { weekEnd, weekRangeInstants, type DateKey } from '@/features/schedules/week';
@@ -18,6 +19,8 @@ export type FaltasDeLaSemana = {
    * pinta la tarjeta de Horario; Inicio lo cuenta con la misma regla.
    */
   sinLlegar: ReadonlySet<string>;
+  /** Esos mismos turnos, enteros: los que se pueden resolver ya en Horas (12-oct). */
+  turnosSinLlegar: readonly ShiftRow[];
 };
 
 /**
@@ -71,20 +74,24 @@ export function useFaltasDeLaSemana(params: {
             resoluciones: justificaciones.data ?? [],
           });
     // Igual que las faltas: sin las jornadas no se sabe quién vino, y no se afirma nada.
-    const sinLlegar = new Set(
+    const turnosSinLlegar =
       jornadas.data === undefined
         ? []
-        : (turnos.data ?? [])
-            .filter((turno) =>
-              turnoSinLlegar({ turno, jornadas: jornadas.data, ahoraISO: nowISO, toleranciaMin }),
-            )
-            .map((turno) => turno.id),
-    );
+        : (turnos.data ?? []).filter((turno) =>
+            turnoSinLlegar({
+              turno,
+              jornadas: jornadas.data,
+              ahoraISO: nowISO,
+              toleranciaMin,
+              resoluciones: justificaciones.data ?? [],
+            }),
+          );
     return {
       faltas,
       porTurno: new Map(faltas.map((falta) => [falta.id, falta])),
       porPersona: faltasPorPersona(faltas),
-      sinLlegar,
+      sinLlegar: new Set(turnosSinLlegar.map((turno) => turno.id)),
+      turnosSinLlegar,
     };
   }, [
     turnos.data,

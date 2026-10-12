@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { useRouter } from 'expo-router';
@@ -21,6 +21,7 @@ import { OfflineBanner, StatusBadge, SyncIndicator } from '@/components/ui/state
 import { useEmployeeNames } from '@/features/team/hooks';
 import { useLiveClock } from '@/hooks/use-live-clock';
 import { LoImportanteDeHoy } from '@/components/dashboard/lo-importante';
+import { TodaviaNoHaMarcado, useResolverFalta } from '@/components/timesheets/resolver-falta';
 import { prioridadDelDia } from '@/features/dashboard/prioridad';
 import {
   FilaDeFranja,
@@ -81,6 +82,20 @@ export default function ManagerHomeScreen() {
   });
 
   const names = useEmployeeNames(scope.organization?.id ?? null);
+
+  /*
+   * «NO HA LLEGADO», RESUELTO DESDE AQUÍ (12-oct): «Vino y no marcó» o «Faltó», con las
+   * mismas hojas que Horas. Lo que se guarda se ve en todas las vistas a la vez.
+   */
+  const [avisoDeFalta, setAvisoDeFalta] = useState<string | null>(null);
+  const resolverFalta = useResolverFalta({
+    nombres: names,
+    timezone: scope.timezone,
+    timeFormat: scope.timeFormat,
+    language,
+    nowISO: now.toISOString(),
+    onHecho: setAvisoDeFalta,
+  });
 
   // Las jornadas de hoy, al día con el horario publicado: «tarde» y «sin turno» salen de ahí.
   const hoy = dateKeyOf(now, scope.timezone);
@@ -249,6 +264,29 @@ export default function ManagerHomeScreen() {
                   trabajando={dashboard.workingCount}
                   enDescanso={dashboard.onBreakCount}
                 />
+
+                <TodaviaNoHaMarcado
+                  turnos={dashboard.turnosSinLlegar}
+                  nombres={names}
+                  timezone={scope.timezone}
+                  timeFormat={scope.timeFormat}
+                  onVino={(falta) => {
+                    setAvisoDeFalta(null);
+                    resolverFalta.abrirVino(falta);
+                  }}
+                  onFalto={(falta) => {
+                    setAvisoDeFalta(null);
+                    resolverFalta.abrirPorQue(falta);
+                  }}
+                />
+                {avisoDeFalta === null ? null : (
+                  <InlineNotice
+                    tone="working"
+                    icon="checkmark-circle-outline"
+                    title={avisoDeFalta}
+                    testID="sin-marcar-hecho"
+                  />
+                )}
 
                 {/*
                   Y ESTO SOLO INFORMA, así que va debajo y en pequeño: quién está dentro
@@ -515,6 +553,7 @@ export default function ManagerHomeScreen() {
           </AsyncSection>
         </Stack>
       </ResponsiveContainer>
+      {resolverFalta.hojas}
     </AppScreen>
   );
 }

@@ -1,6 +1,10 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react-native';
 
-import { FaltasDeLaSemana, JustificarFaltaSheet } from '../faltas-de-la-semana';
+import {
+  FaltasDeLaSemana,
+  JustificarFaltaSheet,
+  RegistrarQueVinoSheet,
+} from '../faltas-de-la-semana';
 import type { ShiftRow } from '@/features/schedules/api';
 import type { Falta } from '@/features/timesheets/faltas';
 import type { ResolucionDeFalta } from '@/features/timesheets/justificaciones';
@@ -220,5 +224,80 @@ describe('las faltas de la semana en Horas', () => {
         /ya tiene marcas/,
       ),
     );
+  });
+});
+
+/**
+ * CON EL TURNO TODAVÍA EN CURSO (12-oct): «Vino y no marcó» registra solo la entrada —la
+ * salida la marca ella en el reloj— y «¿Por qué faltó?» no ofrece «Cumplió su horario».
+ */
+describe('resolver mientras el turno dura', () => {
+  const DURANTE = '2026-10-01T00:30:00.000Z'; // 19:30 en Lima, turno 18:00–21:00
+
+  it('«Vino y no marcó» pide solo la entrada y guarda sin salida', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await renderWithProviders(
+      <RegistrarQueVinoSheet
+        falta={falta('a')}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        language="es-PE"
+        ahoraISO={DURANTE}
+        guardando={false}
+        onGuardar={onGuardar}
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('falta-vino-salida')).toBeNull();
+    await fireEvent.changeText(screen.getByTestId('falta-vino-motivo'), 'Se olvidó de marcar');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    await waitFor(() =>
+      expect(onGuardar).toHaveBeenCalledWith({
+        entradaISO: '2026-09-30T23:00:00.000Z',
+        salidaISO: null,
+        motivo: 'Se olvidó de marcar',
+      }),
+    );
+  });
+
+  it('una entrada que todavía no ha pasado no se guarda, y se dice por qué', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await renderWithProviders(
+      <RegistrarQueVinoSheet
+        falta={falta('a')}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        language="es-PE"
+        ahoraISO={DURANTE}
+        guardando={false}
+        onGuardar={onGuardar}
+        onClose={jest.fn()}
+      />,
+    );
+    await fireEvent.changeText(screen.getByTestId('falta-vino-entrada'), '20:30');
+    await fireEvent.changeText(screen.getByTestId('falta-vino-motivo'), 'Se olvidó de marcar');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    expect(onGuardar).not.toHaveBeenCalled();
+    expect(screen.getByTestId('falta-vino-por-que-no')).toBeTruthy();
+  });
+
+  it('«¿Por qué faltó?» no ofrece «Cumplió su horario» mientras el turno dura', async () => {
+    await renderWithProviders(
+      <JustificarFaltaSheet
+        falta={falta('a')}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        timeFormat="24h"
+        language="es-PE"
+        enCurso
+        guardando={false}
+        quitando={false}
+        onGuardar={jest.fn(() => Promise.resolve())}
+        onQuitar={jest.fn(() => Promise.resolve())}
+        onClose={jest.fn()}
+      />,
+    );
+    expect(screen.getByTestId('justificar-falta-tipo-unjustified')).toBeTruthy();
+    expect(screen.queryByTestId('justificar-falta-tipo-credit')).toBeNull();
   });
 });

@@ -21,7 +21,8 @@ import {
  * motivo—. Una por turno, con el id del turno: decirlo dos veces lo cambia, no lo duplica.
  *
  * Qué es una falta lo decide la app con los datos de siempre (`timesheets/faltas.ts`): un
- * turno publicado que terminó sin ninguna marca. Aquí no se vuelve a decidir: se guarda lo
+ * turno publicado que terminó sin ninguna marca, o uno que ya empezó sin marcas y del que
+ * aquí se dijo «faltó». Aquí no se vuelve a decidir: se guarda lo
  * que se dijo de ese turno, y si después resulta que vino —un fichaje manual—, la falta
  * deja de serlo y esto se queda sin efecto, sin que haga falta borrarlo.
  *
@@ -55,9 +56,15 @@ export const resolveAbsence = onCall(async (request) => {
   if (turno.status !== 'published') {
     throw new HttpsError('failed-precondition', 'Ese turno no está publicado.');
   }
-  if (Date.parse(String(turno.ends_at)) > Date.now()) {
-    throw new HttpsError('failed-precondition', 'Ese turno todavía no terminó.', {
-      motivo: 'NO_TERMINO',
+  /*
+   * BASTA CON QUE HAYA EMPEZADO (12-oct). Antes se exigía que hubiera terminado, y quien
+   * gestiona veía «No ha llegado» toda la tarde sin poder decir «faltó» hasta la noche.
+   * Si después marca, su jornada cubre el turno y la falta deja de serlo sola: lo dicho
+   * aquí se queda sin efecto, como siempre.
+   */
+  if (Date.parse(String(turno.starts_at)) > Date.now()) {
+    throw new HttpsError('failed-precondition', 'Ese turno todavía no empieza.', {
+      motivo: 'NO_EMPEZO',
     });
   }
 
