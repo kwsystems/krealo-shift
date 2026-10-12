@@ -114,7 +114,15 @@ async function tarjetas(pagina) {
 /** «Próximos turnos» de la ficha de Equipo de esa persona: sus rangos, en orden. */
 async function proximosDeEquipo(pagina, nombre) {
   await irPorElMenu(pagina, '/team');
-  const fila = delante(pagina, '[data-testid^="team-member-"]').filter({ hasText: nombre });
+  /*
+   * LA FILA DE ESA PERSONA, NO LA LISTA ENTERA (12-oct). `team-member-list` también empieza
+   * por `team-member-` y contiene el nombre: el clic caía en su centro y abría la ficha de
+   * otra persona. Así falló el arnés el lunes 12-oct, también con el código de antes.
+   */
+  const fila = delante(
+    pagina,
+    '[data-testid^="team-member-"]:not([data-testid="team-member-list"])',
+  ).filter({ hasText: nombre });
   await fila.first().click();
   const hoja = pagina.locator('[data-testid="employee-detail-sheet"]');
   await hoja.waitFor({ timeout: 10000 });
@@ -173,8 +181,12 @@ try {
     }
   }
   const suyas = [...porPersona.values()].find((lista) => lista.length >= 2) ?? [];
-  const elegida = suyas[suyas.length - 1];
-  const otra = suyas[suyas.length - 2];
+  /*
+   * LOS DOS PRIMEROS POR VENIR, NO LOS DOS ÚLTIMOS (12-oct): «Próximos turnos» de Equipo
+   * enseña solo los cinco siguientes, y los últimos de la semana pueden quedar fuera.
+   */
+  const elegida = suyas[1];
+  const otra = suyas[0];
   const porVenir = elegida !== undefined && otra !== undefined && otra.dia > hoy;
   if (elegida === undefined || otra === undefined) {
     problemas.push('Horario no tiene dos turnos publicados de una misma persona esta semana');

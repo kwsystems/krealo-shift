@@ -13,7 +13,7 @@ import { StatusBadge } from '@/components/ui/states';
 import type { TimeEditRequest } from '@/features/requests/api';
 import type { DentroDeLaPersona } from '@/features/timesheets/en-curso';
 import type { SupportedLanguage } from '@/i18n';
-import { formatDateKeyShort } from '@/features/schedules/week';
+import { dateKeyOf, formatDateKeyShort } from '@/features/schedules/week';
 import { spacing } from '@/theme/tokens';
 import { formatShiftRange, type TimeFormatPreference } from '@/utils/time';
 
@@ -227,14 +227,20 @@ export function EmployeeDetailSheet({
         onRetry={() => void upcoming.refetch()}
       >
         <Stack gap={spacing.xs}>
+          {/*
+            CON SU DÍA (12-oct). Decía «Sede Principal · 14:00 – 20:00» sin decir qué día: con
+            dos turnos iguales seguidos no se sabía cuál era el de mañana.
+          */}
           {(upcoming.data ?? []).map((shift) => (
             <KeyValueRow
               key={shift.id}
-              label={
-                shift.status === 'draft'
-                  ? `${t('schedule.statusDraft')} · ${locationNames.get(shift.location_id) ?? ''}`
-                  : (locationNames.get(shift.location_id) ?? '')
-              }
+              label={[
+                formatDateKeyShort(dateKeyOf(shift.starts_at, timezone), language),
+                shift.status === 'draft' ? t('schedule.statusDraft') : null,
+                locationNames.get(shift.location_id) ?? null,
+              ]
+                .filter((parte) => parte !== null && parte !== '')
+                .join(' · ')}
               value={formatShiftRange(
                 shift.starts_at,
                 shift.ends_at,
