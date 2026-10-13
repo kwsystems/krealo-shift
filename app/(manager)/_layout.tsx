@@ -10,6 +10,7 @@ import { AvisosEmergentes } from '@/features/avisos/avisos-emergentes';
 import { useVigiaDeAvisos } from '@/features/avisos/use-vigia-de-avisos';
 import { MenuLateral, type PropsDelMenu } from '@/components/layout/menu-lateral';
 import { ProveedorDeMarca } from '@/theme/marca-de-empresa';
+import { propsDelMarco } from '@/theme/marco';
 import { ErrorDeMembresia } from '@/components/boot/sin-acceso';
 import { AppScreen } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
@@ -132,7 +133,7 @@ function PanelConMarca() {
       flotar encima de cualquier pestaña, y para colocarlo justo debajo de la cabecera hace
       falta un contenedor común donde medirla. Ocupa lo mismo que ocupaba el fragmento.
     */
-    <View style={[estiloDelPanel, { backgroundColor: colors.marco }]}>
+    <View {...propsDelMarco()} style={[estiloDelPanel, { backgroundColor: colors.marco }]}>
       {/*
         La cabecera va DENTRO del provider porque lee la organización y la sede, y
         FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una

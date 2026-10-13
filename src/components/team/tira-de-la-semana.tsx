@@ -77,7 +77,18 @@ export function TiraDeLaSemana({
                 />
               ) : null}
               {dia.falta === undefined ? null : (
-                <View testID={testID === undefined ? undefined : `${testID}-falta-${dia.dia}`}>
+                // En su círculo (13-oct): el rojo no depende del fondo de la fila. Ver la
+                // pastilla de faltas en `member-row.tsx`.
+                <View
+                  style={[
+                    estilos.cruz,
+                    {
+                      backgroundColor:
+                        dia.falta === 'justificada' ? colors.warning50 : colors.danger50,
+                    },
+                  ]}
+                  testID={testID === undefined ? undefined : `${testID}-falta-${dia.dia}`}
+                >
                   <Ionicons
                     name="close"
                     size={12}
@@ -105,6 +116,13 @@ export function TiraDeLaSemana({
 export const ANCHO_DE_LA_TIRA = 7 * 14 + 6 * 3;
 
 const useEstilos = estilosDelTema((colors) => ({
+  cruz: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tira: { flexDirection: 'row', gap: 3, width: ANCHO_DE_LA_TIRA, flexShrink: 0 },
   casilla: { width: 14, alignItems: 'center', gap: 2 },
   trazado: { height: ALTO, width: 14, justifyContent: 'flex-end', alignItems: 'center' },

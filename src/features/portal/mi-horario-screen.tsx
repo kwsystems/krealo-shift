@@ -76,6 +76,7 @@ import { currentLanguage, type SupportedLanguage } from '@/i18n';
 import { useSessionStore } from '@/stores/session-store';
 import { textoDelMotivo } from '@/features/acceso/motivo-sin-ficha';
 import { estilosDelTema } from '@/theme/estilos';
+import { propsDelMarco } from '@/theme/marco';
 import { useTheme } from '@/theme/use-theme';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
@@ -352,7 +353,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             EL SALUDO, EN EL MARCO (13-oct, rediseño): la misma carcasa oscura del panel, con
             la esfera del reloj al lado. Es su app, y se reconoce de un vistazo.
           */}
-          <View style={estilos.banda}>
+          <View {...propsDelMarco()} style={estilos.banda}>
             <Stack gap={spacing.sm} style={estilos.bandaTexto}>
               <MarcaKrealo alto={24} testID="mi-horario-marca" sobreOscuro />
               <AppText variant="label" style={estilos.bandaSede}>

@@ -336,15 +336,31 @@ function MemberRowBase({
                     {dentro.estado === 'trabajando' ? t('timesheet.live') : t('timesheet.paused')}
                   </AppText>
                 )}
+                {/*
+                  LAS FALTAS, EN SU PASTILLA (13-oct): con su propio fondo, el rojo no depende del
+                  de la fila. Sobre la fila verde de quien trabaja, con el puntero encima, se
+                  quedaba en 4,45:1 —lo midió `contraste-check`—, y una pastilla además se lee
+                  como lo que es: un aviso, no un dato más de la columna.
+                */}
                 {faltas > 0 ? (
-                  <AppText
-                    variant="label"
-                    tone={faltasJustificadas >= faltas ? 'warning' : 'danger'}
-                    style={estilosDeColumna.derecha}
-                    testID={`team-member-${member.id}-faltas`}
+                  <View
+                    style={[
+                      estilosDeColumna.pastilla,
+                      {
+                        backgroundColor:
+                          faltasJustificadas >= faltas ? colors.warning50 : colors.danger50,
+                      },
+                    ]}
                   >
-                    {textoDeFaltas}
-                  </AppText>
+                    <AppText
+                      variant="label"
+                      tone={faltasJustificadas >= faltas ? 'warning' : 'danger'}
+                      style={estilosDeColumna.derecha}
+                      testID={`team-member-${member.id}-faltas`}
+                    >
+                      {textoDeFaltas}
+                    </AppText>
+                  </View>
                 ) : null}
               </Stack>
             </Row>
@@ -416,6 +432,12 @@ export const ANCHO_DE_COLUMNA = {
 } as const;
 
 const estilosDeColumna = StyleSheet.create({
+  pastilla: {
+    alignSelf: 'flex-end',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 999,
+  },
   horas: { width: ANCHO_DE_COLUMNA.horas, flexShrink: 0, justifyContent: 'flex-end' },
   horasConTira: {
     width: ANCHO_DE_COLUMNA.horasConTira,

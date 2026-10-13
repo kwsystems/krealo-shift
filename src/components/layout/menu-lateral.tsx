@@ -8,6 +8,7 @@ import { useNovedadesDeDisponibilidad } from '@/features/availability/novedades'
 import { usePendingRequestCount } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { estilosDelTema } from '@/theme/estilos';
+import { propsDelMarco } from '@/theme/marco';
 import { tonosDelTema, type Tono } from '@/theme/tonos';
 import { movimiento } from '@/theme/movimiento';
 import { borderWidth, radii, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
@@ -97,7 +98,7 @@ export function MenuLateral({ state, navigation }: PropsDelMenu) {
   };
 
   return (
-    <View style={estilos.menu} testID="menu-lateral" accessibilityRole="menu">
+    <View {...propsDelMarco()} style={estilos.menu} testID="menu-lateral" accessibilityRole="menu">
       <ScrollView contentContainerStyle={estilos.lista}>
         {destinos.map((destino) => {
           const enEsta =

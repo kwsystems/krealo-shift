@@ -13,6 +13,7 @@ import { CampanaDeAvisos } from '@/features/avisos/campana-de-avisos';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
+import { propsDelMarco } from '@/theme/marco';
 import { borderWidth, fontFamily, fontSize, radii, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
@@ -59,6 +60,7 @@ export function BarraDeAlcance() {
   return (
     <>
       <View
+        {...propsDelMarco()}
         style={[estilos.barra, useSidebar ? null : estilos.barraEstrecha]}
         testID="desktop-header"
       >

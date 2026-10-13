@@ -18,6 +18,7 @@ import { authSource } from '@/lib/firebase/session';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { useSessionStore } from '@/stores/session-store';
 import { estilosDelTema } from '@/theme/estilos';
+import { propsDelMarco } from '@/theme/marco';
 import { movimiento } from '@/theme/movimiento';
 import { spacing } from '@/theme/tokens';
 
@@ -112,7 +113,10 @@ export default function SignInScreen() {
    * acceso de siempre. En el teléfono, la esfera pequeña arriba. El logo encabeza las dos.
    */
   const marca = (
-    <View style={[estilos.marco, partido ? estilos.marcoPartido : estilos.marcoArriba]}>
+    <View
+      {...propsDelMarco()}
+      style={[estilos.marco, partido ? estilos.marcoPartido : estilos.marcoArriba]}
+    >
       <View {...movimiento('entrada')} style={estilos.marcoContenido}>
         <EsferaDeReloj tamano={partido ? 240 : 112} />
         <MarcaKrealo alto={partido ? 40 : 30} testID="sign-in-marca" sobreOscuro />

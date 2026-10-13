@@ -183,6 +183,13 @@ for (const tema of ['light', 'dark']) {
          * `role="img"`, que es lo que dice que es un gráfico, y eso es lo que se salta.
          */
         if (el.closest('[role="img"]') !== null) continue;
+        /*
+         * EL MARCO TAMPOCO (13-oct, rediseño): cabecera, menú, banda del celular y panel del
+         * acceso son oscuros en los dos temas a propósito, y llevan `data-marco` para decirlo
+         * (`src/theme/marco.ts`). Es una marca estructural, no una lista de colores: un fondo
+         * oscuro en claro que no la lleve sigue fallando aquí.
+         */
+        if (el.closest('[data-marco]') !== null) continue;
         const l = luz(getComputedStyle(el).backgroundColor);
         if (l === null) continue;
         fuera.push({
