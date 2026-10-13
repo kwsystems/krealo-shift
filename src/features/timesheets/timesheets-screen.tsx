@@ -57,7 +57,9 @@ import { useDiasDelFichajeManual } from './dias-del-fichaje-manual';
 import { PorResolverDeLaSemana } from './por-resolver-de-la-semana';
 import { casosPorResolver, type CasoPorResolver } from './casos';
 import { useDiasConCasoAbierto } from './casos-abiertos';
-import { porQueNoSeArreglo, useArreglarCaso } from './horas-debidas';
+import { porQueNoSeArreglo, useArreglarCaso, useReabrirDecision } from './horas-debidas';
+import { decisionesDeLaJornada } from './decisiones-de-la-jornada';
+import { DecisionesDeLaJornada } from '@/components/timesheets/decisiones-de-la-jornada';
 import { useMutacionesDeFaltas } from './justificaciones';
 import { detalleDeFaltas, tonoDelTotalDeFaltas } from './textos-de-falta';
 import { useFaltasDeLaSemana } from './use-faltas';
@@ -167,6 +169,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     // Ni el de la hora extra ni el del refrigerio (8-oct): salían en otro día que nadie tocó.
     guardarHoraExtra.reset();
     decidirRefrigerio.reset();
+    reabrir.reset();
     setSelected(null);
     setPedida(null);
   };
@@ -427,6 +430,8 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
    */
   const refrigerioPendiente = casoDeRefrigerio(true);
   const decidirRefrigerio = useArreglarCaso();
+  /* Cambiar una decisión ya tomada (13-oct): ver `decisiones-de-la-jornada.ts`. */
+  const reabrir = useReabrirDecision();
 
   const visibleSessions = useMemo(() => {
     const filtradas = allSessions.filter((session) => {
@@ -1049,6 +1054,19 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 },
               },
             )
+          }
+          seccionDecisiones={
+            <DecisionesDeLaJornada
+              decisiones={decisionesDeLaJornada(selected, events.data ?? [])}
+              cambiando={reabrir.isPending ? (reabrir.variables?.clave ?? null) : null}
+              error={reabrir.error === null ? null : porQueNoSeArreglo(t, reabrir.error)}
+              onCambiar={(clave) =>
+                reabrir.mutate(
+                  { sessionId: selected.id, clave },
+                  { onSuccess: () => setFeedback(t('timesheet.decisions.changed')) },
+                )
+              }
+            />
           }
           seccionHoraExtra={
             selected.ends_at === null ? undefined : (

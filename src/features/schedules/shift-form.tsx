@@ -80,6 +80,11 @@ type Props = {
   onDuplicate?: () => void;
   onRemove?: () => void;
   /**
+   * SI ESE TURNO YA SE TRABAJÓ (13-oct): lo que se decidió de su jornada y el camino a Horas,
+   * donde se ve y se cambia. Andree: «en todas las vistas debería poderse ver y arreglarse».
+   */
+  jornada?: { decisiones: readonly string[]; onVer: () => void };
+  /**
    * SI NO SE PUDO GUARDAR, SE DICE AQUÍ (auditoría, 4-oct). La hoja se quedaba abierta sin
    * ningún mensaje y parecía que el botón no hacía nada.
    */
@@ -100,6 +105,7 @@ export function ShiftFormSheet({
   onSubmit,
   onDuplicate,
   onRemove,
+  jornada,
   error = null,
   onClose,
 }: Props) {
@@ -226,6 +232,27 @@ export function ShiftFormSheet({
         </Stack>
       }
     >
+      {jornada !== undefined ? (
+        <InlineNotice
+          tone="info"
+          icon="time-outline"
+          title={t('schedule.workedDayTitle')}
+          body={
+            jornada.decisiones.length > 0
+              ? t('schedule.workedDayDecided', { decisions: jornada.decisiones.join(' · ') })
+              : t('schedule.workedDayBody')
+          }
+          action={
+            <SecondaryButton
+              label={t('schedule.workedDaySee')}
+              onPress={jornada.onVer}
+              fullWidth={false}
+              testID="shift-form-ver-jornada"
+            />
+          }
+          testID="shift-form-jornada"
+        />
+      ) : null}
       {/*
         TURNO O DESCANSO, ARRIBA Y NO ESCONDIDO. Sin esto, marcar un día libre solo se
         podría hacer pegando una tabla: una función a la que únicamente se llega por un

@@ -93,6 +93,22 @@ export const workSessionSchema = z.object({
   avisos_vistos: z.array(z.string()).default([]),
   /** Los casos de «Por resolver» ya resueltos en esta jornada (1-oct): ver `casos.ts`. */
   casos_resueltos: z.array(z.string()).default([]),
+  /*
+   * QUÉ SE DECIDIÓ EN CADA CASO (13-oct), para enseñarlo con su «Cambiar»: ver
+   * `decisiones-de-la-jornada.ts`. Las jornadas de antes no lo traen, y un valor raro no
+   * tumba la semana entera.
+   */
+  casos_decision: z
+    .record(
+      z.string(),
+      z.object({
+        decision: z.string(),
+        nota: z.string().nullable().default(null),
+        minutos: z.number().nullable().default(null),
+      }),
+    )
+    .optional()
+    .catch(undefined),
   updated_at: z.string(),
 });
 
@@ -193,7 +209,7 @@ export async function fetchWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, casos_decision, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
@@ -217,7 +233,7 @@ export async function fetchOpenWorkSessions(params: {
     db
       .from(TABLES.workSessions)
       .select(
-        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, updated_at',
+        'id, employee_id, location_id, shift_id, starts_at, ends_at, gross_minutes, paid_break_minutes, unpaid_break_minutes, net_minutes, status, flags, departure_reason, departure_note, source, credit_reason, credit_note, auto_clock_out, avisos_vistos, casos_resueltos, casos_decision, updated_at',
       )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)

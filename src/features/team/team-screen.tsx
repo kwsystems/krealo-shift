@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { router } from 'expo-router';
 
 import type { EmployeeDraft } from './api';
 import { EmployeeDetailSheet, TemporaryPinSheet } from './employee-detail';
@@ -28,6 +29,7 @@ import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/co
 import {
   addDaysToKey,
   currentWeekStart,
+  weekStartOfKey,
   dateKeyOf,
   localDateTimeToInstant,
   weekDays,
@@ -627,6 +629,17 @@ export function TeamScreen() {
           timezone={scope.timezone}
           timeFormat={scope.timeFormat}
           language={language}
+          onVerEnHoras={({ dia, jornada }) => {
+            setSelectedId(null);
+            router.push({
+              pathname: '/(manager)/hours',
+              params: {
+                semana: weekStartOfKey(dia, scope.weekStartsOn),
+                persona: selected.id,
+                jornada,
+              },
+            });
+          }}
           busy={mutations.resetPin.isPending}
           activando={mutations.changeStatus.isPending}
           errorDeAccion={mutations.resetPin.error ?? mutations.changeStatus.error}

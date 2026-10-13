@@ -18,6 +18,8 @@
  *    trae el refrigerio de su turno, y al guardar no nace ningún caso en «Por resolver».
  * 4. Y CON 0 DE REFRIGERIO —de corrido—: sale UN caso, nunca «sin refrigerio» y «trabajó de
  *    más» a la vez, y una sola decisión lo cierra.
+ * 6. ME EQUIVOQUÉ (13-oct): tras «No es extra», la jornada dice que se descontó el
+ *    refrigerio; «Cambiar» lo devuelve, el caso vuelve a Por resolver y «Sí es extra» lo cierra.
  * 5. EL CASO DE ANDREE (`?escenario=refrigerio`): un turno con 1 h de refrigerio trabajado
  *    entero sin marcarlo. Sale UN caso, el de la extra, que dice que incluye su refrigerio; y
  *    «No es extra» lo cierra —en Por resolver y en la hoja de la jornada— sin dejar el
@@ -460,6 +462,74 @@ try {
         );
       }
       console.log(`  «No es extra»        ${camino}: quedan ${despues.length} caso(s) de ese día`);
+
+      /*
+       * 6. ME EQUIVOQUÉ: SÍ ERA EXTRA (13-oct). Andree: «el lunes me equivoqué, sí era hora
+       * extra porque es de corrido, no almorzó… necesito que haya opción para poder arreglar
+       * estas cosas». La jornada dice lo que se decidió; «Cambiar» la deja como estaba, el
+       * caso vuelve a Por resolver, y «Sí es extra» lo cierra bien.
+       */
+      if (camino === 'por resolver') {
+        const sesionId = caso.split(':')[0];
+        const fila = delante(pagina, `[data-testid="session-${sesionId}"]`).first();
+        const horasAntes = await fila.innerText().catch(() => '');
+        await fila.click();
+        await esperarHoja(pagina, 'session-detail-sheet');
+        const decidido = pagina.locator('[data-testid="decision-refrigerio_del_turno"]');
+        if ((await decidido.count()) === 0) {
+          problemas.push('la jornada no dice que se descontó el refrigerio con «No es extra»');
+        } else {
+          await pagina
+            .locator('[data-testid="decisiones-de-la-jornada"]')
+            .screenshot({ path: 'capturas/decisiones-de-la-jornada.png' })
+            .catch(() => undefined);
+          await pagina.locator('[data-testid="decision-refrigerio_del_turno-cambiar"]').click();
+          await pagina
+            .locator('[data-testid="decision-refrigerio_del_turno"]')
+            .waitFor({ state: 'detached', timeout: 8000 })
+            .catch(() => problemas.push('«Cambiar» no quita el refrigerio descontado'));
+          const errorAlCambiar = await texto(pagina, '[data-testid="decisiones-error"]');
+          if (errorAlCambiar) problemas.push(`«Cambiar» falla: «${errorAlCambiar}»`);
+          await pagina.keyboard.press('Escape');
+          await pagina
+            .locator('[data-testid="session-detail-sheet"]')
+            .waitFor({ state: 'detached', timeout: 5000 })
+            .catch(async () => {
+              const cerrarHoja = pagina
+                .locator('[data-testid="session-detail-sheet"]')
+                .getByText('Cerrar', { exact: true });
+              if ((await cerrarHoja.count()) > 0) await cerrarHoja.first().click();
+            });
+          await pagina.waitForTimeout(1800);
+          const horasDespues = await delante(pagina, `[data-testid="session-${sesionId}"]`)
+            .first()
+            .innerText()
+            .catch(() => '');
+          if (horasDespues === horasAntes) {
+            problemas.push(
+              'tras «Cambiar», la fila de la jornada sigue igual (sin la hora devuelta)',
+            );
+          }
+          const otraVez = await delDia();
+          const textoOtraVez =
+            otraVez.length === 0 ? '' : await texto(pagina, `[data-testid="caso-${otraVez[0]}"]`);
+          if (otraVez.length !== 1 || !/Incluye su refrigerio/.test(textoOtraVez)) {
+            problemas.push(
+              `tras «Cambiar», el caso no vuelve a Por resolver como antes: ${otraVez.join(', ') || 'ninguno'}`,
+            );
+          } else {
+            await delante(pagina, `[data-testid="caso-${otraVez[0]}-extra"]`).first().click();
+            await pagina.waitForTimeout(1800);
+            const alFinal = await delDia();
+            if (alFinal.length > 0) {
+              problemas.push(`«Sí es extra» tras cambiar deja ${alFinal.join(', ')}`);
+            }
+            console.log(
+              `  «Cambiar» → extra    vuelve 1 caso, «Sí es extra» lo cierra (quedan ${alFinal.length})`,
+            );
+          }
+        }
+      }
     }
     if (errores.length > 0)
       problemas.push(`errores de la página: ${errores.slice(0, 3).join(' | ')}`);

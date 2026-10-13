@@ -283,6 +283,23 @@ export const applyPlannedBreak = onCall(async (request) => {
   // Desde la entrada FICHADA: con una entrada corregida más temprana, la reconstrucción
   // tomaba la entrada de verdad por «la siguiente jornada» y no rehacía esta.
   await rebuildJornadaDe(organizationId, String(sesion.employee_id), locationId, entroSegunFichaje);
+  /*
+   * Y QUEDA DICHO EN LA JORNADA (13-oct), como las demás decisiones: así la hoja de la jornada
+   * enseña «se descontó su refrigerio» con su «Cambiar» (`reopenSessionDecision`).
+   */
+  await db
+    .collection(COLLECTIONS.workSessions)
+    .doc(sessionId)
+    .update({
+      [`casos_decision.${REFRIGERIO_DEL_TURNO}`]: {
+        decision: 'applied',
+        por: uid,
+        at: nowISO(),
+        nota: null,
+        minutos,
+      },
+    })
+    .catch(() => undefined);
   await audit({
     organizationId,
     actorUserId: uid,
@@ -292,6 +309,131 @@ export const applyPlannedBreak = onCall(async (request) => {
     after: { desde: pausa.desde, hasta: pausa.hasta, minutos },
   });
   return { desde: pausa.desde, hasta: pausa.hasta, minutos };
+});
+
+/** La decisión de «Descontar el refrigerio del turno», que no es un caso sino dos fichajes. */
+const REFRIGERIO_DEL_TURNO = 'refrigerio_del_turno';
+const TIPOS_DE_PAUSA = ['break_start', 'break_end'] as const;
+
+/**
+ * CAMBIAR UNA DECISIÓN YA TOMADA (13-oct). Andree pulsó «No es extra» en la jornada de una
+ * vendedora que había trabajado de corrido: «me equivoqué… necesito que haya opción para
+ * poder arreglar estas cosas». No la había: ni el refrigerio descontado ni los casos
+ * resueltos tenían vuelta atrás.
+ *
+ * Esto deja el día COMO ESTABA ANTES de decidir, y el caso vuelve a «Por resolver» para
+ * decidirlo bien:
+ *
+ *   - `refrigerio_del_turno`: se borran los dos fichajes de pausa que puso quien gestiona
+ *     (solo esos: los de la persona no se tocan), sus correcciones, y la extra de ese día si
+ *     quedó en 0 —el «no es extra» que la acompañó—. La jornada se vuelve a calcular.
+ *   - un caso (`faltan_horas`, `sin_refrigerio`, `salida_automatica`, `salida_dudosa`): sale
+ *     de los resueltos. Si era «le debe N h» y sigue pendiente, esa deuda se borra; si ya se
+ *     compensó o perdonó, no: primero se devuelve a pendiente en «Horas que debe».
+ *
+ * Lo que pasó queda en la auditoría.
+ */
+export const reopenSessionDecision = onCall(async (request) => {
+  const uid = requireUid(request);
+  const sessionId = texto(request.data?.p_work_session_id, 'p_work_session_id');
+  const que = texto(request.data?.p_decision, 'p_decision');
+  if (que !== REFRIGERIO_DEL_TURNO && !(CASOS as readonly string[]).includes(que)) {
+    throw new HttpsError('invalid-argument', 'Esa decisión no existe.');
+  }
+  const { ref, sesion, organizationId, locationId } = await jornadaGestionable(uid, sessionId);
+  const decisiones = (sesion.casos_decision ?? {}) as Record<string, unknown>;
+  const resueltos = Array.isArray(sesion.casos_resueltos)
+    ? (sesion.casos_resueltos as unknown[])
+    : [];
+  const ahora = nowISO();
+  const lote = db.batch();
+  let extraBorrada = false;
+
+  if (que === REFRIGERIO_DEL_TURNO) {
+    const pausas = await Promise.all(
+      TIPOS_DE_PAUSA.map((tipo) =>
+        db
+          .collection(COLLECTIONS.timeEvents)
+          .doc(`${organizationId}_refrigerio_${sessionId}_${tipo}`)
+          .get(),
+      ),
+    );
+    const puestas = pausas.filter((doc) => doc.exists);
+    if (puestas.length === 0 && decisiones[REFRIGERIO_DEL_TURNO] === undefined) {
+      throw new HttpsError('failed-precondition', 'En esa jornada no se descontó el refrigerio.', {
+        motivo: 'NO_DECIDIDO',
+      });
+    }
+    for (const doc of puestas) {
+      lote.delete(doc.ref);
+      lote.delete(db.collection(COLLECTIONS.timeAdjustments).doc(`ajuste_${doc.id}`));
+    }
+    const sede = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
+    const zona = zonaSegura(sede?.timezone, 'reopenSessionDecision');
+    const extra = db
+      .collection(COLLECTIONS.overtimeApprovals)
+      .doc(`${locationId}_${String(sesion.employee_id)}_${diaEn(String(sesion.starts_at), zona)}`);
+    const extraDelDia = (await extra.get()).data();
+    if (extraDelDia !== undefined && Number(extraDelDia.minutes) === 0) {
+      lote.delete(extra);
+      extraBorrada = true;
+    }
+  } else {
+    if (!resueltos.includes(que) && decisiones[que] === undefined) {
+      throw new HttpsError('failed-precondition', 'Ese caso no estaba decidido.', {
+        motivo: 'NO_DECIDIDO',
+      });
+    }
+    if (que === 'faltan_horas') {
+      const deuda = db.collection(COLLECTIONS.owedHours).doc(sessionId);
+      const fila = (await deuda.get()).data();
+      if (fila !== undefined) {
+        if (fila.status !== 'pending') {
+          throw new HttpsError(
+            'failed-precondition',
+            'Esas horas ya se dieron por compensadas o perdonadas: primero devuélvelas a pendientes en «Horas que debe».',
+            { motivo: 'YA_SALDADA' },
+          );
+        }
+        lote.delete(deuda);
+      }
+    }
+  }
+
+  lote.update(ref, {
+    casos_resueltos: FieldValue.arrayRemove(que),
+    [`casos_decision.${que}`]: FieldValue.delete(),
+    updated_at: ahora,
+  });
+  await lote.commit();
+
+  if (que === REFRIGERIO_DEL_TURNO) {
+    const entrada =
+      typeof sesion.clock_in_event_id === 'string'
+        ? ((await db.collection(COLLECTIONS.timeEvents).doc(sesion.clock_in_event_id).get()).data()
+            ?.occurred_at as string | undefined)
+        : undefined;
+    await rebuildJornadaDe(
+      organizationId,
+      String(sesion.employee_id),
+      locationId,
+      entrada ?? String(sesion.starts_at),
+    );
+  }
+
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'session_decision_reopened',
+    entityType: 'work_session',
+    entityId: sessionId,
+    before: {
+      decision: que,
+      detalle: decisiones[que] ?? null,
+      extra_en_cero_borrada: extraBorrada,
+    },
+  });
+  return { decision: que, extraBorrada };
 });
 
 /** Las horas que debía, compensadas o perdonadas; o de vuelta a pendientes. */

@@ -14,6 +14,7 @@ import {
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
 import { addManualTimeEvent, adjustWorkSession } from './api';
+import type { ClaveDeDecision } from './decisiones-de-la-jornada';
 
 /**
  * LAS HORAS QUE ALGUIEN DEBE, y lo que las resuelve (Andree, 1-oct).
@@ -275,6 +276,28 @@ export function useArreglarCaso() {
   });
 }
 
+/**
+ * CAMBIAR UNA DECISIÓN YA TOMADA (13-oct): el día vuelve a como estaba y el caso a «Por
+ * resolver». Ver `reopenSessionDecision` y `decisiones-de-la-jornada.ts`.
+ */
+export async function reabrirDecision(params: {
+  sessionId: string;
+  clave: ClaveDeDecision;
+}): Promise<void> {
+  await llamar(RPC.reopenSessionDecision, {
+    p_work_session_id: params.sessionId,
+    p_decision: params.clave,
+  });
+}
+
+export function useReabrirDecision() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: reabrirDecision,
+    onSuccess: () => refrescarVistasDeHoras(queryClient),
+  });
+}
+
 export function useSaldarHorasDebidas() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -291,6 +314,8 @@ export function useSaldarHorasDebidas() {
 export function porQueNoSeArreglo(t: TFunction, error: unknown): string {
   const motivo = error instanceof CasoRechazado ? error.motivo : null;
   if (motivo === 'YA_TIENE_PAUSA') return t('timesheet.cases.errorHasBreak');
+  if (motivo === 'YA_SALDADA') return t('timesheet.decisions.errorSettled');
+  if (motivo === 'NO_DECIDIDO') return t('timesheet.decisions.errorNotDecided');
   if (adminErrorKind(error) === 'conflict') return t('errors.concurrentEdit');
   if (adminErrorKind(error) === 'forbidden') return t('states.noAccessBody');
   if (adminErrorKind(error) === 'offline') return t('errors.network');

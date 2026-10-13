@@ -47,6 +47,7 @@ export function EmployeeDetailSheet({
   accesoAlCelular = null,
   onResetPin,
   onDelete,
+  onVerEnHoras,
   onClose,
 }: {
   /**
@@ -90,6 +91,8 @@ export function EmployeeDetailSheet({
    * la persona ya inactiva: primero se desactiva, luego se elimina.
    */
   onDelete?: () => void;
+  /** Un día trabajado, en Horas, para ver y cambiar lo que se decidió (13-oct). */
+  onVerEnHoras?: (destino: { dia: string; jornada: string }) => void;
   onClose: () => void;
 }) {
   const { t } = useTranslation();
@@ -269,6 +272,7 @@ export function EmployeeDetailSheet({
         timeFormat={timeFormat}
         weekStartsOn={weekStartsOn}
         language={language}
+        onVerEnHoras={onVerEnHoras}
       />
 
       {/* Lo que debe a la tienda, registrado desde «Por resolver» en Horas (1-oct). */}

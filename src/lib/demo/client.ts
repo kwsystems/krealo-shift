@@ -1328,10 +1328,111 @@ function crearRpc(almacen: Almacen) {
                       caso,
                     ]),
                   ],
+                  casos_decision: {
+                    ...((fila.casos_decision ?? {}) as Record<string, unknown>),
+                    [caso]: {
+                      decision,
+                      nota: typeof argumentos.p_note === 'string' ? argumentos.p_note : null,
+                    },
+                  },
                 },
           ),
         );
         return sinError({ caso, decision });
+      }
+
+      /*
+       * Como `reopenSessionDecision` (13-oct): el día vuelve a como estaba antes de decidir. El
+       * refrigerio descontado se devuelve a lo trabajado y la extra que quedó en 0 se borra.
+       */
+      case 'reopen_session_decision': {
+        const id = String(argumentos.p_work_session_id ?? '');
+        const que = String(argumentos.p_decision ?? '');
+        const sesion = filas('work_sessions').find((fila) => fila.id === id);
+        if (sesion === undefined) return conError('Esa jornada no existe.');
+        const decisiones = { ...((sesion.casos_decision ?? {}) as Record<string, unknown>) };
+        const resueltos = Array.isArray(sesion.casos_resueltos)
+          ? (sesion.casos_resueltos as string[])
+          : [];
+        if (decisiones[que] === undefined && !resueltos.includes(que)) {
+          return conError('Eso ya no estaba decidido.');
+        }
+        const zona = String(
+          filas('locations').find((fila) => fila.id === sesion.location_id)?.timezone ??
+            'America/Lima',
+        );
+        const dia = new Intl.DateTimeFormat('en-CA', {
+          timeZone: zona,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+        }).format(new Date(String(sesion.starts_at)));
+        const devuelto =
+          que === 'refrigerio_del_turno'
+            ? Number((decisiones[que] as { minutos?: unknown } | undefined)?.minutos ?? 0)
+            : 0;
+        if (que === 'faltan_horas') {
+          const deuda = filas('owed_hours').find((fila) => fila.id === id);
+          if (deuda !== undefined && deuda.status !== 'pending') {
+            return conError(
+              'Esas horas ya se dieron por compensadas o perdonadas: primero devuélvelas a pendientes en «Horas que debe».',
+            );
+          }
+          almacen.set(
+            'owed_hours',
+            filas('owed_hours').filter((fila) => fila.id !== id),
+          );
+        }
+        if (que === 'refrigerio_del_turno') {
+          almacen.set(
+            'overtime_approvals',
+            filas('overtime_approvals').filter(
+              (fila) =>
+                !(
+                  fila.employee_id === sesion.employee_id &&
+                  fila.location_id === sesion.location_id &&
+                  fila.work_date === dia &&
+                  Number(fila.minutes) === 0
+                ),
+            ),
+          );
+          almacen.set(
+            'daily_time_summary',
+            filas('daily_time_summary').map((fila) =>
+              fila.employee_id !== sesion.employee_id ||
+              fila.location_id !== sesion.location_id ||
+              fila.work_date !== dia
+                ? fila
+                : {
+                    ...fila,
+                    unpaid_break_minutes: Math.max(
+                      0,
+                      Number(fila.unpaid_break_minutes ?? 0) - devuelto,
+                    ),
+                    net_minutes: Number(fila.net_minutes ?? 0) + devuelto,
+                  },
+            ),
+          );
+        }
+        delete decisiones[que];
+        almacen.set(
+          'work_sessions',
+          filas('work_sessions').map((fila) =>
+            fila.id !== id
+              ? fila
+              : {
+                  ...fila,
+                  casos_resueltos: resueltos.filter((caso) => caso !== que),
+                  casos_decision: decisiones,
+                  unpaid_break_minutes: Math.max(
+                    0,
+                    Number(fila.unpaid_break_minutes ?? 0) - devuelto,
+                  ),
+                  net_minutes: Number(fila.net_minutes ?? 0) + devuelto,
+                },
+          ),
+        );
+        return sinError({ decision: que });
       }
 
       case 'apply_planned_break': {
@@ -1364,6 +1465,10 @@ function crearRpc(almacen: Almacen) {
                   ...fila,
                   unpaid_break_minutes: Number(fila.unpaid_break_minutes ?? 0) + minutos,
                   net_minutes: Number(fila.net_minutes ?? 0) - minutos,
+                  casos_decision: {
+                    ...((fila.casos_decision ?? {}) as Record<string, unknown>),
+                    refrigerio_del_turno: { decision: 'applied', nota: null, minutos },
+                  },
                 },
           ),
         );

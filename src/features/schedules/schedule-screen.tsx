@@ -17,6 +17,10 @@ import { estadoVisible } from '@/features/timesheets/en-curso';
 import { useSesionesAlDiaCon, useWorkSessions } from '@/features/timesheets/hooks';
 import { useFaltasDeLaSemana } from '@/features/timesheets/use-faltas';
 import { esCumplidoEspecial } from '@/features/timesheets/textos-de-cumplido';
+import {
+  decisionesDeLaJornada,
+  textoDeDecision,
+} from '@/features/timesheets/decisiones-de-la-jornada';
 import { esSalidaAutomatica } from '@/features/timesheets/textos-de-salida';
 import { useJornadasAlDia } from '@/features/timesheets/jornadas-al-dia';
 import { claveDelDia, useHorasExtra } from '@/features/timesheets/horas-extra';
@@ -1028,6 +1032,22 @@ export function ScheduleScreen({
                 }
               : undefined
           }
+          jornada={(() => {
+            if (editing.mode !== 'edit' || onGoToHours === undefined) return undefined;
+            const suya = (jornadasDeLaSemana.data ?? []).find(
+              (jornada) => jornada.shift_id === editing.shift.id,
+            );
+            if (suya === undefined) return undefined;
+            return {
+              decisiones: decisionesDeLaJornada(suya).map((decision) =>
+                textoDeDecision(t, decision),
+              ),
+              onVer: () => {
+                setEditing(null);
+                onGoToHours({ semana: weekStart, persona: suya.employee_id, jornada: suya.id });
+              },
+            };
+          })()}
           onClose={() => {
             // El error de un intento anterior no se arrastra a la próxima vez que se abra.
             mutations.create.reset();

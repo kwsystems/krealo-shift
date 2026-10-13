@@ -239,6 +239,7 @@ export const RPC = {
    * refrigerio». Ver `functions/src/casos.ts`.
    */
   resolveSessionCase: 'resolve_session_case',
+  reopenSessionDecision: 'reopen_session_decision',
   /** «Descontar el refrigerio del turno» de quien no lo marcó. */
   applyPlannedBreak: 'apply_planned_break',
   /** Las horas que debía, compensadas o perdonadas. */

@@ -71,6 +71,7 @@ export function SessionDetailSheet({
   onSubmitCorrection,
   onReclassifyDeparture,
   seccionHoraExtra,
+  seccionDecisiones,
   onUndoCredit,
   undoingCredit = false,
   enCurso,
@@ -106,6 +107,8 @@ export function SessionDetailSheet({
    * pantalla, que es la que tiene los turnos y lo aprobado; aquí solo se coloca.
    */
   seccionHoraExtra?: ReactNode;
+  /** «Lo que se decidió» con su «Cambiar» (13-oct): ver `DecisionesDeLaJornada`. */
+  seccionDecisiones?: ReactNode;
   /**
    * Deshacer un «cumplido por motivo especial» (4-oct): borra esa jornada y el turno vuelve a
    * ser lo que era —una falta, si nadie marcó—. Solo para las jornadas que lo son.
@@ -318,6 +321,8 @@ export function SessionDetailSheet({
           ))}
         </Row>
       ) : null}
+
+      {seccionDecisiones}
 
       {seccionHoraExtra}
 

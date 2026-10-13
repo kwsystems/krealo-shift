@@ -3,7 +3,7 @@ import { EtiquetasDelDia } from '@/components/schedule/feriado';
 import type { TipoDeTienda } from '@/domain/fechas-comerciales';
 import type { TFunction } from 'i18next';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AsyncSection } from '@/components/schedule/data-states';
@@ -82,6 +82,7 @@ export function HorasDeLaPersona({
   timeFormat,
   weekStartsOn,
   language,
+  onVerEnHoras,
 }: {
   employeeId: string;
   organizationId: string | null;
@@ -92,6 +93,11 @@ export function HorasDeLaPersona({
   timeFormat: TimeFormatPreference;
   weekStartsOn: number;
   language: SupportedLanguage;
+  /**
+   * «Ver en Horas» en cada día trabajado (13-oct): lleva a SU jornada, donde se ve lo que se
+   * decidió y se cambia. Sin esto, la ficha enseñaba el día y no dejaba arreglarlo.
+   */
+  onVerEnHoras?: (destino: { dia: DateKey; jornada: string }) => void;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -260,6 +266,14 @@ export function HorasDeLaPersona({
             language={language}
             timezone={timezone}
             tipoDeTienda={tipoDeTienda}
+            jornadaPorDia={
+              new Map(
+                [...suyas]
+                  .reverse()
+                  .map((jornada) => [dateKeyOf(jornada.starts_at, timezone), jornada.id] as const),
+              )
+            }
+            onVerEnHoras={onVerEnHoras}
           />
         ) : (
           <SemanasDelMes
@@ -354,6 +368,8 @@ function TarjetaDeLaSemana({
   language,
   timezone,
   tipoDeTienda,
+  jornadaPorDia,
+  onVerEnHoras,
 }: {
   dias: readonly DateKey[];
   hoy: DateKey;
@@ -366,6 +382,9 @@ function TarjetaDeLaSemana({
   language: SupportedLanguage;
   timezone: string;
   tipoDeTienda: TipoDeTienda | null;
+  /** La primera jornada de cada día, para «Ver en Horas». */
+  jornadaPorDia: ReadonlyMap<DateKey, string>;
+  onVerEnHoras?: (destino: { dia: DateKey; jornada: string }) => void;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -444,6 +463,18 @@ function TarjetaDeLaSemana({
                   {falta.texto}
                 </AppText>
               )}
+              {onVerEnHoras !== undefined && jornadaPorDia.has(dia) ? (
+                <Pressable
+                  onPress={() => onVerEnHoras({ dia, jornada: jornadaPorDia.get(dia) ?? '' })}
+                  accessibilityRole="link"
+                  hitSlop={8}
+                  testID={`person-day-${dia}-horas`}
+                >
+                  <AppText variant="label" tone="primary">
+                    {t('team.seeDayInHours')}
+                  </AppText>
+                </Pressable>
+              ) : null}
               {/* Un día que no ha llegado no tiene pista: no es un día a cero, es un día por venir. */}
               <View style={[estilos.pista, futuro ? estilos.sinPista : null]}>
                 {minutos > 0 && !futuro ? (

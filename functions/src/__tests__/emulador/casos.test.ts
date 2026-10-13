@@ -1,4 +1,9 @@
-import { applyPlannedBreak, resolveSessionCase, settleOwedHours } from '../../casos';
+import {
+  applyPlannedBreak,
+  reopenSessionDecision,
+  resolveSessionCase,
+  settleOwedHours,
+} from '../../casos';
 import { managerAdjustTime } from '../../manager';
 import { COLLECTIONS, db } from '../../shared/admin';
 import { recordTimeEvent } from '../../shared/attendance';
@@ -332,5 +337,166 @@ describe('trabajó menos que su turno', () => {
     await expect(
       correr(applyPlannedBreak, { p_work_session_id: id }, 'uid-de-otra-tienda'),
     ).rejects.toThrow();
+  });
+});
+
+/*
+ * CAMBIAR UNA DECISIÓN (13-oct). Andree: «el lunes me equivoqué, sí era hora extra porque es
+ * de corrido, no almorzó… necesito que haya opción para poder arreglar estas cosas».
+ */
+describe('cambiar una decisión ya tomada', () => {
+  const motivo = async (promesa: Promise<unknown>) =>
+    promesa.then(
+      () => '(no falló)',
+      (e: { details?: { motivo?: string }; code?: string }) => e.details?.motivo ?? String(e.code),
+    );
+
+  it('«no es extra» con el refrigerio: quitarlo deja la jornada entera y la extra sin decidir', async () => {
+    await fichar('clock_in', H(10));
+    await fichar('clock_out', H(20));
+    const { id } = await jornada();
+    // Lo que hace «No es extra» con el refrigerio sin marcar: lo descuenta y guarda 0.
+    await correr(applyPlannedBreak, { p_work_session_id: id });
+    const extra = `${SEDE}_${PERSONA}_2026-09-22`;
+    await db.collection(COLLECTIONS.overtimeApprovals).doc(extra).set({
+      id: extra,
+      organization_id: ORG,
+      location_id: SEDE,
+      employee_id: PERSONA,
+      work_date: '2026-09-22',
+      minutes: 0,
+      approved_by: GERENTE,
+    });
+    expect(await jornada()).toMatchObject({ net_minutes: 540, unpaid_break_minutes: 60 });
+    expect(
+      ((await jornada()).casos_decision as Record<string, unknown>).refrigerio_del_turno,
+    ).toMatchObject({ decision: 'applied', minutos: 60 });
+
+    const r = (await correr(reopenSessionDecision, {
+      p_work_session_id: id,
+      p_decision: 'refrigerio_del_turno',
+    })) as { extraBorrada: boolean };
+    expect(r.extraBorrada).toBe(true);
+
+    const despues = await jornada();
+    expect(despues).toMatchObject({ id, net_minutes: 600, unpaid_break_minutes: 0 });
+    expect((despues.casos_decision ?? {}) as Record<string, unknown>).not.toHaveProperty(
+      'refrigerio_del_turno',
+    );
+    const deQuienGestiona = (
+      await db.collection(COLLECTIONS.timeEvents).where('employee_id', '==', PERSONA).get()
+    ).docs.filter((d) => d.data().source === 'manager');
+    expect(deQuienGestiona).toHaveLength(0);
+    expect(
+      (await db.collection(COLLECTIONS.timeAdjustments).where('employee_id', '==', PERSONA).get())
+        .size,
+    ).toBe(0);
+    expect((await db.collection(COLLECTIONS.overtimeApprovals).doc(extra).get()).exists).toBe(
+      false,
+    );
+
+    // Y se puede volver a decidir: ahora, por ejemplo, descontarlo otra vez.
+    await correr(applyPlannedBreak, { p_work_session_id: id });
+    expect(await jornada()).toMatchObject({ net_minutes: 540 });
+  });
+
+  it('una extra aprobada de verdad no se borra al quitar el refrigerio', async () => {
+    await fichar('clock_in', H(10));
+    await fichar('clock_out', H(20));
+    const { id } = await jornada();
+    await correr(applyPlannedBreak, { p_work_session_id: id });
+    const extra = `${SEDE}_${PERSONA}_2026-09-22`;
+    await db.collection(COLLECTIONS.overtimeApprovals).doc(extra).set({
+      id: extra,
+      organization_id: ORG,
+      location_id: SEDE,
+      employee_id: PERSONA,
+      work_date: '2026-09-22',
+      minutes: 60,
+      approved_by: GERENTE,
+    });
+    await correr(reopenSessionDecision, {
+      p_work_session_id: id,
+      p_decision: 'refrigerio_del_turno',
+    });
+    expect(
+      (await db.collection(COLLECTIONS.overtimeApprovals).doc(extra).get()).data(),
+    ).toMatchObject({ minutes: 60 });
+  });
+
+  it('«le debe» pendiente: cambiarla borra la deuda y el caso vuelve', async () => {
+    await fichar('clock_in', H(9, 52));
+    await fichar('clock_out', H(12, 4));
+    const { id } = await jornada();
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'faltan_horas',
+      p_decision: 'owes',
+      p_minutes: 289,
+    });
+    await correr(reopenSessionDecision, { p_work_session_id: id, p_decision: 'faltan_horas' });
+    expect((await db.collection(COLLECTIONS.owedHours).doc(id).get()).exists).toBe(false);
+    const despues = await jornada();
+    expect(despues.casos_resueltos).toEqual([]);
+    expect((despues.casos_decision ?? {}) as Record<string, unknown>).not.toHaveProperty(
+      'faltan_horas',
+    );
+  });
+
+  it('«le debe» ya compensada no se cambia sin devolverla a pendiente', async () => {
+    await fichar('clock_in', H(9, 52));
+    await fichar('clock_out', H(12, 4));
+    const { id } = await jornada();
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'faltan_horas',
+      p_decision: 'owes',
+      p_minutes: 289,
+    });
+    await correr(settleOwedHours, { p_owed_id: id, p_status: 'compensated' });
+    expect(
+      await motivo(
+        correr(reopenSessionDecision, { p_work_session_id: id, p_decision: 'faltan_horas' }),
+      ),
+    ).toBe('YA_SALDADA');
+    expect((await jornada()).casos_resueltos).toEqual(['faltan_horas']);
+  });
+
+  it('lo que no se decidió no se cambia, y solo quien gestiona la sede', async () => {
+    await fichar('clock_in', H(10));
+    await fichar('clock_out', H(18, 50));
+    const { id } = await jornada();
+    expect(
+      await motivo(
+        correr(reopenSessionDecision, {
+          p_work_session_id: id,
+          p_decision: 'refrigerio_del_turno',
+        }),
+      ),
+    ).toBe('NO_DECIDIDO');
+    expect(
+      await motivo(
+        correr(reopenSessionDecision, { p_work_session_id: id, p_decision: 'sin_refrigerio' }),
+      ),
+    ).toBe('NO_DECIDIDO');
+    expect(
+      await motivo(correr(reopenSessionDecision, { p_work_session_id: id, p_decision: 'otra' })),
+    ).toBe('invalid-argument');
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'sin_refrigerio',
+      p_decision: 'worked_through',
+    });
+    expect(
+      await motivo(
+        correr(
+          reopenSessionDecision,
+          { p_work_session_id: id, p_decision: 'sin_refrigerio' },
+          'otro',
+        ),
+      ),
+    ).not.toBe('(no falló)');
+    await correr(reopenSessionDecision, { p_work_session_id: id, p_decision: 'sin_refrigerio' });
+    expect((await jornada()).casos_resueltos).toEqual([]);
   });
 });
