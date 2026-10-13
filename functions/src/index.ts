@@ -110,3 +110,4 @@ export { viewStoreSchedule } from './horario-de-la-tienda';
 export { applyPlannedBreak, resolveSessionCase, settleOwedHours } from './casos';
 export { deleteAvailability, markAvailabilitySeen, saveAvailability } from './disponibilidad';
 export { clearAbsenceResolution, resolveAbsence } from './faltas';
+export { setEmployeePay } from './sueldos';

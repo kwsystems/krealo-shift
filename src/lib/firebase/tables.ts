@@ -68,6 +68,11 @@ export const TABLES = {
   availability: 'availability',
   /** Por qué faltó alguien a un turno (2-oct). Solo la escribe el servidor. */
   absenceResolutions: 'absence_resolutions',
+  /**
+   * El sueldo de cada persona (13-oct): lo leen quien administra y la propia persona, y lo
+   * escribe solo el servidor. Ver `functions/src/sueldos.ts`.
+   */
+  employeePay: 'employee_pay',
   announcements: 'announcements',
   auditLogs: 'audit_logs',
   pushTokens: 'push_tokens',
@@ -245,6 +250,8 @@ export const RPC = {
   /** Por qué faltó: justificada o no, y el motivo. Ver `functions/src/faltas.ts`. */
   resolveAbsence: 'resolve_absence',
   clearAbsenceResolution: 'clear_absence_resolution',
+  /** El sueldo de una persona, para el sueldo aproximado (13-oct). Ver `functions/src/sueldos.ts`. */
+  setEmployeePay: 'set_employee_pay',
   /** Dar un turno por cumplido por un motivo especial, y deshacerlo (4-oct). */
   creditShiftAsWorked: 'credit_shift_as_worked',
   /** «Vino y no marcó»: su entrada y su salida de una vez (4-oct). */

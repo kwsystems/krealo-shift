@@ -79,6 +79,8 @@ import { useTheme } from '@/theme/use-theme';
 import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 import { HorasQueDebes } from './horas-que-debes';
+import { useSueldoDelMes } from '@/features/sueldos/hooks';
+import { TarjetaDelSueldo } from '@/features/sueldos/tarjeta-del-sueldo';
 import { situacionDeHoy } from './hoy';
 import { duracion } from '@/features/timesheets/duracion';
 import { DEFAULT_LOCATION_SETTINGS } from '@/hooks/use-manager-scope';
@@ -164,6 +166,14 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   const tz = ficha.timezone;
   const formato = ficha.sede?.settings.timeFormat;
   const hora = (instante: string) => formatClockTime(instante, tz, formato, language);
+  const sueldo = useSueldoDelMes({
+    organizationId: ficha.organizationId,
+    employeeId: ficha.employeeId,
+    timezone: tz,
+    nowISO,
+    ingreso: ficha.ingreso,
+    baja: ficha.baja,
+  });
 
   const [semana, setSemana] = useState<'esta' | 'proxima'>('esta');
   /*
@@ -378,6 +388,12 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
               tipoDeTienda={ficha.tipoDeTienda}
             />
           )}
+
+          {/*
+            SU SUELDO DE ESTE MES, APROXIMADO (13-oct): solo si quien gestiona puso su sueldo.
+            Cambia cada día con sus faltas, extras aprobadas, feriados y lo que debe.
+          */}
+          <TarjetaDelSueldo sueldo={sueldo} propia language={language} />
 
           {/* LO QUE DEBE, si debe algo: registrado por quien gestiona (1-oct). */}
           <HorasQueDebes

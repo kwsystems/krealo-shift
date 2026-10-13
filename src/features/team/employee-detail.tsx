@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { HorasDeLaPersona } from './horas-de-la-persona';
 import { HorasQueDebe } from './horas-que-debe';
 import { useUpcomingShifts, type TeamMember } from './hooks';
+import { SueldoDeLaPersona } from '@/features/sueldos/sueldo-de-la-persona';
 import { AsyncSection } from '@/components/schedule/data-states';
 import { AdminSheet, InlineNotice, KeyValueRow } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
@@ -275,6 +276,18 @@ export function EmployeeDetailSheet({
         organizationId={organizationId}
         locationId={locationId}
         employeeId={member.id}
+        language={language}
+      />
+
+      {/*
+        LO QUE VA A COBRAR ESTE MES (13-oct), aproximado y con su desglose: el mismo que ve
+        en su celular. Solo para el dueño o un administrador.
+      */}
+      <SueldoDeLaPersona
+        organizationId={organizationId}
+        member={member}
+        timezone={timezone}
+        nowISO={nowISO}
         language={language}
       />
 

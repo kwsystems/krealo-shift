@@ -1125,6 +1125,26 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
 
   almacen.set('employees', empleados);
   almacen.set('overtime_approvals', horasExtraAprobadas);
+  /*
+   * SUELDOS (13-oct): tres personas con sueldo —la vendedora del celular entre ellas, con
+   * asignación familiar y ONP— y el resto sin él, para que se vea también «Poner su sueldo».
+   */
+  almacen.set(
+    'employee_pay',
+    [
+      { n: 1, monto: 1500, asignacion: true, pension: 'onp' },
+      { n: 2, monto: 1300, asignacion: false, pension: 'afp' },
+      { n: 3, monto: 1230, asignacion: false, pension: null },
+    ].map(({ n, monto, asignacion, pension }) => ({
+      id: empleadoId(n),
+      organization_id: DEMO_ORG_ID,
+      employee_id: empleadoId(n),
+      monthly_salary: monto,
+      family_allowance: asignacion,
+      pension,
+      updated_at: aISO(hoy),
+    })),
+  );
   almacen.set('job_roles', puestos);
   almacen.set('employee_location_assignments', asignaciones);
   almacen.set('employee_job_roles', puestosDeEmpleado);

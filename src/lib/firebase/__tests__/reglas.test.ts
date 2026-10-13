@@ -456,7 +456,7 @@ describe('reglas de Firestore', () => {
       await assertFails(setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ minutes: '90' })));
     });
 
-    it('un vendedor ni se las aprueba ni las lee', async () => {
+    it('un vendedor no se las aprueba ni lee las de otros; las suyas sí (13-oct)', async () => {
       await escribir(`organization_memberships/${ORG}_vendedor-extra`, {
         id: `${ORG}_vendedor-extra`,
         organization_id: ORG,
@@ -466,10 +466,21 @@ describe('reglas de Firestore', () => {
         employee_id: 'emp-yo',
         managed_location_ids: [],
       });
+      await escribir('employees/emp-yo', {
+        id: 'emp-yo',
+        organization_id: ORG,
+        full_name: 'Yo',
+        status: 'active',
+      });
+      await escribir(`overtime_approvals/${ID}`, aprobacion());
+      await escribir(`overtime_approvals/${SEDE}_emp-otra_2026-09-21`, {
+        ...aprobacion({ id: `${SEDE}_emp-otra_2026-09-21`, employee_id: 'emp-otra' }),
+      });
       const db = entorno.authenticatedContext('vendedor-extra').firestore();
       await assertFails(
         setDoc(doc(db, 'overtime_approvals', ID), aprobacion({ approved_by: 'vendedor-extra' })),
       );
+      // Las de toda la sede, no: traen las de los demás.
       await assertFails(
         getDocs(
           query(
@@ -479,6 +490,18 @@ describe('reglas de Firestore', () => {
           ),
         ),
       );
+      // Las suyas, sí: es lo que suma su sueldo aproximado.
+      const suyas = await assertSucceeds(
+        getDocs(
+          query(
+            collection(db, 'overtime_approvals'),
+            where('organization_id', '==', ORG),
+            where('employee_id', '==', 'emp-yo'),
+          ),
+        ),
+      );
+      expect(suyas.docs.map((d) => d.id)).toEqual([ID]);
+      await assertFails(getDoc(doc(db, 'overtime_approvals', `${SEDE}_emp-otra_2026-09-21`)));
     });
   });
 
@@ -579,6 +602,43 @@ describe('reglas de Firestore', () => {
           ),
         ),
       );
+    });
+
+    /*
+     * SU SUELDO ES SUYO (13-oct): lo lee la persona y el dueño o un administrador; un
+     * compañero o un gerente de sede, no. Y nadie lo escribe desde la app.
+     */
+    it('lee su sueldo y no el de una compañera; el gerente de sede no lee ninguno', async () => {
+      const sueldo = (empleado: string) =>
+        escribir(`employee_pay/${empleado}`, {
+          id: empleado,
+          organization_id: ORG,
+          employee_id: empleado,
+          monthly_salary: 1500,
+          family_allowance: false,
+        });
+      await sueldo('emp-yo');
+      await sueldo('emp-otra');
+      await escribir(`organization_memberships/${ORG}_gerente-de-sede`, {
+        id: `${ORG}_gerente-de-sede`,
+        organization_id: ORG,
+        user_id: 'gerente-de-sede',
+        role: 'manager',
+        status: 'active',
+        managed_location_ids: [SEDE],
+        created_at: '2026-09-30T12:00:00.000Z',
+      });
+
+      const yo = entorno.authenticatedContext(VENDEDOR).firestore();
+      await assertSucceeds(getDoc(doc(yo, 'employee_pay', 'emp-yo')));
+      await assertFails(getDoc(doc(yo, 'employee_pay', 'emp-otra')));
+      await assertFails(setDoc(doc(yo, 'employee_pay', 'emp-yo'), { monthly_salary: 9000 }));
+
+      const dueno = entorno.authenticatedContext(UID).firestore();
+      await assertSucceeds(getDoc(doc(dueno, 'employee_pay', 'emp-otra')));
+
+      const gerente = entorno.authenticatedContext('gerente-de-sede').firestore();
+      await assertFails(getDoc(doc(gerente, 'employee_pay', 'emp-otra')));
     });
 
     /*

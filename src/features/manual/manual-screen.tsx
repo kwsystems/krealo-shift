@@ -214,6 +214,7 @@ export function ManualScreen({ dentroDelPanel = false }: { dentroDelPanel?: bool
                   'adminHours',
                   'adminInbox',
                   'adminAlerts',
+                  'adminPay',
                 ]).map((par) => (
                   <Columnas key={par[0]} dos={dos}>
                     {par.map((clave) => (

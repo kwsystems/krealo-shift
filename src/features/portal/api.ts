@@ -44,6 +44,8 @@ const fichaSchema = z.object({
   full_name: z.string(),
   preferred_name: z.string().nullable().default(null),
   status: z.string(),
+  hire_date: z.string().nullable().default(null),
+  end_date: z.string().nullable().default(null),
 });
 
 const asignacionSchema = z.object({
@@ -64,6 +66,9 @@ export type MiFicha = {
   weekStartsOn: number;
   /** El tipo de tienda de su empresa: las fechas con más clientes salen en su horario. */
   tipoDeTienda: TipoDeTienda | null;
+  /** Su primer y su último día (13-oct): el sueldo de un mes a medias se cuenta por días. */
+  ingreso: string | null;
+  baja: string | null;
 };
 
 /** Sin ficha unida, y por qué si el servidor lo sabe (5-oct): ver `motivo-sin-ficha.ts`. */
@@ -127,7 +132,7 @@ export async function fetchMiFicha(): Promise<MiFicha | SinFicha> {
   const [ficha] = await selectRows(z.array(fichaSchema), (client) =>
     client
       .from(TABLES.employees)
-      .select('id, full_name, preferred_name, status')
+      .select('id, full_name, preferred_name, status, hire_date, end_date')
       .eq('id', employeeId),
   );
   if (organizacion === undefined || ficha === undefined) return sinFicha;
@@ -153,6 +158,8 @@ export async function fetchMiFicha(): Promise<MiFicha | SinFicha> {
       timezone: organizacion.default_timezone,
       weekStartsOn: organizacion.week_starts_on ?? 1,
       tipoDeTienda: organizacion.business_type,
+      ingreso: ficha.hire_date,
+      baja: ficha.end_date,
     };
   }
 
@@ -185,6 +192,8 @@ export async function fetchMiFicha(): Promise<MiFicha | SinFicha> {
     timezone: sede?.timezone ?? organizacion.default_timezone,
     weekStartsOn: sede?.settings.weekStartsOn ?? organizacion.week_starts_on ?? 1,
     tipoDeTienda: organizacion.business_type,
+    ingreso: ficha.hire_date,
+    baja: ficha.end_date,
   };
 }
 

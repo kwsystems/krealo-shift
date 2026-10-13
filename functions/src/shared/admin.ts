@@ -76,6 +76,8 @@ export const COLLECTIONS = {
   availability: 'availability',
   /** Por qué faltó alguien a un turno: ver `faltas.ts`. Una por turno. */
   absenceResolutions: 'absence_resolutions',
+  /** El sueldo de cada persona (13-oct): ver `sueldos.ts`. Una por ficha. */
+  employeePay: 'employee_pay',
   /** Las horas extra aprobadas por día; las escribe el panel (ver `horas-extra.ts`). */
   overtimeApprovals: 'overtime_approvals',
   announcements: 'announcements',

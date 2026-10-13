@@ -1443,6 +1443,33 @@ function crearRpc(almacen: Almacen) {
         return sinError({ vistas: ids.size });
       }
 
+      /* Como `setEmployeePay`: uno por persona, y sin monto se borra. */
+      case 'set_employee_pay': {
+        const empleado = String(argumentos.p_employee_id ?? '');
+        const monto = argumentos.p_monthly_salary;
+        const otras = filas('employee_pay').filter((fila) => fila.employee_id !== empleado);
+        if (monto === null || monto === undefined) {
+          almacen.set('employee_pay', otras);
+          return sinError({ employee_id: empleado, monthly_salary: null });
+        }
+        if (typeof monto !== 'number' || !(monto > 0) || monto > 100_000) {
+          return conError('El sueldo tiene que ser un monto en soles mayor que cero.');
+        }
+        almacen.set('employee_pay', [
+          ...otras,
+          {
+            id: empleado,
+            organization_id: DEMO_ORG_ID,
+            employee_id: empleado,
+            monthly_salary: monto,
+            family_allowance: argumentos.p_family_allowance === true,
+            pension: argumentos.p_pension ?? null,
+            updated_at: new Date().toISOString(),
+          },
+        ]);
+        return sinError({ employee_id: empleado, monthly_salary: monto });
+      }
+
       case 'settle_owed_hours': {
         const id = String(argumentos.p_owed_id ?? '');
         const estado = String(argumentos.p_status ?? 'pending');

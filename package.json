@@ -56,6 +56,7 @@
     "programado:check": "node scripts/programado-check.mjs dist-demo",
     "vistas:check": "node scripts/vistas-check.mjs dist-demo",
     "sin-marcar:check": "node scripts/sin-marcar-check.mjs dist-demo",
+    "sueldo:check": "node scripts/sueldo-check.mjs dist-demo",
     "acceso:check": "node scripts/acceso-check.mjs dist-demo",
     "marca:check": "node scripts/marca-check.mjs dist-demo",
     "avisos:check": "node scripts/avisos-check.mjs dist-demo",

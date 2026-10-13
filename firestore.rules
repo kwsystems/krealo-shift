@@ -330,7 +330,10 @@ service cloud.firestore {
     }
 
     match /overtime_approvals/{id} {
-      allow read: if isStaff(resource.data.organization_id);
+      // Y LAS SUYAS, la propia persona (13-oct): su sueldo aproximado suma sus horas extra
+      // aprobadas. Las de los demás, no; y aprobárselas, nunca.
+      allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow create: if aprobacionValida(id);
       allow update: if aprobacionValida(id)
         && request.resource.data.organization_id == resource.data.organization_id
@@ -386,6 +389,15 @@ service cloud.firestore {
     // alguien. Ver functions/src/faltas.ts.
     match /absence_resolutions/{shiftId} {
       allow read: if isStaff(resource.data.organization_id)
+        || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
+      allow write: if false;
+    }
+
+    // EL SUELDO DE CADA PERSONA (13-oct): lo leen el dueño o un administrador —no un gerente
+    // de sede— y la propia persona; un compañero, nunca. Lo escribe solo el servidor
+    // (`functions/src/sueldos.ts`).
+    match /employee_pay/{employeeId} {
+      allow read: if isAdmin(resource.data.organization_id)
         || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
       allow write: if false;
     }
