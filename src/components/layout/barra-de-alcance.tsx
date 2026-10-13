@@ -14,7 +14,7 @@ import { useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
 import { propsDelMarco } from '@/theme/marco';
-import { borderWidth, fontFamily, fontSize, radii, sizes, spacing } from '@/theme/tokens';
+import { fontFamily, fontSize, radii, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -298,9 +298,8 @@ const useEstilos = estilosDelTema((colors) => ({
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
     // EL MARCO (13-oct): la cabecera y el menú son la carcasa; el contenido, la hoja.
+    // Sin raya debajo: cabecera y menú son el MISMO marco, y la raya los partía en dos.
     backgroundColor: colors.marco,
-    borderBottomColor: colors.marcoRegla,
-    borderBottomWidth: borderWidth.hairline,
   },
   /*
    * EN EL TELÉFONO, MENOS AIRE A LOS LADOS Y ENTRE PIEZAS (5-oct). Desde que la campana de

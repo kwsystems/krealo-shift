@@ -177,6 +177,11 @@ function PanelConMarca() {
             ? {
                 backgroundColor: colors.canvas,
                 borderTopLeftRadius: radii.hoja,
+                // EL FILO (13-oct): en oscuro, hoja y marco casi se confundían y la esquina
+                // parecía un corte. Una línea fina más clara la dibuja en los dos temas.
+                borderTopWidth: 1,
+                borderLeftWidth: 1,
+                borderColor: colors.marcoRegla,
                 overflow: 'hidden',
               }
             : { backgroundColor: colors.canvas },

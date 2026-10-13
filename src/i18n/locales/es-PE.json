@@ -83,6 +83,9 @@
   },
   "admin": {
     "tabHome": "Inicio",
+    "navGroupDaily": "Día a día",
+    "navGroupInsights": "Análisis",
+    "navGroupAdmin": "Gestión",
     "tabTeamPeople": "Personas",
     "tabAvailability": "Disponibilidad",
     "tabTeam": "Equipo",

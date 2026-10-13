@@ -83,6 +83,9 @@
   },
   "admin": {
     "tabHome": "Home",
+    "navGroupDaily": "Day to day",
+    "navGroupInsights": "Insights",
+    "navGroupAdmin": "Admin",
     "tabTeamPeople": "People",
     "tabAvailability": "Availability",
     "tabTeam": "Team",
