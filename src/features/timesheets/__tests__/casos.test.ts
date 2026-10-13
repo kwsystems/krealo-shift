@@ -465,6 +465,42 @@ describe('fuera de turno (6-oct)', () => {
   });
 });
 
+/**
+ * UNA DECISIÓN, NO DOS (13-oct): de 10:00 a 19:00 sin pausa en un turno 10–19 con 1 h de
+ * refrigerio. La hora de más ES la comida sin descontar: sale solo el caso de la extra, que
+ * lleva dentro el refrigerio sin marcar.
+ */
+describe('refrigerio sin marcar y hora extra son un solo caso (13-oct)', () => {
+  const sinPausa = jornada({ gross_minutes: 540, unpaid_break_minutes: 0, net_minutes: 540 });
+  const conUmbral = (sesiones: WorkSession[], umbralExtra = 60) =>
+    casosPorResolver({ sesiones, turnos: [TURNO], ahoraISO: H(23), timezone: TZ, umbralExtra });
+
+  it('sale solo «trabajó 1 h más», con el refrigerio de 1 h dentro', () => {
+    const lista = conUmbral([sinPausa]);
+    expect(lista.map((caso) => caso.tipo)).toEqual(['fuera_de_turno']);
+    expect(lista[0]).toMatchObject({
+      deMas: 60,
+      posibleExtra: true,
+      refrigerioSinMarcar: { minutos: 60, sesion: { id: 's1' } },
+    });
+  });
+
+  it('si las horas de más no llegan al aviso, se pregunta solo el refrigerio', () => {
+    expect(conUmbral([sinPausa], 90).map((caso) => caso.tipo)).toEqual(['sin_refrigerio']);
+  });
+
+  it('con el refrigerio marcado no hay nada que fundir', () => {
+    const larga = jornada({
+      ends_at: H(21),
+      gross_minutes: 660,
+      unpaid_break_minutes: 60,
+      net_minutes: 600,
+    });
+    const [caso] = conUmbral([larga]);
+    expect(caso).toMatchObject({ tipo: 'fuera_de_turno', refrigerioSinMarcar: null });
+  });
+});
+
 /*
  * «LE DEBE» QUE YA NO CUADRA (8-oct): se apuntó la deuda y después se corrigió la jornada.
  */

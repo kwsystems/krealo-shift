@@ -1,4 +1,5 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
+import { refrigerioCentrado } from '../../src/domain/refrigerio-centrado';
 
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import {
@@ -80,26 +81,8 @@ export function diaLocal(instante: string, zona: string): string {
   }).format(new Date(instante));
 }
 
-/**
- * Dónde va el refrigerio de un turno que no se fichó: en el centro de la jornada, en
- * cuartos de hora. 10:00–19:00 con una hora da 14:00–15:00. No es un dato —nadie lo
- * marcó—, es la forma más neutra de que la jornada descuente lo que el turno planificó.
- */
-export function refrigerioCentrado(
-  startsAt: string,
-  endsAt: string,
-  minutos: number,
-): { desde: string; hasta: string } | null {
-  const inicio = Date.parse(startsAt);
-  const total = Math.floor((Date.parse(endsAt) - inicio) / 60000);
-  if (minutos <= 0 || minutos >= total) return null;
-  const antes = Math.min(Math.round((total - minutos) / 2 / 15) * 15, total - minutos);
-  const desde = inicio + antes * 60000;
-  return {
-    desde: new Date(desde).toISOString(),
-    hasta: new Date(desde + minutos * 60000).toISOString(),
-  };
-}
+// Vive en `src/domain/refrigerio-centrado.ts`: la demostración usa la misma regla.
+export { refrigerioCentrado };
 
 /**
  * El primer día en que se fichó con el reloj en la sede, o `null` si nunca. Solo cuenta

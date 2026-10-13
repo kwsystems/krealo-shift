@@ -66,9 +66,10 @@ export function useResolverFalta(params: {
       falta: Falta;
       entradaISO: string;
       salidaISO: string | null;
+      refrigerioMinutos: number;
       motivo: string;
     }) => {
-      const { falta, entradaISO, salidaISO, motivo } = variables;
+      const { falta, entradaISO, salidaISO, refrigerioMinutos, motivo } = variables;
       if (salidaISO === null) {
         // Turno en curso: la entrada sola, atada a su turno. La salida la marca ella.
         await addManualTimeEvent({
@@ -85,6 +86,7 @@ export function useResolverFalta(params: {
         shiftId: falta.id,
         startsAt: entradaISO,
         endsAt: salidaISO,
+        breakMinutes: refrigerioMinutos,
         reason: motivo,
       });
     },
@@ -105,8 +107,14 @@ export function useResolverFalta(params: {
           language={language}
           ahoraISO={nowISO}
           guardando={registrar.isPending}
-          onGuardar={async ({ entradaISO, salidaISO, motivo }) => {
-            await registrar.mutateAsync({ falta: vino, entradaISO, salidaISO, motivo });
+          onGuardar={async ({ entradaISO, salidaISO, refrigerioMinutos, motivo }) => {
+            await registrar.mutateAsync({
+              falta: vino,
+              entradaISO,
+              salidaISO,
+              refrigerioMinutos,
+              motivo,
+            });
             setVino(null);
             onHecho?.(
               salidaISO === null

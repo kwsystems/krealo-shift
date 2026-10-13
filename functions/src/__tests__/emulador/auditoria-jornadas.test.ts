@@ -214,5 +214,60 @@ describe('auditoría de jornadas', () => {
       const resultado = await fallo(registrar());
       expect(resultado.details).toEqual({ motivo: 'CON_MARCAS' });
     });
+
+    /*
+     * CON SU REFRIGERIO (13-oct): quien no marcó en todo el día tampoco marcó su comida. Se
+     * registra la de su turno en el centro: de 10:00 a 19:00 con 1 h son 8 h, no 9, y no
+     * nacen «sin refrigerio» ni «1 h más que su turno».
+     */
+    it('con el refrigerio de su turno, la jornada mide 8 h y no 9', async () => {
+      const conRefrigerio = { p_break_minutes: 60 };
+      expect(
+        await correr(registerMissedAttendance, {
+          p_shift_id: 't-falta',
+          p_starts_at: L(10, 0),
+          p_ends_at: L(19, 0),
+          p_reason: 'Se olvidó de marcar',
+          ...conRefrigerio,
+        }),
+      ).toMatchObject({ repetido: false });
+      const [jornada] = await jornadas();
+      expect(jornada).toMatchObject({
+        starts_at: L(10, 0),
+        ends_at: L(19, 0),
+        unpaid_break_minutes: 60,
+        net_minutes: 480,
+        status: 'complete',
+      });
+      const eventos = await db
+        .collection(COLLECTIONS.timeEvents)
+        .where('employee_id', '==', PERSONA)
+        .get();
+      const tipos = eventos.docs
+        .map((d) => d.data())
+        .sort((a, b) => String(a.occurred_at).localeCompare(String(b.occurred_at)))
+        .map((e) => `${e.event_type}@${String(e.occurred_at).slice(11, 16)}`);
+      // 14:00–15:00 en Lima es 19:00–20:00 en UTC: en el centro de la jornada.
+      expect(tipos).toEqual([
+        'clock_in@15:00',
+        'break_start@19:00',
+        'break_end@20:00',
+        'clock_out@00:00',
+      ]);
+    });
+
+    it('un refrigerio que no cabe se rechaza y no escribe nada', async () => {
+      const resultado = await fallo(
+        correr(registerMissedAttendance, {
+          p_shift_id: 't-falta',
+          p_starts_at: L(10, 0),
+          p_ends_at: L(11, 0),
+          p_reason: 'Se olvidó de marcar',
+          p_break_minutes: 60,
+        }),
+      );
+      expect(resultado.details).toEqual({ motivo: 'CORTA' });
+      expect(await jornadas()).toHaveLength(0);
+    });
   });
 });

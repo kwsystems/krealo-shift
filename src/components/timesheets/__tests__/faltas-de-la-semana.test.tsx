@@ -255,6 +255,7 @@ describe('resolver mientras el turno dura', () => {
       expect(onGuardar).toHaveBeenCalledWith({
         entradaISO: '2026-09-30T23:00:00.000Z',
         salidaISO: null,
+        refrigerioMinutos: 0,
         motivo: 'Se olvidó de marcar',
       }),
     );
@@ -299,5 +300,75 @@ describe('resolver mientras el turno dura', () => {
     );
     expect(screen.getByTestId('justificar-falta-tipo-unjustified')).toBeTruthy();
     expect(screen.queryByTestId('justificar-falta-tipo-credit')).toBeNull();
+  });
+});
+
+/**
+ * CON EL DÍA ENTERO, SU REFRIGERIO (13-oct): si no marcó nada, tampoco marcó la comida. La
+ * hoja trae el de su turno puesto, se puede cambiar, y 0 es «trabajó de corrido».
+ */
+describe('«Vino y no marcó» con el día entero', () => {
+  const DESPUES = '2026-10-01T05:00:00.000Z';
+  const conRefrigerio = (minutos: number): Falta => {
+    const base = falta('a');
+    return { ...base, turno: { ...base.turno, planned_unpaid_break_minutes: minutos } };
+  };
+  const abrir = async (f: Falta, onGuardar: jest.Mock) =>
+    renderWithProviders(
+      <RegistrarQueVinoSheet
+        falta={f}
+        nombre="Ana Prueba"
+        timezone={TZ}
+        language="es-PE"
+        ahoraISO={DESPUES}
+        guardando={false}
+        onGuardar={onGuardar}
+        onClose={jest.fn()}
+      />,
+    );
+
+  it('trae el refrigerio de su turno y lo guarda con la entrada y la salida', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await abrir(conRefrigerio(60), onGuardar);
+    expect(screen.getByTestId('falta-vino-refrigerio').props.value).toBe('1 h');
+    expect(screen.getByTestId('falta-vino-refrigerio-se-guarda')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('falta-vino-motivo'), 'Se olvidó de marcar');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    await waitFor(() =>
+      expect(onGuardar).toHaveBeenCalledWith({
+        entradaISO: '2026-09-30T23:00:00.000Z',
+        salidaISO: '2026-10-01T02:00:00.000Z',
+        refrigerioMinutos: 60,
+        motivo: 'Se olvidó de marcar',
+      }),
+    );
+  });
+
+  it('0 es «trabajó de corrido», y un refrigerio que no cabe no se guarda', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await abrir(conRefrigerio(60), onGuardar);
+    await fireEvent.changeText(screen.getByTestId('falta-vino-motivo'), 'Se olvidó de marcar');
+    await fireEvent.changeText(screen.getByTestId('falta-vino-refrigerio'), '4 h');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    expect(onGuardar).not.toHaveBeenCalled();
+    expect(screen.getByTestId('falta-vino-por-que-no')).toBeTruthy();
+    await fireEvent.changeText(screen.getByTestId('falta-vino-refrigerio'), '0');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    await waitFor(() =>
+      expect(onGuardar).toHaveBeenCalledWith(expect.objectContaining({ refrigerioMinutos: 0 })),
+    );
+  });
+
+  it('acepta la hora como se escribe: «18» es las 18:00', async () => {
+    const onGuardar = jest.fn(() => Promise.resolve());
+    await abrir(conRefrigerio(0), onGuardar);
+    await fireEvent.changeText(screen.getByTestId('falta-vino-entrada'), '18');
+    await fireEvent.changeText(screen.getByTestId('falta-vino-motivo'), 'Se olvidó de marcar');
+    await fireEvent.press(screen.getByTestId('falta-vino-guardar'));
+    await waitFor(() =>
+      expect(onGuardar).toHaveBeenCalledWith(
+        expect.objectContaining({ entradaISO: '2026-09-30T23:00:00.000Z' }),
+      ),
+    );
   });
 });

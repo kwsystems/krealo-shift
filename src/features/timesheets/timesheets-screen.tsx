@@ -1082,25 +1082,54 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 }}
                 saving={guardarHoraExtra.isPending}
                 failed={guardarHoraExtra.isError}
-                onGuardar={(minutos) =>
-                  guardarHoraExtra.mutate(
-                    {
-                      employeeId: selected.employee_id,
-                      workDate: dateKeyOf(selected.starts_at, scope.timezone),
-                      minutes: minutos,
-                    },
+                onGuardar={(minutos) => {
+                  const guardar = () =>
+                    guardarHoraExtra.mutate(
+                      {
+                        employeeId: selected.employee_id,
+                        workDate: dateKeyOf(selected.starts_at, scope.timezone),
+                        minutes: minutos,
+                      },
+                      {
+                        onSuccess: () => {
+                          cerrarDetalle();
+                          setFeedback(
+                            minutos > 0
+                              ? t('timesheet.overtimeSaved')
+                              : t('timesheet.overtimeNotExtraSaved'),
+                          );
+                        },
+                      },
+                    );
+                  /*
+                   * «NO ES EXTRA» CON EL REFRIGERIO SIN MARCAR (13-oct), como en Por resolver:
+                   * esa hora era su comida y se descuenta. Si aun así le sobra algo, tampoco es
+                   * extra y se guarda 0. Una sola decisión, no «no es extra» y luego el
+                   * refrigerio aparte.
+                   */
+                  const pendiente = refrigerioPendiente;
+                  if (minutos > 0 || pendiente === undefined) {
+                    guardar();
+                    return;
+                  }
+                  const deMas = minutosDeMas(
+                    netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0,
+                    planificado.get(claveSeleccionada),
+                  );
+                  decidirRefrigerio.mutate(
+                    { tipo: 'descontar_refrigerio', sessionId: pendiente.sesion.id },
                     {
                       onSuccess: () => {
+                        if (deMas > pendiente.refrigerio) {
+                          guardar();
+                          return;
+                        }
                         cerrarDetalle();
-                        setFeedback(
-                          minutos > 0
-                            ? t('timesheet.overtimeSaved')
-                            : t('timesheet.overtimeNotExtraSaved'),
-                        );
+                        setFeedback(t('timesheet.breakDecidedApplied'));
                       },
                     },
-                  )
-                }
+                  );
+                }}
               />
             )
           }

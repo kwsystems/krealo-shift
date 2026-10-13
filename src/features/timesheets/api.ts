@@ -558,6 +558,8 @@ export async function registrarQueVino(params: {
   shiftId: string;
   startsAt: string;
   endsAt: string;
+  /** El refrigerio que se le pone (13-oct): el de su turno, salvo que se cambie. */
+  breakMinutes: number;
   reason: string;
 }): Promise<void> {
   const db = requireClient();
@@ -566,6 +568,7 @@ export async function registrarQueVino(params: {
       p_shift_id: params.shiftId,
       p_starts_at: params.startsAt,
       p_ends_at: params.endsAt,
+      p_break_minutes: params.breakMinutes,
       p_reason: params.reason.trim(),
     });
     if (error !== null) throw toAdminError(error);

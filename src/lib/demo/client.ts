@@ -1,3 +1,4 @@
+import { refrigerioCentrado } from '@/domain/refrigerio-centrado';
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { motivoValido, NOTA_MAXIMA_DE_FALTA } from '@/domain/motivos-de-falta';
 import { motivoDeCumplidoValido, NOTA_MAXIMA_DE_CUMPLIDO } from '@/domain/motivos-de-cumplido';
@@ -1560,21 +1561,45 @@ function crearRpc(almacen: Almacen) {
             },
           };
         }
+        /*
+         * CON SU REFRIGERIO (13-oct), como el servidor: el que llega —el de su turno, que la
+         * hoja trae puesto—, en el centro de la jornada. Sin él, ninguno.
+         */
+        const refrigerio = Number(argumentos.p_break_minutes ?? 0);
+        const pausa = refrigerio > 0 ? refrigerioCentrado(entrada, salida, refrigerio) : null;
+        if (refrigerio > 0 && pausa === null) {
+          return conError('El refrigerio no cabe entre esa entrada y salida.');
+        }
         const ahora = new Date().toISOString();
-        const eventos = (['clock_in', 'clock_out'] as const).map((tipo) => ({
-          id: tipo === 'clock_in' ? idEntrada : `vino-${String(turno.id)}-salida`,
+        const marcas = [
+          { tipo: 'clock_in', id: idEntrada, instante: entrada },
+          ...(pausa === null
+            ? []
+            : [
+                {
+                  tipo: 'break_start',
+                  id: `vino-${String(turno.id)}-pausa`,
+                  instante: pausa.desde,
+                },
+                { tipo: 'break_end', id: `vino-${String(turno.id)}-vuelta`, instante: pausa.hasta },
+              ]),
+          { tipo: 'clock_out', id: `vino-${String(turno.id)}-salida`, instante: salida },
+        ];
+        const eventos = marcas.map((marca) => ({
+          id: marca.id,
           organization_id: DEMO_ORG_ID,
           employee_id: turno.employee_id,
           location_id: turno.location_id,
           shift_id: turno.id,
-          event_type: tipo,
-          break_type: null,
-          occurred_at: tipo === 'clock_in' ? entrada : salida,
+          event_type: marca.tipo,
+          break_type: marca.tipo === 'break_start' || marca.tipo === 'break_end' ? 'unpaid' : null,
+          occurred_at: marca.instante,
           source: 'manager',
           is_offline: false,
         }));
         almacen.set('time_events', [...filas('time_events'), ...eventos]);
         const brutos = minutosEntre(entrada, salida);
+        const sinPagar = pausa === null ? 0 : refrigerio;
         almacen.set('work_sessions', [
           ...filas('work_sessions'),
           {
@@ -1587,8 +1612,8 @@ function crearRpc(almacen: Almacen) {
             ends_at: salida,
             gross_minutes: brutos,
             paid_break_minutes: 0,
-            unpaid_break_minutes: 0,
-            net_minutes: brutos,
+            unpaid_break_minutes: sinPagar,
+            net_minutes: brutos - sinPagar,
             status: 'complete',
             flags: [],
             source: 'manager',
@@ -1613,6 +1638,10 @@ function crearRpc(almacen: Almacen) {
             author_name: 'Andree (demostración)',
           })),
         ]);
+        // Y el resumen del día, como todo lo que crea o cambia una jornada.
+        rehacerResumenDelDia(
+          filas('work_sessions').find((fila) => fila.id === `vino-${String(turno.id)}`),
+        );
         return sinError({ eventIds: eventos.map((evento) => evento.id), repetido: false });
       }
 

@@ -21,6 +21,9 @@ import {
   localDateTimeToInstant,
   localTimeOf,
 } from '@/features/schedules/week';
+import { horaEscrita } from '@/domain/hora-escrita';
+import { minutosEscritos } from '@/domain/duracion-escrita';
+import { duracion } from '@/features/timesheets/duracion';
 import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
 import {
   MOTIVOS_DE_CUMPLIDO,
@@ -198,7 +201,13 @@ export function FaltasDeLaSemana({
   );
 }
 
-const HORA = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** Un refrigerio como se escribe a mano: «1 h», «30», «1:30». Lo lee `minutosEscritos`. */
+function textoDeMinutos(minutos: number): string {
+  if (minutos === 0) return '0';
+  if (minutos % 60 === 0) return `${minutos / 60} h`;
+  if (minutos < 60) return String(minutos);
+  return `${Math.floor(minutos / 60)}:${String(minutos % 60).padStart(2, '0')}`;
+}
 /** Lo que se tolera de reloj adelantado, como el servidor. */
 const MARGEN_FUTURO_MS = 5 * 60_000;
 
@@ -212,6 +221,11 @@ const MARGEN_FUTURO_MS = 5 * 60_000;
  * aún no ha pasado: se registra la entrada, la jornada queda abierta y ella sigue en el
  * reloj como cualquier día —refrigerio y salida—. Pedirle aquí una salida futura era
  * inventarla.
+ *
+ * CON EL DÍA ENTERO, TAMBIÉN SU REFRIGERIO (13-oct). Si no marcó nada, tampoco marcó la
+ * comida, y sin ella la jornada contaba de más: «sin refrigerio» y «1 h más que su turno» en
+ * Por resolver por una hora que no existía. El campo trae el de su turno; 0 si trabajó de
+ * corrido. Lo registra el servidor en el centro de la jornada.
  */
 export function RegistrarQueVinoSheet({
   falta,
@@ -233,6 +247,8 @@ export function RegistrarQueVinoSheet({
   onGuardar: (params: {
     entradaISO: string;
     salidaISO: string | null;
+    /** El refrigerio que se le pone, en minutos; 0 con el turno en curso. */
+    refrigerioMinutos: number;
     motivo: string;
   }) => Promise<void>;
   onClose: () => void;
@@ -241,39 +257,52 @@ export function RegistrarQueVinoSheet({
   const enCurso = Date.parse(falta.turno.ends_at) > Date.parse(ahoraISO);
   const [entrada, setEntrada] = useState(localTimeOf(falta.turno.starts_at, timezone));
   const [salida, setSalida] = useState(localTimeOf(falta.turno.ends_at, timezone));
+  const [refrigerio, setRefrigerio] = useState(
+    textoDeMinutos(Math.max(0, falta.turno.planned_unpaid_break_minutes)),
+  );
   const [motivo, setMotivo] = useState('');
   const [intentado, setIntentado] = useState(false);
   const [fallo, setFallo] = useState(false);
 
-  const entradaISO = HORA.test(entrada.trim())
-    ? localDateTimeToInstant(falta.dia, entrada.trim(), timezone)
-    : null;
+  // Como en el resto de la app: «10», «10.30», «1030» o «6pm» valen (`horaEscrita`).
+  const horaDeEntrada = horaEscrita(entrada);
+  const horaDeSalida = horaEscrita(salida);
+  const entradaISO =
+    horaDeEntrada === null ? null : localDateTimeToInstant(falta.dia, horaDeEntrada, timezone);
   // Una salida «antes» de la entrada es del día siguiente: el turno de noche.
-  const salidaElMismoDia = HORA.test(salida.trim())
-    ? localDateTimeToInstant(falta.dia, salida.trim(), timezone)
-    : null;
+  const salidaElMismoDia =
+    horaDeSalida === null ? null : localDateTimeToInstant(falta.dia, horaDeSalida, timezone);
   const salidaISO =
-    salidaElMismoDia === null || entradaISO === null
+    salidaElMismoDia === null || entradaISO === null || horaDeSalida === null
       ? null
       : salidaElMismoDia > entradaISO
         ? salidaElMismoDia
-        : localDateTimeToInstant(addDaysToKey(falta.dia, 1), salida.trim(), timezone);
+        : localDateTimeToInstant(addDaysToKey(falta.dia, 1), horaDeSalida, timezone);
+  const refrigerioMinutos = enCurso ? 0 : minutosEscritos(refrigerio);
+  const duracionMinutos =
+    entradaISO === null || salidaISO === null
+      ? null
+      : Math.round((Date.parse(salidaISO) - Date.parse(entradaISO)) / 60_000);
+  const refrigerioMal =
+    refrigerioMinutos === null ||
+    (duracionMinutos !== null && refrigerioMinutos > 0 && refrigerioMinutos >= duracionMinutos);
 
   const horasMal = entradaISO === null || (!enCurso && salidaISO === null);
   // Con el turno en curso la que no puede ser futura es la entrada; si no, la salida.
   const ultima = enCurso ? entradaISO : salidaISO;
   const futura = ultima !== null && Date.parse(ultima) > Date.parse(ahoraISO) + MARGEN_FUTURO_MS;
   const motivoFalta = motivo.trim().length < 3;
-  const valido = !horasMal && !futura && !motivoFalta;
+  const valido = !horasMal && !futura && !refrigerioMal && !motivoFalta;
 
   const guardar = () => {
     setIntentado(true);
-    if (!valido || entradaISO === null) return;
+    if (!valido || entradaISO === null || refrigerioMinutos === null) return;
     if (!enCurso && salidaISO === null) return;
     setFallo(false);
     onGuardar({
       entradaISO,
       salidaISO: enCurso ? null : salidaISO,
+      refrigerioMinutos,
       motivo: motivo.trim(),
     }).catch(() => setFallo(true));
   };
@@ -292,7 +321,9 @@ export function RegistrarQueVinoSheet({
                 ? t('timesheet.absences.errorHours')
                 : futura
                   ? t('timesheet.futureTime')
-                  : t('timesheet.absences.reasonRequired')}
+                  : refrigerioMal
+                    ? t('timesheet.absences.breakInvalid')
+                    : t('timesheet.absences.reasonRequired')}
             </AppText>
           ) : null}
           <PrimaryButton
@@ -335,6 +366,34 @@ export function RegistrarQueVinoSheet({
           </Mitad>
         )}
       </Row>
+      {enCurso ? null : (
+        <Stack gap={spacing.xs}>
+          <FormField
+            label={t('timesheet.absences.break')}
+            value={refrigerio}
+            onChangeText={setRefrigerio}
+            keyboardType="numbers-and-punctuation"
+            autoCorrect={false}
+            placeholder="1 h"
+            testID="falta-vino-refrigerio"
+          />
+          {refrigerioMinutos !== null && !refrigerioMal ? (
+            <AppText
+              variant="label"
+              tone="primary"
+              tabular
+              testID="falta-vino-refrigerio-se-guarda"
+            >
+              {refrigerioMinutos === 0
+                ? t('timesheet.absences.breakNone')
+                : t('common.savedAs', { duration: duracion(t, refrigerioMinutos) })}
+            </AppText>
+          ) : null}
+          <AppText variant="help" tone="subtle">
+            {t('timesheet.absences.breakHint')}
+          </AppText>
+        </Stack>
+      )}
       {/* Por qué no se guarda, junto al botón: ver el pie. */}
       <FormField
         label={t('timesheet.absences.reason')}

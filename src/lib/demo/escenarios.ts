@@ -30,6 +30,7 @@ export const ESCENARIOS = [
   'cambiado',
   'cumplido',
   'avisos',
+  'refrigerio',
 ] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
@@ -419,6 +420,85 @@ export const MARCAS_DEL_ESCENARIO_AVISOS: readonly {
   },
 ];
 
+/**
+ * EL DÍA ENTERO SIN REFRIGERIO (13-oct), el caso de Andree: un turno de la semana pasada con
+ * 1 h de refrigerio, trabajado de principio a fin sin marcar la pausa. Antes salía dos veces
+ * en «Por resolver» —«sin refrigerio» y «trabajó 1 h más»—; ahora es un solo caso.
+ */
+function dejarUnDiaSinRefrigerio(almacen: Almacen): void {
+  const lunes = localDateTimeToInstant(weekStartOfKey(dateKeyOf(new Date(), TZ), 1), '00:00', TZ);
+  if (lunes === null) return;
+  const lunesPasado = Date.parse(lunes) - 7 * 24 * 3600_000;
+  const turno = (almacen.get('shifts') ?? [])
+    .filter(
+      (fila) =>
+        fila.status === 'published' &&
+        fila.location_id === DEMO_LOCATION_1 &&
+        Date.parse(String(fila.starts_at)) >= lunesPasado &&
+        Date.parse(String(fila.ends_at)) <= Date.parse(lunes),
+    )
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
+  if (turno === undefined) return;
+  const desde = Date.parse(String(turno.starts_at));
+  const hasta = Date.parse(String(turno.ends_at));
+  const brutos = Math.round((hasta - desde) / 60_000);
+  almacen.set(
+    'shifts',
+    (almacen.get('shifts') ?? []).map((fila) =>
+      fila.id === turno.id ? { ...fila, planned_unpaid_break_minutes: 60 } : fila,
+    ),
+  );
+  // Sus jornadas de ese rato se cambian por una sola: del inicio al fin del turno, sin pausa.
+  const otras = (almacen.get('work_sessions') ?? []).filter(
+    (sesion) =>
+      sesion.employee_id !== turno.employee_id ||
+      Date.parse(String(sesion.starts_at)) >= hasta ||
+      Date.parse(String(sesion.ends_at ?? sesion.starts_at)) <= desde,
+  );
+  const sinPausa: Fila = {
+    id: `sin-refrigerio-${String(turno.id)}`,
+    organization_id: turno.organization_id,
+    employee_id: turno.employee_id,
+    location_id: turno.location_id,
+    shift_id: turno.id,
+    starts_at: turno.starts_at,
+    ends_at: turno.ends_at,
+    gross_minutes: brutos,
+    paid_break_minutes: 0,
+    unpaid_break_minutes: 0,
+    net_minutes: brutos,
+    status: 'complete',
+    flags: [],
+    departure_reason: null,
+    auto_clock_out: false,
+    avisos_vistos: [],
+    casos_resueltos: [],
+    updated_at: turno.ends_at,
+  };
+  almacen.set('work_sessions', [...otras, sinPausa]);
+  // Y sus fichajes de entrada y salida, para que la reconstrucción tenga de dónde partir.
+  almacen.set('time_events', [
+    ...(almacen.get('time_events') ?? []).filter(
+      (evento) =>
+        evento.employee_id !== turno.employee_id ||
+        Date.parse(String(evento.occurred_at)) > hasta ||
+        Date.parse(String(evento.occurred_at)) < desde,
+    ),
+    ...(['clock_in', 'clock_out'] as const).map((tipo) => ({
+      id: `sin-refrigerio-${String(turno.id)}-${tipo}`,
+      organization_id: turno.organization_id,
+      employee_id: turno.employee_id,
+      location_id: turno.location_id,
+      shift_id: turno.id,
+      event_type: tipo,
+      break_type: null,
+      occurred_at: tipo === 'clock_in' ? turno.starts_at : turno.ends_at,
+      source: 'kiosk',
+      is_offline: false,
+    })),
+  ]);
+}
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
   // `avisos` es el día de siempre: lo suyo llega después, con el panel abierto.
   if (escenario === 'normal' || escenario === 'avisos') return almacen;
@@ -431,6 +511,11 @@ export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almace
 
   if (escenario === 'cumplido') {
     cumplidoEspecialDeLaVendedora(almacen);
+    return almacen;
+  }
+
+  if (escenario === 'refrigerio') {
+    dejarUnDiaSinRefrigerio(almacen);
     return almacen;
   }
 

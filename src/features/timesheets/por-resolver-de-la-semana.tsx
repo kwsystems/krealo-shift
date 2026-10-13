@@ -285,7 +285,9 @@ export function PorResolverDeLaSemana({
         : caso.entroAntes >= caso.salioDespues
           ? t('timesheet.cases.cameEarly', { hours: duracion(t, caso.entroAntes) })
           : t('timesheet.cases.leftLate', { hours: duracion(t, caso.salioDespues) });
-      const ocupado = (guardarExtra.isPending || darPorVisto.isPending) && enCurso === caso.id;
+      const ocupado =
+        (guardarExtra.isPending || darPorVisto.isPending || arreglar.isPending) &&
+        enCurso === caso.id;
       const decidirExtra = (minutos: number) => {
         setEnCurso(caso.id);
         guardarExtra.mutate(
@@ -293,11 +295,28 @@ export function PorResolverDeLaSemana({
           { onSettled: () => setEnCurso(null) },
         );
       };
+      /*
+       * «NO ES EXTRA» CON EL REFRIGERIO SIN MARCAR (13-oct): esa hora era su comida, así que
+       * se descuenta el refrigerio del turno —lo mismo que «Descontar refrigerio»—. Si aun
+       * así le sobra algo, eso tampoco es extra: se guarda 0. Una decisión, no dos.
+       */
+      const refrigerio = caso.refrigerioSinMarcar;
+      const noEsExtra =
+        refrigerio === null
+          ? () => decidirExtra(0)
+          : () =>
+              lanzar(
+                caso.id,
+                { tipo: 'descontar_refrigerio', sessionId: refrigerio.sesion.id },
+                () => {
+                  if (caso.deMas > refrigerio.minutos) decidirExtra(0);
+                },
+              );
       return {
         ...base,
         ocupada: ocupado,
         que,
-        detalle:
+        detalle: [
           caso.turno === null
             ? t('timesheet.cases.outsideDetailNoShift', { marks: marcas })
             : t('timesheet.cases.outsideDetail', {
@@ -310,6 +329,12 @@ export function PorResolverDeLaSemana({
                 ),
                 marks: marcas,
               }),
+          refrigerio === null
+            ? null
+            : t('timesheet.cases.extraIsBreak', { hours: duracion(t, refrigerio.minutos) }),
+        ]
+          .filter((linea) => linea !== null)
+          .join(' · '),
         principal: caso.posibleExtra
           ? {
               etiqueta: t('timesheet.cases.approveExtra', { hours: duracion(t, caso.deMas) }),
@@ -327,7 +352,7 @@ export function PorResolverDeLaSemana({
         alternativa: caso.posibleExtra
           ? {
               etiqueta: t('timesheet.cases.notExtra'),
-              onPress: () => decidirExtra(0),
+              onPress: noEsExtra,
               testID: `caso-${caso.id}-no-extra`,
             }
           : null,

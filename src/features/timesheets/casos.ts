@@ -115,6 +115,12 @@ export type CasoPorResolver =
       salioDespues: number;
       /** Las jornadas con marcas fuera del turno sin ver: «Está bien así» las da por vistas. */
       conMarcas: WorkSession[];
+      /**
+       * EL REFRIGERIO QUE NO MARCÓ ESE DÍA, si lo hay (13-oct): la hora de más ES, en todo o en
+       * parte, su comida sin descontar. Entonces este es el único caso del día —el de «sin
+       * refrigerio» se funde aquí— y «No es extra» descuenta el refrigerio de esta jornada.
+       */
+      refrigerioSinMarcar: { minutos: number; sesion: WorkSession } | null;
     }
   | {
       /*
@@ -401,6 +407,28 @@ export function casosPorResolver(params: {
     casos.push(...fueraDeTurno(params, turnoPorId, params.umbralExtra));
   }
 
+  /*
+   * UNA DECISIÓN, NO DOS (13-oct). Una jornada de 10:00 a 19:00 sin pausa, con un turno que
+   * lleva 1 h de refrigerio, salía dos veces: «sin refrigerio» y «trabajó 1 h más que su
+   * turno». Es la misma hora —la de comer, sin descontar—. Andree: «es raro hacerlo 2 veces
+   * por literalmente lo mismo… solo debería ser hora extra». Si ese día hay horas de más, el
+   * refrigerio sin marcar va dentro del caso de la extra y no sale aparte.
+   */
+  const extraDelDia = new Map(
+    casos.flatMap((caso) =>
+      caso.tipo === 'fuera_de_turno' && caso.posibleExtra
+        ? [[claveDelDia(caso.sesion.employee_id, caso.dia), caso] as const]
+        : [],
+    ),
+  );
+  const unaDecision = casos.filter((caso) => {
+    if (caso.tipo !== 'sin_refrigerio') return true;
+    const extra = extraDelDia.get(claveDelDia(caso.sesion.employee_id, caso.dia));
+    if (extra === undefined) return true;
+    extra.refrigerioSinMarcar = { minutos: caso.refrigerio, sesion: caso.sesion };
+    return false;
+  });
+
   // Primero lo que sigue abierto —se está pagando ahora mismo—, y luego por día.
   const orden = {
     sin_salida: 0,
@@ -411,7 +439,7 @@ export function casosPorResolver(params: {
     faltan_horas: 5,
     deuda_que_no_cuadra: 6,
   } as const;
-  return casos.sort(
+  return unaDecision.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),
   );
 }
@@ -543,6 +571,7 @@ function fueraDeTurno(
               turno: turnoUltima,
             }).despues,
       conMarcas,
+      refrigerioSinMarcar: null,
     });
   }
   return casos;
