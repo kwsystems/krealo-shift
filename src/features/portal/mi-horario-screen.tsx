@@ -80,7 +80,7 @@ import { radii, spacing, type StatusTone } from '@/theme/tokens';
 import { formatClockTime } from '@/utils/time';
 import { HorasQueDebes } from './horas-que-debes';
 import { useSueldoDelMes } from '@/features/sueldos/hooks';
-import { TarjetaDelSueldo } from '@/features/sueldos/tarjeta-del-sueldo';
+import { SelectorDelMes, TarjetaDelSueldo } from '@/features/sueldos/tarjeta-del-sueldo';
 import { situacionDeHoy } from './hoy';
 import { duracion } from '@/features/timesheets/duracion';
 import { DEFAULT_LOCATION_SETTINGS } from '@/hooks/use-manager-scope';
@@ -166,6 +166,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
   const tz = ficha.timezone;
   const formato = ficha.sede?.settings.timeFormat;
   const hora = (instante: string) => formatClockTime(instante, tz, formato, language);
+  const [mesDelSueldo, setMesDelSueldo] = useState(0);
   const sueldo = useSueldoDelMes({
     organizationId: ficha.organizationId,
     employeeId: ficha.employeeId,
@@ -173,6 +174,7 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
     nowISO,
     ingreso: ficha.ingreso,
     baja: ficha.baja,
+    mesesAtras: mesDelSueldo,
   });
 
   const [semana, setSemana] = useState<'esta' | 'proxima'>('esta');
@@ -393,7 +395,17 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             SU SUELDO DE ESTE MES, APROXIMADO (13-oct): solo si quien gestiona puso su sueldo.
             Cambia cada día con sus faltas, extras aprobadas, feriados y lo que debe.
           */}
-          <TarjetaDelSueldo sueldo={sueldo} propia language={language} />
+          {sueldo.estado === 'sinSueldo' ? null : (
+            <Stack gap={spacing.sm}>
+              <SelectorDelMes mesesAtras={mesDelSueldo} onChange={setMesDelSueldo} />
+              <TarjetaDelSueldo
+                sueldo={sueldo}
+                propia
+                language={language}
+                hoy={dateKeyOf(nowISO, tz)}
+              />
+            </Stack>
+          )}
 
           {/* LO QUE DEBE, si debe algo: registrado por quien gestiona (1-oct). */}
           <HorasQueDebes

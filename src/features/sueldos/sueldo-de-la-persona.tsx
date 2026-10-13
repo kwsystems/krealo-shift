@@ -16,7 +16,7 @@ import { spacing } from '@/theme/tokens';
 
 import { useGuardarSueldo, useSueldoDelMes } from './hooks';
 import { montoEscrito } from './monto-escrito';
-import { soles, TarjetaDelSueldo } from './tarjeta-del-sueldo';
+import { SelectorDelMes, soles, TarjetaDelSueldo } from './tarjeta-del-sueldo';
 
 /**
  * EL SUELDO EN LA FICHA DE EQUIPO (13-oct): lo que va a cobrar este mes, con el mismo
@@ -38,6 +38,7 @@ export function SueldoDeLaPersona({
 }) {
   const { t } = useTranslation();
   const scope = useManagerScope();
+  const [mesesAtras, setMesesAtras] = useState(0);
   const sueldo = useSueldoDelMes({
     organizationId: scope.isAdmin ? organizationId : null,
     employeeId: scope.isAdmin ? member.id : null,
@@ -45,6 +46,7 @@ export function SueldoDeLaPersona({
     nowISO,
     ingreso: member.hire_date,
     baja: member.end_date,
+    mesesAtras,
   });
   const [editando, setEditando] = useState(false);
   if (!scope.isAdmin) return null;
@@ -76,7 +78,13 @@ export function SueldoDeLaPersona({
         </Card>
       ) : (
         <Stack gap={spacing.sm}>
-          <TarjetaDelSueldo sueldo={sueldo} propia={false} language={language} />
+          <SelectorDelMes mesesAtras={mesesAtras} onChange={setMesesAtras} />
+          <TarjetaDelSueldo
+            sueldo={sueldo}
+            propia={false}
+            language={language}
+            hoy={dateKeyOf(nowISO, timezone)}
+          />
           {sueldo.estado === 'listo' ? (
             <SecondaryButton
               label={t('pay.change')}

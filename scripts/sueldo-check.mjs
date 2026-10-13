@@ -15,6 +15,8 @@
  *    línea de la falta vale el día más su sexto de descanso: S/ 1,500 → S/ 58.33.
  * 3. PONER UN SUELDO: a quien no tiene, «Poner su sueldo»; un monto sin sentido dice por qué
  *    no se guarda; uno por debajo del mínimo lo avisa; y al guardar sale su tarjeta.
+ * 5. DEL 1 AL 31, Y SE PAGA ESE DÍA (13-oct): la tarjeta lo dice, y «Mes pasado» enseña el que
+ *    ya se pagó —el mismo en el celular y en Equipo— para compararlo con la boleta.
  * 4. UN GERENTE DE SEDE NO LO VE: lo comprueban las reglas (`reglas.test.ts`); aquí, que el
  *    celular de la vendedora no enseña ningún formulario.
  *
@@ -91,6 +93,14 @@ async function cerrarFicha(pagina) {
   await hoja.waitFor({ state: 'detached', timeout: 5000 }).catch(() => undefined);
 }
 
+const textoDe = async (raiz, id) =>
+  (
+    await raiz
+      .locator(`[data-testid="${id}"]`)
+      .first()
+      .innerText()
+      .catch(() => '')
+  ).trim();
 const totalEn = async (raiz) =>
   monto(
     await raiz
@@ -137,9 +147,23 @@ try {
   ) {
     problemas.push('el celular de la vendedora ofrece cambiar su sueldo');
   }
+  const periodoCel = await textoDe(pCel, 'sueldo-periodo');
+  console.log(`  periodo              «${periodoCel}»`);
+  if (!/^Del 1 al 3[01] de \S+ · se paga/.test(periodoCel)) {
+    problemas.push(`el celular no dice el periodo y el día de pago: «${periodoCel}»`);
+  }
   if ((await tarjetaCel.count()) > 0) {
     await tarjetaCel.first().scrollIntoViewIfNeeded();
     await tarjetaCel.first().screenshot({ path: 'capturas/sueldo-celular.png' });
+  }
+  // EL MES YA PAGADO (13-oct): «se pagó el …» y compararlo con la boleta.
+  await pCel.locator('[data-testid="sueldo-mes-1"]').first().click();
+  await esperar(pCel, 1500);
+  const pasadoCel = await textoDe(pCel, 'sueldo-periodo');
+  const enCelularPasado = await totalEn(pCel);
+  console.log(`  celular, mes pasado  ${enCelularPasado} «${pasadoCel}»`);
+  if (!/se pagó el .+ Compáralo con tu boleta/.test(pasadoCel)) {
+    problemas.push(`el mes pasado en el celular no dice que ya se pagó: «${pasadoCel}»`);
   }
   await celular.close();
 
@@ -165,6 +189,20 @@ try {
   if ((await hoja.locator('[data-testid="sueldo-justificadas"]').count()) === 0) {
     problemas.push('la falta justificada no se dice («no se descuenta»)');
   }
+  // El mes pasado, el mismo en Equipo que en su celular.
+  await hoja.locator('[data-testid="sueldo-mes-1"]').first().click();
+  await esperar(pagina, 1500);
+  const enEquipoPasado = await totalEn(hoja);
+  const pasadoEquipo = await textoDe(hoja, 'sueldo-periodo');
+  console.log(`  equipo, mes pasado   ${enEquipoPasado} «${pasadoEquipo}»`);
+  if (enEquipoPasado !== enCelularPasado) {
+    problemas.push(`el mes pasado: celular ${enCelularPasado}, Equipo ${enEquipoPasado}`);
+  }
+  if (!/se pagó el .+ Compáralo con su boleta/.test(pasadoEquipo)) {
+    problemas.push(`el mes pasado en Equipo no dice que ya se pagó: «${pasadoEquipo}»`);
+  }
+  await hoja.locator('[data-testid="sueldo-mes-0"]').first().click();
+  await esperar(pagina, 1200);
   await hoja
     .locator('[data-testid="sueldo-de-la-persona"]')
     .first()

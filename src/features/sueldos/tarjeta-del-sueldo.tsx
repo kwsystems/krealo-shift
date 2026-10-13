@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import { AppText } from '@/components/ui/app-text';
 import { SecondaryButton } from '@/components/ui/buttons';
 import { Card, Row, SeparadorDeRegistro, Stack } from '@/components/ui/layout';
+import { SegmentedControl } from '@/components/schedule/fields';
+import { diasHastaElPago, type PeriodoDePago } from '@/domain/periodo-de-pago';
 import type { SueldoEstimado } from '@/domain/sueldo-estimado';
 import { duracion } from '@/features/timesheets/duracion';
 import type { SupportedLanguage } from '@/i18n';
@@ -30,6 +32,60 @@ const NOMBRE_DEL_MES = (desde: string, language: SupportedLanguage) => {
   return language === 'en' ? nombre : nombre.toLocaleLowerCase('es-PE');
 };
 
+/** «viernes 31»: el día de pago con su nombre, que es como se dice en la tienda. */
+const DIA_DE_PAGO = (dia: string, language: SupportedLanguage) =>
+  new Intl.DateTimeFormat(language === 'en' ? 'en-US' : 'es-PE', {
+    weekday: 'long',
+    day: 'numeric',
+    ...(language === 'en' ? { month: 'short' as const } : {}),
+    timeZone: 'UTC',
+  }).format(new Date(`${dia}T12:00:00Z`));
+
+/**
+ * DEL 1 AL 31 Y SE PAGA ESE DÍA (13-oct), en una línea: cuánto falta para cobrar, «se paga
+ * hoy», o —el mes pasado— que ya se pagó y que se compare con la boleta.
+ */
+export function textoDelPeriodo(
+  t: ReturnType<typeof useTranslation>['t'],
+  periodo: PeriodoDePago,
+  hoy: string,
+  propia: boolean,
+  language: SupportedLanguage,
+): string {
+  const comun = {
+    to: Number(periodo.hasta.slice(8)),
+    month: NOMBRE_DEL_MES(periodo.desde, language),
+    payday: DIA_DE_PAGO(periodo.diaDePago, language),
+  };
+  const faltan = diasHastaElPago(hoy, periodo);
+  if (faltan < 0) return t(propia ? 'pay.periodPastOwn' : 'pay.periodPast', comun);
+  if (faltan === 0) return t('pay.periodToday', comun);
+  return t('pay.periodCurrent', { ...comun, count: faltan });
+}
+
+/** «Este mes» o «Mes pasado»: el que ya se pagó, para compararlo con la boleta. */
+export function SelectorDelMes({
+  mesesAtras,
+  onChange,
+}: {
+  mesesAtras: number;
+  onChange: (mesesAtras: number) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <SegmentedControl<'0' | '1'>
+      label={t('pay.whichMonth')}
+      value={mesesAtras === 1 ? '1' : '0'}
+      onChange={(valor) => onChange(Number(valor))}
+      options={[
+        { value: '0', label: t('pay.thisMonth') },
+        { value: '1', label: t('pay.lastMonth') },
+      ]}
+      testID="sueldo-mes"
+    />
+  );
+}
+
 type Linea = {
   clave: string;
   etiqueta: string;
@@ -49,11 +105,14 @@ export function TarjetaDelSueldo({
   sueldo,
   propia,
   language,
+  hoy,
 }: {
   sueldo: SueldoDelMes;
   /** En su celular: «Tu sueldo». En Equipo: «Sueldo». */
   propia: boolean;
   language: SupportedLanguage;
+  /** El día de hoy en la sede, para decir cuánto falta para el pago. */
+  hoy: string;
 }) {
   const { t } = useTranslation();
   const estilos = useEstilos();
@@ -99,6 +158,9 @@ export function TarjetaDelSueldo({
             {soles(total)}
           </AppText>
         </Row>
+        <AppText variant="label" tone="primary" testID="sueldo-periodo">
+          {textoDelPeriodo(t, mes, hoy, propia, language)}
+        </AppText>
 
         <Stack gap={0}>
           {lineas.map((linea, i) => (

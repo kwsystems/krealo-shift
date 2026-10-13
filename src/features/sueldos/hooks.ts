@@ -1,13 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { periodoDePago, type PeriodoDePago } from '@/domain/periodo-de-pago';
 import { sueldoEstimado, type SueldoEstimado } from '@/domain/sueldo-estimado';
 import { fetchMisJornadas, fetchMisTurnos, fetchRelojDesdeDeMisSedes } from '@/features/portal/api';
-import {
-  addDaysToKey,
-  dateKeyOf,
-  localDateTimeToInstant,
-  type DateKey,
-} from '@/features/schedules/week';
+import { addDaysToKey, dateKeyOf, localDateTimeToInstant } from '@/features/schedules/week';
 import { fetchMisHorasDebidas } from '@/features/timesheets/horas-debidas';
 import { useMisJustificaciones } from '@/features/timesheets/justificaciones';
 import { ADMIN_LIST_STALE_MS } from '@/hooks/use-admin-query';
@@ -20,18 +16,6 @@ import {
   type Sueldo,
 } from './api';
 import { hechosDelMes, type HechosDelMes } from './hechos-del-mes';
-
-/** El mes de la sede en que cae ese instante: su primer y su último día. */
-export function mesDe(
-  instante: Date | string,
-  timezone: string,
-): { desde: DateKey; hasta: DateKey } {
-  const hoy = dateKeyOf(instante, timezone);
-  const [anio, mes] = hoy.split('-').map(Number) as [number, number];
-  const ultimo = new Date(Date.UTC(anio, mes, 0)).getUTCDate();
-  const mm = String(mes).padStart(2, '0');
-  return { desde: `${anio}-${mm}-01`, hasta: `${anio}-${mm}-${String(ultimo).padStart(2, '0')}` };
-}
 
 export function useSueldo(organizationId: string | null, employeeId: string | null) {
   return useQuery({
@@ -60,7 +44,8 @@ export type SueldoDelMes =
   | {
       estado: 'listo';
       sueldo: Sueldo;
-      mes: { desde: DateKey; hasta: DateKey };
+      /** El periodo de pago que se cuenta: del 1 al último día, que es cuando se paga. */
+      mes: PeriodoDePago;
       hechos: HechosDelMes;
       cuenta: SueldoEstimado;
     };
@@ -81,9 +66,11 @@ export function useSueldoDelMes(params: {
   nowISO: string;
   ingreso?: string | null;
   baja?: string | null;
+  /** 0 = el mes en curso; 1 = el que ya se pagó, para compararlo con la boleta. */
+  mesesAtras?: number;
 }): SueldoDelMes {
   const { organizationId, employeeId, timezone, nowISO } = params;
-  const mes = mesDe(nowISO, timezone);
+  const mes = periodoDePago(dateKeyOf(nowISO, timezone), params.mesesAtras ?? 0);
   const sueldo = useSueldo(organizationId, employeeId);
   const resoluciones = useMisJustificaciones({
     organizationId: organizationId ?? '',
