@@ -37,6 +37,7 @@ import { fechaComercialDe, type TipoDeTienda } from '@/domain/fechas-comerciales
 import { feriadoDe } from '@/domain/feriados-peru';
 import { AppText } from '@/components/ui/app-text';
 import { MarcaKrealo } from '@/components/ui/marca-krealo';
+import { EsferaDeReloj } from '@/components/ui/esfera-de-reloj';
 import { GhostButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import {
@@ -347,17 +348,24 @@ function Contenido({ ficha }: { ficha: MiFicha }) {
             EL LOGO ARRIBA, PEQUEÑO (5-oct): esta pantalla no tiene cabecera, y quien la abre
             desde un enlace del correo tiene que reconocer la app antes de leer su horario.
           */}
-          <MarcaKrealo alto={24} testID="mi-horario-marca" />
-          <Stack gap={spacing.xs}>
-            <AppText variant="label" tone="primary">
-              {ficha.sede === null
-                ? ficha.organizacion
-                : `${ficha.organizacion} · ${ficha.sede.name}`}
-            </AppText>
-            <AppText variant="title" testID="mi-horario-hola">
-              {t('portal.hello', { name: ficha.nombre })}
-            </AppText>
-          </Stack>
+          {/*
+            EL SALUDO, EN EL MARCO (13-oct, rediseño): la misma carcasa oscura del panel, con
+            la esfera del reloj al lado. Es su app, y se reconoce de un vistazo.
+          */}
+          <View style={estilos.banda}>
+            <Stack gap={spacing.sm} style={estilos.bandaTexto}>
+              <MarcaKrealo alto={24} testID="mi-horario-marca" sobreOscuro />
+              <AppText variant="label" style={estilos.bandaSede}>
+                {ficha.sede === null
+                  ? ficha.organizacion
+                  : `${ficha.organizacion} · ${ficha.sede.name}`}
+              </AppText>
+              <AppText variant="title" style={estilos.bandaHola} testID="mi-horario-hola">
+                {t('portal.hello', { name: ficha.nombre })}
+              </AppText>
+            </Stack>
+            <EsferaDeReloj tamano={72} />
+          </View>
 
           {fallo !== null ? (
             <AdminErrorState
@@ -1226,6 +1234,17 @@ function Pie() {
 }
 
 const useEstilos = estilosDelTema((colors) => ({
+  banda: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.base,
+    backgroundColor: colors.marco,
+    borderRadius: radii.hoja,
+    padding: spacing.lg,
+  },
+  bandaTexto: { flex: 1, minWidth: 0 },
+  bandaSede: { color: colors.marcoApagado },
+  bandaHola: { color: colors.marcoTexto },
   lista: { paddingVertical: 0, paddingHorizontal: 0, overflow: 'hidden' as const },
   fila: { paddingVertical: spacing.md, paddingHorizontal: spacing.base, minHeight: 64 },
   /* Hoy se distingue con una franja y el color del texto: dos señales, no solo color. */

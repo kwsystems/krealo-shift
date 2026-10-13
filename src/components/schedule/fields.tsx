@@ -22,10 +22,12 @@ import {
   shadows,
   sizes,
   spacing,
+  fontFamily,
   paletaDeEstado,
   type StatusTone,
 } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
+import { movimiento } from '@/theme/movimiento';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -119,6 +121,12 @@ const estilosDeFicha = StyleSheet.create({
   etiquetaQueEncoge: { flexShrink: 1, minWidth: 0 },
   /* Rótulo y detalle juntos, arriba: el `space-between` de la ficha deja el número abajo. */
   arriba: { gap: spacing.xs },
+  cifra: {
+    fontFamily: fontFamily.displayBold,
+    fontSize: 28,
+    lineHeight: 32,
+    letterSpacing: -0.8,
+  },
 });
 
 export function StatTile({
@@ -189,7 +197,12 @@ export function StatTile({
         que le tocara según su rótulo. El `detalle` va arriba, con el rótulo: debajo del
         número lo subía 16 px respecto a sus vecinos (medido).
       */}
-      <AppText variant="section" tabular>
+      {/*
+        LA CIFRA, GRANDE Y EN ARCHIVO (13-oct): es lo que se viene a buscar, y a 20 px pesaba
+        lo mismo que su rótulo. Con la clave en el valor, cada vez que cambia entra con un
+        pequeño salto: se nota que algo se movió sin tener que comparar de memoria.
+      */}
+      <AppText key={value} {...movimiento('aparecer')} style={estilosDeFicha.cifra} tabular>
         {value}
       </AppText>
     </View>
@@ -210,6 +223,7 @@ export function StatTile({
 
   return (
     <Pressable
+      {...movimiento('pulsable')}
       style={styles.tileWrap}
       accessibilityRole="button"
       accessibilityLabel={`${label}: ${value}${detalle === undefined ? '' : `, ${detalle}`}`}
@@ -487,8 +501,12 @@ export function AdminSheet({
   const { t } = useTranslation();
   const { isWide } = useResponsive();
 
+  /*
+   * FUNDIDO Y NO DESLIZAMIENTO (13-oct): con «slide», en la web subía también el velo
+   * oscuro, como una persiana. Ahora el velo se funde y la hoja sube sola. Ver `movimiento.ts`.
+   */
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={[styles.backdrop, isWide ? styles.backdropCentered : null]}>
         <Pressable
           style={styles.backdropTouchable}
@@ -504,7 +522,11 @@ export function AdminSheet({
           contenido, la barra roza el borde de la hoja —que es donde el ojo la busca— y
           el texto conserva su margen igual.
         */}
-        <View style={[styles.sheet, isWide ? styles.sheetWide : null]} testID={testID}>
+        <View
+          {...movimiento('hoja')}
+          style={[styles.sheet, isWide ? styles.sheetWide : null]}
+          testID={testID}
+        >
           <Row justify="space-between" align="center" style={styles.sheetHeader}>
             <AppText variant="section" style={styles.sheetTitle}>
               {title}
@@ -953,7 +975,7 @@ const useEstilos = estilosDelTema((colors) => ({
    * sobre lo que haya debajo. Con 0,45 el fondo queda legible pero claramente detrás,
    * que es lo que pide una tarea modal: atenuar para enfocar, no tapar.
    */
-  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0, 0, 0, 0.45)' },
+  backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(14, 12, 22, 0.5)' },
   backdropCentered: { justifyContent: 'center', alignItems: 'center' },
   /*
    * ABSOLUTO, Y ERA `flex: 1`. Ahí estaba la hoja descolocada.
@@ -973,14 +995,14 @@ const useEstilos = estilosDelTema((colors) => ({
   backdropTouchable: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
   sheet: {
     backgroundColor: colors.surface,
-    borderTopLeftRadius: radii.card,
-    borderTopRightRadius: radii.card,
-    paddingTop: spacing.base,
+    borderTopLeftRadius: radii.hoja,
+    borderTopRightRadius: radii.hoja,
+    paddingTop: spacing.lg,
     maxHeight: '85%',
     ...shadows.floating,
   },
   sheetWide: {
-    borderRadius: radii.card,
+    borderRadius: radii.hoja,
     width: 560,
     maxWidth: '92%',
     marginBottom: 0,

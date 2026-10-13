@@ -7,6 +7,7 @@ import { AppText } from '@/components/ui/app-text';
 import { franjaDelDia, type FranjaDelDia } from '@/domain/franja-del-dia';
 import { useResponsive } from '@/hooks/use-responsive';
 import { estilosDelTema } from '@/theme/estilos';
+import { movimiento } from '@/theme/movimiento';
 import { radii, sizes, spacing } from '@/theme/tokens';
 
 /**
@@ -98,6 +99,7 @@ export function FranjaDeUnDia({
     >
       {franja.plan === null ? null : (
         <View
+          {...movimiento('crecer')}
           testID={testID === undefined ? undefined : `${testID}-plan`}
           style={[
             estilos.carril,
@@ -111,6 +113,7 @@ export function FranjaDeUnDia({
 
       {franja.real === null ? null : (
         <View
+          {...movimiento('crecer')}
           testID={testID === undefined ? undefined : `${testID}-real`}
           style={[
             estilos.trabajado,
@@ -400,6 +403,7 @@ export function ListaDeFranjas({
             ))}
             {hayAhora ? (
               <View
+                {...movimiento('latido')}
                 testID={testID === undefined ? undefined : `${testID}-ahora`}
                 style={[estilos.ahoraDelBloque, { left: fraccionAPorcentaje(ahora) }]}
               />

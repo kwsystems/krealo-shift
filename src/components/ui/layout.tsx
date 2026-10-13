@@ -5,6 +5,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useResponsive } from '@/hooks/use-responsive';
 import { borderWidth, radii, shadows, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
+import { movimiento } from '@/theme/movimiento';
 import { useTheme } from '@/theme/use-theme';
 import type { ColorSet } from '@/theme/tokens';
 
@@ -101,7 +102,18 @@ const maxWidths = {
 
 export function ResponsiveContainer({ children, width = 'content', style }: ContainerProps) {
   const styles = useEstilos();
-  return <View style={[styles.container, { maxWidth: maxWidths[width] }, style]}>{children}</View>;
+  /*
+   * LA ENTRADA DE CADA PANTALLA (13-oct): sus bloques aparecen uno detrás de otro al abrirla.
+   * Va aquí porque es el contenedor que todas las pantallas comparten. Ver `movimiento.ts`.
+   */
+  return (
+    <View
+      {...movimiento('pantalla')}
+      style={[styles.container, { maxWidth: maxWidths[width] }, style]}
+    >
+      {children}
+    </View>
+  );
 }
 
 type CardProps = {

@@ -70,9 +70,9 @@ export function BarraDeAlcance() {
           que se leían enteros sin él.
         */}
         {useSidebar ? (
-          <MarcaKrealo variante="horizontal" alto={30} />
+          <MarcaKrealo variante="horizontal" alto={30} sobreOscuro />
         ) : width >= ANCHO_PARA_EL_ICONO ? (
-          <MarcaKrealo variante="icono" alto={24} />
+          <MarcaKrealo variante="icono" alto={24} sobreOscuro />
         ) : null}
 
         <Pressable
@@ -93,7 +93,7 @@ export function BarraDeAlcance() {
           {...respuesta.props}
         >
           {({ pressed }) => (
-            <View style={[estilos.contexto, ...respuesta.estilo(pressed)]}>
+            <View style={[estilos.contexto, ...respuesta.estilo(pressed, colors.marcoEncima)]}>
               {/*
                 POR DEBAJO DE 360 PX, EMPRESA Y SEDE UNA ENCIMA DE OTRA (5-oct). Con la campana
                 de avisos a la derecha, en una sola línea se cortaban las dos a 320 px; apiladas
@@ -130,7 +130,7 @@ export function BarraDeAlcance() {
                 ÚNICO que lo dice: allí no hay puntero que pueda revelarlo al pasar por
                 encima. Por eso no es decoración y no se quita en compacto.
               */}
-              <Ionicons name="chevron-down" size={16} color={colors.ink500} />
+              <Ionicons name="chevron-down" size={16} color={colors.marcoApagado} />
             </View>
           )}
         </Pressable>
@@ -295,8 +295,9 @@ const useEstilos = estilosDelTema((colors) => ({
     gap: spacing.base,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm,
-    backgroundColor: colors.surface,
-    borderBottomColor: colors.border,
+    // EL MARCO (13-oct): la cabecera y el menú son la carcasa; el contenido, la hoja.
+    backgroundColor: colors.marco,
+    borderBottomColor: colors.marcoRegla,
     borderBottomWidth: borderWidth.hairline,
   },
   /*
@@ -332,13 +333,13 @@ const useEstilos = estilosDelTema((colors) => ({
   organizacion: {
     fontFamily: fontFamily.medium,
     fontSize: fontSize.label,
-    color: colors.ink700,
+    color: colors.marcoTexto,
     flexShrink: 1,
     minWidth: 0,
   },
   /* La punta y el punto medio no se encogen: son de ancho fijo y lo que cede es el texto. */
-  separador: { color: colors.ink500, fontSize: fontSize.label, flexShrink: 0 },
-  sede: { fontSize: fontSize.label, color: colors.ink500, flexShrink: 1, minWidth: 0 },
+  separador: { color: colors.marcoApagado, fontSize: fontSize.label, flexShrink: 0 },
+  sede: { fontSize: fontSize.label, color: colors.marcoApagado, flexShrink: 1, minWidth: 0 },
   opcion: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md,

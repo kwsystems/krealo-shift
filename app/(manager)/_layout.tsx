@@ -17,7 +17,7 @@ import { useBootResolution } from '@/features/boot/use-boot-resolution';
 import { useDatosAlDia } from '@/hooks/use-datos-al-dia';
 import { ManagerScopeProvider, useManagerScope } from '@/hooks/use-manager-scope';
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, fontFamily, fontSize, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
+import { fontFamily, fontSize, radii, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -132,7 +132,7 @@ function PanelConMarca() {
       flotar encima de cualquier pestaña, y para colocarlo justo debajo de la cabecera hace
       falta un contenedor común donde medirla. Ocupa lo mismo que ocupaba el fragmento.
     */
-    <View style={estiloDelPanel}>
+    <View style={[estiloDelPanel, { backgroundColor: colors.marco }]}>
       {/*
         La cabecera va DENTRO del provider porque lee la organización y la sede, y
         FUERA del Tabs porque debe cruzar toda la ventana, barra lateral incluida: una
@@ -167,7 +167,18 @@ function PanelConMarca() {
            * que otra capa siempre lo tape es depender de algo que nadie prometió. Lo que
            * no se puede es afirmar que arregla un fallo visible, porque no lo hace.
            */
-          sceneStyle: { backgroundColor: colors.canvas },
+          /*
+           * LA HOJA DENTRO DEL MARCO (13-oct): en pantalla ancha el contenido es una hoja clara
+           * con la esquina de arriba redondeada, metida en el marco oscuro de menú y cabecera,
+           * como la tarjeta en el reloj marcador. En el teléfono, de borde a borde.
+           */
+          sceneStyle: useSidebar
+            ? {
+                backgroundColor: colors.canvas,
+                borderTopLeftRadius: radii.hoja,
+                overflow: 'hidden',
+              }
+            : { backgroundColor: colors.canvas },
           tabBarActiveTintColor: colors.primary600,
           tabBarInactiveTintColor: colors.ink500,
           // Sidebar en iPad ancho, barra inferior en teléfono.
@@ -180,7 +191,7 @@ function PanelConMarca() {
             backgroundColor: colors.surface,
             borderTopColor: colors.border,
             borderRightColor: colors.border,
-            borderRightWidth: useSidebar ? borderWidth.hairline : 0,
+            borderRightWidth: 0,
             minHeight: sizes.touchTargetPreferred,
             paddingTop: useSidebar ? spacing.base : 0,
             /*

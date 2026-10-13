@@ -15,6 +15,7 @@ import {
   type StatusTone,
 } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
+import { movimiento } from '@/theme/movimiento';
 import { useTheme } from '@/theme/use-theme';
 
 /**
@@ -168,9 +169,24 @@ export function LoadingState({ label, testID }: { label?: string; testID?: strin
       <AppText variant="help" tone="subtle">
         {label ?? t('common.loading')}
       </AppText>
+      {/*
+        EL ESQUELETO (13-oct): tres renglones con un brillo que pasa. Dicen «aquí viene una
+        lista» mientras carga; una rueda sola en medio del vacío se lee como algo atascado.
+      */}
+      <View
+        style={styles.esqueleto}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        {ANCHOS_DEL_ESQUELETO.map((ancho) => (
+          <View key={ancho} {...movimiento('brillo')} style={[styles.renglon, { width: ancho }]} />
+        ))}
+      </View>
     </View>
   );
 }
+
+const ANCHOS_DEL_ESQUELETO = ['100%', '82%', '64%'] as const;
 
 /**
  * Aviso de sin conexión. No bloquea el uso: el kiosco debe seguir fichando (§9.7).
@@ -292,6 +308,8 @@ export function Section({
 }
 
 const useEstilos = estilosDelTema((colors) => ({
+  esqueleto: { width: '100%', maxWidth: 320, gap: spacing.sm, marginTop: spacing.sm },
+  renglon: { height: 12, borderRadius: radii.pill, backgroundColor: colors.hundido },
   badge: {
     flexDirection: 'row',
     alignItems: 'center',

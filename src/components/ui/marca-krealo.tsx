@@ -43,11 +43,14 @@ export function MarcaKrealo({
   variante = 'horizontal',
   alto = 26,
   testID = 'marca-krealo',
+  sobreOscuro = false,
 }: {
   variante?: VarianteDeMarca;
   /** En píxeles. El kit propone 26 en una cabecera de escritorio y 24 en el teléfono. */
   alto?: number;
   testID?: string;
+  /** Sobre el marco oscuro del panel: la versión clara, sea cual sea el tema. */
+  sobreOscuro?: boolean;
 }) {
   const { t } = useTranslation();
   const { isDark, colors } = useTheme();
@@ -62,7 +65,7 @@ export function MarcaKrealo({
   }
   return (
     <Image
-      source={{ uri: rutaDelLogo(variante, isDark) }}
+      source={{ uri: rutaDelLogo(variante, isDark || sobreOscuro) }}
       resizeMode="contain"
       accessibilityRole="image"
       accessibilityLabel={nombre}

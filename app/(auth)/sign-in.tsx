@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { router } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 
@@ -6,7 +7,9 @@ import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
 import { LanguageSwitch } from '@/components/ui/language-switch';
 import { MarcaKrealo } from '@/components/ui/marca-krealo';
+import { EsferaDeReloj } from '@/components/ui/esfera-de-reloj';
 import { AppScreen, Card, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import { useResponsive } from '@/hooks/use-responsive';
 import { AccesoPorCorreo } from '@/features/acceso/acceso-por-correo';
 import { isDemoMode } from '@/lib/demo/config';
 import { accesoPorCorreoDisponible } from '@/lib/firebase/enlace-por-correo';
@@ -14,6 +17,8 @@ import { useGoogleSignIn } from '@/lib/firebase/auth';
 import { authSource } from '@/lib/firebase/session';
 import { kioskModeAvailable } from '@/lib/kiosk/disponibilidad';
 import { useSessionStore } from '@/stores/session-store';
+import { estilosDelTema } from '@/theme/estilos';
+import { movimiento } from '@/theme/movimiento';
 import { spacing } from '@/theme/tokens';
 
 /**
@@ -97,72 +102,93 @@ export default function SignInScreen() {
 
   const signInDemo = authSource()?.signInDemo ?? null;
   const signInDemoVendedor = authSource()?.signInDemoVendedor ?? null;
+  const estilos = useEstilos();
+  const { width } = useResponsive();
+  const partido = width >= ANCHO_PARA_PARTIR;
+
+  /*
+   * LA PUERTA DE LA APP (13-oct, rediseño): en pantalla ancha, a la izquierda el marco oscuro
+   * con la esfera del reloj —el aro del logo, con su hora y su segundero— y a la derecha el
+   * acceso de siempre. En el teléfono, la esfera pequeña arriba. El logo encabeza las dos.
+   */
+  const marca = (
+    <View style={[estilos.marco, partido ? estilos.marcoPartido : estilos.marcoArriba]}>
+      <View {...movimiento('entrada')} style={estilos.marcoContenido}>
+        <EsferaDeReloj tamano={partido ? 240 : 112} />
+        <MarcaKrealo alto={partido ? 40 : 30} testID="sign-in-marca" sobreOscuro />
+        <AppText variant="body" style={estilos.lema}>
+          {t('auth.brandTagline')}
+        </AppText>
+      </View>
+    </View>
+  );
 
   return (
-    <AppScreen tone="kiosk" scroll>
-      <ResponsiveContainer width="form">
-        <Stack gap={spacing.xl}>
-          {/* El logo de Krealo Shift encabeza el acceso (5-oct): es la puerta de la app. */}
-          <MarcaKrealo alto={36} testID="sign-in-marca" />
-          <Stack gap={spacing.xs}>
-            <AppText variant="title">{t('auth.signInTitle')}</AppText>
-            <AppText variant="help" tone="subtle">
-              {t('auth.signInSubtitle')}
-            </AppText>
-          </Stack>
+    <AppScreen tone="kiosk" scroll padded={false} style={estilos.lleno}>
+      <View style={[estilos.puerta, partido ? estilos.puertaPartida : null]}>
+        {marca}
+        <View style={[estilos.acceso, partido ? estilos.accesoPartido : null]}>
+          <ResponsiveContainer width="form">
+            <Stack gap={spacing.xl}>
+              <Stack gap={spacing.xs}>
+                <AppText variant="title">{t('auth.signInTitle')}</AppText>
+                <AppText variant="help" tone="subtle">
+                  {t('auth.signInSubtitle')}
+                </AppText>
+              </Stack>
 
-          {endReason === 'expired' ? (
-            <Card testID="sign-in-session-expired">
-              <AppText variant="bodyStrong" accessibilityRole="alert">
-                {t('states.sessionExpiredTitle')}
-              </AppText>
-              <AppText variant="help" tone="subtle">
-                {t('states.sessionExpiredBody')}
-              </AppText>
-            </Card>
-          ) : null}
+              {endReason === 'expired' ? (
+                <Card testID="sign-in-session-expired">
+                  <AppText variant="bodyStrong" accessibilityRole="alert">
+                    {t('states.sessionExpiredTitle')}
+                  </AppText>
+                  <AppText variant="help" tone="subtle">
+                    {t('states.sessionExpiredBody')}
+                  </AppText>
+                </Card>
+              ) : null}
 
-          <Card>
-            {/*
+              <Card>
+                {/*
               El botón se desactiva mientras la petición nativa se prepara. En web
               está listo desde el primer render; en iPad hay un instante en el que
               `expo-auth-session` todavía no tiene el descubrimiento de Google, y
               pulsar ahí no hacía nada, que se lee como una app rota.
             */}
-            <PrimaryButton
-              label={t('auth.signInWithGoogle')}
-              onPress={() => void entrar(google.signIn)}
-              loading={submitting}
-              disabled={!google.ready}
-              testID="sign-in-google"
-            />
+                <PrimaryButton
+                  label={t('auth.signInWithGoogle')}
+                  onPress={() => void entrar(google.signIn)}
+                  loading={submitting}
+                  disabled={!google.ready}
+                  testID="sign-in-google"
+                />
 
-            {/*
+                {/*
               Falta el identificador de cliente OAuth de iOS: sin él, pulsar abriría
               un navegador que acaba en una página de error de Google que nadie sabe
               interpretar. Se dice aquí, en la pantalla, y no en la consola.
             */}
-            {google.unavailableReason === 'missingIosClientId' ? (
-              <AppText variant="help" tone="danger" testID="sign-in-google-unavailable">
-                {t('auth.googleUnavailableNative')}
-              </AppText>
-            ) : null}
+                {google.unavailableReason === 'missingIosClientId' ? (
+                  <AppText variant="help" tone="danger" testID="sign-in-google-unavailable">
+                    {t('auth.googleUnavailableNative')}
+                  </AppText>
+                ) : null}
 
-            {mensajeError !== null ? (
-              <AppText variant="help" tone="danger" accessibilityRole="alert">
-                {mensajeError}
-              </AppText>
-            ) : null}
+                {mensajeError !== null ? (
+                  <AppText variant="help" tone="danger" accessibilityRole="alert">
+                    {mensajeError}
+                  </AppText>
+                ) : null}
 
-            {/*
+                {/*
               SIN GOOGLE: UN ENLACE AL CORREO. Para quien tiene el correo en Microsoft o en
               cualquier otro sitio y no usa Google. Va debajo y plegado: la mayoría entra con
               Google. Solo en web, y no en la demostración, que no tiene servidor que mande
               correos. Ver `src/lib/firebase/enlace-por-correo.ts`.
             */}
-            {accesoPorCorreoDisponible && !isDemoMode ? <AccesoPorCorreo /> : null}
+                {accesoPorCorreoDisponible && !isDemoMode ? <AccesoPorCorreo /> : null}
 
-            {/*
+                {/*
               ATAJO DE DEMOSTRACIÓN, y solo ahí: con la demostración apagada esto no
               existe en la pantalla.
 
@@ -171,54 +197,54 @@ export default function SignInScreen() {
               para no tener que pasar por Google cada vez, no la forma principal de
               entrar.
             */}
-            {isDemoMode && signInDemo !== null ? (
-              <Stack gap={spacing.xs}>
-                <SecondaryButton
-                  label={t('auth.signInAsAdmin')}
-                  onPress={() => void entrar(signInDemo)}
-                  testID="sign-in-demo"
-                />
-                {/*
+                {isDemoMode && signInDemo !== null ? (
+                  <Stack gap={spacing.xs}>
+                    <SecondaryButton
+                      label={t('auth.signInAsAdmin')}
+                      onPress={() => void entrar(signInDemo)}
+                      testID="sign-in-demo"
+                    />
+                    {/*
                   Y COMO VENDEDOR: la vista que tiene cada persona del equipo en su celular,
                   para poder enseñarla antes de dársela. Ver `DEMO_VENDEDOR_USER_ID`.
                 */}
-                {signInDemoVendedor === null ? null : (
-                  <SecondaryButton
-                    label={t('auth.signInAsSeller')}
-                    onPress={() => void entrar(signInDemoVendedor)}
-                    testID="sign-in-demo-vendedor"
-                  />
-                )}
-                <AppText variant="help" tone="subtle">
-                  {t('auth.demoHint')}
-                </AppText>
-              </Stack>
-            ) : null}
+                    {signInDemoVendedor === null ? null : (
+                      <SecondaryButton
+                        label={t('auth.signInAsSeller')}
+                        onPress={() => void entrar(signInDemoVendedor)}
+                        testID="sign-in-demo-vendedor"
+                      />
+                    )}
+                    <AppText variant="help" tone="subtle">
+                      {t('auth.demoHint')}
+                    </AppText>
+                  </Stack>
+                ) : null}
 
-            <Row justify="flex-end" wrap>
-              {/*
+                <Row justify="flex-end" wrap>
+                  {/*
                 Aqui tambien, y no solo en Ajustes: Ajustes vive DETRAS del acceso,
                 asi que alguien que no entiende esta pantalla no puede llegar a el
                 para cambiar el idioma. Un selector de idioma inalcanzable sin
                 entender el idioma actual no sirve para nada.
               */}
-              <LanguageSwitch testID="sign-in-language-toggle" />
-            </Row>
-          </Card>
+                  <LanguageSwitch testID="sign-in-language-toggle" />
+                </Row>
+              </Card>
 
-          {/*
+              {/*
             La tarjeta entera desaparece donde el modo kiosco no es posible.
             Ofrecer "configurar este dispositivo como reloj" en un navegador era
             mandar a alguien a una pantalla que solo sabe decir que no; y el aviso de
             que los empleados fichan con su PIN tampoco ayuda a quien no puede montar
             el reloj desde aquí. El porqué está en `src/lib/kiosk/disponibilidad.ts`.
           */}
-          {kioskModeAvailable ? (
-            <Card>
-              <AppText variant="help" tone="subtle">
-                {t('auth.employeeNoAccountNotice')}
-              </AppText>
-              {/*
+              {kioskModeAvailable ? (
+                <Card>
+                  <AppText variant="help" tone="subtle">
+                    {t('auth.employeeNoAccountNotice')}
+                  </AppText>
+                  {/*
                 `router.push` Y NO UN `<Link asChild>`, que es lo que había.
                 `asChild` clona sus propiedades sobre el hijo con el `Slot` de Radix,
                 una pieza pensada para el DOM, y el resultado medido en el navegador es
@@ -229,15 +255,34 @@ export default function SignInScreen() {
                 Navegar a mano es una línea, no depende de cómo esté construido el
                 botón, y se comprueba pulsándolo.
               */}
-              <SecondaryButton
-                label={t('auth.setupKioskLink')}
-                onPress={() => router.push('/kiosk/setup')}
-                testID="setup-kiosk-link"
-              />
-            </Card>
-          ) : null}
-        </Stack>
-      </ResponsiveContainer>
+                  <SecondaryButton
+                    label={t('auth.setupKioskLink')}
+                    onPress={() => router.push('/kiosk/setup')}
+                    testID="setup-kiosk-link"
+                  />
+                </Card>
+              ) : null}
+            </Stack>
+          </ResponsiveContainer>
+        </View>
+      </View>
     </AppScreen>
   );
 }
+
+/** Desde aquí, la esfera a un lado y el acceso al otro. */
+const ANCHO_PARA_PARTIR = 900;
+
+const useEstilos = estilosDelTema((colors) => ({
+  // Que la puerta ocupe la ventana entera: si no, el marco oscuro acababa a media altura.
+  lleno: { flexGrow: 1 },
+  puerta: { flexGrow: 1 },
+  puertaPartida: { flexDirection: 'row' },
+  marco: { backgroundColor: colors.marco, alignItems: 'center', justifyContent: 'center' },
+  marcoPartido: { flexBasis: '44%' as unknown as number, flexGrow: 0, padding: spacing.huge },
+  marcoArriba: { paddingVertical: spacing.xl, paddingHorizontal: spacing.base },
+  marcoContenido: { alignItems: 'center', gap: spacing.lg, maxWidth: 360 },
+  lema: { color: colors.marcoApagado, textAlign: 'center' },
+  acceso: { padding: spacing.base, paddingTop: spacing.xl },
+  accesoPartido: { flex: 1, justifyContent: 'center', padding: spacing.huge },
+}));

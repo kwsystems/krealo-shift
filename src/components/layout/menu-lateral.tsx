@@ -8,7 +8,8 @@ import { useNovedadesDeDisponibilidad } from '@/features/availability/novedades'
 import { usePendingRequestCount } from '@/hooks/use-manager-dashboard';
 import { useManagerScope } from '@/hooks/use-manager-scope';
 import { estilosDelTema } from '@/theme/estilos';
-import { useTonos, type Tono } from '@/theme/tonos';
+import { tonosDelTema, type Tono } from '@/theme/tonos';
+import { movimiento } from '@/theme/movimiento';
 import { borderWidth, radii, SIDEBAR_WIDTH, sizes, spacing } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
 
@@ -144,7 +145,8 @@ function Entrada({
   onPress: (evento: GestureResponderEvent) => void;
 }) {
   const estilos = useEstilos();
-  const tonos = useTonos();
+  // El menú va sobre el marco oscuro en los dos temas: sus tonos son siempre los oscuros.
+  const tonos = tonosDelTema(true);
   const { colors } = useTheme();
   const tono = tonos[destino.tono];
   const [encima, setEncima] = useState(false);
@@ -161,23 +163,33 @@ function Entrada({
       testID={`menu-${destino.ruta}`}
       style={({ pressed }) => [
         estilos.entrada,
-        activa ? { backgroundColor: tono.fondo } : null,
-        !activa && (encima || pressed) ? { backgroundColor: colors.hundido } : null,
+        activa ? { backgroundColor: colors.marcoActiva } : null,
+        !activa && (encima || pressed) ? { backgroundColor: colors.marcoEncima } : null,
       ]}
     >
+      {/*
+        LA MARCA DE «ESTÁS AQUÍ» (13-oct): una barra del color de la sección pegada al borde,
+        que entra al cambiar de sección. El fondo solo no bastaba sobre el marco oscuro.
+      */}
+      {activa ? (
+        <View
+          {...movimiento('aparecer')}
+          style={[estilos.marcaActiva, { backgroundColor: tono.solido }]}
+        />
+      ) : null}
       <View
         style={[
           estilos.baldosa,
           activa
-            ? { backgroundColor: colors.surface, borderColor: tono.borde }
-            : { backgroundColor: tono.fondo, borderColor: tono.fondo },
+            ? { backgroundColor: tono.solido, borderColor: tono.solido }
+            : { backgroundColor: tono.fondo, borderColor: tono.borde },
         ]}
       >
-        <Ionicons name={destino.icono} size={18} color={tono.tinta} />
+        <Ionicons name={destino.icono} size={18} color={activa ? colors.marco : tono.tinta} />
       </View>
       <AppText
         variant={activa ? 'bodyStrong' : 'body'}
-        style={[estilos.etiqueta, activa ? { color: tono.tinta } : null]}
+        style={[estilos.etiqueta, { color: activa ? colors.marcoTexto : colors.marcoApagado }]}
         numberOfLines={1}
       >
         {destino.etiqueta}
@@ -215,7 +227,8 @@ function Subentrada({
   onPress: (evento: GestureResponderEvent) => void;
 }) {
   const estilos = useEstilos();
-  const tonos = useTonos();
+  // El menú va sobre el marco oscuro en los dos temas: sus tonos son siempre los oscuros.
+  const tonos = tonosDelTema(true);
   const { colors } = useTheme();
   const tono = tonos[nombreDelTono];
   const aviso = tonos.naranja;
@@ -231,7 +244,7 @@ function Subentrada({
       testID={`menu-sub-${ruta}`}
       style={({ pressed }) => [
         estilos.subentrada,
-        !activa && (encima || pressed) ? { backgroundColor: colors.hundido } : null,
+        !activa && (encima || pressed) ? { backgroundColor: colors.marcoEncima } : null,
       ]}
     >
       <View
@@ -243,7 +256,7 @@ function Subentrada({
       <AppText
         variant={activa ? 'bodyStrong' : 'help'}
         tone={activa ? 'default' : 'muted'}
-        style={[estilos.etiqueta, activa ? { color: tono.tinta } : null]}
+        style={[estilos.etiqueta, { color: activa ? colors.marcoTexto : colors.marcoApagado }]}
         numberOfLines={1}
       >
         {etiqueta}
@@ -265,9 +278,8 @@ function Subentrada({
 const useEstilos = estilosDelTema((colors) => ({
   menu: {
     width: SIDEBAR_WIDTH,
-    backgroundColor: colors.surface,
-    borderRightWidth: borderWidth.hairline,
-    borderRightColor: colors.border,
+    // EL MARCO (13-oct): oscuro en los dos temas, como la cabecera. Ver `marco` en tokens.
+    backgroundColor: colors.marco,
   },
   lista: { paddingTop: spacing.base, paddingHorizontal: spacing.sm, gap: spacing.xs },
   entrada: {
@@ -277,6 +289,15 @@ const useEstilos = estilosDelTema((colors) => ({
     minHeight: sizes.touchTargetPreferred,
     paddingHorizontal: spacing.sm,
     borderRadius: radii.button,
+  },
+  marcaActiva: {
+    position: 'absolute',
+    // Pegada al borde del menú, fuera del relleno de la entrada.
+    left: -spacing.sm,
+    top: 12,
+    bottom: 12,
+    width: 3,
+    borderRadius: 2,
   },
   baldosa: {
     width: 32,

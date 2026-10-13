@@ -136,15 +136,21 @@ const styles = StyleSheet.create({
     fontSize: fontSize.kioskTitleMin,
     lineHeight: Math.round(fontSize.kioskTitleMin * lineHeight.tight),
   },
+  /*
+   * ARCHIVO MÁS APRETADA EN LOS TÍTULOS (13-oct): con el espaciado de fábrica, a 28 px se
+   * leía como un rótulo genérico; cerrada medio punto gana el aire de cartel de horario.
+   */
   title: {
     fontFamily: fontFamily.displayBold,
     fontSize: fontSize.titleMobileMin,
     lineHeight: Math.round(fontSize.titleMobileMin * lineHeight.tight),
+    letterSpacing: -0.6,
   },
   section: {
     fontFamily: fontFamily.display,
     fontSize: fontSize.sectionMin,
     lineHeight: Math.round(fontSize.sectionMin * lineHeight.normal),
+    letterSpacing: -0.25,
   },
   body: {
     fontFamily: fontFamily.regular,

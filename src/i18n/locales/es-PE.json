@@ -132,6 +132,7 @@
   },
   "auth": {
     "signInTitle": "Ingresa a Krealo Shift",
+    "brandTagline": "Turnos, marcas y horas de tu tienda, al minuto.",
     "signInSubtitle": "Para administradores y gerentes",
     "signOut": "Cerrar sesión",
     "signOutEverywhere": "Cerrar sesión en todos los dispositivos",

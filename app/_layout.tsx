@@ -29,6 +29,7 @@ import { useSessionStore } from '@/stores/session-store';
 import { useNetworkStore } from '@/stores/network-store';
 import { usePreferencesStore } from '@/stores/preferences-store';
 import { aplicarBarraDeDesplazamiento } from '@/theme/barra-de-desplazamiento';
+import { aplicarMovimiento, marcarTemaDelMovimiento } from '@/theme/movimiento';
 import { estilosDelTema } from '@/theme/estilos';
 import { useTheme } from '@/theme/use-theme';
 
@@ -39,6 +40,7 @@ initI18n();
 // El aspecto de la barra de desplazamiento en la web. Antes del primer render, para
 // que no se vea la barra gris del navegador y luego cambie.
 aplicarBarraDeDesplazamiento();
+aplicarMovimiento();
 
 // `catch` porque puede rechazar si el splash ya se oculto —recarga rapida en
 // desarrollo, o una segunda llamada— y eso seria un rechazo sin capturar en el
@@ -76,6 +78,9 @@ export default function RootLayout() {
   const hydrateSession = useSessionStore((s) => s.hydrate);
   const subscribeSession = useSessionStore((s) => s.subscribe);
   const startNetwork = useNetworkStore((s) => s.start);
+
+  // Las sombras y el brillo del movimiento siguen al tema: ver `movimiento.ts`.
+  useEffect(() => marcarTemaDelMovimiento(isDark), [isDark]);
 
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,

@@ -132,6 +132,7 @@
   },
   "auth": {
     "signInTitle": "Sign in to Krealo Shift",
+    "brandTagline": "Your store’s shifts, clock-ins and hours, to the minute.",
     "signInSubtitle": "For admins and managers",
     "signOut": "Sign out",
     "signOutEverywhere": "Sign out on all devices",

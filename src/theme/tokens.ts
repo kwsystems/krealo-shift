@@ -30,6 +30,20 @@ export const lightColors = {
   ink500: '#6F6B7A',
   surface: '#FFFFFF',
   canvas: '#F7F7FA',
+  /*
+   * EL MARCO (13-oct): el menú y la cabecera, oscuros en los DOS temas, como la carcasa de
+   * un reloj marcador; el contenido va dentro, en la hoja clara. Antes menú, cabecera y
+   * contenido eran el mismo blanco y no se sabía dónde acababa la navegación.
+   *
+   * Medido contra `marco`: `marcoTexto` 15,6:1 y `marcoApagado` 7,4:1; contra `marcoActiva`,
+   * 12,2:1 y 5,8:1. Encima y activa se separan del marco por luz, no por borde.
+   */
+  marco: '#16141F',
+  marcoTexto: '#EEECF5',
+  marcoApagado: '#A7A2B6',
+  marcoEncima: '#221F2E',
+  marcoActiva: '#2C2741',
+  marcoRegla: '#2A2736',
   /**
    * LOS DOS PLANOS QUE FALTABAN, y su ausencia era el defecto de diseño número uno.
    *
@@ -207,6 +221,14 @@ export const darkColors = {
   hundido: '#17151E',
 
   canvas: '#131118',
+  // El marco, más oscuro que el lienzo: en oscuro la hoja de contenido es la que se levanta.
+  marco: '#0B0A10',
+  // Un punto más claro que en claro: aquí el marco es más oscuro (y ningún papel repite valor).
+  marcoTexto: '#F2F0F8',
+  marcoApagado: '#A39EB2',
+  marcoEncima: '#1B1925',
+  marcoActiva: '#262236',
+  marcoRegla: '#1E1C27',
   border: '#332F3D',
   /* Mismos trabajos que en claro, medidos contra la superficie oscura: 2,07:1 y 3,01:1. */
   regla: '#514B61',
@@ -283,7 +305,9 @@ export const spacing = {
 } as const;
 
 export const radii = {
-  card: 16,
+  card: 18,
+  /** La esquina de la hoja de contenido dentro del marco del panel (13-oct). */
+  hoja: 24,
   button: 14,
   /** Botones principales del kiosco, que son más grandes. */
   kioskButton: 18,
@@ -497,9 +521,14 @@ export const shadows = {
      * versión no lo puedo comprobar desde aquí. Una mejora que solo puedo verificar en la
      * mitad de los sitios donde corre no es una mejora, es una apuesta.
      */
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
+    /*
+     * MÁS ABIERTA (13-oct, rediseño): 8 px de radio y 2 de caída se leían como un borde sucio
+     * pegado a la tarjeta. Con 20 y 6 la misma cantidad de sombra se reparte y la tarjeta
+     * queda apoyada sobre el lienzo; por eso baja a 0,08, para que pese lo mismo.
+     */
+    shadowOpacity: 0.08,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 2,
   },
   floating: {

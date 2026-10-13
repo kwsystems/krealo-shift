@@ -149,7 +149,7 @@ export function CampanaDeAvisos() {
         {...respuesta.props}
       >
         {({ pressed }) => (
-          <View style={[estilos.campana, ...respuesta.estilo(pressed)]}>
+          <View style={[estilos.campana, ...respuesta.estilo(pressed, colors.marcoEncima)]}>
             <Animated.View
               style={{
                 transformOrigin: 'top',
@@ -166,7 +166,7 @@ export function CampanaDeAvisos() {
               <Ionicons
                 name={sinVer > 0 ? 'notifications' : 'notifications-outline'}
                 size={22}
-                color={sinVer > 0 ? colors.primary600 : colors.ink700}
+                color={colors.marcoTexto}
               />
             </Animated.View>
             {sinVer > 0 ? (
@@ -415,7 +415,7 @@ const useEstilos = estilosDelTema((colors) => ({
     backgroundColor: colors.primary600,
     // El anillo del color de la cabecera separa el número de la campana que pisa.
     borderWidth: 2,
-    borderColor: colors.surface,
+    borderColor: colors.marco,
     alignItems: 'center',
     justifyContent: 'center',
   },

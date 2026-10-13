@@ -4,6 +4,7 @@ import * as Haptics from 'expo-haptics';
 import { AppText } from './app-text';
 import { borderWidth, radii, sizes, spacing, type ColorSet } from '@/theme/tokens';
 import { useTheme } from '@/theme/use-theme';
+import { movimiento } from '@/theme/movimiento';
 
 /**
  * Botones de la app (§25).
@@ -113,7 +114,8 @@ export function AppButton({
       // que están en dos nodos distintos.
       accessibilityHint={accessibilityHint ?? hint}
       accessibilityState={{ disabled: inactive, busy: loading }}
-      style={({ pressed }) => [
+      {...movimiento(!inactive && 'boton')}
+      style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => [
         styles.base,
         {
           height: isKiosk ? sizes.buttonKiosk : sizes.buttonMobile,
@@ -121,6 +123,8 @@ export function AppButton({
           paddingHorizontal: isKiosk ? spacing.xl : spacing.lg,
         },
         variantStyles[variant].container,
+        // AL PASAR EL PUNTERO (13-oct): antes un botón no respondía hasta tocarlo.
+        hovered === true && !pressed && !inactive ? variantStyles[variant].hovered : null,
         pressed && !inactive ? variantStyles[variant].pressed : null,
         apagado
           ? {
@@ -220,7 +224,19 @@ export const GhostButton = (props: Omit<Props, 'variant'>) => (
 const estiloDeVariante = (colors: ColorSet) =>
   ({
     primary: {
-      container: { backgroundColor: colors.primary500, borderWidth: 0 },
+      /*
+       * CON SOMBRA DE SU COLOR (13-oct): el botón principal se apoya sobre la hoja con un
+       * halo de su propio tinte, que es lo que lo separa de los demás antes de leerlo.
+       */
+      container: {
+        backgroundColor: colors.primary500,
+        borderWidth: 0,
+        shadowColor: colors.primary600,
+        shadowOpacity: 0.32,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 6 },
+      },
+      hovered: { backgroundColor: colors.primary600 },
       pressed: { backgroundColor: colors.primary600 },
       tone: 'onPrimary' as const,
       // El aspa de carga va del mismo color que el texto de encima, no blanco fijo: en
@@ -228,7 +244,16 @@ const estiloDeVariante = (colors: ColorSet) =>
       spinnerColor: colors.onPrimary,
     },
     secondary: {
-      container: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border },
+      container: {
+        backgroundColor: colors.surface,
+        borderWidth: 1,
+        borderColor: colors.border,
+        shadowColor: '#000000',
+        shadowOpacity: 0.05,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 2 },
+      },
+      hovered: { backgroundColor: colors.encima },
       pressed: { backgroundColor: colors.primary50 },
       tone: 'default' as const,
       spinnerColor: colors.primary600,
@@ -239,12 +264,14 @@ const estiloDeVariante = (colors: ColorSet) =>
         borderWidth: 1,
         borderColor: colors.danger600,
       },
+      hovered: { backgroundColor: colors.danger100 },
       pressed: { backgroundColor: colors.danger100 },
       tone: 'danger' as const,
       spinnerColor: colors.danger600,
     },
     ghost: {
       container: { backgroundColor: 'transparent', borderWidth: 0 },
+      hovered: { backgroundColor: colors.primary50 },
       pressed: { backgroundColor: colors.primary50 },
       tone: 'primary' as const,
       spinnerColor: colors.primary600,
