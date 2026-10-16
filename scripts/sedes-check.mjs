@@ -67,7 +67,17 @@ async function menu(ruta, marcador) {
 async function sedesDeLaCabecera() {
   await pagina.locator('[data-testid="scope-open"]').click();
   await pagina.locator('[data-testid="scope-sheet"]').waitFor({ timeout: 20000 });
-  await pagina.waitForTimeout(300);
+  /*
+   * LISTA = EL FOCO YA ESTÁ DENTRO (16-oct). La hoja entra con un fundido, y hasta que
+   * termina no es la de arriba: un Escape antes de eso no la cierra. Con 300 ms fijos, la
+   * tercera apertura del arnés pulsaba Escape con el foco aún en la cabecera y la hoja se
+   * quedaba abierta. Se espera a la señal de verdad, no a un reloj.
+   */
+  await pagina.waitForFunction(
+    () => document.activeElement?.closest('[aria-modal="true"]') != null,
+    undefined,
+    { timeout: 10000 },
+  );
   const ids = await pagina
     .locator('[data-testid^="scope-loc-"]')
     .evaluateAll((nodos) => nodos.map((n) => n.getAttribute('data-testid').slice(10)));
