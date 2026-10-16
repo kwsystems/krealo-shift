@@ -67,7 +67,14 @@ import { FaltasDeLaSemana } from '@/components/timesheets/faltas-de-la-semana';
 import { TodaviaNoHaMarcado, useResolverFalta } from '@/components/timesheets/resolver-falta';
 import { AppText } from '@/components/ui/app-text';
 import { PrimaryButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import {
+  AppScreen,
+  BarraDeControl,
+  ResponsiveContainer,
+  Row,
+  Stack,
+  useListaHastaElBorde,
+} from '@/components/ui/layout';
 import { StatusBadge } from '@/components/ui/states';
 import {
   addWeeks,
@@ -109,6 +116,8 @@ export type DestinoEnHoras = { semana?: string; persona?: string; jornada?: stri
 export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {}) {
   const { t } = useTranslation();
   const estilosDelPeriodo = useEstilosDeHoras();
+  // La barra de desplazamiento, en el borde de la ventana: ver `useListaHastaElBorde`.
+  const listaAlBorde = useListaHastaElBorde();
   const scope = useManagerScope();
   const language = currentLanguage();
   const now = useLiveClock('minute');
@@ -585,6 +594,8 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
             onRetry={scope.refetch}
           >
             <SessionList
+              estiloDeLista={listaAlBorde.lista}
+              estiloDelContenido={listaAlBorde.contenido}
               sessions={visibleSessions}
               employeeNames={names}
               alertsBySession={alertsBySession}

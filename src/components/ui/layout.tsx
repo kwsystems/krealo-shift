@@ -3,7 +3,7 @@ import { ScrollView, View, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useResponsive } from '@/hooks/use-responsive';
-import { borderWidth, radii, shadows, spacing } from '@/theme/tokens';
+import { borderWidth, radii, shadows, SIDEBAR_WIDTH, spacing } from '@/theme/tokens';
 import { estilosDelTema } from '@/theme/estilos';
 import { movimiento } from '@/theme/movimiento';
 import { useTheme } from '@/theme/use-theme';
@@ -99,6 +99,31 @@ const maxWidths = {
   content: 1200,
   full: undefined,
 } as const;
+
+/**
+ * UNA LISTA QUE LLEGA AL BORDE DE LA PANTALLA (16-oct). Andree, en Horas: «¿por qué la barra
+ * está al medio y no al costado? Es el único apartado donde está así». Horas y Equipo
+ * desplazan una lista virtualizada —no la pantalla entera, por los cientos de filas—, y esa
+ * lista vivía dentro del contenedor de 1 200 px: su barra de desplazamiento salía en el borde
+ * del contenedor, en medio de la ventana.
+ *
+ * Esto le da a la lista el hueco de los lados como margen negativo y se lo devuelve como
+ * relleno: su caja va de borde a borde —la barra, pegada a la derecha, como en todas las
+ * pantallas— y sus filas siguen alineadas con lo de arriba. Las cifras son las de
+ * `AppScreen` y `ResponsiveContainer`: relleno de la pantalla y ancho máximo del contenido.
+ */
+export function useListaHastaElBorde(): { lista: ViewStyle; contenido: ViewStyle } {
+  const { width, useSidebar, isCompact } = useResponsive();
+  const relleno = isCompact ? spacing.base : spacing.xl;
+  // La hoja de contenido: la ventana menos el menú y el filo de la hoja.
+  const escena = width - (useSidebar ? SIDEBAR_WIDTH + borderWidth.hairline : 0);
+  const contenedor = Math.min(maxWidths.content, escena - 2 * relleno);
+  const hueco = Math.max(0, (escena - contenedor) / 2);
+  return {
+    lista: { marginHorizontal: -hueco, marginBottom: -relleno },
+    contenido: { paddingHorizontal: hueco, paddingBottom: spacing.xl + relleno },
+  };
+}
 
 export function ResponsiveContainer({ children, width = 'content', style }: ContainerProps) {
   const styles = useEstilos();

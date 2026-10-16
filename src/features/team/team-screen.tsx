@@ -25,7 +25,14 @@ import {
 } from '@/components/schedule/fields';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton, SecondaryButton } from '@/components/ui/buttons';
-import { AppScreen, BarraDeControl, ResponsiveContainer, Row, Stack } from '@/components/ui/layout';
+import {
+  AppScreen,
+  BarraDeControl,
+  ResponsiveContainer,
+  Row,
+  Stack,
+  useListaHastaElBorde,
+} from '@/components/ui/layout';
 import {
   addDaysToKey,
   currentWeekStart,
@@ -64,6 +71,8 @@ type StatusFilter = 'all' | 'active' | 'inactive';
 
 export function TeamScreen() {
   const { t } = useTranslation();
+  // La barra de desplazamiento, en el borde de la ventana: ver `useListaHastaElBorde`.
+  const listaAlBorde = useListaHastaElBorde();
   const scope = useManagerScope();
   const language = currentLanguage();
 
@@ -599,6 +608,8 @@ export function TeamScreen() {
                 onRetry={team.refetch}
               >
                 <MemberList
+                  estiloDeLista={listaAlBorde.lista}
+                  estiloDelContenido={listaAlBorde.contenido}
                   members={filtered}
                   semanaPorMiembro={semanaPorMiembro}
                   semanaVacia={semanaVacia}

@@ -1,5 +1,5 @@
 import { useCallback, useMemo, type ReactElement } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { SessionRow, type HoraExtraDeLaFila } from './session-row';
@@ -64,6 +64,9 @@ export type SessionListProps = {
   /** Qué enseñar cuando no hay filas: cargando, error o vacío de verdad. */
   empty?: ReactElement;
   testID?: string;
+  /** Para que la lista llegue al borde de la pantalla: ver `useListaHastaElBorde`. */
+  estiloDeLista?: ViewStyle;
+  estiloDelContenido?: ViewStyle;
 };
 
 /**
@@ -93,6 +96,8 @@ export function SessionList({
   header,
   empty,
   testID = 'timesheet-session-list',
+  estiloDeLista,
+  estiloDelContenido,
 }: SessionListProps) {
   const { t } = useTranslation();
   const elementos = useMemo<Elemento[]>(() => {
@@ -182,8 +187,8 @@ export function SessionList({
       }
       ListEmptyComponent={empty}
       ItemSeparatorComponent={SeparadorEntreFilas}
-      style={styles.lista}
-      contentContainerStyle={styles.contenido}
+      style={[styles.lista, estiloDeLista]}
+      contentContainerStyle={[styles.contenido, estiloDelContenido]}
       testID={testID}
       keyboardShouldPersistTaps="handled"
     />

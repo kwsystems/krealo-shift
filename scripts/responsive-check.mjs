@@ -337,6 +337,7 @@ const MEDIR = (minimoTactil) => {
   const partidas = [];
   const tactiles = [];
   const scrollers = [];
+  const barras = [];
   let medidos = 0;
 
   const visible = (el, r) => {
@@ -454,9 +455,22 @@ const MEDIR = (minimoTactil) => {
         });
       }
     }
+
+    /*
+     * 5. LA BARRA DE DESPLAZAMIENTO, EN EL BORDE (16-oct). Andree, en Horas: «¿por qué la
+     * barra está al medio y no al costado?». La lista desplazaba dentro del contenedor de
+     * 1 200 px y su barra salía en medio de la ventana. Lo que desplaza la pantalla —alto,
+     * más de la mitad de la ventana— tiene que llegar al borde derecho.
+     */
+    if (el.scrollHeight > el.clientHeight + 2 && r.height > innerHeight * 0.5) {
+      const cs = getComputedStyle(el);
+      if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && r.right < vw - 4) {
+        barras.push({ texto, derecha: Math.round(r.right) });
+      }
+    }
   }
 
-  return { fuera, recortes, partidas, tactiles, scrollers, medidos, vw };
+  return { fuera, recortes, partidas, tactiles, scrollers, barras, medidos, vw };
 };
 
 const { base, cerrar } = await servirExport(DIR, 8260);
@@ -636,6 +650,12 @@ for (const [nombreAncho, ancho, alto] of ANCHOS) {
         `«${t.texto || t.testid || 'sin texto'}» mide ${t.ancho}×${t.alto}, por debajo del ` +
           `mínimo táctil de ${MINIMO_TACTIL}`,
         t.testid,
+      );
+    }
+    for (const b of m.barras) {
+      problemas.push(
+        `${nombreAncho} (${ancho}px), ${pantalla}: la barra de desplazamiento sale a ${b.derecha}px, ` +
+          `no en el borde de la ventana (${m.vw}px) — «${b.texto}»`,
       );
     }
     for (const s of m.scrollers) {

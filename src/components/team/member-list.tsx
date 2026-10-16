@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { FlatList, StyleSheet, View } from 'react-native';
+import { FlatList, StyleSheet, View, type ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AppText } from '@/components/ui/app-text';
@@ -58,6 +58,9 @@ export type MemberListProps = {
   /** En modo «eliminar varios», quiénes están marcados. Sin definir, modo normal. */
   marcados?: ReadonlySet<string>;
   testID?: string;
+  /** Para que la lista llegue al borde de la pantalla: ver `useListaHastaElBorde`. */
+  estiloDeLista?: ViewStyle;
+  estiloDelContenido?: ViewStyle;
 };
 
 export function MemberList({
@@ -70,6 +73,8 @@ export function MemberList({
   onSelect,
   marcados,
   testID = 'team-member-list',
+  estiloDeLista,
+  estiloDelContenido,
 }: MemberListProps) {
   const renderItem = useCallback(
     ({ item }: { item: TeamMember }) => (
@@ -121,8 +126,8 @@ export function MemberList({
        * llevaba, así que al mirar el código de al lado todo parecía consistente.
        */
       ItemSeparatorComponent={SeparadorDeRegistro}
-      style={styles.lista}
-      contentContainerStyle={styles.contenido}
+      style={[styles.lista, estiloDeLista]}
+      contentContainerStyle={[styles.contenido, estiloDelContenido]}
       testID={testID}
       // Sin esto, teclear en el filtro cierra el teclado en cada pulsación.
       keyboardShouldPersistTaps="handled"

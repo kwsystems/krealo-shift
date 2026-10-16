@@ -127,7 +127,22 @@ const estilosDeFicha = StyleSheet.create({
     lineHeight: 32,
     letterSpacing: -0.8,
   },
+  cifraMedia: { fontSize: 25, lineHeight: 32, letterSpacing: -0.6 },
+  cifraLarga: { fontSize: 21, lineHeight: 32, letterSpacing: -0.4 },
+  cifraMuyLarga: { fontSize: 18, lineHeight: 32, letterSpacing: -0.2 },
 });
+
+/**
+ * LA CIFRA ENCOGE CON SU LARGO (16-oct): a 28 px, «140:37» no cabía en una ficha de 80 px y
+ * se partía en dos líneas —lo midió `responsive-check` en Horas con la semana avanzada—.
+ * Una cifra corta («2», «67%») se queda grande; una de seis o más caracteres baja lo justo.
+ */
+function tamanoDeCifra(valor: string) {
+  const largo = valor.length;
+  if (largo <= 4) return null;
+  if (largo === 5) return estilosDeFicha.cifraMedia;
+  return largo === 6 ? estilosDeFicha.cifraLarga : estilosDeFicha.cifraMuyLarga;
+}
 
 export function StatTile({
   label,
@@ -202,7 +217,12 @@ export function StatTile({
         lo mismo que su rótulo. Con la clave en el valor, cada vez que cambia entra con un
         pequeño salto: se nota que algo se movió sin tener que comparar de memoria.
       */}
-      <AppText key={value} {...movimiento('aparecer')} style={estilosDeFicha.cifra} tabular>
+      <AppText
+        key={value}
+        {...movimiento('aparecer')}
+        style={[estilosDeFicha.cifra, tamanoDeCifra(value)]}
+        tabular
+      >
         {value}
       </AppText>
     </View>
