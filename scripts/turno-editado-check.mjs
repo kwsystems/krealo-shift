@@ -175,6 +175,12 @@ try {
   }
   // Si no quedan dos por venir (un sábado), dos cualesquiera: Equipo ya no se puede mirar.
   if ([...porPersona.values()].every((lista) => lista.length < 2)) {
+    /*
+     * VACÍA LO DE ANTES (22-oct). Sin esto, el jueves la lista de quien tenía un turno por
+     * venir se rellenaba DETRÁS con todos los suyos: se editaba el del lunes, ya pasado, y
+     * se esperaba verlo en «Próximos turnos». El arnés fallaba con la app bien.
+     */
+    porPersona.clear();
     for (const t of publicadas) {
       if (t.persona === '') continue;
       porPersona.set(t.persona, [...(porPersona.get(t.persona) ?? []), t]);
@@ -187,7 +193,9 @@ try {
    */
   const elegida = suyas[1];
   const otra = suyas[0];
-  const porVenir = elegida !== undefined && otra !== undefined && otra.dia > hoy;
+  // Los DOS por venir: «Próximos turnos» solo enseña lo que no ha pasado.
+  const porVenir =
+    elegida !== undefined && otra !== undefined && otra.dia > hoy && elegida.dia > hoy;
   if (elegida === undefined || otra === undefined) {
     problemas.push('Horario no tiene dos turnos publicados de una misma persona esta semana');
   } else {
