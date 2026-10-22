@@ -1477,7 +1477,7 @@
       "reasonPlaceholder": "For example: the clock's battery was dead",
       "reasonRequired": "Write the reason: it stays in the corrections history.",
       "save": "Record clock-in and clock-out",
-      "failed": "It couldn't be recorded. Check the times and try again.",
+      "failed": "It couldn't be recorded and the server didn't say why. Try again in a moment.",
       "registered": "Recorded: it no longer counts as an absence.",
       "tile": "Absences",
       "sheetBodyNow": "Their shift is still running: only the clock-in is recorded, with your reason. They carry on at the time clock as on any other day: break and clock-out.",

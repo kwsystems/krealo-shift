@@ -3,6 +3,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import {
   attendanceStateAt,
+  entradaSinSalidaAntes,
   filaDelEvento,
   rebuildJornadaDe,
   reservarSecuencias,
@@ -17,6 +18,7 @@ import {
 import { exigirQueSeaDeLaSede } from './shared/persona-de-la-sede';
 import { noEnElFuturo } from './shared/salida-a-mano';
 import { refrigerioCentrado } from './horario-cumplido';
+import { diaYHoraLocal } from './shared/zonas';
 
 /**
  * «VINO Y NO MARCÓ»: SU ENTRADA Y SU SALIDA, JUNTAS (4-oct).
@@ -103,10 +105,15 @@ export const registerMissedAttendance = onCall(async (request) => {
   if (yaEstaba.exists) return { eventIds: ids, repetido: true };
 
   if ((await attendanceStateAt(employeeId, entrada)) !== 'OFF_SHIFT') {
+    // Desde cuándo (22-oct): es la entrada sin salida que hay que cerrar antes.
+    const desde = await entradaSinSalidaAntes(employeeId, entrada);
+    const sedeDelTurno = (await db.collection(COLLECTIONS.locations).doc(locationId).get()).data();
     throw new HttpsError(
       'failed-precondition',
-      'A esa hora ya estaba dentro: revisa su jornada en Horas.',
-      { motivo: 'DENTRO' },
+      desde === null
+        ? 'A esa hora ya estaba dentro: revisa su jornada en Horas.'
+        : `Ya figura dentro desde ${diaYHoraLocal(desde, String(sedeDelTurno?.timezone ?? 'America/Lima'))} y esa entrada no tiene salida. Ponle la salida en Horas, en la semana de ese día, y vuelve a registrar sus horas.`,
+      { motivo: 'DENTRO', desde },
     );
   }
   const entreMedias = await db

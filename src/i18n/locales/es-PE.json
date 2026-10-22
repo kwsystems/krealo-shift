@@ -1477,7 +1477,7 @@
       "reasonPlaceholder": "Por ejemplo: el reloj no tenía batería",
       "reasonRequired": "Escribe el motivo: queda en el historial de correcciones.",
       "save": "Registrar entrada y salida",
-      "failed": "No se pudo registrar. Revisa las horas y vuelve a intentarlo.",
+      "failed": "No se pudo registrar y el servidor no dijo por qué. Vuelve a intentarlo en un momento.",
       "registered": "Registrado: ya no cuenta como falta.",
       "tile": "Faltas",
       "sheetBodyNow": "Su turno sigue en curso: se registra solo su entrada, con tu motivo. Después sigue en el reloj como cualquier día: refrigerio y salida.",

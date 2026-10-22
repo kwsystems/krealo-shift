@@ -147,4 +147,50 @@ describe('poner la entrada a la hora del turno, antes de que llegue', () => {
     ).rejects.toMatchObject({ code: 'invalid-argument' });
     expect(await jornadas()).toHaveLength(0);
   });
+
+  /*
+   * UNA ENTRADA VIEJA SIN SALIDA (22-oct): el servidor la ve dentro y rechaza la de hoy. El
+   * rechazo tiene que decir desde cuándo —es lo que hay que cerrar—; antes decía solo «ya
+   * estaba dentro», y la hoja de Horas ni eso.
+   */
+  it('si ya figura dentro por una entrada sin salida, dice desde cuándo y no registra nada', async () => {
+    const ayer = hace(27);
+    await recordTimeEvent({
+      organizationId: ORG,
+      employeeId: PERSONA,
+      locationId: SEDE,
+      eventType: 'clock_in',
+      occurredAt: ayer,
+      idempotencyKey: 'entrada-de-ayer',
+      source: 'kiosk',
+    });
+    const fallo = await correr(managerAddTimeEvent, {
+      p_employee_id: PERSONA,
+      p_location_id: SEDE,
+      p_event_type: 'clock_in',
+      p_occurred_at: hace(3),
+      p_reason: 'El reloj no tenía batería',
+    }).catch((error: unknown) => error);
+    const cuando = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      hourCycle: 'h23',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).formatToParts(new Date(ayer));
+    const parte = (tipo: string) => cuando.find((p) => p.type === tipo)?.value;
+    expect(fallo).toMatchObject({
+      code: 'failed-precondition',
+      details: { motivo: 'DENTRO_DESDE', desde: ayer },
+    });
+    expect((fallo as Error).message).toContain(
+      `desde el ${parte('day')}/${parte('month')} a las ${parte('hour')}:${parte('minute')}`,
+    );
+    const marcas = await db
+      .collection(COLLECTIONS.timeEvents)
+      .where('employee_id', '==', PERSONA)
+      .get();
+    expect(marcas.size).toBe(1);
+  });
 });

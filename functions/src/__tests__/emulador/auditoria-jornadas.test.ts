@@ -215,6 +215,17 @@ describe('auditoría de jornadas', () => {
       expect(resultado.details).toEqual({ motivo: 'CON_MARCAS' });
     });
 
+    // Desde cuándo figura dentro (22-oct): es la entrada sin salida que hay que cerrar.
+    it('si ya figura dentro por una entrada sin salida, dice desde cuándo', async () => {
+      await reloj('clock_in', L(8, 30));
+      const resultado = (await registrar().catch((error: unknown) => error)) as {
+        details?: unknown;
+        message?: string;
+      };
+      expect(resultado.details).toEqual({ motivo: 'DENTRO', desde: L(8, 30) });
+      expect(resultado.message).toContain('a las 08:30');
+    });
+
     /*
      * CON SU REFRIGERIO (13-oct): quien no marcó en todo el día tampoco marcó su comida. Se
      * registra la de su turno en el centro: de 10:00 a 19:00 con 1 h son 8 h, no 9, y no

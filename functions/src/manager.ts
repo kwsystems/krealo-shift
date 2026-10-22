@@ -4,7 +4,12 @@ import bcrypt from 'bcryptjs';
 import { FieldValue } from 'firebase-admin/firestore';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 
-import { attendanceStateAt, heredarJornada, recordTimeEvent } from './shared/attendance';
+import {
+  attendanceStateAt,
+  entradaSinSalidaAntes,
+  heredarJornada,
+  recordTimeEvent,
+} from './shared/attendance';
 import { getStorage } from 'firebase-admin/storage';
 
 import { auth, COLLECTIONS, db, nowISO } from './shared/admin';
@@ -21,7 +26,7 @@ import { generatePin } from '../../src/domain/pin';
 import { estaReclasificado, tipoEfectivo } from './shared/eventos';
 import { politicasDe, POLITICAS_POR_DEFECTO } from './shared/politicas';
 import { revisarJornadasDeLaSede, revisarTurnoDeLasJornadas } from './shared/turnos';
-import { instanteLocal, zonaSegura } from './shared/zonas';
+import { diaYHoraLocal, instanteLocal, zonaSegura } from './shared/zonas';
 import { DEFAULT_PAID_REASONS } from '../../src/domain/break-reason';
 import { esMarcaFueraDelTurno } from '../../src/domain/fuera-del-turno';
 import {
@@ -776,6 +781,21 @@ export const managerAddTimeEvent = onCall(async (request) => {
 
   const estado = await attendanceStateAt(employeeId, occurredAt);
   const resultado = transition(estado, eventType);
+  /*
+   * UNA ENTRADA QUE NO CABE PORQUE YA FIGURA DENTRO dice desde cuándo (22-oct): esa entrada
+   * vieja sin salida es lo que hay que cerrar, y sin la fecha no había por dónde buscarla.
+   */
+  const desde =
+    !resultado.allowed && eventType === 'clock_in'
+      ? await entradaSinSalidaAntes(employeeId, occurredAt)
+      : null;
+  if (desde !== null) {
+    throw new HttpsError(
+      'failed-precondition',
+      `Ya figura dentro desde ${diaYHoraLocal(desde, String(location.timezone ?? 'America/Lima'))} y esa entrada no tiene salida. Ponle la salida en Horas, en la semana de ese día, y vuelve a registrar esta entrada.`,
+      { motivo: 'DENTRO_DESDE', estado, tipo: eventType, desde },
+    );
+  }
   if (!resultado.allowed) {
     throw new HttpsError(
       'failed-precondition',

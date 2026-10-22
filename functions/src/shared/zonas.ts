@@ -75,3 +75,21 @@ export function instanteLocal(fecha: string, hora: string, zona: string): string
   const primera = supuesto - desfaseMs(supuesto, zona);
   return new Date(supuesto - desfaseMs(primera, zona)).toISOString();
 }
+
+/**
+ * «el 21/10 a las 10:02», en la hora de la sede. Para los mensajes del servidor que dicen
+ * DESDE CUÁNDO pasa algo (22-oct): «ya estaba dentro» sin decir desde cuándo no dice qué
+ * jornada hay que ir a cerrar.
+ */
+export function diaYHoraLocal(iso: string, zona: string): string {
+  const partes = new Intl.DateTimeFormat('en-CA', {
+    timeZone: zonaSegura(zona, 'diaYHoraLocal'),
+    hourCycle: 'h23',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).formatToParts(new Date(iso));
+  const valor = (tipo: string) => partes.find((parte) => parte.type === tipo)?.value ?? '';
+  return `el ${valor('day')}/${valor('month')} a las ${valor('hour')}:${valor('minute')}`;
+}

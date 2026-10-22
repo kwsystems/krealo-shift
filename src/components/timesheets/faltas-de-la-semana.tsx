@@ -25,6 +25,7 @@ import { horaEscrita } from '@/domain/hora-escrita';
 import { minutosEscritos } from '@/domain/duracion-escrita';
 import { duracion } from '@/features/timesheets/duracion';
 import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
+import { porQueNoSeRegistro } from '@/features/timesheets/por-que-no-se-registro';
 import {
   MOTIVOS_DE_CUMPLIDO,
   NOTA_MAXIMA_DE_CUMPLIDO,
@@ -262,7 +263,8 @@ export function RegistrarQueVinoSheet({
   );
   const [motivo, setMotivo] = useState('');
   const [intentado, setIntentado] = useState(false);
-  const [fallo, setFallo] = useState(false);
+  // El motivo del servidor, en palabras: ver `porQueNoSeRegistro`.
+  const [fallo, setFallo] = useState<string | null>(null);
 
   // Como en el resto de la app: «10», «10.30», «1030» o «6pm» valen (`horaEscrita`).
   const horaDeEntrada = horaEscrita(entrada);
@@ -298,13 +300,13 @@ export function RegistrarQueVinoSheet({
     setIntentado(true);
     if (!valido || entradaISO === null || refrigerioMinutos === null) return;
     if (!enCurso && salidaISO === null) return;
-    setFallo(false);
+    setFallo(null);
     onGuardar({
       entradaISO,
       salidaISO: enCurso ? null : salidaISO,
       refrigerioMinutos,
       motivo: motivo.trim(),
-    }).catch(() => setFallo(true));
+    }).catch((error: unknown) => setFallo(porQueNoSeRegistro(t, error)));
   };
 
   return (
@@ -405,9 +407,9 @@ export function RegistrarQueVinoSheet({
         error={intentado && motivoFalta ? t('timesheet.absences.reasonRequired') : undefined}
         testID="falta-vino-motivo"
       />
-      {fallo ? (
+      {fallo !== null ? (
         <AppText variant="help" tone="danger" testID="falta-vino-error">
-          {t('timesheet.absences.failed')}
+          {fallo}
         </AppText>
       ) : null}
     </AdminSheet>

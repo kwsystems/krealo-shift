@@ -61,17 +61,8 @@ export type TimeEventInput = {
   timezone?: string;
 };
 
-/**
- * Estado de asistencia de una persona EN UN INSTANTE, no solo ahora.
- *
- * El instante importa porque una correccion casi siempre se pone en el pasado: un
- * gerente que anade el fichaje que faltó ayer necesita saber si la transicion valia
- * ENTONCES, no si vale ahora. Era `attendance_state_at` y es el mismo motivo.
- */
-export async function attendanceStateAt(
-  employeeId: string,
-  instant: string,
-): Promise<AttendanceState> {
+/** Los fichajes de la persona hasta ese instante, en el orden en que pasaron. */
+async function fichajesHasta(employeeId: string, instant: string) {
   const snapshot = await db
     .collection(COLLECTIONS.timeEvents)
     .where('employee_id', '==', employeeId)
@@ -85,14 +76,51 @@ export async function attendanceStateAt(
    * la maquina de estados recibe «salida, entrada» en vez de «entrada, salida» y
    * concluye lo contrario de lo que paso.
    */
-  const ordenados = snapshot.docs
+  return snapshot.docs
     .map((doc) => doc.data())
     .sort((a, b) => {
       const porInstante = String(a.occurred_at).localeCompare(String(b.occurred_at));
       return porInstante !== 0 ? porInstante : Number(a.seq ?? 0) - Number(b.seq ?? 0);
     });
+}
 
+/**
+ * Estado de asistencia de una persona EN UN INSTANTE, no solo ahora.
+ *
+ * El instante importa porque una correccion casi siempre se pone en el pasado: un
+ * gerente que anade el fichaje que faltó ayer necesita saber si la transicion valia
+ * ENTONCES, no si vale ahora. Era `attendance_state_at` y es el mismo motivo.
+ */
+export async function attendanceStateAt(
+  employeeId: string,
+  instant: string,
+): Promise<AttendanceState> {
+  const ordenados = await fichajesHasta(employeeId, instant);
   return reduceEvents(ordenados.map((row) => tipoEfectivo(row))).state;
+}
+
+/**
+ * LA ENTRADA QUE SIGUE SIN SALIDA en ese instante, o `null` si a esa hora estaba fuera
+ * (22-oct).
+ *
+ * Andree no podía registrar la entrada de una vendedora con el reloj sin batería, y nadie
+ * sabía por qué: la hoja decía «Revisa las horas» con las horas bien puestas. Una de las
+ * causas posibles es justo esta —una entrada vieja sin salida: el servidor la ve «dentro» y
+ * la pantalla, que a las 16 h deja de contar una jornada abierta como presencia, «No ha
+ * llegado»—, y el rechazo decía «ya estaba dentro» sin decir desde cuándo. Con esto el
+ * mensaje dice qué entrada hay que cerrar.
+ */
+export async function entradaSinSalidaAntes(
+  employeeId: string,
+  instant: string,
+): Promise<string | null> {
+  let abierta: string | null = null;
+  for (const fila of await fichajesHasta(employeeId, instant)) {
+    const tipo = tipoEfectivo(fila);
+    if (tipo === 'clock_in') abierta = String(fila.occurred_at);
+    if (tipo === 'clock_out') abierta = null;
+  }
+  return abierta;
 }
 
 /** Numero de secuencia global creciente. Es el `seq` de Postgres. */
