@@ -261,6 +261,15 @@ deuda de contraste.
 `.env.example` sí trae los valores reales, y es correcto: la configuración web de Firebase
 es pública por diseño. Recuperarlo es `cp .env.example .env`.
 
+**Un despliegue de funciones que falla deja las funciones como «sin cambios» (2026-10-22).**
+Ese día Google publicó un buildpack de Node (`nodejs_20261022`) cuyas imágenes no arrancaban:
+las 63 funciones dieron «Container Healthcheck failed», también con el código que ya estaba en
+producción (se comprobó desplegándolo). Cloud Run siguió sirviendo la revisión buena anterior,
+así que producción no se cayó. Pero firebase-tools guarda la huella del código del intento
+fallido, y el siguiente despliegue dijo «Skipped (No changes detected)» a funciones que corrían
+código viejo. Tras un fallo así se despliega con `FUNCTIONS_DEPLOY_UNCHANGED=true`, y se
+comprueba en Cloud Run que la revisión que sirve el tráfico es la última creada.
+
 Las reglas de Firestore y Storage se suben **solo si cambiaron** (`--only
 firestore:rules,firestore:indexes,storage`): mirar el diff antes, no desplegarlas por
 costumbre.
