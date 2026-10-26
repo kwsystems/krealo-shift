@@ -11,6 +11,7 @@ import { ajustarSesion } from './manager';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { filaDelEvento, rebuildWorkSession, reservarSecuencias } from './shared/attendance';
 import { audit, membershipOf, requireManagesLocation, requireUid } from './shared/caller';
+import { anotarCambioTrasAprobar } from './shared/periodo-aprobado';
 import { politicasDe } from './shared/politicas';
 import { enOrden, recorrer } from './shared/secuencia';
 import { zonaSegura } from './shared/zonas';
@@ -376,6 +377,13 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
       entityId: requestId,
       after: { moved_auto_clock_out: cerradaSola.id },
     });
+    await anotarCambioTrasAprobar({
+      organizationId,
+      locationId,
+      instante: String(cerradaSola.datos.starts_at),
+      uid,
+      motivo: 'forgot_clock_request_approved',
+    });
     return {
       status: 'approved',
       applied: true,
@@ -508,6 +516,19 @@ export const reviewTimeEditRequest = onCall({ timeoutSeconds: 120 }, async (requ
     entityType: 'time_edit_request',
     entityId: requestId,
     after: { event_ids: nuevos.map((nuevo) => nuevo.id), replaced: plan.reemplazados },
+  });
+  /*
+   * APROBAR UN «OLVIDÉ MARCAR» EN UNA SEMANA APROBADA QUEDA ANOTADO (26-oct): sus fichajes
+   * cambian las horas de esa jornada, igual que «Agregar fichaje manual» (`manager.ts`), que
+   * ya lo anotaba. Arriba, lo mismo cuando mueve la salida que puso el sistema. Una
+   * corrección con horas pasa por `ajustarSesion`, que lo anota por su cuenta.
+   */
+  await anotarCambioTrasAprobar({
+    organizationId,
+    locationId,
+    instante: plan.entrada,
+    uid,
+    motivo: 'forgot_clock_request_approved',
   });
 
   return {

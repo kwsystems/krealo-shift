@@ -4,6 +4,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { filaDelEvento, rebuildJornadaDe, reservarSecuencias } from './shared/attendance';
 import { audit, membershipOf, requireManagesLocation, requireUid } from './shared/caller';
+import { anotarCambioTrasAprobar } from './shared/periodo-aprobado';
 import { zonaSegura } from './shared/zonas';
 import { refrigerioCentrado } from './horario-cumplido';
 
@@ -334,6 +335,17 @@ export const applyPlannedBreak = onCall(async (request) => {
     entityId: sessionId,
     after: { desde: pausa.desde, hasta: pausa.hasta, minutos },
   });
+  /*
+   * Y SI ESA SEMANA YA SE APROBÓ, QUEDA ANOTADO (26-oct): descontar el refrigerio le quita
+   * horas a la jornada, como una corrección de `manager.ts`. Ver `anotarCambioTrasAprobar`.
+   */
+  await anotarCambioTrasAprobar({
+    organizationId,
+    locationId,
+    instante: desde,
+    uid,
+    motivo: 'planned_break_applied',
+  });
   return { desde: pausa.desde, hasta: pausa.hasta, minutos };
 });
 
@@ -374,6 +386,7 @@ export const reopenSessionDecision = onCall(async (request) => {
   const ahora = nowISO();
   const lote = db.batch();
   let extraBorrada = false;
+  let deudaBorrada = false;
 
   if (que === REFRIGERIO_DEL_TURNO) {
     const pausas = await Promise.all(
@@ -422,6 +435,7 @@ export const reopenSessionDecision = onCall(async (request) => {
           );
         }
         lote.delete(deuda);
+        deudaBorrada = true;
       }
     }
   }
@@ -459,6 +473,22 @@ export const reopenSessionDecision = onCall(async (request) => {
       extra_en_cero_borrada: extraBorrada,
     },
   });
+  /*
+   * CAMBIAR UNA DECISIÓN QUE TOCA HORAS, EN UNA SEMANA APROBADA, QUEDA ANOTADO (26-oct): quitar
+   * el refrigerio descontado devuelve horas a la jornada, y quitar un «le debe» borra horas
+   * debidas. Las demás —una salida dada por buena, «trabajó sin refrigerio»— solo vuelven a
+   * preguntar y no cambian nada de lo exportado: no se anotan.
+   */
+  if (que === REFRIGERIO_DEL_TURNO || deudaBorrada) {
+    await anotarCambioTrasAprobar({
+      organizationId,
+      locationId,
+      instante: String(sesion.starts_at),
+      uid,
+      motivo:
+        que === REFRIGERIO_DEL_TURNO ? 'planned_break_reopened' : 'owed_hours_decision_reopened',
+    });
+  }
   return { decision: que, extraBorrada };
 });
 

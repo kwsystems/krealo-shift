@@ -21,6 +21,7 @@ import {
   requireRole,
   requireUid,
 } from './shared/caller';
+import { anotarCambioTrasAprobar } from './shared/periodo-aprobado';
 
 /**
  * DAR UN TURNO POR CUMPLIDO POR UN MOTIVO ESPECIAL (4-oct).
@@ -258,6 +259,18 @@ export const creditShiftAsWorked = onCall(async (request) => {
       minutes: minutosNetos(turno),
     },
   });
+  /*
+   * SI ESA SEMANA YA SE APROBÓ, QUEDA ANOTADO (26-oct): dar el turno por cumplido le pone sus
+   * horas a un día que no tenía, como una corrección de `manager.ts`. Ver
+   * `anotarCambioTrasAprobar`; lo mismo al deshacerlo, abajo.
+   */
+  await anotarCambioTrasAprobar({
+    organizationId: turno.organization_id,
+    locationId: turno.location_id,
+    instante: turno.starts_at,
+    uid,
+    motivo: 'shift_credited_as_worked',
+  });
 
   return { id: turno.id, minutos: minutosNetos(turno) };
 });
@@ -325,6 +338,14 @@ export const undoShiftCredit = onCall(async (request) => {
       work_date: diaLocal(turno.starts_at, zona),
       reason: existentes[0]?.data()?.metadata?.motivo_especial ?? null,
     },
+  });
+  // Deshacerlo le quita esas horas al día: también es un cambio tras aprobar (26-oct).
+  await anotarCambioTrasAprobar({
+    organizationId: turno.organization_id,
+    locationId: turno.location_id,
+    instante: turno.starts_at,
+    uid,
+    motivo: 'shift_credit_undone',
   });
 
   return { id: turno.id };

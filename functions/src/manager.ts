@@ -1461,6 +1461,18 @@ export const managerReclassifyDeparture = onCall(async (request) => {
     entityType: 'time_event',
     entityId: eventId,
   });
+  /*
+   * Y SI ESA SEMANA YA SE APROBÓ, QUEDA ANOTADO (26-oct): la salida convertida en pausa funde
+   * dos jornadas, y con una pausa pagada el hueco pasa a ser horas trabajadas. Como
+   * `managerAdjustTime` y `managerAddTimeEvent`, más arriba.
+   */
+  await anotarCambioTrasAprobar({
+    organizationId,
+    locationId,
+    instante: String(salida.occurred_at),
+    uid,
+    motivo: 'departure_reclassified_as_break',
+  });
 
   return { minutes: minutos, breakType, workSessionId: sesionCortada.docs[0]?.id ?? null };
 });
