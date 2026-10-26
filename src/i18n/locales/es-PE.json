@@ -1358,6 +1358,7 @@
     "employeeNumberHint": "Opcional. El código que use el negocio en su planilla o contrato, para cruzar a la misma persona entre la app y los papeles. Sirve para buscarla en Equipo; no cambia horas ni fichajes.",
     "locationsHint": "Las tiendas donde puede fichar con su PIN. Al menos una.",
     "jobRolesHint": "Opcional. Lo que hace en la tienda: al crearle un turno se propone el primero, y el turno lo muestra.",
+    "emailAdminOnly": "Con este correo la persona entra desde su celular a ver lo suyo, sueldo incluido. Por eso solo lo cambia el dueño o un administrador.",
     "emailOptionalHint": "Con su correo podrá entrar desde su celular a ver su horario, sus horas y si llegó a tiempo: con «Entrar con tu correo» en krealo-shift.web.app. No hace falta para fichar: en el reloj ficha con su PIN.",
     "emailTaken": "Ese correo ya está en la ficha de {{name}}. Cada persona necesita el suyo para entrar a ver su horario.",
     "employeeCreated": "Empleado creado. Genera su PIN para que pueda fichar.",

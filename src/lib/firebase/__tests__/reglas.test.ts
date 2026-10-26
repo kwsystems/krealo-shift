@@ -17,6 +17,7 @@ import {
   orderBy,
   query,
   setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 
@@ -137,6 +138,16 @@ describe('reglas de Firestore', () => {
       body: JSON.stringify({ fields: aFirestore(campos) }),
     });
     if (!res.ok) throw new Error(`sembrar ${ruta}: ${res.status} ${await res.text()}`);
+  };
+
+  /** Sobre un documento que ya existe: el POST de `escribir` solo crea (26-oct). */
+  const reescribir = async (ruta: string, campos: Record<string, unknown>) => {
+    const res = await fetch(`${REST}/${ruta}`, {
+      method: 'PATCH',
+      headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: aFirestore(campos) }),
+    });
+    if (!res.ok) throw new Error(`reescribir ${ruta}: ${res.status} ${await res.text()}`);
   };
 
   beforeEach(async () => {
@@ -424,6 +435,16 @@ describe('reglas de Firestore', () => {
       ...extra,
     });
 
+    // Desde el 26-oct la persona tiene que trabajar en la sede: ver la última prueba.
+    beforeEach(async () => {
+      await escribir(`employee_location_assignments/emp-yo_${SEDE}`, {
+        id: `emp-yo_${SEDE}`,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-yo',
+      });
+    });
+
     it('quien gestiona la sede aprueba, lo lee y lo quita', async () => {
       const db = entorno.authenticatedContext(UID).firestore();
       await assertSucceeds(setDoc(doc(db, 'overtime_approvals', ID), aprobacion()));
@@ -502,6 +523,44 @@ describe('reglas de Firestore', () => {
       );
       expect(suyas.docs.map((d) => d.id)).toEqual([ID]);
       await assertFails(getDoc(doc(db, 'overtime_approvals', `${SEDE}_emp-otra_2026-09-21`)));
+    });
+
+    /*
+     * HORAS EXTRA DE OTRA SEDE (26-oct): gestionar la sede no basta, la persona tiene que
+     * trabajar en ella. Sin asignación `{persona}_{sede}` no se aprueba —ni cero minutos—, y
+     * una asignación de otra empresa con ese mismo id tampoco vale.
+     */
+    it('no se aprueban horas extra a quien no trabaja en la sede', async () => {
+      const ajenaId = `${SEDE}_emp-de-otra-sede_2026-09-21`;
+      const ajena = (extra: Record<string, unknown> = {}) =>
+        aprobacion({ id: ajenaId, employee_id: 'emp-de-otra-sede', ...extra });
+      await escribir(`employee_location_assignments/emp-de-otra-sede_otra-sede`, {
+        id: 'emp-de-otra-sede_otra-sede',
+        organization_id: ORG,
+        location_id: 'otra-sede',
+        employee_id: 'emp-de-otra-sede',
+      });
+      const db = entorno.authenticatedContext(UID).firestore();
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ajenaId), ajena()));
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ajenaId), ajena({ minutes: 0 })));
+
+      // Con su id pero de OTRA empresa: tampoco.
+      await escribir(`employee_location_assignments/emp-de-otra-sede_${SEDE}`, {
+        id: `emp-de-otra-sede_${SEDE}`,
+        organization_id: 'otra-empresa',
+        location_id: SEDE,
+        employee_id: 'emp-de-otra-sede',
+      });
+      await assertFails(setDoc(doc(db, 'overtime_approvals', ajenaId), ajena()));
+
+      // La mitad que da sentido a lo de arriba: asignada a la sede, sí.
+      await reescribir(`employee_location_assignments/emp-de-otra-sede_${SEDE}`, {
+        id: `emp-de-otra-sede_${SEDE}`,
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-de-otra-sede',
+      });
+      await assertSucceeds(setDoc(doc(db, 'overtime_approvals', ajenaId), ajena()));
     });
   });
 
@@ -999,6 +1058,283 @@ describe('reglas de Firestore', () => {
       );
       // Su turno sí lo sigue leyendo.
       await assertSucceeds(getDoc(doc(db, 'shifts/turno-con-nota')));
+    });
+  });
+
+  /** Un gerente de sede, con las sedes que gestiona (26-oct). */
+  const gerente = (uid: string, sedes: string[]) =>
+    escribir(`organization_memberships/${ORG}_${uid}`, {
+      id: `${ORG}_${uid}`,
+      organization_id: ORG,
+      user_id: uid,
+      role: 'manager',
+      status: 'active',
+      managed_location_ids: sedes,
+      created_at: '2026-10-26T12:00:00.000Z',
+    });
+
+  /*
+   * EL CORREO DE LA FICHA ES LA LLAVE DE LA CUENTA (26-oct). `ligarFichaDeEmpleado` liga a
+   * la ficha activa cuyo correo coincide, y esa cuenta lee el sueldo de la persona. Un gerente
+   * que cambiaba el correo de alguien que aún no había entrado, y entraba con él, leía un
+   * sueldo que a un gerente no se le enseña. Lo demás de la ficha lo sigue editando.
+   */
+  describe('el correo de la ficha', () => {
+    const ficha = {
+      id: 'emp-sin-cuenta',
+      organization_id: ORG,
+      full_name: 'Persona sin cuenta',
+      email: 'persona@example.com',
+      status: 'active',
+      user_id: null,
+    };
+
+    beforeEach(async () => {
+      await gerente('gerente-de-sede', [SEDE]);
+      await escribir('employees/emp-sin-cuenta', ficha);
+      await escribir('employee_pay/emp-sin-cuenta', {
+        id: 'emp-sin-cuenta',
+        organization_id: ORG,
+        employee_id: 'emp-sin-cuenta',
+        monthly_salary: 1500,
+      });
+    });
+
+    it('un gerente no cambia el correo ni la cuenta de una ficha; lo demás sí', async () => {
+      const db = entorno.authenticatedContext('gerente-de-sede').firestore();
+      const ref = doc(db, 'employees', 'emp-sin-cuenta');
+
+      // El ataque: su segunda cuenta como correo de la ficha.
+      await assertFails(updateDoc(ref, { email: 'segunda.cuenta@example.com' }));
+      await assertFails(updateDoc(ref, { email: null }));
+      await assertFails(updateDoc(ref, { user_id: 'cuenta-del-gerente' }));
+      await assertFails(updateDoc(ref, { organization_id: 'otra-empresa' }));
+
+      // Lo que hace Equipo: nombre, número, estado y último día.
+      await assertSucceeds(
+        updateDoc(ref, {
+          full_name: 'Nombre corregido',
+          preferred_name: null,
+          employee_number: '17',
+          updated_at: '2026-10-26T12:00:00.000Z',
+        }),
+      );
+      await assertSucceeds(updateDoc(ref, { status: 'inactive' }));
+      await assertSucceeds(updateDoc(ref, { status: 'active', end_date: null }));
+      // Mandar el mismo correo que ya tiene no es cambiarlo.
+      await assertSucceeds(updateDoc(ref, { full_name: 'Otra vez', email: ficha.email }));
+    });
+
+    it('el dueño sí cambia el correo, y la empresa no la cambia nadie', async () => {
+      const db = entorno.authenticatedContext(UID).firestore();
+      const ref = doc(db, 'employees', 'emp-sin-cuenta');
+      await assertSucceeds(updateDoc(ref, { email: 'correo.nuevo@example.com' }));
+      await assertFails(updateDoc(ref, { organization_id: 'otra-empresa' }));
+    });
+
+    it('un gerente da de alta con correo, pero no con cuenta ni sobre un sueldo huérfano', async () => {
+      const db = entorno.authenticatedContext('gerente-de-sede').firestore();
+      const alta = (id: string, extra: Record<string, unknown> = {}) =>
+        setDoc(doc(db, 'employees', id), {
+          id,
+          organization_id: ORG,
+          full_name: 'Alta nueva',
+          preferred_name: null,
+          employee_number: null,
+          email: 'alta.nueva@example.com',
+          status: 'active',
+          hire_date: null,
+          user_id: null,
+          ...extra,
+        });
+
+      // Como `createEmployee`: correo elegido por quien da de alta, cuenta en null.
+      await assertSucceeds(alta('emp-nueva'));
+      await assertFails(alta('emp-con-cuenta', { user_id: 'cuenta-del-gerente' }));
+
+      // Una ficha borrada cuyo sueldo sigue ahí: recrearla con un correo propio, no.
+      await escribir('employee_pay/emp-borrada', {
+        id: 'emp-borrada',
+        organization_id: ORG,
+        employee_id: 'emp-borrada',
+        monthly_salary: 2100,
+      });
+      await assertFails(alta('emp-borrada'));
+      const dueno = entorno.authenticatedContext(UID).firestore();
+      await assertSucceeds(
+        setDoc(doc(dueno, 'employees', 'emp-borrada'), {
+          id: 'emp-borrada',
+          organization_id: ORG,
+          full_name: 'Vuelve',
+          status: 'active',
+          user_id: null,
+        }),
+      );
+    });
+  });
+
+  /*
+   * EDITAR NO MUDA (26-oct). Las reglas de update de turnos y descansos miraban solo el
+   * documento de ANTES: un gerente de la sede podía mandar un turno o un descanso a otra sede
+   * que no gestiona, y a otra persona.
+   */
+  describe('turnos y descansos no se mudan a una sede ajena', () => {
+    const DESCANSO = `${SEDE}_emp-a_2026-10-26`;
+    const descanso = {
+      id: DESCANSO,
+      organization_id: ORG,
+      location_id: SEDE,
+      employee_id: 'emp-a',
+      date_key: '2026-10-26',
+      note: null,
+    };
+
+    beforeEach(async () => {
+      await gerente('gerente-de-sede', [SEDE]);
+      await gerente('gerente-de-dos', [SEDE, 'otra-sede']);
+      await escribir('locations/otra-sede', {
+        id: 'otra-sede',
+        organization_id: ORG,
+        name: 'Otra',
+      });
+      await escribir('shifts/turno-de-la-sede', {
+        id: 'turno-de-la-sede',
+        organization_id: ORG,
+        location_id: SEDE,
+        employee_id: 'emp-a',
+        status: 'draft',
+        publication_version: 0,
+        starts_at: '2026-10-27T14:00:00.000Z',
+        ends_at: '2026-10-27T22:00:00.000Z',
+      });
+      await escribir(`rest_days/${DESCANSO}`, descanso);
+    });
+
+    it('un turno: a otra sede solo si gestiona las dos; a otra persona de su sede, sí', async () => {
+      const db = entorno.authenticatedContext('gerente-de-sede').firestore();
+      const ref = doc(db, 'shifts', 'turno-de-la-sede');
+      await assertFails(updateDoc(ref, { location_id: 'otra-sede' }));
+      await assertFails(updateDoc(ref, { organization_id: 'otra-empresa' }));
+      // Lo que hace «Editar turno»: otra persona, otras horas, en borrador.
+      await assertSucceeds(
+        updateDoc(ref, {
+          location_id: SEDE,
+          employee_id: 'emp-b',
+          starts_at: '2026-10-27T15:00:00.000Z',
+          status: 'draft',
+        }),
+      );
+      // Y cancelar uno publicado.
+      await assertSucceeds(updateDoc(ref, { status: 'cancelled' }));
+
+      const deDos = entorno.authenticatedContext('gerente-de-dos').firestore();
+      await assertSucceeds(
+        updateDoc(doc(deDos, 'shifts', 'turno-de-la-sede'), { location_id: 'otra-sede' }),
+      );
+    });
+
+    it('un descanso no cambia de sede, persona ni día; pegarlo otra vez, sí', async () => {
+      const db = entorno.authenticatedContext('gerente-de-sede').firestore();
+      const ref = doc(db, 'rest_days', DESCANSO);
+      await assertFails(updateDoc(ref, { location_id: 'otra-sede' }));
+      await assertFails(updateDoc(ref, { employee_id: 'emp-b' }));
+      await assertFails(updateDoc(ref, { date_key: '2026-10-27' }));
+      // `setRestDays`: el mismo descanso pegado otra vez, con nota.
+      await assertSucceeds(setDoc(ref, { ...descanso, note: 'Cumpleaños' }, { merge: true }));
+
+      // Ni gestionando las dos: el id es sede_persona_día y dejaría de decir la verdad.
+      const deDos = entorno.authenticatedContext('gerente-de-dos').firestore();
+      await assertFails(updateDoc(doc(deDos, 'rest_days', DESCANSO), { location_id: 'otra-sede' }));
+    });
+  });
+
+  /*
+   * ASIGNACIONES (26-oct): el update miraba solo el documento NUEVO, y un gerente de otra sede
+   * reescribía `{persona}_{sede}` con la suya y sacaba a la persona del reloj de esta. El alta
+   * exige además el id determinista y que persona y sede sean de la empresa de la fila.
+   */
+  describe('asignaciones a sede', () => {
+    const asignacion = (
+      employee_id: string,
+      location_id: string,
+      extra: Record<string, unknown> = {},
+    ) => ({
+      id: `${employee_id}_${location_id}`,
+      organization_id: ORG,
+      employee_id,
+      location_id,
+      can_manage: false,
+      is_primary: false,
+      ...extra,
+    });
+
+    beforeEach(async () => {
+      await gerente('gerente-de-sede', [SEDE]);
+      await gerente('gerente-de-otra', ['otra-sede']);
+      await escribir('locations/otra-sede', {
+        id: 'otra-sede',
+        organization_id: ORG,
+        name: 'Otra',
+      });
+      await escribir('locations/sede-ajena', {
+        id: 'sede-ajena',
+        organization_id: 'otra-empresa',
+        name: 'Ajena',
+      });
+      await escribir('employees/emp-a', { id: 'emp-a', organization_id: ORG, status: 'active' });
+      await escribir('employees/emp-de-fuera', {
+        id: 'emp-de-fuera',
+        organization_id: 'otra-empresa',
+        status: 'active',
+      });
+      await escribir(`employee_location_assignments/emp-a_${SEDE}`, asignacion('emp-a', SEDE));
+    });
+
+    it('un gerente de otra sede no reescribe la asignación de esta', async () => {
+      const db = entorno.authenticatedContext('gerente-de-otra').firestore();
+      const ref = doc(db, 'employee_location_assignments', `emp-a_${SEDE}`);
+      // El ataque: la fila de esta sede, reescrita con la suya.
+      await assertFails(setDoc(ref, asignacion('emp-a', 'otra-sede', { id: `emp-a_${SEDE}` })));
+      await assertFails(updateDoc(ref, { is_primary: true }));
+      await assertFails(deleteDoc(ref));
+    });
+
+    it('el alta exige el id {persona}_{sede} y que persona y sede sean de la empresa', async () => {
+      const db = entorno.authenticatedContext('gerente-de-otra').firestore();
+      await assertFails(
+        setDoc(
+          doc(db, 'employee_location_assignments', 'id-inventado'),
+          asignacion('emp-a', 'otra-sede'),
+        ),
+      );
+      await assertFails(
+        setDoc(
+          doc(db, 'employee_location_assignments', 'emp-de-fuera_otra-sede'),
+          asignacion('emp-de-fuera', 'otra-sede'),
+        ),
+      );
+      const dueno = entorno.authenticatedContext(UID).firestore();
+      await assertFails(
+        setDoc(
+          doc(dueno, 'employee_location_assignments', 'emp-a_sede-ajena'),
+          asignacion('emp-a', 'sede-ajena'),
+        ),
+      );
+
+      // Lo que hace `replaceAssignments`: dar de alta en su sede y quitarla.
+      const ref = doc(db, 'employee_location_assignments', 'emp-a_otra-sede');
+      await assertSucceeds(
+        setDoc(ref, asignacion('emp-a', 'otra-sede', { created_at: '2026-10-26T12:00:00.000Z' })),
+      );
+      await assertSucceeds(deleteDoc(ref));
+    });
+
+    it('quien gestiona la sede reescribe la suya sin mudarla', async () => {
+      const db = entorno.authenticatedContext('gerente-de-sede').firestore();
+      const ref = doc(db, 'employee_location_assignments', `emp-a_${SEDE}`);
+      await assertSucceeds(setDoc(ref, asignacion('emp-a', SEDE, { is_primary: true })));
+      await assertFails(updateDoc(ref, { employee_id: 'emp-b' }));
+      await assertFails(updateDoc(ref, { organization_id: 'otra-empresa' }));
     });
   });
 

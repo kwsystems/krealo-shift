@@ -226,8 +226,15 @@ export type EmployeeDraft = {
   fullName: string;
   preferredName: string | null;
   employeeNumber: string | null;
-  /** Opcional a propósito: el empleado del kiosco no necesita correo (§11.2). */
-  email: string | null;
+  /**
+   * Opcional a propósito: el empleado del kiosco no necesita correo (§11.2).
+   *
+   * `undefined` es «NO SE TOCA» (26-oct): lo manda la ficha editada por un gerente, que no
+   * puede cambiar el correo —es la llave de la cuenta de la persona, ver `firestore.rules`—.
+   * Mandarlo igual que estaba pasaría la regla, pero un correo guardado con mayúsculas
+   * volvería en minúsculas y contaría como cambio.
+   */
+  email?: string | null;
   locationIds: string[];
   jobRoleIds: string[];
 };
@@ -369,7 +376,7 @@ export async function createEmployee(params: {
         full_name: draft.fullName.trim(),
         preferred_name: draft.preferredName,
         employee_number: draft.employeeNumber,
-        email: draft.email,
+        email: draft.email ?? null,
         status: 'active',
         // Explicitos aunque vayan en nulo: ver el comentario del esquema de arriba.
         hire_date: null,
@@ -407,7 +414,7 @@ export async function updateEmployee(params: {
         full_name: draft.fullName.trim(),
         preferred_name: draft.preferredName,
         employee_number: draft.employeeNumber,
-        email: draft.email,
+        ...(draft.email === undefined ? {} : { email: draft.email }),
       })
       .eq('id', employeeId),
   );

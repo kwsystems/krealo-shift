@@ -52,6 +52,7 @@ export function EmployeeFormSheet({
   saving,
   saveError,
   correosOcupados,
+  correoSoloLectura = false,
   onSubmit,
   onClose,
 }: {
@@ -80,6 +81,12 @@ export function EmployeeFormSheet({
    * avisa aquí, al escribirlo, y no el día que la persona no pueda entrar.
    */
   correosOcupados?: ReadonlyMap<string, string>;
+  /**
+   * EL CORREO DE UNA FICHA QUE YA EXISTE SOLO LO CAMBIA EL DUEÑO O UN ADMINISTRADOR (26-oct):
+   * es con lo que la persona entra, y desde su cuenta se ve su sueldo. Para un gerente el
+   * campo se enseña pero no se edita, y el guardado no lo manda. Ver `firestore.rules`.
+   */
+  correoSoloLectura?: boolean;
   onSubmit: (draft: EmployeeDraft) => void;
   onClose: () => void;
 }) {
@@ -88,8 +95,11 @@ export function EmployeeFormSheet({
   const [submitted, setSubmitted] = useState(false);
 
   const nameValid = values.fullName.trim().length > 1;
-  const emailValid = values.email.trim() === '' || EMAIL_PATTERN.test(values.email.trim());
-  const duenoDelCorreo = correosOcupados?.get(values.email.trim().toLowerCase()) ?? null;
+  const emailValid =
+    correoSoloLectura || values.email.trim() === '' || EMAIL_PATTERN.test(values.email.trim());
+  const duenoDelCorreo = correoSoloLectura
+    ? null
+    : (correosOcupados?.get(values.email.trim().toLowerCase()) ?? null);
   const locationsValid = values.locationIds.length > 0;
   const canSubmit = nameValid && emailValid && duenoDelCorreo === null && locationsValid;
   // Lo primero que impide guardar, junto al botón (8-oct): ver `shift-form.tsx`.
@@ -112,7 +122,11 @@ export function EmployeeFormSheet({
       preferredName: values.preferredName.trim() === '' ? null : values.preferredName.trim(),
       employeeNumber: values.employeeNumber.trim() === '' ? null : values.employeeNumber.trim(),
       // En minúsculas: es con lo que la persona entra, y la búsqueda del servidor es exacta.
-      email: values.email.trim() === '' ? null : values.email.trim().toLowerCase(),
+      email: correoSoloLectura
+        ? undefined
+        : values.email.trim() === ''
+          ? null
+          : values.email.trim().toLowerCase(),
       locationIds: values.locationIds,
       jobRoleIds: values.jobRoleIds,
     });
@@ -209,6 +223,7 @@ export function EmployeeFormSheet({
           label={t('team.emailOptional')}
           value={values.email}
           onChangeText={(email) => setValues((current) => ({ ...current, email }))}
+          editable={!correoSoloLectura}
           keyboardType="email-address"
           autoCapitalize="none"
           error={
@@ -225,8 +240,8 @@ export function EmployeeFormSheet({
             {t('team.emailTaken', { name: duenoDelCorreo })}
           </AppText>
         )}
-        <AppText variant="help" tone="subtle">
-          {t('team.emailOptionalHint')}
+        <AppText variant="help" tone="subtle" testID="employee-email-hint">
+          {correoSoloLectura ? t('team.emailAdminOnly') : t('team.emailOptionalHint')}
         </AppText>
       </Stack>
 
