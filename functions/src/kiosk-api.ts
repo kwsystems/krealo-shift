@@ -11,12 +11,13 @@ import {
 } from '../../src/domain/attendance-state-machine';
 import { COLLECTIONS, db, nowISO } from './shared/admin';
 import { membershipOf, requireManagesLocation, requireUid } from './shared/caller';
+import { anotarCambioTrasAprobar } from './shared/periodo-aprobado';
 import { attendanceStateAt, pausaAbiertaDe, recordTimeEvent } from './shared/attendance';
 import { cerradaDeHecho, repararSalidasPuestasAMano } from './shared/salida-a-mano';
 import { estaBloqueado, trasUnFallo } from './shared/bloqueo';
 import { politicasDe } from './shared/politicas';
 import { deLaJornada } from './shared/hora-de-la-jornada';
-import { datosDelFichaje, horaDelFichajeSinRed } from './shared/validar-fichaje';
+import { datosDelFichaje, demasiadoAtrasado, horaDelFichajeSinRed } from './shared/validar-fichaje';
 import { instanteLocal, zonaSegura } from './shared/zonas';
 import { puestosPorEmpleado } from './shared/puestos';
 import { salDeBcrypt, verificadorSinConexion } from './shared/verificador';
@@ -25,6 +26,7 @@ import {
   authenticateKiosk,
   issueActionToken,
   KIOSK_TOKEN_SECRET,
+  plataformaDeclarada,
   recordKioskRejection,
   verifyActionToken,
   type KioskContext,
@@ -156,6 +158,8 @@ export const activateKiosk = onCall(async (request) => {
       installation_id: installationId,
       status: 'active',
       app_version: appVersion,
+      // Navegador o app: decide si este reloj puede mandar fichajes sin red (26-oct).
+      platform: plataformaDeclarada(request.data),
       last_seen_at: nowISO(),
       last_sync_at: null,
       created_by: datosCodigo.created_by ?? null,
@@ -822,7 +826,7 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
   const sede = ((await db.collection(COLLECTIONS.locations).doc(kiosk.locationId).get()).data() ??
     {}) as Record<string, unknown>;
   const ids = [...new Set(ordenados.map((evento) => String(evento?.employeeOpaqueId ?? '')))];
-  const activas = new Set(
+  const fichas = new Map(
     (
       await Promise.all(
         ids
@@ -830,15 +834,43 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
           .map((id) => db.collection(COLLECTIONS.employees).doc(id).get()),
       )
     )
-      .filter((doc) => doc.exists && doc.data()?.status === 'active')
-      .map((doc) => doc.id),
+      .filter((doc) => doc.exists)
+      .map((doc) => [doc.id, doc.data() ?? {}] as const),
   );
+  /*
+   * ACTIVA, O DE BAJA DESPUÉS DE ESE DÍA (26-oct): lo que marcó sin red en su último día
+   * llega cuando vuelve la red, y para entonces la baja quizá ya se cumplió. Ese fichaje es
+   * de cuando trabajaba y entra; uno de después de su último día, no.
+   */
+  const zonaDeLaSede = zonaSegura(sede.timezone ?? 'America/Lima', 'syncOfflineEvents');
+  const estabaActiva = (employeeId: string, hora: string): boolean => {
+    const ficha = fichas.get(employeeId);
+    if (ficha === undefined) return false;
+    if (ficha.status === 'active') return true;
+    const baja = typeof ficha.end_date === 'string' ? ficha.end_date : null;
+    const dia = fechaLocal(hora, zonaDeLaSede);
+    return baja !== null && dia !== null && dia <= baja;
+  };
   const ahora = Date.now();
 
   const resultados = [];
   for (const evento of ordenados) {
     const idempotencyKey = String(evento?.idempotencyKey ?? '');
     const employeeId = String(evento?.employeeOpaqueId ?? '');
+
+    /*
+     * UN RELOJ WEB NO FICHA SIN RED (26-oct): no tiene cola (`disponibilidad.ts`), así que
+     * un lote suyo no salió de la app sino de alguien con la credencial del navegador, y
+     * sin PIN. Se rechaza evento a evento, con la forma de siempre. Ver `plataformaDeclarada`.
+     */
+    if (kiosk.platform === 'web') {
+      resultados.push({
+        idempotencyKey,
+        status: 'rejected' as const,
+        reason: 'Este reloj es un navegador y en el navegador no se ficha sin conexión.',
+      });
+      continue;
+    }
 
     if (evento?.offlineVerified !== true || !deLaTienda.has(employeeId)) {
       resultados.push({
@@ -853,11 +885,20 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
     const porRevisar =
       hora === null
         ? 'La hora del aparato no es una fecha válida o está en el futuro.'
-        : !activas.has(employeeId)
+        : !estabaActiva(employeeId, hora)
           ? 'Esa persona ya no está activa: un encargado tiene que mirar este fichaje.'
           : null;
     if (porRevisar !== null) {
       resultados.push({ idempotencyKey, status: 'needs_review' as const, reason: porRevisar });
+      continue;
+    }
+    if (demasiadoAtrasado(hora as string, ahora)) {
+      resultados.push({
+        idempotencyKey,
+        status: 'rejected' as const,
+        reason:
+          'Ese fichaje es de hace más de 72 horas: un encargado tiene que registrarlo a mano desde Horas.',
+      });
       continue;
     }
 
@@ -888,6 +929,21 @@ export const syncOfflineEvents = onCall(OPCIONES_CON_SECRETO, async (request) =>
         isOffline: true,
         source: 'kiosk',
       });
+      /*
+       * UNA SEMANA YA APROBADA SE ENTERA (26-oct), como cuando quien gestiona añade un
+       * fichaje (`managerAddTimeEvent`): un lote que llega tarde cambia horas que quizá ya
+       * se exportaron. Solo lo nuevo; un duplicado no cambia nada.
+       */
+      if (!resultado.duplicated) {
+        await anotarCambioTrasAprobar({
+          organizationId: kiosk.organizationId,
+          locationId: kiosk.locationId,
+          instante: hora as string,
+          uid: null,
+          deviceId: kiosk.deviceId,
+          motivo: 'offline_time_event_synced',
+        });
+      }
       resultados.push({
         idempotencyKey,
         status: resultado.duplicated ? ('duplicate' as const) : ('accepted' as const),

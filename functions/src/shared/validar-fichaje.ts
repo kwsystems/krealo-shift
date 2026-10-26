@@ -122,3 +122,16 @@ export function horaDelFichajeSinRed(valor: unknown, ahora: number = Date.now())
   if (Number.isNaN(ms) || ms > ahora + MARGEN_FUTURO_MS) return null;
   return new Date(ms).toISOString();
 }
+
+/**
+ * NI DE HACE MÁS DE TRES DÍAS (26-oct). Un fichaje sin red se acepta con la hora del
+ * aparato y sin PIN comprobado por el servidor, así que sin tope cabía uno de cualquier
+ * semana —también de una ya aprobada y exportada—. Setenta y dos horas cubren un fin de
+ * semana largo con el wifi caído; lo de antes lo registra quien gestiona, a mano y con
+ * motivo, que es como se añade cualquier otro fichaje olvidado.
+ */
+export const ANTIGUEDAD_MAXIMA_SIN_RED_MS = 72 * 60 * 60_000;
+
+export function demasiadoAtrasado(hora: string, ahora: number = Date.now()): boolean {
+  return ahora - Date.parse(hora) > ANTIGUEDAD_MAXIMA_SIN_RED_MS;
+}

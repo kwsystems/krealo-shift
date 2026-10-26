@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { z } from 'zod';
 
 import { docId } from '@/lib/firebase/ids';
@@ -279,8 +280,13 @@ async function invoke<T>(
       return { ok: false, error: { kind: 'device_credential' } };
     }
 
+    /*
+     * `platform` EN CADA LLAMADA (26-oct): así el servidor sabe qué relojes son un
+     * navegador, que no ficha sin red, y rechaza un lote «sin conexión» que llegue de uno
+     * de ellos. Ver `plataformaDeclarada` en `functions/src/shared/kiosk.ts`.
+     */
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body: { ...body, kioskAuth },
+      body: { ...body, kioskAuth, platform: Platform.OS },
     });
 
     if (error !== null) {
