@@ -69,12 +69,22 @@ export function planificadoPorDia(turnos: readonly ShiftRow[], zona: string): Ma
   const mapa = new Map<string, number>();
   for (const turno of turnos) {
     if (!turnoEnPie(turno)) continue;
-    const brutos = Math.floor((Date.parse(turno.ends_at) - Date.parse(turno.starts_at)) / 60000);
-    const netos = Math.max(0, brutos - Math.max(0, turno.planned_unpaid_break_minutes));
     const clave = claveDelDia(turno.employee_id, dateKeyOf(turno.starts_at, zona));
-    mapa.set(clave, (mapa.get(clave) ?? 0) + netos);
+    mapa.set(clave, (mapa.get(clave) ?? 0) + minutosPlanificadosDelTurno(turno));
   }
   return mapa;
+}
+
+/**
+ * Lo planificado de UN turno: su duración menos el refrigerio planificado. Es la pieza de
+ * `planificadoPorDia`, y la usa también el sueldo (26-oct) para valorar el turno que no se
+ * trabajó de un día partido: las dos cuentas miden el turno igual.
+ */
+export function minutosPlanificadosDelTurno(
+  turno: Pick<ShiftRow, 'starts_at' | 'ends_at' | 'planned_unpaid_break_minutes'>,
+): number {
+  const brutos = Math.floor((Date.parse(turno.ends_at) - Date.parse(turno.starts_at)) / 60000);
+  return Math.max(0, brutos - Math.max(0, turno.planned_unpaid_break_minutes));
 }
 
 /**

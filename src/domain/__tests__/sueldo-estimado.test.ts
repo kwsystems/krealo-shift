@@ -78,12 +78,76 @@ describe('el sueldo aproximado del mes', () => {
     expect(r.neto).toBe(1305);
   });
 
-  it('si entró a mitad de mes cobra los días en que tuvo contrato', () => {
-    expect(base({ ingreso: '2026-10-17' })).toMatchObject({ diasPagados: 15, base: 750 });
+  /*
+   * EL MES A MEDIAS SOBRE 30 (26-oct): se pagan 30 menos los días del mes sin contrato, y no
+   * los días del calendario. Octubre tiene 31: entrar el 17 deja 16 días sin contrato.
+   */
+  it('si entró a mitad de mes cobra 30 menos los días sin contrato', () => {
+    expect(base({ ingreso: '2026-10-17' })).toMatchObject({
+      diasPagados: 14,
+      diasConContrato: 15,
+      base: 700,
+    });
   });
 
   it('si se fue a mitad de mes, también', () => {
-    expect(base({ baja: '2026-10-10' })).toMatchObject({ diasPagados: 10, base: 500 });
+    expect(base({ baja: '2026-10-10' })).toMatchObject({ diasPagados: 9, base: 450 });
+  });
+
+  it('en un mes de 31, entrar el 2 ya no paga el mes entero', () => {
+    expect(base({ ingreso: '2026-10-02' })).toMatchObject({ diasPagados: 29, base: 1450 });
+    // Entrar el 31: un día con contrato y ninguno que cobrar.
+    expect(base({ ingreso: '2026-10-31' })).toMatchObject({
+      diasPagados: 0,
+      diasConContrato: 1,
+      base: 0,
+    });
+  });
+
+  it('en febrero, medio mes no se paga de menos', () => {
+    const FEBRERO = { desde: '2026-02-01', hasta: '2026-02-28' };
+    expect(base({ mes: FEBRERO })).toMatchObject({ diasPagados: 30, base: 1500 });
+    // Se fue el 14: 14 días sin contrato de 28, cobra 16 de 30 (antes, 14).
+    expect(base({ mes: FEBRERO, baja: '2026-02-14' })).toMatchObject({
+      diasPagados: 16,
+      base: 800,
+    });
+    expect(base({ mes: FEBRERO, ingreso: '2026-02-15' })).toMatchObject({ diasPagados: 16 });
+    // Se fue el 27: un día sin contrato, el 28.
+    expect(base({ mes: FEBRERO, baja: '2026-02-27' })).toMatchObject({ diasPagados: 29 });
+  });
+
+  it('un mes sin contrato no cobra nada, ni la asignación familiar', () => {
+    const familia = { sueldoMensual: 1500, asignacionFamiliar: true, pension: null };
+    const seFueAntes = base({ datos: familia, baja: '2026-09-20' });
+    expect(seFueAntes).toMatchObject({
+      diasPagados: 0,
+      diasConContrato: 0,
+      base: 0,
+      asignacionFamiliar: 0,
+      bruto: 0,
+    });
+    expect(base({ datos: familia, ingreso: '2026-11-03' })).toMatchObject({
+      diasConContrato: 0,
+      asignacionFamiliar: 0,
+      bruto: 0,
+    });
+    // Con días pagados, la asignación es entera.
+    expect(base({ datos: familia, ingreso: '2026-10-17' }).asignacionFamiliar).toBe(123);
+  });
+
+  it('el turno no trabajado de un día partido descuenta sus horas, no el día', () => {
+    const r = base({
+      turnosSinTrabajar: [
+        { estado: 'injustificada', minutos: 120 },
+        { estado: 'justificada', minutos: 240 },
+        { estado: 'sinRevisar', minutos: 60 },
+      ],
+    });
+    // 3 h × 6.25: la justificada no cuenta.
+    expect(r.turnosSinTrabajar).toEqual({ turnos: 2, minutos: 180, monto: 18.75, sinRevisar: 1 });
+    expect(r.faltas.dias).toBe(0);
+    expect(r.bruto).toBe(1481.25);
   });
 
   it('un mes de faltas no deja el sueldo en negativo', () => {

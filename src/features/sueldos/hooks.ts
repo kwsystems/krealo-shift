@@ -147,6 +147,7 @@ export function useSueldoDelMes(params: {
     ingreso: params.ingreso ?? null,
     baja: params.baja ?? null,
     faltas: hechos.faltas,
+    turnosSinTrabajar: hechos.turnosSinTrabajar,
     extrasPorDia: hechos.extrasPorDia,
     feriadosTrabajados: hechos.feriadosTrabajados.length,
     minutosQueDebe: hechos.minutosQueDebe,

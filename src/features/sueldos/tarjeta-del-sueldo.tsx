@@ -98,8 +98,8 @@ type Linea = {
 /**
  * EL SUELDO APROXIMADO DEL MES, con su desglose (13-oct). La misma tarjeta en el celular de
  * la persona («Tu sueldo…») y en su ficha de Equipo: la cuenta es `sueldo-estimado.ts`, aquí
- * solo se dice. Cada línea dice de dónde sale —«2 faltas sin justificar»—, y abajo, siempre,
- * que es un aproximado y que lo que vale es la boleta.
+ * solo se dice. Cada línea dice de dónde sale —«2 días de falta sin justificar»—, y abajo,
+ * siempre, que es un aproximado y que lo que vale es la boleta.
  */
 export function TarjetaDelSueldo({
   sueldo,
@@ -137,6 +137,20 @@ export function TarjetaDelSueldo({
   }
 
   const { cuenta, mes } = sueldo;
+  /*
+   * UN MES SIN CONTRATO NO TIENE SUELDO (26-oct): «Mes pasado» de quien entró este mes
+   * enseñaba una tarjeta de S/ 0.00 —o de S/ 123, con la asignación familiar—. Se dice en una
+   * línea, como el «sin sueldo» de la ficha.
+   */
+  if (cuenta.diasConContrato === 0) {
+    return (
+      <Card style={estilos.caja} testID="sueldo-sin-contrato">
+        <AppText variant="help" tone="muted">
+          {t('pay.noContract', { month: NOMBRE_DEL_MES(mes.desde, language) })}
+        </AppText>
+      </Card>
+    );
+  }
   const lineas = lineasDe(t, cuenta);
   const total = cuenta.neto ?? cuenta.bruto;
 
@@ -268,6 +282,20 @@ function lineasDe(t: ReturnType<typeof useTranslation>['t'], cuenta: SueldoEstim
       etiqueta: t('pay.absencesPending', { count: cuenta.faltasSinRevisar.dias }),
       detalle: t('pay.absencesPendingDetail'),
       monto: cuenta.faltasSinRevisar.monto,
+      signo: '−',
+      tono: 'danger',
+    });
+  }
+  if (cuenta.turnosSinTrabajar.monto > 0) {
+    lineas.push({
+      clave: 'turnos-sin-trabajar',
+      etiqueta: t('pay.missedShifts', { count: cuenta.turnosSinTrabajar.turnos }),
+      detalle: `${duracion(t, cuenta.turnosSinTrabajar.minutos)} · ${t(
+        cuenta.turnosSinTrabajar.sinRevisar > 0
+          ? 'pay.missedShiftsPendingDetail'
+          : 'pay.missedShiftsDetail',
+      )}`,
+      monto: cuenta.turnosSinTrabajar.monto,
       signo: '−',
       tono: 'danger',
     });
