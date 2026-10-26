@@ -33,11 +33,12 @@ const turno = (extra: Fila = {}): Fila => ({
   ...extra,
 });
 
-const fichar = (almacen: Almacen, eventType: string, ahora: Date) =>
+const fichar = (almacen: Almacen, eventType: string, ahora: Date, breakReason?: string) =>
   registrarFichajeDemo(almacen, {
     employeeId: 'e1',
     locationId: 'sede',
     eventType,
+    breakReason,
     zona: ZONA,
     ahora,
   });
@@ -77,6 +78,31 @@ describe('fichar en vivo en la demo', () => {
     );
     expect(manana).toMatchObject({ shift_id: 't1', flags: [] });
     expect(tarde).toMatchObject({ shift_id: 't1', flags: [] });
+  });
+
+  it('salir desde el refrigerio lo descuenta hasta la salida, como el servidor', () => {
+    const almacen = almacenCon([turno()]);
+    fichar(almacen, 'clock_in', H(9));
+    fichar(almacen, 'break_start', H(13), 'meal');
+    fichar(almacen, 'clock_out', H(14));
+    expect(jornadas(almacen)[0]).toMatchObject({
+      gross_minutes: 300,
+      unpaid_break_minutes: 60,
+      paid_break_minutes: 0,
+      net_minutes: 240,
+    });
+  });
+
+  it('salir desde una pausa pagada la cuenta como pagada y no la descuenta', () => {
+    const almacen = almacenCon([turno()]);
+    fichar(almacen, 'clock_in', H(9));
+    fichar(almacen, 'break_start', H(13), 'rest');
+    fichar(almacen, 'clock_out', H(13, 15));
+    expect(jornadas(almacen)[0]).toMatchObject({
+      paid_break_minutes: 15,
+      unpaid_break_minutes: 0,
+      net_minutes: 255,
+    });
   });
 
   it('sin turno es «sin turno»; un borrador nunca publicado no cuenta', () => {

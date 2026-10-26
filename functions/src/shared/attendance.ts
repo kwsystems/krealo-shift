@@ -372,10 +372,24 @@ export async function rebuildWorkSession(
   let pagados = 0;
   let noPagados = 0;
   let pausaAbierta: Record<string, unknown> | null = null;
+  /*
+   * LA SALIDA DESDE EL DESCANSO CIERRA EL DESCANSO (26-oct). El reloj deja «Marcar salida»
+   * estando en descanso y avisa «Al marcar salida cerraremos tu descanso», pero aquí solo
+   * contaban las pausas con `break_end`: entrada 09:00, refrigerio 13:00 y salida 14:00
+   * pagaba 300 min en vez de 240. Igual con la salida automática que cae en mitad de un
+   * refrigerio. La pausa abierta al salir dura hasta la salida, y se mide después de las
+   * correcciones (abajo), contra la salida que vale.
+   */
+  let pausaAlSalir: Record<string, unknown> | null = null;
 
   for (const evento of desdeUltimaEntrada) {
-    if (tipoEfectivo(evento) === 'break_start') pausaAbierta = evento;
-    if (tipoEfectivo(evento) === 'break_end' && pausaAbierta !== null) {
+    const tipo = tipoEfectivo(evento);
+    if (tipo === 'clock_out') {
+      pausaAlSalir = pausaAbierta;
+      break;
+    }
+    if (tipo === 'break_start') pausaAbierta = evento;
+    if (tipo === 'break_end' && pausaAbierta !== null) {
       const minutos = Math.floor(
         (new Date(String(evento.occurred_at)).getTime() -
           new Date(String(pausaAbierta.occurred_at)).getTime()) /
@@ -401,6 +415,16 @@ export async function rebuildWorkSession(
   });
   const startsAt = corregida.startsAt;
   const endsAt = corregida.endsAt;
+  if (pausaAlSalir !== null && endsAt !== null) {
+    const minutos = Math.max(
+      0,
+      Math.floor(
+        (new Date(endsAt).getTime() - new Date(String(pausaAlSalir.occurred_at)).getTime()) / 60000,
+      ),
+    );
+    if (pausaAlSalir.break_type === 'paid') pagados += minutos;
+    else noPagados += minutos;
+  }
   /**
    * LOS SEGUNDOS SE TRUNCAN, NO SE REDONDEAN, y esto se paga en dinero. SQL
    * redondeaba y TypeScript truncaba, asi que las dos mitades del producto discrepaban

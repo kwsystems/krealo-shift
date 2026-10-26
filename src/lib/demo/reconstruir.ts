@@ -143,6 +143,19 @@ function reconstruir(almacen: Almacen, employeeId: string, locationId: string, z
   let pausaAbierta: Evento | null = null;
   for (const evento of desdeEntrada) {
     const tipo = tipoEfectivo(evento);
+    /*
+     * LA SALIDA DESDE EL DESCANSO CIERRA EL DESCANSO (26-oct), como `rebuildWorkSession`: la
+     * pausa que sigue abierta al marcar salida cuenta hasta la salida, pagada o no según su
+     * tipo. Antes se pagaba entera como trabajada.
+     */
+    if (tipo === 'clock_out') {
+      if (pausaAbierta !== null) {
+        const mins = minutos(String(pausaAbierta.occurred_at), String(evento.occurred_at));
+        if (pausaAbierta.break_type === 'paid') pagados += mins;
+        else noPagados += mins;
+      }
+      break;
+    }
     if (tipo === 'break_start') pausaAbierta = evento;
     if (tipo === 'break_end' && pausaAbierta !== null) {
       const mins = minutos(String(pausaAbierta.occurred_at), String(evento.occurred_at));
