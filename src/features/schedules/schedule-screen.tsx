@@ -34,6 +34,7 @@ import { PegarHorarioSheet } from './pegar-horario-sheet';
 import { RegistrarCumplidoSheet } from './registrar-cumplido-sheet';
 import type { EmpleadoConocido } from './pegar-horario';
 import { ShiftFormSheet, emptyShiftValues, type ShiftFormValues } from './shift-form';
+import { turnoEnPie } from './turno-en-pie';
 import {
   addWeeks,
   currentWeekStart,
@@ -1059,20 +1060,27 @@ export function ScheduleScreen({
         />
       ) : null}
 
+      {/*
+       * EL «CAMBIADO» SE CANCELA, NO SE ELIMINA (26-oct): el equipo ya vio ese turno, así que
+       * la hoja dice lo mismo que hace `removeShift`, con el mismo criterio (`turnoEnPie`).
+       * Y avisa de que se cancela el turno entero, no solo el cambio sin publicar.
+       */}
       <ConfirmSheet
         visible={removingShift !== null}
         title={
-          removingShift?.status === 'published'
+          removingShift !== null && turnoEnPie(removingShift)
             ? t('schedule.cancelShift')
             : t('schedule.deleteShift')
         }
         body={
-          removingShift?.status === 'published'
-            ? t('schedule.cancelShiftHint')
-            : t('schedule.deleteShiftHint')
+          removingShift === null || !turnoEnPie(removingShift)
+            ? t('schedule.deleteShiftHint')
+            : removingShift.status === 'published'
+              ? t('schedule.cancelShiftHint')
+              : t('schedule.cancelChangedShiftHint')
         }
         confirmLabel={
-          removingShift?.status === 'published'
+          removingShift !== null && turnoEnPie(removingShift)
             ? t('schedule.cancelShift')
             : t('schedule.deleteShift')
         }
@@ -1081,13 +1089,15 @@ export function ScheduleScreen({
           const shift = removingShift;
           if (shift === null) return;
           mutations.remove.mutate(
-            { shiftId: shift.id, status: shift.status },
+            {
+              shiftId: shift.id,
+              status: shift.status,
+              publicationVersion: shift.publication_version,
+            },
             {
               onSuccess: () => {
                 setRemovingShift(null);
-                setFeedback(
-                  shift.status === 'published' ? t('schedule.cancelled') : t('schedule.deleted'),
-                );
+                setFeedback(turnoEnPie(shift) ? t('schedule.cancelled') : t('schedule.deleted'));
               },
             },
           );
@@ -1404,15 +1414,22 @@ export function ScheduleScreen({
                      * `unknown` en la interpolación es el precio de que traducir acepte
                      * cualquier valor; aquí se paga mirándolo.
                      */
-                    onSuccess: ({ turnos, descansos, omitidos }) => {
+                    /*
+                     * Y CADA OMITIDO CON SU MOTIVO (26-oct): `omitidos` cuenta también los de
+                     * quien ya no está en el equipo (`deBaja`), y decirles «ya tenía turno o
+                     * descanso a esa hora» sería mentir sobre por qué no se copiaron.
+                     */
+                    onSuccess: ({ turnos, descansos, omitidos, deBaja }) => {
                       setCopyOpen(false);
+                      const pisados = omitidos - deBaja;
                       setFeedback(
                         [
                           t('schedule.copied', { count: turnos }),
                           descansos === 0
                             ? null
                             : t('schedule.copiedRestDays', { count: descansos }),
-                          omitidos === 0 ? null : t('schedule.copiedSkipped', { count: omitidos }),
+                          pisados === 0 ? null : t('schedule.copiedSkipped', { count: pisados }),
+                          deBaja === 0 ? null : t('schedule.copiedSkippedLeft', { count: deBaja }),
                         ]
                           .filter((parte) => parte !== null)
                           .join(' '),

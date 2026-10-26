@@ -211,7 +211,11 @@ export function useScheduleMutations(params: {
   });
 
   const remove = useMutation({
-    mutationFn: (variables: { shiftId: string; status: string }) => removeShift(variables),
+    mutationFn: (variables: {
+      shiftId: string;
+      status: string;
+      publicationVersion?: number | null;
+    }) => removeShift(variables),
     onSuccess: invalidate,
   });
 
