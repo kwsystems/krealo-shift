@@ -177,8 +177,18 @@ async function llamar(nombre: string, argumentos: Record<string, unknown>): Prom
 
 /** Lo que se puede hacer con un caso de «Por resolver». */
 export type ArregloDeCaso =
-  | { tipo: 'debe'; sessionId: string; minutos: number; nota: string | null }
-  | { tipo: 'justificado'; sessionId: string; nota: string | null }
+  /*
+   * `faltaban`: cuánto le faltaba al decidir (26-oct). El servidor lo apunta en la decisión y
+   * con eso «Por resolver» sabe si la jornada cambió después: ver `deuda_que_no_cuadra`.
+   */
+  | {
+      tipo: 'debe';
+      sessionId: string;
+      minutos: number;
+      faltaban?: number;
+      nota: string | null;
+    }
+  | { tipo: 'justificado'; sessionId: string; faltaban?: number; nota: string | null }
   | { tipo: 'sin_refrigerio_ok'; sessionId: string }
   /** La salida que puso el cierre automático está bien (5-oct). */
   | { tipo: 'salida_automatica_ok'; sessionId: string }
@@ -209,6 +219,7 @@ export async function arreglarCaso(arreglo: ArregloDeCaso): Promise<void> {
         p_case: 'faltan_horas',
         p_decision: 'owes',
         p_minutes: arreglo.minutos,
+        p_missing_minutes: arreglo.faltaban ?? null,
         p_note: arreglo.nota,
       });
       return;
@@ -217,6 +228,7 @@ export async function arreglarCaso(arreglo: ArregloDeCaso): Promise<void> {
         p_work_session_id: arreglo.sessionId,
         p_case: 'faltan_horas',
         p_decision: 'justified',
+        p_missing_minutes: arreglo.faltaban ?? null,
         p_note: arreglo.nota,
       });
       return;

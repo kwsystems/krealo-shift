@@ -288,6 +288,44 @@ describe('trabajó menos que su turno', () => {
     expect(debe).toMatchObject({ status: 'compensated', settled_by: GERENTE });
   });
 
+  /*
+   * «LE DEBE» PARCIAL (26-oct): la decisión apunta cuánto le faltaba, para que Horas no la
+   * dé por «deuda que no cuadra» solo porque se le perdonó una parte.
+   */
+  it('«le debe 1 h» de 2 apunta lo que faltaba; un valor raro no se apunta', async () => {
+    await fichar('clock_in', H(10));
+    await fichar('clock_out', H(17));
+    const { id } = await jornada();
+
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'faltan_horas',
+      p_decision: 'owes',
+      p_minutes: 60,
+      p_missing_minutes: 120,
+    });
+    expect((await db.collection(COLLECTIONS.owedHours).doc(String(id)).get()).data()).toMatchObject(
+      {
+        minutes: 60,
+        status: 'pending',
+      },
+    );
+    expect(await jornada()).toMatchObject({
+      casos_decision: { faltan_horas: { decision: 'owes', faltaban: 120 } },
+    });
+
+    await correr(resolveSessionCase, {
+      p_work_session_id: id,
+      p_case: 'faltan_horas',
+      p_decision: 'justified',
+      p_missing_minutes: -5,
+    });
+    const decision = ((await jornada()).casos_decision as Record<string, Record<string, unknown>>)
+      .faltan_horas;
+    expect(decision).toMatchObject({ decision: 'justified' });
+    expect(decision).not.toHaveProperty('faltaban');
+  });
+
   it('«está justificado» no deja horas debidas', async () => {
     await fichar('clock_in', H(9, 52));
     await fichar('clock_out', H(12, 4));

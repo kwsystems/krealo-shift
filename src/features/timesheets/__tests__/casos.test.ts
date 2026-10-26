@@ -1,7 +1,8 @@
 import type { ShiftRow } from '@/features/schedules/api';
 
 import type { WorkSession } from '../api';
-import { casosPorResolver } from '../casos';
+import { casosPorResolver, type CasoPorResolver } from '../casos';
+import { diasConCasoAbierto } from '../casos-abiertos';
 
 /**
  * «Por resolver» en Horas (Andree, 1-oct). Los dos casos de sus capturas —la que se fue
@@ -554,5 +555,104 @@ describe('una deuda que ya no cuadra', () => {
       120,
     );
     expect(lista).toEqual([]);
+  });
+});
+
+/*
+ * «LE DEBE» PARCIAL (26-oct): le faltaban 2 h y se apuntó «le debe 1 h». La deuda no cuadra
+ * con lo que falta, pero la jornada no cambió: la decisión vale.
+ */
+describe('una deuda parcial no es una deuda que no cuadra', () => {
+  const salioALas17 = (faltaban?: number) =>
+    jornada({
+      ends_at: H(17),
+      gross_minutes: 420,
+      net_minutes: 360,
+      casos_resueltos: ['faltan_horas'],
+      casos_decision:
+        faltaban === undefined
+          ? undefined
+          : { faltan_horas: { decision: 'owes', nota: null, minutos: null, faltaban } },
+    });
+  const conDeuda = (sesion: WorkSession, minutos: number) =>
+    casosPorResolver({
+      sesiones: [sesion],
+      turnos: [TURNO],
+      ahoraISO: H(23),
+      timezone: TZ,
+      debidas: [
+        { id: 's1', work_session_id: 's1', minutes: minutos, note: null, status: 'pending' },
+      ],
+    });
+
+  it('faltaban 2 h, debe 1 h y siguen faltando 2 h: nada', () => {
+    expect(conDeuda(salioALas17(120), 60)).toEqual([]);
+  });
+
+  it('si después se corrige la jornada, sí: lo que falta ya no es lo que faltaba', () => {
+    const corregida = { ...salioALas17(120), ends_at: H(19), gross_minutes: 540, net_minutes: 480 };
+    expect(conDeuda(corregida, 60)).toEqual([
+      expect.objectContaining({ tipo: 'deuda_que_no_cuadra', faltaAhora: 0 }),
+    ]);
+  });
+
+  it('una decisión de antes, sin lo que faltaba, se compara con la deuda como siempre', () => {
+    expect(conDeuda(salioALas17(), 60)).toEqual([
+      expect.objectContaining({ tipo: 'deuda_que_no_cuadra', faltaAhora: 120 }),
+    ]);
+  });
+});
+
+/*
+ * LA EXTRA QUE YA NO CUADRA (26-oct): se decidió la extra del día y después cambió la jornada.
+ */
+describe('una extra que ya no cuadra', () => {
+  const turnoLargo = { ...TURNO, ends_at: H(21) } as ShiftRow;
+  const CLAVE = 'e1_2026-09-29';
+  const dia = (sesion: WorkSession, aprobada: number, alDecidir?: number): CasoPorResolver[] =>
+    casosPorResolver({
+      sesiones: [sesion],
+      turnos: [turnoLargo],
+      ahoraISO: H(23, 30),
+      timezone: TZ,
+      umbralExtra: 60,
+      aprobadas: new Map([[CLAVE, aprobada]]),
+      deMasAlDecidir: alDecidir === undefined ? undefined : new Map([[CLAVE, alDecidir]]),
+    });
+  // De 10:00 a 21:00 con 1 h de refrigerio: 10 h netas, justo lo planificado.
+  const justa = jornada({ ends_at: H(21), gross_minutes: 660, net_minutes: 600 });
+  // De 10:00 a 23:00 con 1 h de refrigerio: 2 h de más.
+  const conDosDeMas = jornada({ ends_at: H(23), gross_minutes: 780, net_minutes: 720 });
+
+  it('2 h aprobadas y la jornada corregida ya no tiene nada de más: se dice', () => {
+    expect(dia(justa, 120, 120)).toEqual([
+      expect.objectContaining({ tipo: 'extra_que_no_cuadra', aprobada: 120, deMasAhora: 0 }),
+    ]);
+  });
+
+  it('una aprobación de antes, sin lo de más al decidir, se compara con lo aprobado', () => {
+    expect(dia(justa, 120)).toEqual([
+      expect.objectContaining({ tipo: 'extra_que_no_cuadra', deMasAhora: 0 }),
+    ]);
+    expect(dia(conDosDeMas, 120)).toEqual([]);
+  });
+
+  it('aprobar menos de lo que vio es una decisión: si la jornada no cambió, nada', () => {
+    expect(dia(conDosDeMas, 60, 120)).toEqual([]);
+  });
+
+  it('«no es extra» y después trabajó bastante más: se vuelve a preguntar', () => {
+    expect(dia(conDosDeMas, 0, 60)).toEqual([
+      expect.objectContaining({ tipo: 'extra_que_no_cuadra', aprobada: 0, deMasAhora: 120 }),
+    ]);
+  });
+
+  it('«no es extra» y trabajó menos, o un «no es extra» de antes: nada', () => {
+    expect(dia(justa, 0, 120)).toEqual([]);
+    expect(dia(conDosDeMas, 0)).toEqual([]);
+  });
+
+  it('cuenta para «Necesita revisión» como cualquier caso', () => {
+    expect(diasConCasoAbierto(dia(justa, 120, 120))).toEqual(new Set([CLAVE]));
   });
 });

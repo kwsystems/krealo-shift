@@ -38,6 +38,10 @@ import { turnoEnPie } from '@/features/schedules/turno-en-pie';
  *     MISMA situación decidida en dos pantallas: «Visto» en Horario y la extra en Horas. Ahora
  *     es un caso de aquí: «Aprobar como extra» o «No es extra»; y si no trabajó de más, «Está
  *     bien así». Decidida la extra de ese día —aprobada o 0—, el caso se va.
+ *   - EXTRA QUE NO CUADRA (26-oct): la extra de un día se decidió y después la jornada cambió
+ *     —se corrigió la salida, se añadió un fichaje—, y lo trabajado de más ya no es lo que se
+ *     decidió. «Ajustar la extra a N» o «Quitar la extra»; si se había dicho «no es extra» y
+ *     ahora trabajó bastante más, «Revisar» o «Sigue sin ser extra».
  *   - SALIDA DUDOSA: la salida quedó en una hora que todavía no llegó, o la jornada pasa de
  *     dieciséis horas. Casi siempre es el día equivocado —una salida «de hoy a las 21:00»
  *     escrita pasada la medianoche—, y mientras siga así la jornada está viva en todas las
@@ -139,6 +143,25 @@ export type CasoPorResolver =
       faltaAhora: number;
     }
   | {
+      /*
+       * LA EXTRA QUE YA NO CUADRA (26-oct), el mismo arreglo que `deuda_que_no_cuadra` para el
+       * otro lado del día. Se aprobaron 2 h de extra y después se corrigió la jornada: ya no
+       * trabajó nada de más, y Horas, Reportes y el CSV seguían pagando 2 h de extra sin que
+       * nada avisara. Y al revés: un «no es extra» (0) no se volvía a mirar aunque la jornada
+       * creciera después.
+       */
+      tipo: 'extra_que_no_cuadra';
+      id: string;
+      /** La última jornada del día, como en `fuera_de_turno`. */
+      sesion: WorkSession;
+      turno: ShiftRow | null;
+      dia: DateKey;
+      /** La extra decidida ese día: 0 es «no es extra». */
+      aprobada: number;
+      /** Lo que trabajó de más ahora, sobre lo planificado (todo, sin turno). */
+      deMasAhora: number;
+    }
+  | {
       tipo: 'salida_dudosa';
       id: string;
       sesion: WorkSession;
@@ -168,6 +191,12 @@ export function casosPorResolver(params: {
    * Sin él no se buscan los casos «fuera de turno»: así los llama solo quien sabe decidirlos.
    */
   umbralExtra?: number;
+  /**
+   * Lo que había trabajado de más cada día cuando se decidió su extra (`deMasAlDecidirPorDia`,
+   * 26-oct): para ver si la decisión ya no cuadra. Un día que no lo apuntó se compara con lo
+   * aprobado.
+   */
+  deMasAlDecidir?: ReadonlyMap<string, number>;
   /** Las horas debidas PENDIENTES de la sede: para ver si alguna ya no cuadra (8-oct). */
   debidas?: readonly {
     id: string;
@@ -378,7 +407,23 @@ export function casosPorResolver(params: {
         idsDelTurno.has(fila.work_session_id),
     );
     const faltaAhora = faltaDeVerdad ? faltan : 0;
-    if (deuda !== undefined && Math.abs(deuda.minutes - faltaAhora) >= MINUTOS_MINIMOS_DE_UN_CASO) {
+    /*
+     * «LE DEBE» PARCIAL NO ES UNA DEUDA QUE NO CUADRA (26-oct). Le faltaban 2 h, quien gestiona
+     * apuntó «le debe 1 h» —le perdonó la otra— y al instante salía «la deuda ya no cuadra»,
+     * porque se comparaba la deuda (1 h) con lo que falta (2 h). Lo que hay que comparar es lo
+     * que falta AHORA con lo que faltaba AL DECIDIR, que el servidor apunta en la decisión
+     * (`casos_decision.faltan_horas.faltaban`): si la jornada no cambió, la decisión vale, sea
+     * la deuda que sea. Las decisiones de antes no lo traen y se comparan con la deuda.
+     */
+    const faltabanAlDecidir =
+      deuda === undefined
+        ? null
+        : (ordenadas.find((sesion) => sesion.id === deuda.work_session_id)?.casos_decision
+            ?.faltan_horas?.faltaban ?? null);
+    if (
+      deuda !== undefined &&
+      Math.abs((faltabanAlDecidir ?? deuda.minutes) - faltaAhora) >= MINUTOS_MINIMOS_DE_UN_CASO
+    ) {
       casos.push({
         tipo: 'deuda_que_no_cuadra',
         id: `${ultima.id}:deuda`,
@@ -438,6 +483,7 @@ export function casosPorResolver(params: {
     fuera_de_turno: 4,
     faltan_horas: 5,
     deuda_que_no_cuadra: 6,
+    extra_que_no_cuadra: 7,
   } as const;
   return unaDecision.sort(
     (a, b) => orden[a.tipo] - orden[b.tipo] || a.sesion.starts_at.localeCompare(b.sesion.starts_at),
@@ -477,7 +523,8 @@ function salidaDelDiaDeEntrada(
 /**
  * LOS DÍAS FUERA DE TURNO (6-oct), por persona y día —la extra se aprueba por día—. Solo días
  * cerrados: quien sigue dentro todavía no ha trabajado «de más». Un día con la extra decidida
- * (aprobada o «no es extra», que es 0) ya no pregunta nada.
+ * (aprobada o «no es extra», que es 0) ya no pregunta nada… mientras la decisión cuadre con lo
+ * que trabajó (26-oct, `extra_que_no_cuadra`).
  */
 function fueraDeTurno(
   params: {
@@ -485,10 +532,11 @@ function fueraDeTurno(
     turnos: readonly ShiftRow[];
     timezone: string;
     aprobadas?: ReadonlyMap<string, number>;
+    deMasAlDecidir?: ReadonlyMap<string, number>;
   },
   turnoPorId: ReadonlyMap<string, ShiftRow>,
   umbral: number,
-): Extract<CasoPorResolver, { tipo: 'fuera_de_turno' }>[] {
+): Extract<CasoPorResolver, { tipo: 'fuera_de_turno' | 'extra_que_no_cuadra' }>[] {
   const porDia = new Map<string, { dia: DateKey; sesiones: WorkSession[] }>();
   for (const sesion of params.sesiones) {
     const dia = dateKeyOf(sesion.starts_at, params.timezone);
@@ -498,10 +546,9 @@ function fueraDeTurno(
     porDia.set(clave, grupo);
   }
 
-  const casos: Extract<CasoPorResolver, { tipo: 'fuera_de_turno' }>[] = [];
+  const casos: Extract<CasoPorResolver, { tipo: 'fuera_de_turno' | 'extra_que_no_cuadra' }>[] = [];
   for (const [clave, { dia, sesiones }] of porDia) {
     if (sesiones.some((sesion) => sesion.ends_at === null)) continue;
-    if (params.aprobadas?.has(clave)) continue;
     const ordenadas = [...sesiones].sort((a, b) => a.starts_at.localeCompare(b.starts_at));
     const primera = ordenadas[0]!;
     const ultima = ordenadas[ordenadas.length - 1]!;
@@ -532,6 +579,39 @@ function fueraDeTurno(
       0,
     );
     const deMas = Math.max(0, trabajado - planificado);
+
+    /*
+     * LA EXTRA DECIDIDA, SI TODAVÍA CUADRA (26-oct). Copia el diseño de `deuda_que_no_cuadra`:
+     * se compara lo que trabajó de más AHORA con lo que había trabajado de más AL DECIDIR
+     * (`de_mas_al_decidir` de la aprobación), y no con lo aprobado, porque aprobar menos de lo
+     * que se vio —2 h de 2 h 30— es una decisión, no un error, y avisaría al instante. Las
+     * aprobaciones de antes no lo apuntaron: con ellas se compara lo aprobado.
+     *
+     * Con «no es extra» (0) solo avisa si ahora trabajó MÁS: que trabaje menos no cambia que
+     * no sea extra. Y un 0 de antes, sin apunte, no se mira: no se sabe con cuánto se decidió,
+     * y sacar de nuevo todos los «no es extra» del pasado llenaría la lista de ruido.
+     */
+    if (params.aprobadas?.has(clave)) {
+      const aprobada = params.aprobadas.get(clave) ?? 0;
+      const alDecidir = params.deMasAlDecidir?.get(clave) ?? (aprobada > 0 ? aprobada : null);
+      const noCuadra =
+        alDecidir !== null &&
+        (aprobada > 0
+          ? Math.abs(deMas - alDecidir) >= MINUTOS_MINIMOS_DE_UN_CASO
+          : deMas - alDecidir >= MINUTOS_MINIMOS_DE_UN_CASO);
+      if (noCuadra) {
+        casos.push({
+          tipo: 'extra_que_no_cuadra',
+          id: `${ultima.id}:extra`,
+          sesion: ultima,
+          turno: turnosDelDia[0] ?? null,
+          dia,
+          aprobada,
+          deMasAhora: deMas,
+        });
+      }
+      continue;
+    }
     const posibleExtra = deMas > 0 && deMas >= Math.max(1, umbral);
 
     const conMarcas = ordenadas.filter((sesion) =>

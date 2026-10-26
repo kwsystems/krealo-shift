@@ -2,6 +2,7 @@ import type { Almacen, Fila } from './postgrest';
 import { DEFAULT_PAID_REASONS, type BreakReason } from '@/domain/break-reason';
 import { marcasFueraDelTurno, MINUTOS_FUERA_DEL_TURNO_POR_DEFECTO } from '@/domain/fuera-del-turno';
 import { cubreElTurno } from '@/features/timesheets/faltas';
+import { turnoEnPie } from '@/features/schedules/turno-en-pie';
 
 /**
  * Los datos de la demostración.
@@ -1122,6 +1123,47 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
     ),
     ...faltasSembradas,
   ];
+
+  /*
+   * LO DE MÁS AL DECIDIR (26-oct): cada extra sembrada apunta lo que esa persona trabajó de más
+   * sobre sus turnos de ese día, como lo guarda la app (`de_mas_al_decidir`, ver
+   * `extra_que_no_cuadra` en `features/timesheets/casos.ts`). Sin él, «Por resolver» la
+   * compararía con lo aprobado —que aquí se calcula sobre 8 h y no sobre su turno— y la
+   * demostración nacería con extras «que no cuadran» que nadie provocó.
+   */
+  const diaLocal = (iso: unknown) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: TZ,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(String(iso)));
+  for (const extra of horasExtraAprobadas) {
+    const delDia = (fila: Fila) =>
+      fila.employee_id === extra.employee_id && fila.location_id === extra.location_id;
+    const netos = resumenDiario
+      .filter((dia) => delDia(dia) && dia.work_date === extra.work_date)
+      .reduce((suma, dia) => suma + Number(dia.net_minutes), 0);
+    const planificado = turnosCoherentes
+      .filter(
+        (turno) =>
+          delDia(turno) &&
+          turnoEnPie(turno as { status: string; publication_version?: number | null }) &&
+          diaLocal(turno.starts_at) === extra.work_date,
+      )
+      .reduce(
+        (suma, turno) =>
+          suma +
+          Math.max(
+            0,
+            Math.floor(
+              (Date.parse(String(turno.ends_at)) - Date.parse(String(turno.starts_at))) / 60_000,
+            ) - Math.max(0, Number(turno.planned_unpaid_break_minutes ?? 0)),
+          ),
+        0,
+      );
+    extra.de_mas_al_decidir = Math.max(0, netos - planificado);
+  }
 
   almacen.set('employees', empleados);
   almacen.set('overtime_approvals', horasExtraAprobadas);

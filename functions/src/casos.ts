@@ -89,6 +89,26 @@ export const resolveSessionCase = onCall(async (request) => {
       ? String(request.data.p_note).trim().slice(0, 300)
       : null;
 
+  /*
+   * CUÁNTO LE FALTABA AL DECIDIR (26-oct), en `faltan_horas`. Con 2 h que faltaban, «le debe
+   * 1 h» —se le perdona la otra— hacía saltar al instante «la deuda ya no cuadra», porque Horas
+   * comparaba la deuda con lo que falta. Ahora compara lo que falta con esto, apuntado en la
+   * decisión. Lo manda Horas, que es quien mide la falta (`src/features/timesheets/casos.ts`,
+   * con varias jornadas por turno y el refrigerio de corrido): repetir aquí esa cuenta sería
+   * una segunda copia que acabaría diciendo otra cosa. Es solo la referencia del aviso, no
+   * horas que se cobren; sin él, o con un valor raro, no se apunta y Horas hace lo de antes.
+   */
+  const faltabanCrudo = Number(request.data?.p_missing_minutes);
+  const faltaban =
+    caso === 'faltan_horas' &&
+    request.data?.p_missing_minutes !== null &&
+    request.data?.p_missing_minutes !== undefined &&
+    Number.isInteger(faltabanCrudo) &&
+    faltabanCrudo >= 0 &&
+    faltabanCrudo <= MINUTOS_MAXIMOS_DEBIDOS
+      ? faltabanCrudo
+      : null;
+
   const { ref, sesion, organizationId, locationId } = await jornadaGestionable(uid, sessionId);
   if (sesion.ends_at === null || sesion.ends_at === undefined) {
     throw new HttpsError(
@@ -134,7 +154,13 @@ export const resolveSessionCase = onCall(async (request) => {
 
   lote.update(ref, {
     casos_resueltos: FieldValue.arrayUnion(caso),
-    [`casos_decision.${caso}`]: { decision, por: uid, at: ahora, nota },
+    [`casos_decision.${caso}`]: {
+      decision,
+      por: uid,
+      at: ahora,
+      nota,
+      ...(faltaban === null ? {} : { faltaban }),
+    },
     updated_at: ahora,
   });
   await lote.commit();
@@ -145,7 +171,7 @@ export const resolveSessionCase = onCall(async (request) => {
     action: 'session_case_resolved',
     entityType: 'work_session',
     entityId: sessionId,
-    after: { caso, decision, minutos },
+    after: { caso, decision, minutos, faltaban },
   });
   return { caso, decision, minutos };
 });

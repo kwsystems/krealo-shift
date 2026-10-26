@@ -31,6 +31,7 @@ import {
 import {
   aprobadasPorDia,
   claveDelDia,
+  deMasAlDecidirPorDia,
   esPosibleHoraExtra,
   minutosDeMas,
   planificadoPorDia,
@@ -358,6 +359,10 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   const horasExtra = useHorasExtra({ organizationId, locationId: scope.locationId, from, to });
   const guardarHoraExtra = useGuardarHoraExtra({ organizationId, locationId: scope.locationId });
   const aprobadas = useMemo(() => aprobadasPorDia(horasExtra.data ?? []), [horasExtra.data]);
+  const deMasAlDecidir = useMemo(
+    () => deMasAlDecidirPorDia(horasExtra.data ?? []),
+    [horasExtra.data],
+  );
   const planificado = useMemo(
     () => planificadoPorDia(turnosDeLaSemana.data ?? [], scope.timezone),
     [turnosDeLaSemana.data, scope.timezone],
@@ -698,6 +703,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     timeFormat={scope.timeFormat}
                     language={language}
                     aprobadas={aprobadas}
+                    deMasAlDecidir={deMasAlDecidir}
                     onVerJornada={setSelected}
                   />
 
@@ -1112,12 +1118,21 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                 saving={guardarHoraExtra.isPending}
                 failed={guardarHoraExtra.isError}
                 onGuardar={(minutos) => {
-                  const guardar = () =>
+                  const deMas = minutosDeMas(
+                    netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0,
+                    planificado.get(claveSeleccionada),
+                  );
+                  /*
+                   * Con lo que trabajó de más AL DECIDIR (26-oct), como en Por resolver: si la
+                   * jornada cambia después, la decisión que ya no cuadra sale allí.
+                   */
+                  const guardar = (deMasAlGuardar: number) =>
                     guardarHoraExtra.mutate(
                       {
                         employeeId: selected.employee_id,
                         workDate: dateKeyOf(selected.starts_at, scope.timezone),
                         minutes: minutos,
+                        deMas: deMasAlGuardar,
                       },
                       {
                         onSuccess: () => {
@@ -1138,19 +1153,16 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                    */
                   const pendiente = refrigerioPendiente;
                   if (minutos > 0 || pendiente === undefined) {
-                    guardar();
+                    guardar(deMas);
                     return;
                   }
-                  const deMas = minutosDeMas(
-                    netosPorDia.get(claveSeleccionada) ?? selected.net_minutes ?? 0,
-                    planificado.get(claveSeleccionada),
-                  );
                   decidirRefrigerio.mutate(
                     { tipo: 'descontar_refrigerio', sessionId: pendiente.sesion.id },
                     {
                       onSuccess: () => {
                         if (deMas > pendiente.refrigerio) {
-                          guardar();
+                          // Lo de más que queda con el refrigerio ya descontado.
+                          guardar(deMas - pendiente.refrigerio);
                           return;
                         }
                         cerrarDetalle();
