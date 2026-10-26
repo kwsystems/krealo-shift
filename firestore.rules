@@ -169,8 +169,48 @@ service cloud.firestore {
       // Su propia ficha la lee aunque esté desactivada: es lo que le dice por qué no ve nada.
       allow read: if isStaff(resource.data.organization_id)
         || isSelfAccount(resource.data.organization_id, employeeId);
-      allow create: if isStaff(request.resource.data.organization_id);
-      allow update: if isStaff(resource.data.organization_id);
+      /*
+       * EL CORREO DE UNA FICHA QUE YA EXISTE SOLO LO CAMBIA EL DUEÑO O UN ADMINISTRADOR
+       * (26-oct). Ese correo es la llave de la cuenta: `ligarFichaDeEmpleado`
+       * (functions/src/ficha-de-empleado.ts) liga a la ficha ACTIVA cuyo `email` coincide con
+       * el de quien entra, y desde ahí esa cuenta lee lo de la persona, sueldo incluido
+       * (`employee_pay`). Con `isStaff` a secas, un gerente de sede podía poner un Gmail suyo
+       * en la ficha de alguien que aún no había entrado, entrar con él y leer un sueldo que a
+       * un gerente no se le enseña nunca.
+       *
+       * Lo que liga una cuenta a una ficha es `email` (la búsqueda) más `status` y
+       * `organization_id` (qué fichas cuentan). `organization_id` no cambia NUNCA, para
+       * nadie: una ficha no se muda de empresa. `user_id` lo escribe el alta en `null` y no lo
+       * lee el servidor para ligar, pero dice «esta cuenta es esta persona»: queda con el
+       * correo, solo para administradores. El resto —nombre, número, estado, último día— lo
+       * sigue editando quien gestiona, que es lo que hace Equipo.
+       *
+       * `diff().affectedKeys()` y no comparar el valor enviado: el panel manda el correo sin
+       * tocar en cada guardado y eso no es un cambio. Desde hoy, para un gerente ni lo manda
+       * (`updateEmployee` con `email: undefined`): el campo le sale de solo lectura.
+       */
+      allow update: if isStaff(resource.data.organization_id)
+        && request.resource.data.organization_id == resource.data.organization_id
+        && (isAdmin(resource.data.organization_id)
+          || !request.resource.data.diff(resource.data).affectedKeys()
+            .hasAny(['email', 'user_id', 'id']));
+      /*
+       * DAR DE ALTA CON CORREO SÍ LO PUEDE UN GERENTE (26-oct), y la diferencia con cambiarlo
+       * es deliberada. Una ficha nueva no tiene historia: ni sueldo, ni horas, ni nada que la
+       * cuenta ligada pudiera leer que no haya puesto el propio gerente. Es como se invita a un
+       * vendedor, y quitárselo a los gerentes rompería el alta de cada sede. Lo que se cierra
+       * son las dos formas de que una ficha «nueva» no lo sea:
+       *   - `user_id` nace en `null`: la cuenta la liga el servidor, no quien da de alta;
+       *   - el id de una ficha BORRADA no se reutiliza si su sueldo sigue ahí. `deleteEmployee`
+       *     no borra `employee_pay/{id}`, y recrear `employees/{ese id}` con un correo propio
+       *     abría ese sueldo viejo a la cuenta nueva. `exists()` y no `get()`: en una escritura
+       *     es una lectura sola y no hay lista que pagar (ver `membershipDoc`).
+       * Lo que queda, y se acepta: el dueño ve el correo en la ficha antes de ponerle sueldo.
+       */
+      allow create: if isAdmin(request.resource.data.organization_id)
+        || (isStaff(request.resource.data.organization_id)
+          && request.resource.data.get('user_id', null) == null
+          && !exists(/databases/$(database)/documents/employee_pay/$(employeeId)));
       allow delete: if false;    // un empleado con fichajes no se borra: pasa a inactive
     }
 
@@ -192,10 +232,37 @@ service cloud.firestore {
       // los turnos de todo el equipo aunque su pantalla solo enseñara los suyos.
       allow read: if isStaff(resource.data.organization_id)
         || isSelfEmployee(resource.data.organization_id, resource.data.employee_id);
-      allow create, update: if managesLocation(
-        request.resource.data.organization_id,
-        request.resource.data.location_id
-      );
+      /*
+       * EL ALTA, COHERENTE CON SU ID Y CON SU EMPRESA (26-oct). El id es `{empleado}_{sede}`
+       * (`src/lib/firebase/ids-compuestos.ts`), y desde hoy la regla lo exige: es lo que deja a
+       * `overtime_approvals` comprobar con un solo `get()` que la persona trabaja en la sede.
+       * Y la persona y la sede tienen que ser de la misma empresa que la fila: antes un gerente
+       * podía asignar a su sede a alguien de otra empresa, o un administrador una sede ajena.
+       */
+      allow create: if managesLocation(
+          request.resource.data.organization_id,
+          request.resource.data.location_id
+        )
+        && assignmentId == request.resource.data.employee_id + '_' + request.resource.data.location_id
+        && get(/databases/$(database)/documents/employees/$(request.resource.data.employee_id))
+          .data.organization_id == request.resource.data.organization_id
+        && get(/databases/$(database)/documents/locations/$(request.resource.data.location_id))
+          .data.organization_id == request.resource.data.organization_id;
+      /*
+       * Y AL REESCRIBIRLA NO SE MUDA (26-oct). La regla miraba solo el documento NUEVO: un
+       * gerente de la sede X reescribía `E_Y` con `location_id: X` y sacaba a E del reloj de Y,
+       * una sede que no gestiona. Ahora manda la fila que YA existe y persona, sede y empresa no
+       * cambian: una asignación a otra sede es otra fila, con su id. La app no reescribe
+       * ninguna —`replaceAssignments` solo da de alta las nuevas y borra las que sobran—, pero
+       * `insert` es un `set` y sobre un id que ya existe cuenta como update.
+       */
+      allow update: if managesLocation(
+          resource.data.organization_id,
+          resource.data.location_id
+        )
+        && request.resource.data.organization_id == resource.data.organization_id
+        && request.resource.data.location_id == resource.data.location_id
+        && request.resource.data.employee_id == resource.data.employee_id;
       allow delete: if managesLocation(
         resource.data.organization_id,
         resource.data.location_id
@@ -260,7 +327,23 @@ service cloud.firestore {
         request.resource.data.organization_id,
         request.resource.data.location_id
       );
-      allow update, delete: if managesLocation(
+      /*
+       * EDITAR UN TURNO MIRA LAS DOS SEDES, LA DE ANTES Y LA DE DESPUÉS (26-oct). Miraba solo la
+       * de antes: un gerente de la sede X podía mandar un turno suyo a la sede Y, que no
+       * gestiona, y aparecía en el Horario y en el reloj de Y. Quien gestiona las dos sí puede
+       * mudarlo. La persona sí cambia —«Editar turno» deja elegir a otra, y eso lo deja en
+       * borrador—, la empresa no.
+       */
+      allow update: if managesLocation(
+          resource.data.organization_id,
+          resource.data.location_id
+        )
+        && managesLocation(
+          request.resource.data.organization_id,
+          request.resource.data.location_id
+        )
+        && request.resource.data.organization_id == resource.data.organization_id;
+      allow delete: if managesLocation(
         resource.data.organization_id,
         resource.data.location_id
       );
@@ -303,7 +386,22 @@ service cloud.firestore {
         request.resource.data.organization_id,
         request.resource.data.location_id
       );
-      allow update, delete: if managesLocation(
+      /*
+       * Y REESCRIBIRLO NO LO MUDA (26-oct). Igual que los turnos, miraba solo el documento de
+       * antes: un gerente de X podía convertir un descanso suyo en el de otra persona en la
+       * sede Y. Aquí no hace falta mirar las dos sedes: el id ES sede_persona_día, y lo único
+       * que la app reescribe es lo mismo pegado otra vez (`setRestDays`, un `upsert` sobre ese
+       * id). Así que nada de lo que forma el id cambia en un update.
+       */
+      allow update: if managesLocation(
+          resource.data.organization_id,
+          resource.data.location_id
+        )
+        && request.resource.data.organization_id == resource.data.organization_id
+        && request.resource.data.location_id == resource.data.location_id
+        && request.resource.data.employee_id == resource.data.employee_id
+        && request.resource.data.date_key == resource.data.date_key;
+      allow delete: if managesLocation(
         resource.data.organization_id,
         resource.data.location_id
       );
@@ -326,7 +424,27 @@ service cloud.firestore {
         && d.minutes >= 0
         && d.minutes <= 1440
         && d.work_date is string
-        && id == d.location_id + '_' + d.employee_id + '_' + d.work_date;
+        && id == d.location_id + '_' + d.employee_id + '_' + d.work_date
+        && trabajaEnLaSede(d.organization_id, d.employee_id, d.location_id);
+    }
+
+    /*
+     * Y LA PERSONA TRABAJA EN ESA SEDE (26-oct). Solo se miraba que quien aprueba gestionara la
+     * sede, nunca que la persona fuera de ella: un gerente de X podía aprobarle horas extra en
+     * X a alguien de la sede Y —o de otra empresa— y eso suma a su sueldo. Es lo mismo que el
+     * servidor ya exige al corregir fichajes (`exigirQueSeaDeLaSede`, 4-oct), con la misma
+     * consecuencia aceptada: a quien se le quitó la sede no se le aprueban extras pasados ahí
+     * hasta volver a asignársela.
+     *
+     * La asignación se busca por su id determinista `{empleado}_{sede}` —la app la crea así
+     * desde el 22-sep (`ids-compuestos.ts`) y la regla de altas lo exige desde hoy—, y su
+     * `organization_id` tiene que ser el de la aprobación. `exists()` antes del `get()` para
+     * que una que no existe deniegue sin depender de cómo trata el motor un `null`; en una
+     * escritura de un solo documento las dos lecturas no cuestan nada.
+     */
+    function trabajaEnLaSede(orgId, employeeId, locationId) {
+      let ruta = /databases/$(database)/documents/employee_location_assignments/$(employeeId + '_' + locationId);
+      return exists(ruta) && get(ruta).data.organization_id == orgId;
     }
 
     match /overtime_approvals/{id} {

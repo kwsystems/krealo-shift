@@ -735,6 +735,7 @@ export function TeamScreen() {
                 .map((m) => [(m.email ?? '').trim().toLowerCase(), m.full_name] as const),
             )
           }
+          correoSoloLectura={form.mode === 'edit' && !scope.isAdmin}
           onSubmit={submitForm}
           onClose={() => {
             // Igual con el formulario: «No se pudo guardar» no espera al siguiente (8-oct).
