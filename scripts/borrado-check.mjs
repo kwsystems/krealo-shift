@@ -99,11 +99,20 @@ try {
   const casoBaja = 'dejó de trabajar: pide su último día y dice qué turnos se quitan';
   const deBaja = [];
   const probadas = new Set();
+  /*
+   * UNO BASTA, Y EL «HOY» SE PRUEBA TAMBIÉN (26-oct). Un lunes de la demo casi todo el equipo
+   * ya marcó: solo una persona puede irse con un último día anterior a hoy. Se intentan dos
+   * y vale con una; con cero, falla. Y a la primera que marcó hoy se le da de baja de
+   * verdad, para comprobar que sigue en Activo con su último día a la vista.
+   */
+  let hoyProbado = false;
+  const casoHoy = 'con último día hoy sigue en Activo, con su último día a la vista';
   while (deBaja.length < 2) {
     const i = deBaja.length;
     const id = (await filas()).find((candidata) => !probadas.has(candidata));
     if (id === undefined) {
-      fallar(casoBaja, 'no queda nadie en Activo cuyo último día no sea hoy');
+      if (deBaja.length === 0)
+        fallar(casoBaja, 'no queda nadie en Activo cuyo último día no sea hoy');
       break;
     }
     probadas.add(id);
@@ -114,8 +123,21 @@ try {
     const resumen = pagina.locator('[data-testid="dar-de-baja-resumen"]');
     await resumen.waitFor({ timeout: 15000 });
     if ((await pagina.locator('[data-testid="dar-de-baja-hoy"]').count()) > 0) {
-      await pagina.locator('[data-testid="dar-de-baja-cancelar"]').click();
+      if (hoyProbado) {
+        await pagina.locator('[data-testid="dar-de-baja-cancelar"]').click();
+        await hojaBaja.waitFor({ state: 'detached', timeout: 15000 });
+        continue;
+      }
+      hoyProbado = true;
+      await pagina.locator('[data-testid="dar-de-baja-confirmar"]').click();
       await hojaBaja.waitFor({ state: 'detached', timeout: 15000 });
+      await pagina.waitForTimeout(400);
+      const fila = pagina.locator(`[data-testid="team-member-${id}"][role="button"]`);
+      const texto = ((await fila.count()) > 0 ? await fila.innerText() : '').replace(/\s+/g, ' ');
+      if (!(await filas()).includes(id)) fallar(casoHoy, 'salió de Activo el mismo día');
+      else if (!/último día/i.test(texto))
+        fallar(casoHoy, `la fila no dice su último día: «${texto}»`);
+      else pasa(casoHoy, texto.slice(0, 120));
       continue;
     }
     if (i === 0) {
