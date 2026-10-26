@@ -47,6 +47,22 @@ export async function callFunction<T>(
         data?: unknown;
         error?: unknown;
       };
+      /*
+       * EL FALLO DE LA DEMO TAMBIÉN LLEGA (26-oct). Se tiraba: una función de la demo que
+       * decía «no» devolvía `data: null` sin error, y la pantalla acababa en «respuesta
+       * inesperada» en vez de enseñar el motivo, como haría con el servidor.
+       */
+      const fallo = resultado?.error as Partial<CallableError> | null | undefined;
+      if (fallo !== null && typeof fallo === 'object') {
+        return {
+          data: null,
+          error: {
+            code: typeof fallo.code === 'string' ? fallo.code : 'internal',
+            message: typeof fallo.message === 'string' ? fallo.message : 'internal',
+            details: fallo.details ?? null,
+          },
+        };
+      }
       return { data: (resultado?.data ?? null) as T | null, error: null };
     } catch (error) {
       return { data: null, error: { code: 'internal', message: String(error) } };

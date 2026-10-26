@@ -91,17 +91,33 @@ try {
    * abre una hoja con el calendario —empieza en el último día que marcó— y dice cuántos
    * turnos de después se quitan antes de confirmar. Se comprueba en la primera.
    */
+  /*
+   * QUIEN MARCÓ HOY NO SIRVE AQUÍ (26-oct): su último día no puede ser anterior a su última
+   * marca, y con último día hoy sigue activa hasta mañana, o sea que no pasa a Inactivo. La
+   * hoja lo dice (`dar-de-baja-hoy`); se cancela y se prueba con la siguiente fila.
+   */
   const casoBaja = 'dejó de trabajar: pide su último día y dice qué turnos se quitan';
   const deBaja = [];
-  for (let i = 0; i < 2; i += 1) {
-    const fila = pagina.locator('[data-testid^="team-member-"][role="button"]').first();
-    const id = (await fila.getAttribute('data-testid')).slice('team-member-'.length);
-    await fila.click();
+  const probadas = new Set();
+  while (deBaja.length < 2) {
+    const i = deBaja.length;
+    const id = (await filas()).find((candidata) => !probadas.has(candidata));
+    if (id === undefined) {
+      fallar(casoBaja, 'no queda nadie en Activo cuyo último día no sea hoy');
+      break;
+    }
+    probadas.add(id);
+    await pagina.locator(`[data-testid="team-member-${id}"][role="button"]`).click();
     await pagina.locator('[data-testid="employee-deactivate"]').click();
     const hojaBaja = pagina.locator('[data-testid="dar-de-baja-sheet"]');
     await hojaBaja.waitFor({ timeout: 15000 });
     const resumen = pagina.locator('[data-testid="dar-de-baja-resumen"]');
     await resumen.waitFor({ timeout: 15000 });
+    if ((await pagina.locator('[data-testid="dar-de-baja-hoy"]').count()) > 0) {
+      await pagina.locator('[data-testid="dar-de-baja-cancelar"]').click();
+      await hojaBaja.waitFor({ state: 'detached', timeout: 15000 });
+      continue;
+    }
     if (i === 0) {
       const texto = (await resumen.innerText()).replace(/\s+/g, ' ').trim();
       const calendario = await pagina.locator('[data-testid="dar-de-baja-calendario"]').count();

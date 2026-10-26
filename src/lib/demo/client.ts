@@ -2281,7 +2281,10 @@ function crearFunctions(almacen: Almacen) {
         /*
          * DAR DE BAJA CON SU ÚLTIMO DÍA (4-oct), con las mismas reglas que
          * `functions/src/baja-de-empleado.ts`: lo de antes no se toca, sus turnos de después
-         * se cancelan —no se borran— y sus días libres de después se quitan.
+         * se cancelan —no se borran— y sus días libres de después se quitan. Desde el 26-oct,
+         * como allí: el día no puede ser anterior a su última marca, y con último día hoy
+         * sigue activa (puede marcar su salida). La demo no tiene el cierre de cada hora que
+         * la desactiva al día siguiente: se queda activa con su día guardado.
          */
         case 'dischargeEmployee': {
           const cuerpo = (opciones?.body ?? {}) as {
@@ -2293,17 +2296,45 @@ function crearFunctions(almacen: Almacen) {
           const empleado = (almacen.get('employees') ?? []).find((f) => f.id === id);
           if (empleado === undefined) return conError('Ese empleado no existe.');
           const hoy = dateKeyOf(new Date(), TZ);
-          const ultimaJornada = (almacen.get('work_sessions') ?? [])
-            .filter((f) => f.employee_id === id)
-            .map((f) => String(f.starts_at))
+          const ultimaMarca = [
+            ...(almacen.get('work_sessions') ?? [])
+              .filter((f) => f.employee_id === id)
+              .map((f) => String(f.starts_at)),
+            ...(almacen.get('time_events') ?? [])
+              .filter((f) => f.employee_id === id)
+              .map((f) => String(f.occurred_at)),
+          ]
+            .map((instante) => dateKeyOf(instante, TZ))
             .sort()
             .at(-1);
-          const ultimoDiaMarcado =
-            ultimaJornada === undefined ? null : dateKeyOf(ultimaJornada, TZ);
+          const ultimoDiaMarcado = ultimaMarca ?? null;
           const ultimoDia = cuerpo.lastDay;
           const valido = typeof ultimoDia === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(ultimoDia);
           if (!valido && cuerpo.dryRun !== true) return conError('Falta el último día de trabajo.');
-          if (valido && ultimoDia > hoy) return conError('El último día no puede ser futuro.');
+          if (valido && ultimoDia > hoy) {
+            return {
+              data: null,
+              error: {
+                code: 'invalid-argument',
+                message: 'El último día no puede ser futuro.',
+                details: { code: 'future_last_day' },
+              },
+            };
+          }
+          if (valido && ultimoDiaMarcado !== null && ultimoDia < ultimoDiaMarcado) {
+            return {
+              data: null,
+              error: {
+                code: 'invalid-argument',
+                message: `Marcó en el reloj el ${ultimoDiaMarcado}: su último día no puede ser anterior.`,
+                details: {
+                  code: 'before_last_mark',
+                  motivo: 'ANTES_DE_SU_ULTIMA_MARCA',
+                  ultimoDiaMarcado,
+                },
+              },
+            };
+          }
           const despues = (dia: string) => valido && dia > ultimoDia;
           const turnos = (almacen.get('shifts') ?? []).filter(
             (f) =>
@@ -2320,9 +2351,10 @@ function crearFunctions(almacen: Almacen) {
             ultimoDiaMarcado,
             turnos: turnos.length,
             descansos: descansos.length,
+            sigueHoy: valido && ultimoDia === hoy,
           };
           if (cuerpo.dryRun === true) return sinError(resumen);
-          empleado.status = 'inactive';
+          if (!resumen.sigueHoy) empleado.status = 'inactive';
           empleado.end_date = ultimoDia;
           for (const turno of turnos) turno.status = 'cancelled';
           almacen.set(

@@ -456,8 +456,25 @@ const bajaSchema = z.object({
   ultimoDiaMarcado: z.string().nullable(),
   turnos: z.number().int(),
   descansos: z.number().int(),
+  /** Último día hoy: sigue activa y puede marcar hasta que acabe el día (26-oct). */
+  sigueHoy: z.boolean().default(false),
 });
 export type ResumenDeBaja = z.infer<typeof bajaSchema>;
+
+/**
+ * POR QUÉ EL SERVIDOR NO DEJÓ DAR DE BAJA, con su código (26-oct): la hoja decía siempre
+ * «No se pudo dar de baja», también cuando el día elegido era anterior a su última marca y
+ * lo que había que hacer era elegir otro.
+ */
+export class BajaRechazada extends AdminError {
+  constructor(
+    readonly motivo: 'futuro' | 'antesDeSuUltimaMarca',
+    readonly ultimoDiaMarcado: string | null,
+    message: string,
+  ) {
+    super('invalid', message, motivo);
+  }
+}
 
 export async function dischargeEmployee(params: {
   employeeId: string;
@@ -465,7 +482,20 @@ export async function dischargeEmployee(params: {
   dryRun?: boolean;
 }): Promise<ResumenDeBaja> {
   const { data, error } = await callFunction<unknown>('dischargeEmployee', params);
-  if (error !== null) throw toAdminError(error);
+  if (error !== null) {
+    const detalles = (error.details ?? {}) as Record<string, unknown>;
+    if (detalles.motivo === 'ANTES_DE_SU_ULTIMA_MARCA') {
+      throw new BajaRechazada(
+        'antesDeSuUltimaMarca',
+        typeof detalles.ultimoDiaMarcado === 'string' ? detalles.ultimoDiaMarcado : null,
+        error.message,
+      );
+    }
+    if (detalles.code === 'future_last_day') {
+      throw new BajaRechazada('futuro', null, error.message);
+    }
+    throw toAdminError(error);
+  }
   const parsed = bajaSchema.safeParse(data);
   if (!parsed.success) throw new AdminError('unexpectedShape', parsed.error.message);
   return parsed.data;

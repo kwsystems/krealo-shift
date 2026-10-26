@@ -128,7 +128,10 @@ function MemberRowBase({
     visible !== null
       ? t(CLAVE_DE_ESTADO[visible])
       : member.status === 'active'
-        ? t('team.statusActive')
+        ? typeof member.end_date !== 'string'
+          ? t('team.statusActive')
+          : // Último día hoy: sigue activa hasta mañana (26-oct).
+            t('team.statusLastDayShort', { day: formatDateKeyShort(member.end_date, language) })
         : member.status === 'inactive'
           ? member.end_date === null
             ? t('team.statusInactive')

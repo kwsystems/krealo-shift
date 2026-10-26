@@ -100,7 +100,9 @@ export function EmployeeDetailSheet({
 
   const statusLabel =
     member.status === 'active'
-      ? t('team.statusActive')
+      ? typeof member.end_date !== 'string'
+        ? t('team.statusActive')
+        : t('team.statusLastDay', { day: formatDateKeyShort(member.end_date, language) })
       : member.status === 'inactive'
         ? member.end_date === null
           ? t('team.statusInactive')
