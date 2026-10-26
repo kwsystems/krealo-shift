@@ -77,7 +77,7 @@ const motivosAnotados = async () =>
   (await db.collection(COLLECTIONS.auditLogs).get()).docs
     .map((doc) => doc.data())
     .filter((fila) => fila.action === 'timesheet_period_changed_after_approval')
-    .map((fila) => String((fila.after as Record<string, unknown>).motivo))
+    .map((fila) => String((fila.after_data as Record<string, unknown>).motivo))
     .sort();
 
 beforeEach(async () => {
