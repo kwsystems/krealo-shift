@@ -186,7 +186,11 @@ try {
   if (enCelular !== null && enEquipo !== null && enCelular !== enEquipo) {
     problemas.push(`el celular dice ${enCelular} y Equipo ${enEquipo}`);
   }
-  if ((await hoja.locator('[data-testid="sueldo-justificadas"]').count()) === 0) {
+  /*
+   * EL DÍA O EL TURNO (26-oct): la falta justificada de la demo es un turno de tarde en un día
+   * que trabajó por la mañana, y desde que eso no es un día de falta, su aviso es el de turnos.
+   */
+  if ((await hoja.locator('[data-testid^="sueldo-justificadas"]').count()) === 0) {
     problemas.push('la falta justificada no se dice («no se descuenta»)');
   }
   // El mes pasado, el mismo en Equipo que en su celular.

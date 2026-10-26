@@ -70,9 +70,16 @@ export type SueldoEstimado = {
   /**
    * Turnos a los que no vino en un día en que SÍ trabajó otro turno (el día partido a medias):
    * se descuentan sus horas, no el día. `turnos` y `minutos` son los que descuentan (sin
-   * justificar o sin revisar); `sinRevisar`, cuántos de ellos nadie ha revisado aún.
+   * justificar o sin revisar); `sinRevisar`, cuántos de ellos nadie ha revisado aún;
+   * `justificados`, los que no descuentan, para que la tarjeta lo diga.
    */
-  turnosSinTrabajar: { turnos: number; minutos: number; monto: number; sinRevisar: number };
+  turnosSinTrabajar: {
+    turnos: number;
+    minutos: number;
+    monto: number;
+    sinRevisar: number;
+    justificados: number;
+  };
   horasExtra: { minutos: number; monto: number };
   feriados: { dias: number; monto: number };
   /** Horas que debe, pendientes: se descuentan si no se compensan. */
@@ -210,6 +217,7 @@ export function sueldoEstimado(params: {
       minutos: minutosSinTrabajar,
       monto: redondear(montoSinTrabajar),
       sinRevisar: turnosQueDescuentan.filter((turno) => turno.estado === 'sinRevisar').length,
+      justificados: (params.turnosSinTrabajar ?? []).length - turnosQueDescuentan.length,
     },
     horasExtra: { minutos: minutosExtra, monto: redondear(montoExtra) },
     feriados: { dias: params.feriadosTrabajados, monto: redondear(montoFeriados) },

@@ -145,7 +145,13 @@ describe('el sueldo aproximado del mes', () => {
       ],
     });
     // 3 h × 6.25: la justificada no cuenta.
-    expect(r.turnosSinTrabajar).toEqual({ turnos: 2, minutos: 180, monto: 18.75, sinRevisar: 1 });
+    expect(r.turnosSinTrabajar).toEqual({
+      turnos: 2,
+      minutos: 180,
+      monto: 18.75,
+      sinRevisar: 1,
+      justificados: 1,
+    });
     expect(r.faltas.dias).toBe(0);
     expect(r.bruto).toBe(1481.25);
   });

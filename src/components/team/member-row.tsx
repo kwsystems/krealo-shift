@@ -139,6 +139,16 @@ function MemberRowBase({
               t('team.statusLeftShort', { day: formatDateKeyShort(member.end_date, language) })
           : t('team.statusInvited');
 
+  /*
+   * EL ÚLTIMO DÍA DE QUIEN SE VA HOY, TAMBIÉN SI ESTÁ DENTRO (26-oct). Con último día hoy
+   * sigue activa hasta mañana, y la insignia dice «Trabajando» en vez de su estado: sin esta
+   * línea, la fila de quien se va hoy no lo decía en ningún sitio mientras trabajaba.
+   */
+  const ultimoDiaAparte =
+    visible !== null && member.status === 'active' && typeof member.end_date === 'string'
+      ? t('team.statusLastDayShort', { day: formatDateKeyShort(member.end_date, language) })
+      : null;
+
   const puestos =
     member.jobRoleIds.length === 0
       ? t('team.noJobRolesAssigned')
@@ -193,6 +203,8 @@ function MemberRowBase({
        * navega con un lector de pantalla no la tiene a mano, así que aquí va con palabras.
        */
       accessibilityLabel={`${member.displayName}. ${estado}${
+        ultimoDiaAparte === null ? '' : `, ${ultimoDiaAparte}`
+      }${
         dentro === undefined ? '' : `, ${t('timesheet.sinceTime', { time: dentro.desde })}`
       }. ${t('team.thisWeek')}: ${minutesToHHmm(weekMinutes)}${
         dentro === undefined ? '' : `, ${t('timesheet.live')}`
@@ -275,6 +287,11 @@ function MemberRowBase({
                   {dentro === undefined ? null : (
                     <AppText variant="label" tone="muted" tabular>
                       {t('timesheet.sinceTime', { time: dentro.desde })}
+                    </AppText>
+                  )}
+                  {ultimoDiaAparte === null ? null : (
+                    <AppText variant="label" tone="muted">
+                      {ultimoDiaAparte}
                     </AppText>
                   )}
                 </Row>
@@ -373,6 +390,16 @@ function MemberRowBase({
                 {dentro === undefined ? null : (
                   <AppText variant="label" tone="muted" tabular style={estilosDeColumna.derecha}>
                     {t('timesheet.sinceTime', { time: dentro.desde })}
+                  </AppText>
+                )}
+                {ultimoDiaAparte === null ? null : (
+                  <AppText
+                    variant="label"
+                    tone="muted"
+                    style={estilosDeColumna.derecha}
+                    testID={`team-member-${member.id}-ultimo-dia`}
+                  >
+                    {ultimoDiaAparte}
                   </AppText>
                 )}
               </View>

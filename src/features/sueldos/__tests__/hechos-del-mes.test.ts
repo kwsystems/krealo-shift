@@ -157,6 +157,7 @@ describe('la falta del sueldo es por día, con turno partido', () => {
       minutos: 120,
       monto: 10.25,
       sinRevisar: 1,
+      justificados: 0,
     });
     expect(cuenta.bruto).toBe(1219.75);
   });

@@ -2029,6 +2029,8 @@
     "net": "Estimated total",
     "justifiedNote_one": "{{count}} excused day of absence: not deducted.",
     "justifiedNote_other": "{{count}} excused days of absence: not deducted.",
+    "justifiedShiftsNote_one": "{{count}} excused shift, on a day they did work: not deducted.",
+    "justifiedShiftsNote_other": "{{count}} excused shifts, on days they did work: not deducted.",
     "noContract": "Not employed in {{month}}: there is no pay to estimate for that month.",
     "holidayNote": "A holiday worked is paid triple: the normal day plus two more.",
     "belowMinimum": "It's below the minimum wage ({{rmv}} a month).",

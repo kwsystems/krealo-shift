@@ -2029,6 +2029,8 @@
     "net": "Total aproximado",
     "justifiedNote_one": "{{count}} día de falta justificado: no se descuenta.",
     "justifiedNote_other": "{{count}} días de falta justificados: no se descuentan.",
+    "justifiedShiftsNote_one": "{{count}} turno justificado, en un día que sí trabajó: no se descuenta.",
+    "justifiedShiftsNote_other": "{{count}} turnos justificados, en días que sí trabajó: no se descuentan.",
     "noContract": "Sin contrato en {{month}}: no hay sueldo que calcular ese mes.",
     "holidayNote": "Un feriado trabajado se paga triple: su día normal y dos días más.",
     "belowMinimum": "Está por debajo del sueldo mínimo ({{rmv}} al mes).",

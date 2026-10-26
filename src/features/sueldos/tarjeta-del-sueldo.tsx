@@ -208,6 +208,15 @@ export function TarjetaDelSueldo({
             {t('pay.justifiedNote', { count: cuenta.faltasJustificadas })}
           </AppText>
         ) : null}
+        {/*
+          EL TURNO JUSTIFICADO TAMBIÉN SE DICE (26-oct): desde que un turno perdido en un día
+          trabajado ya no es un día de falta, su justificación no salía en la tarjeta.
+        */}
+        {cuenta.turnosSinTrabajar.justificados > 0 ? (
+          <AppText variant="help" tone="muted" testID="sueldo-justificadas-turnos">
+            {t('pay.justifiedShiftsNote', { count: cuenta.turnosSinTrabajar.justificados })}
+          </AppText>
+        ) : null}
         {cuenta.feriados.dias > 0 ? (
           <AppText variant="help" tone="muted">
             {t('pay.holidayNote')}
