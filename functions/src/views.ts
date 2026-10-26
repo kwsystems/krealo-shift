@@ -323,7 +323,12 @@ export const viewBreakTimeByReason = onCall(async (request) => {
   for (const doc of eventos.docs) {
     const evento = doc.data();
     const tipo = tipoEfectivo(evento);
-    if (tipo !== 'break_start' && tipo !== 'break_end') continue;
+    /*
+     * LA SALIDA TAMBIÉN CIERRA UNA PAUSA (26-oct): quien marca salida estando en descanso no
+     * marca `break_end`, y la jornada ya cuenta ese descanso hasta la salida
+     * (`rebuildWorkSession`). Sin la salida aquí, Reportes lo perdía y no cuadraba con Horas.
+     */
+    if (tipo !== 'break_start' && tipo !== 'break_end' && tipo !== 'clock_out') continue;
     const lista = porEmpleado.get(evento.employee_id as string) ?? [];
     lista.push(evento);
     porEmpleado.set(evento.employee_id as string, lista);

@@ -1,4 +1,4 @@
-import { dischargeEmployee } from '../../baja-de-empleado';
+import { dischargeEmployee, inactivarBajasVencidas } from '../../baja-de-empleado';
 import { COLLECTIONS, db } from '../../shared/admin';
 
 /**
@@ -54,6 +54,8 @@ async function turno(id: string, desde: string, hasta: string, status = 'publish
       publication_version: status === 'published' ? 1 : 0,
     });
 }
+
+const empleadoRef = () => db.collection(COLLECTIONS.employees).doc(PERSONA);
 
 const estado = async (id: string) =>
   (await db.collection(COLLECTIONS.shifts).doc(id).get()).data()?.status;
@@ -176,5 +178,220 @@ describe('dar de baja con su último día', () => {
     );
     expect(resultado.code).toBe('permission-denied');
     expect(await estado('t-01')).toBe('published');
+  });
+});
+
+/*
+ * CON ÚLTIMO DÍA HOY SIGUE ACTIVA HASTA MAÑANA (26-oct): se la dejaba inactiva al momento y
+ * el reloj le rechazaba el PIN ese mismo día, sin poder marcar su salida, y su turno de hoy
+ * acababa como falta. La desactiva el cierre de cada hora cuando ese día pasa en su sede.
+ */
+describe('último día hoy', () => {
+  const diaLima = (instante: number) =>
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Lima',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date(instante));
+  const sumarDias = (dia: string, dias: number) =>
+    new Date(Date.parse(`${dia}T00:00:00Z`) + dias * 24 * 3600_000).toISOString().slice(0, 10);
+  const ficha = async () => (await empleadoRef().get()).data();
+
+  it('guarda el día y la deja activa; lo de mañana se quita y lo de hoy se queda', async () => {
+    const hoy = diaLima(Date.now());
+    await turno('t-hoy', lima(hoy, 10), lima(hoy, 18));
+    await turno('t-manana', lima(sumarDias(hoy, 1), 10), lima(sumarDias(hoy, 1), 18));
+
+    const previo = (await correr(ADMIN, {
+      employeeId: PERSONA,
+      lastDay: hoy,
+      dryRun: true,
+    })) as Record<string, unknown>;
+    expect(previo).toMatchObject({ sigueHoy: true, hoy });
+
+    const resumen = (await correr(ADMIN, { employeeId: PERSONA, lastDay: hoy })) as Record<
+      string,
+      unknown
+    >;
+    expect(resumen).toMatchObject({ sigueHoy: true });
+    expect(await ficha()).toMatchObject({ status: 'active', end_date: hoy });
+    expect(await estado('t-hoy')).toBe('published');
+    expect(await estado('t-manana')).toBe('cancelled');
+
+    // Esta misma hora todavía es su último día: sigue activa.
+    expect((await inactivarBajasVencidas(Date.now())).inactivadas).toEqual([]);
+    expect(await ficha()).toMatchObject({ status: 'active' });
+
+    // Pasado el día, el cierre de cada hora la desactiva y lo deja auditado.
+    expect((await inactivarBajasVencidas(Date.now() + 26 * 3600_000)).inactivadas).toEqual([
+      PERSONA,
+    ]);
+    expect(await ficha()).toMatchObject({ status: 'inactive', end_date: hoy });
+    const auditoria = await db
+      .collection(COLLECTIONS.auditLogs)
+      .where('action', '==', 'employee_discharge_effective')
+      .get();
+    expect(auditoria.size).toBe(1);
+  });
+
+  it('un día anterior se aplica al momento, como siempre', async () => {
+    const resumen = (await correr(ADMIN, {
+      employeeId: PERSONA,
+      lastDay: '2026-09-30',
+    })) as Record<string, unknown>;
+    expect(resumen).toMatchObject({ sigueHoy: false });
+    expect(await ficha()).toMatchObject({ status: 'inactive', end_date: '2026-09-30' });
+  });
+
+  it('con una jornada abierta espera a que se cierre: el turno de noche marca su salida', async () => {
+    await empleadoRef().update({ end_date: '2026-09-30' });
+    await db
+      .collection(COLLECTIONS.workSessions)
+      .doc(`${PERSONA}_abierta`)
+      .set({
+        id: `${PERSONA}_abierta`,
+        organization_id: ORG,
+        employee_id: PERSONA,
+        location_id: SEDE,
+        starts_at: lima('2026-09-30', 21),
+        ends_at: null,
+        status: 'open',
+      });
+
+    expect(await inactivarBajasVencidas(Date.now())).toEqual({
+      inactivadas: [],
+      esperando: [PERSONA],
+    });
+    expect(await ficha()).toMatchObject({ status: 'active' });
+
+    await db
+      .collection(COLLECTIONS.workSessions)
+      .doc(`${PERSONA}_abierta`)
+      .update({ status: 'complete', ends_at: lima('2026-10-01', 2) });
+    expect((await inactivarBajasVencidas(Date.now())).inactivadas).toEqual([PERSONA]);
+  });
+
+  it('quien ya no tiene día de baja —se reactivó— no se toca', async () => {
+    await empleadoRef().update({ end_date: null });
+    expect((await inactivarBajasVencidas(Date.now() + 26 * 3600_000)).inactivadas).toEqual([]);
+    expect(await ficha()).toMatchObject({ status: 'active' });
+  });
+});
+
+/*
+ * QUE GESTIONE ALGUNA DE SUS SEDES (26-oct): solo se miraba el rol, y el encargado de una
+ * tienda podía dar de baja a alguien de otra.
+ */
+describe('quién puede dar de baja', () => {
+  const ENCARGADO = 'uid-encargado-baja';
+  const DE_OTRA = 'uid-encargado-otra-baja';
+
+  beforeEach(async () => {
+    await db
+      .collection(COLLECTIONS.locations)
+      .doc(SEDE)
+      .set({ id: SEDE, organization_id: ORG, timezone: 'America/Lima' });
+    for (const [uid, sede] of [
+      [ENCARGADO, SEDE],
+      [DE_OTRA, 'otra-sede-baja'],
+    ] as const) {
+      await db
+        .collection(COLLECTIONS.memberships)
+        .doc(`${ORG}_${uid}`)
+        .set({
+          organization_id: ORG,
+          user_id: uid,
+          role: 'manager',
+          status: 'active',
+          managed_location_ids: [sede],
+        });
+    }
+  });
+
+  const asignar = () =>
+    db
+      .collection(COLLECTIONS.employeeLocations)
+      .doc(`${PERSONA}_${SEDE}`)
+      .set({ organization_id: ORG, employee_id: PERSONA, location_id: SEDE, is_primary: true });
+
+  it('el encargado de otra sede no puede, ni para contar', async () => {
+    await asignar();
+    for (const dryRun of [true, false]) {
+      const resultado = await fallo(
+        correr(DE_OTRA, { employeeId: PERSONA, lastDay: '2026-09-30', dryRun }),
+      );
+      expect(resultado.code).toBe('permission-denied');
+    }
+    expect(await estado('t-01')).toBe('published');
+  });
+
+  it('el encargado de su sede sí', async () => {
+    await asignar();
+    await correr(ENCARGADO, { employeeId: PERSONA, lastDay: '2026-09-30' });
+    expect(await estado('t-01')).toBe('cancelled');
+  });
+
+  it('sin sede asignada, solo owner y admin', async () => {
+    const resultado = await fallo(
+      correr(ENCARGADO, { employeeId: PERSONA, lastDay: '2026-09-30' }),
+    );
+    expect(resultado.code).toBe('permission-denied');
+    await correr(ADMIN, { employeeId: PERSONA, lastDay: '2026-09-30' });
+    expect(await estado('t-01')).toBe('cancelled');
+  });
+});
+
+/*
+ * NI ANTES DE SU ÚLTIMA MARCA (26-oct): solo se comprobaba que no fuera futuro, y un día
+ * anterior cancelaba turnos que sí trabajó.
+ */
+describe('el último día no puede ser anterior a su última marca', () => {
+  beforeEach(async () => {
+    // La salida del turno de noche del 1-oct, pasada la medianoche: es del 2-oct.
+    await db
+      .collection(COLLECTIONS.timeEvents)
+      .doc(`${ORG}_salida-noche`)
+      .set({
+        id: `${ORG}_salida-noche`,
+        organization_id: ORG,
+        employee_id: PERSONA,
+        location_id: SEDE,
+        event_type: 'clock_out',
+        occurred_at: lima('2026-10-02', 1),
+        seq: 10,
+      });
+  });
+
+  it('propone el día de su último fichaje', async () => {
+    const resumen = (await correr(ADMIN, { employeeId: PERSONA, dryRun: true })) as Record<
+      string,
+      unknown
+    >;
+    expect(resumen).toMatchObject({ ultimoDiaMarcado: '2026-10-02' });
+  });
+
+  it('un día antes se rechaza con su motivo, también al contar, y no se toca nada', async () => {
+    for (const dryRun of [true, false]) {
+      const resultado = await fallo(
+        correr(ADMIN, { employeeId: PERSONA, lastDay: '2026-09-30', dryRun }),
+      );
+      expect(resultado.code).toBe('invalid-argument');
+      expect(resultado.details).toEqual({
+        code: 'before_last_mark',
+        motivo: 'ANTES_DE_SU_ULTIMA_MARCA',
+        ultimoDiaMarcado: '2026-10-02',
+      });
+    }
+    expect((await empleadoRef().get()).data()).toMatchObject({ status: 'active' });
+    expect(await estado('t-01')).toBe('published');
+  });
+
+  it('ese mismo día sí', async () => {
+    await correr(ADMIN, { employeeId: PERSONA, lastDay: '2026-10-02' });
+    expect((await empleadoRef().get()).data()).toMatchObject({
+      status: 'inactive',
+      end_date: '2026-10-02',
+    });
   });
 });

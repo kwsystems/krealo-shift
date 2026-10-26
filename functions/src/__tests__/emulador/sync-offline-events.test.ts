@@ -274,13 +274,14 @@ describe('syncOfflineEvents', () => {
  * empezaron a fallar dos días después de escribirse.
  */
 describe('un lote de hace días', () => {
-  const HACE_TRES_DIAS = new Date(Date.now() - 3 * 24 * 3600_000);
-  const dia = (dias: number, horaUtc: number) => {
-    const d = new Date(HACE_TRES_DIAS);
-    d.setUTCDate(d.getUTCDate() + dias);
-    d.setUTCHours(horaUtc, 0, 0, 0);
-    return d.toISOString();
-  };
+  /*
+   * Hace 70 h y no tres días a una hora fija (26-oct): desde que se rechaza lo de más de 72 h,
+   * «hace tres días a las 13:00 UTC» caía fuera según la hora a la que corriera la prueba.
+   * Sigue lejos de las 36 h que es lo que esta prueba vigila.
+   */
+  const INICIO = Date.now() - 70 * 3600_000;
+  const dia = (dias: number, horas: number) =>
+    new Date(INICIO + (dias * 24 + horas) * 3600_000).toISOString();
   const jornadas = async () =>
     (await db.collection(COLLECTIONS.workSessions).where('employee_id', '==', PERSONA).get()).docs
       .map((d) => d.data())
@@ -288,26 +289,26 @@ describe('un lote de hace días', () => {
 
   it('forma cada jornada con sus horas, aunque llegue días después', async () => {
     const r = await sincronizar([
-      evento({ clave: 'v-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 13) }),
-      evento({ clave: 'v-2', tipo: 'break_start', seq: 2, cuando: dia(0, 17) }),
-      evento({ clave: 'v-3', tipo: 'break_end', seq: 3, cuando: dia(0, 18) }),
-      evento({ clave: 'v-4', tipo: 'clock_out', seq: 4, cuando: dia(0, 21) }),
-      evento({ clave: 'v-5', tipo: 'clock_in', seq: 5, cuando: dia(1, 13) }),
-      evento({ clave: 'v-6', tipo: 'clock_out', seq: 6, cuando: dia(1, 21) }),
+      evento({ clave: 'v-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 0) }),
+      evento({ clave: 'v-2', tipo: 'break_start', seq: 2, cuando: dia(0, 4) }),
+      evento({ clave: 'v-3', tipo: 'break_end', seq: 3, cuando: dia(0, 5) }),
+      evento({ clave: 'v-4', tipo: 'clock_out', seq: 4, cuando: dia(0, 8) }),
+      evento({ clave: 'v-5', tipo: 'clock_in', seq: 5, cuando: dia(1, 0) }),
+      evento({ clave: 'v-6', tipo: 'clock_out', seq: 6, cuando: dia(1, 8) }),
     ]);
     expect(r.accepted).toBe(6);
 
     const [primera, segunda, ...otras] = await jornadas();
     expect(otras).toHaveLength(0);
     expect(primera).toMatchObject({
-      starts_at: dia(0, 13),
-      ends_at: dia(0, 21),
+      starts_at: dia(0, 0),
+      ends_at: dia(0, 8),
       status: 'complete',
       net_minutes: 420,
     });
     expect(segunda).toMatchObject({
-      starts_at: dia(1, 13),
-      ends_at: dia(1, 21),
+      starts_at: dia(1, 0),
+      ends_at: dia(1, 8),
       status: 'complete',
       net_minutes: 480,
     });
@@ -315,12 +316,12 @@ describe('un lote de hace días', () => {
 
   it('la salida que llega tarde cierra SU jornada, no la de hoy', async () => {
     // Entró hace tres días; el iPad perdió la red antes de que marcara la salida.
-    await sincronizar([evento({ clave: 'w-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 13) })]);
-    await sincronizar([evento({ clave: 'w-2', tipo: 'clock_out', seq: 2, cuando: dia(0, 21) })]);
+    await sincronizar([evento({ clave: 'w-1', tipo: 'clock_in', seq: 1, cuando: dia(0, 0) })]);
+    await sincronizar([evento({ clave: 'w-2', tipo: 'clock_out', seq: 2, cuando: dia(0, 8) })]);
 
     const [unica, ...otras] = await jornadas();
     expect(otras).toHaveLength(0);
-    expect(unica).toMatchObject({ ends_at: dia(0, 21), status: 'complete', net_minutes: 480 });
+    expect(unica).toMatchObject({ ends_at: dia(0, 8), status: 'complete', net_minutes: 480 });
   });
 });
 
@@ -376,5 +377,134 @@ describe('lo que manda el aparato se comprueba (auditoría, 4-oct)', () => {
     expect(r.results.find((x) => x.idempotencyKey === 'o-2')).toMatchObject({
       status: 'needs_review',
     });
+  });
+});
+
+/*
+ * EL LOTE SIN RED, CON TRES LÍMITES (26-oct): un reloj web no ficha sin red, lo de hace más
+ * de 72 h lo registra quien gestiona, y lo que entra en una semana ya aprobada queda anotado
+ * en ella como cualquier otro cambio.
+ */
+describe('lo que el lote ya no deja pasar', () => {
+  it('un reloj web: cada evento rechazado con su motivo, y nada guardado', async () => {
+    await db.collection(COLLECTIONS.kioskDevices).doc(APARATO).update({ platform: 'web' });
+    const r = await sincronizar([
+      evento({ clave: 'web-1', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+      evento({ clave: 'web-2', tipo: 'clock_out', seq: 2, cuando: hora(480) }),
+    ]);
+    expect(r.results).toEqual([
+      expect.objectContaining({
+        idempotencyKey: 'web-1',
+        status: 'rejected',
+        reason: expect.stringContaining('navegador'),
+      }),
+      expect.objectContaining({
+        idempotencyKey: 'web-2',
+        status: 'rejected',
+        reason: expect.stringContaining('navegador'),
+      }),
+    ]);
+    expect(r.accepted).toBe(0);
+    expect(r.pending).toBe(0);
+    expect(await eventosGuardados()).toHaveLength(0);
+  });
+
+  it('un reloj que dijo ser web queda marcado: decir después «soy un iPad» no lo desmarca', async () => {
+    // Su primera llamada de verdad, desde el navegador.
+    await correr(syncOfflineEvents, { kioskAuth, platform: 'web', events: [] });
+    expect((await db.collection(COLLECTIONS.kioskDevices).doc(APARATO).get()).data()).toMatchObject(
+      { platform: 'web' },
+    );
+
+    const r = (await correr(syncOfflineEvents, {
+      kioskAuth,
+      platform: 'ios',
+      events: [evento({ clave: 'web-3', tipo: 'clock_in', seq: 1, cuando: hora(0) })],
+    })) as Respuesta;
+    expect(r.results[0]).toMatchObject({ status: 'rejected' });
+    expect(await eventosGuardados()).toHaveLength(0);
+  });
+
+  it('la app (ios) y un reloj sin plataforma conocida siguen sincronizando', async () => {
+    const r = (await correr(syncOfflineEvents, {
+      kioskAuth,
+      platform: 'ios',
+      events: [evento({ clave: 'ios-1', tipo: 'clock_in', seq: 1, cuando: hora(0) })],
+    })) as Respuesta;
+    expect(r.results[0]).toMatchObject({ status: 'accepted' });
+    expect(
+      (await db.collection(COLLECTIONS.kioskDevices).doc(APARATO).get()).data()?.platform,
+    ).toBeUndefined();
+  });
+
+  it('un fichaje de hace más de 72 h se rechaza; el resto del lote entra', async () => {
+    const viejo = new Date(Date.now() - 73 * 3600_000).toISOString();
+    const r = await sincronizar([
+      evento({ clave: 'old-1', tipo: 'clock_in', seq: 1, cuando: viejo }),
+      evento({ clave: 'new-1', tipo: 'clock_in', seq: 2, cuando: hora(0) }),
+    ]);
+    expect(r.results.find((x) => x.idempotencyKey === 'old-1')).toMatchObject({
+      status: 'rejected',
+      reason: expect.stringContaining('72 horas'),
+    });
+    expect(r.results.find((x) => x.idempotencyKey === 'new-1')).toMatchObject({
+      status: 'accepted',
+    });
+    expect((await eventosGuardados()).map((e) => e.occurred_at)).toEqual([hora(0)]);
+  });
+
+  it('lo marcado sin red en su último día entra aunque la baja ya se cumplió; lo de después no', async () => {
+    const diaDe = (iso: string) =>
+      new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Lima' }).format(new Date(iso));
+    const ficha = db.collection(COLLECTIONS.employees).doc(PERSONA);
+    await ficha.update({ status: 'inactive', end_date: diaDe(hora(0)) });
+    const r = await sincronizar([
+      evento({ clave: 'ult-1', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+    ]);
+    expect(r.results[0]).toMatchObject({ status: 'accepted' });
+
+    // Con el último día la víspera, ese mismo fichaje ya es de después: por revisar.
+    const vispera = new Date(Date.parse(`${diaDe(hora(0))}T12:00:00Z`) - 24 * 3600_000)
+      .toISOString()
+      .slice(0, 10);
+    await ficha.update({ end_date: vispera });
+    const r2 = await sincronizar([
+      evento({ clave: 'ult-2', tipo: 'clock_out', seq: 2, cuando: hora(60) }),
+    ]);
+    expect(r2.results[0]).toMatchObject({ status: 'needs_review' });
+  });
+
+  it('lo que entra en una semana aprobada queda anotado en ella; un duplicado no', async () => {
+    await db.collection(COLLECTIONS.timesheetPeriods).doc('semana-aprobada').set({
+      id: 'semana-aprobada',
+      organization_id: ORG,
+      location_id: SEDE,
+      starts_on: '2000-01-01',
+      ends_on: '2999-12-31',
+      status: 'approved',
+      changes_after_approval: 0,
+      changed_after_approval_at: null,
+      changed_after_approval_by: null,
+    });
+
+    const lote = [
+      evento({ clave: 'ap-1', tipo: 'clock_in', seq: 1, cuando: hora(0) }),
+      evento({ clave: 'ap-2', tipo: 'clock_out', seq: 2, cuando: hora(480) }),
+    ];
+    expect((await sincronizar(lote)).accepted).toBe(2);
+    // Reenviado: la cola reintenta lo que no oyó confirmar.
+    expect((await sincronizar(lote)).results.map((x) => x.status)).toEqual([
+      'duplicate',
+      'duplicate',
+    ]);
+
+    expect(
+      (await db.collection(COLLECTIONS.timesheetPeriods).doc('semana-aprobada').get()).data(),
+    ).toMatchObject({ changes_after_approval: 2, changed_after_approval_at: expect.any(String) });
+    const auditoria = (await db.collection(COLLECTIONS.auditLogs).get()).docs
+      .map((d) => d.data())
+      .filter((d) => d.action === 'timesheet_period_changed_after_approval');
+    expect(auditoria).toHaveLength(2);
+    expect(auditoria[0]).toMatchObject({ actor_user_id: null, actor_device_id: APARATO });
   });
 });

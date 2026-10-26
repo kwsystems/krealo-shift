@@ -757,14 +757,14 @@ export function TeamScreen() {
           weekStartsOn={scope.weekStartsOn}
           language={language}
           pending={mutations.discharge.isPending}
-          error={mutations.discharge.error === null ? null : t('team.dischargeFailed')}
+          error={mutations.discharge.error}
           onConfirm={(lastDay) =>
             mutations.discharge.mutate(
               { employeeId: dandoDeBaja.id, lastDay },
               {
                 onSuccess: (resumen) => {
                   setFeedback(
-                    t('team.discharged', {
+                    t(resumen.sigueHoy ? 'team.dischargedToday' : 'team.discharged', {
                       name: dandoDeBaja.displayName,
                       count: resumen.turnos,
                     }),

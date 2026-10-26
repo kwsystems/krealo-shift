@@ -2,13 +2,14 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import { dischargeEmployee } from './api';
+import { BajaRechazada, dischargeEmployee } from './api';
 import type { TeamMember } from './hooks';
 import { CalendarioDeDias } from '@/components/schedule/calendario-de-dias';
 import { AdminSheet, InlineNotice } from '@/components/schedule/fields';
 import { MonthNavigator } from '@/components/schedule/week-tools';
 import { AppText } from '@/components/ui/app-text';
 import { DangerButton, GhostButton } from '@/components/ui/buttons';
+import { adminErrorKind } from '@/hooks/use-admin-query';
 import { Stack } from '@/components/ui/layout';
 import { LoadingState } from '@/components/ui/states';
 import { formatDateKeyShort, formatWeekdayShort, type DateKey } from '@/features/schedules/week';
@@ -40,7 +41,8 @@ export function DarDeBajaSheet({
   weekStartsOn: number;
   language: SupportedLanguage;
   pending: boolean;
-  error: string | null;
+  /** El fallo de confirmar, tal como llegó: la hoja dice el motivo. `null` si no hubo. */
+  error: unknown;
   onConfirm: (lastDay: DateKey) => void;
   onClose: () => void;
 }) {
@@ -63,6 +65,22 @@ export function DarDeBajaSheet({
 
   const diaLegible = (clave: DateKey) =>
     `${formatWeekdayShort(clave, language)} ${formatDateKeyShort(clave, language)}`;
+  /*
+   * EL MOTIVO, Y YA AL ELEGIR EL DÍA (26-oct): el recuento de `dryRun` comprueba lo mismo que
+   * la baja, así que un día anterior a su última marca se dice antes de pulsar «Confirmar».
+   */
+  const fallo = error ?? conteo.error ?? null;
+  const textoDelFallo = (causa: unknown): string => {
+    if (causa instanceof BajaRechazada) {
+      if (causa.motivo === 'futuro') return t('team.dischargeFuture');
+      return causa.ultimoDiaMarcado === null
+        ? causa.message
+        : t('team.dischargeBeforeLastMark', { day: diaLegible(causa.ultimoDiaMarcado) });
+    }
+    return adminErrorKind(causa) === 'forbidden'
+      ? t('states.noAccessBody')
+      : t('team.dischargeFailed');
+  };
   const primero = `${(mes ?? elegido ?? hoy ?? '').slice(0, 7)}-01`;
 
   return (
@@ -74,14 +92,14 @@ export function DarDeBajaSheet({
       footer={
         <Stack gap={spacing.sm}>
           {/* El fallo junto al botón (8-oct): debajo del calendario no se veía. */}
-          {error !== null ? (
+          {fallo !== null ? (
             <AppText
               variant="help"
               tone="danger"
               accessibilityRole="alert"
               testID="dar-de-baja-error"
             >
-              {error}
+              {textoDelFallo(fallo)}
             </AppText>
           ) : null}
           <DangerButton
@@ -94,10 +112,10 @@ export function DarDeBajaSheet({
               if (elegido !== null) onConfirm(elegido);
             }}
             loading={pending}
-            disabled={elegido === null || conteo.isPending}
+            disabled={elegido === null || conteo.isPending || conteo.isError}
             testID="dar-de-baja-confirmar"
           />
-          <GhostButton label={t('common.cancel')} onPress={onClose} />
+          <GhostButton label={t('common.cancel')} onPress={onClose} testID="dar-de-baja-cancelar" />
         </Stack>
       }
     >
@@ -108,7 +126,7 @@ export function DarDeBajaSheet({
           <LoadingState />
         ) : (
           <AppText variant="help" tone="danger" accessibilityRole="alert">
-            {t('team.dischargeFailed')}
+            {textoDelFallo(inicial.error)}
           </AppText>
         )
       ) : (
@@ -151,6 +169,16 @@ export function DarDeBajaSheet({
               : t('team.dischargeNoShifts')
           }
           testID="dar-de-baja-resumen"
+        />
+      ) : null}
+
+      {/* Último día hoy: sigue activa hasta mañana (26-oct). Ver `baja-de-empleado.ts`. */}
+      {elegido !== null && conteo.data?.sigueHoy === true ? (
+        <InlineNotice
+          tone="info"
+          icon="time-outline"
+          body={t('team.dischargeToday')}
+          testID="dar-de-baja-hoy"
         />
       ) : null}
     </AdminSheet>

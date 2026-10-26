@@ -1,6 +1,7 @@
 import { logger } from 'firebase-functions/v2';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 
+import { inactivarBajasVencidas } from './baja-de-empleado';
 import { COLLECTIONS, db } from './shared/admin';
 import { audit } from './shared/caller';
 import { corregirSalidaConFichaje } from './shared/salida-a-mano';
@@ -138,5 +139,15 @@ export const cerrarJornadasSinSalida = onSchedule(
       cerradas: resumen.cerradas.length,
       fallidas: resumen.fallidas.length,
     });
+    /*
+     * Y LAS BAJAS CUYO ÚLTIMO DÍA YA PASÓ (26-oct), después de cerrar: quien se fue sin
+     * marcar la salida de su último día queda cerrada arriba y de baja aquí. Ver
+     * `inactivarBajasVencidas`. Un fallo aquí no tumba el cierre, que ya se hizo.
+     */
+    try {
+      await inactivarBajasVencidas();
+    } catch (error) {
+      logger.error('No se pudieron cumplir las bajas', { error: String(error) });
+    }
   },
 );

@@ -25,7 +25,9 @@ export async function anotarCambioTrasAprobar(params: {
   locationId: string;
   /** Un instante de lo que cambió: la entrada de la jornada, o el fichaje. */
   instante: string;
-  uid: string;
+  /** Quien lo cambió; `null` si fue un reloj (`deviceId`), que no tiene usuario. */
+  uid: string | null;
+  deviceId?: string | null;
   /** Qué lo cambió, para el registro de auditoría. */
   motivo: string;
 }): Promise<string[]> {
@@ -55,6 +57,7 @@ export async function anotarCambioTrasAprobar(params: {
       await audit({
         organizationId: params.organizationId,
         actorUserId: params.uid,
+        actorDeviceId: params.deviceId ?? null,
         action: 'timesheet_period_changed_after_approval',
         entityType: 'timesheet_period',
         entityId: doc.id,

@@ -76,7 +76,34 @@ export type KioskContext = {
    * para que copiar el SQLite de un iPad a otro no de un verificador utilizable.
    */
   offlineKey: string;
+  /**
+   * `web` si este reloj es un navegador, `ios`/`android` si es la app, `null` si no se
+   * sabe (relojes activados antes del 26-oct que todavía no han dicho nada). Ver
+   * `plataformaDeclarada`.
+   */
+  platform: PlataformaDelReloj;
 };
+
+/**
+ * DE QUÉ ES EL RELOJ: UN NAVEGADOR O LA APP (26-oct).
+ *
+ * El reloj web no ficha sin red (`src/lib/kiosk/disponibilidad.ts`), así que un lote «sin
+ * conexión» que llega de un reloj web no lo escribió la app: alguien con la credencial que
+ * guarda el navegador lo armó a mano, sin PIN. Para poder decirlo, la app manda
+ * `Platform.OS` en cada llamada del reloj, y se guarda en el aparato al activarlo.
+ *
+ * LO DECLARA EL CLIENTE Y POR ESO SOLO SE CREE EN UNA DIRECCIÓN: `web` se apunta en cuanto
+ * se oye y ya no se borra; `ios`/`android` solo se apunta al activar. Quien copie la
+ * credencial de un navegador puede decir «soy un iPad», pero ese reloj ya quedó marcado
+ * como web con su primera llamada de verdad. Un reloj activado antes de esto y que nunca
+ * vuelva a llamar sigue sin plataforma, y se trata como hasta ahora.
+ */
+export type PlataformaDelReloj = 'web' | 'ios' | 'android' | null;
+
+export function plataformaDeclarada(payload: unknown): PlataformaDelReloj {
+  const valor = (payload as { platform?: unknown } | null)?.platform;
+  return valor === 'web' || valor === 'ios' || valor === 'android' ? valor : null;
+}
 
 export type KioskAuth = { credential?: unknown; devicePublicId?: unknown };
 
@@ -194,11 +221,21 @@ export async function authenticateKiosk(payload: unknown): Promise<KioskContext>
     console.error('[krealo-shift] no se pudo anotar la señal de vida del reloj:', error);
   });
 
+  // `web` se apunta una vez y esperando: es lo que cierra la cola sin red a este reloj.
+  const guardada = plataformaDeclarada({ platform: device.platform });
+  const esWeb = guardada === 'web' || plataformaDeclarada(payload) === 'web';
+  if (esWeb && guardada !== 'web') {
+    await deviceDoc.ref.update({ platform: 'web' }).catch((error: unknown) => {
+      console.error('[krealo-shift] no se pudo apuntar que el reloj es web:', error);
+    });
+  }
+
   return {
     deviceId: deviceDoc.id,
     organizationId: device.organization_id as string,
     locationId: device.location_id as string,
     offlineKey: (secretSnapshot.data()?.offline_key as string | undefined) ?? '',
+    platform: esWeb ? 'web' : guardada,
   };
 }
 
