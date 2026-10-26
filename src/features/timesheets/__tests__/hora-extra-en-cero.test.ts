@@ -1,4 +1,4 @@
-import { guardarHoraExtra } from '../horas-extra';
+import { guardarHoraExtra, reabrirHoraExtra } from '../horas-extra';
 
 const mockFrom = jest.fn();
 
@@ -39,6 +39,29 @@ describe('guardar horas extra en cero', () => {
       expect.objectContaining({ id: 'sede_e1_2026-10-03', minutes: 0, approved_by: 'gerente' }),
       { onConflict: 'id' },
     );
+  });
+
+  it('apunta lo que trabajó de más al decidir; sin dato, null (26-oct)', async () => {
+    const upsert = jest.fn().mockResolvedValue({ data: null, error: null });
+    mockFrom.mockReturnValue({ upsert });
+    await guardarHoraExtra({ ...base, minutes: 60, deMas: 95.4 });
+    expect(upsert).toHaveBeenLastCalledWith(
+      expect.objectContaining({ minutes: 60, de_mas_al_decidir: 95 }),
+      { onConflict: 'id' },
+    );
+    await guardarHoraExtra(base);
+    expect(upsert).toHaveBeenLastCalledWith(expect.objectContaining({ de_mas_al_decidir: null }), {
+      onConflict: 'id',
+    });
+  });
+
+  it('«Revisar» borra la decisión de ese día y nada más (26-oct)', async () => {
+    const eq = jest.fn().mockResolvedValue({ data: null, error: null });
+    const borrar = jest.fn().mockReturnValue({ eq });
+    mockFrom.mockReturnValue({ delete: borrar });
+    await reabrirHoraExtra({ locationId: 'sede', employeeId: 'e1', workDate: '2026-10-03' });
+    expect(borrar).toHaveBeenCalledTimes(1);
+    expect(eq).toHaveBeenCalledWith('id', 'sede_e1_2026-10-03');
   });
 
   it('un número negativo se guarda como 0', async () => {

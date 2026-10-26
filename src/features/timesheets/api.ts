@@ -105,6 +105,12 @@ export const workSessionSchema = z.object({
         decision: z.string(),
         nota: z.string().nullable().default(null),
         minutos: z.number().nullable().default(null),
+        /*
+         * En `faltan_horas`, cuánto le faltaba al decidir (26-oct): con eso «Por resolver» sabe
+         * si la jornada cambió después, aunque la deuda apuntada sea menor —«le debe 1 h» de 2—.
+         * Ver `deuda_que_no_cuadra` en `casos.ts`. Las decisiones de antes no lo traen.
+         */
+        faltaban: z.number().nullable().optional(),
       }),
     )
     .optional()

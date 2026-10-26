@@ -15,6 +15,7 @@ import {
   requireRole,
   requireUid,
 } from './shared/caller';
+import { anotarCambioTrasAprobar } from './shared/periodo-aprobado';
 import { exigirQueSeaDeLaSede } from './shared/persona-de-la-sede';
 import { noEnElFuturo } from './shared/salida-a-mano';
 import { refrigerioCentrado } from './horario-cumplido';
@@ -192,6 +193,18 @@ export const registerMissedAttendance = onCall(async (request) => {
     entityType: 'shift',
     entityId: shiftId,
     after: { event_ids: ids, starts_at: entrada, ends_at: salida, break_minutes: refrigerio },
+  });
+  /*
+   * Y SI ESA SEMANA YA SE APROBÓ, QUEDA ANOTADO (26-oct): registrar «vino y no marcó» le da
+   * horas a un día que no tenía ninguna, o sea cambia lo que se exportó. Lo mismo que hacen
+   * las correcciones de `manager.ts`; ver `anotarCambioTrasAprobar`.
+   */
+  await anotarCambioTrasAprobar({
+    organizationId,
+    locationId,
+    instante: entrada,
+    uid,
+    motivo: 'missed_attendance_registered',
   });
   return { eventIds: ids, repetido: false };
 });

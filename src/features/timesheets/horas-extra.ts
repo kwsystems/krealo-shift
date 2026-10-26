@@ -39,6 +39,11 @@ export const horaExtraSchema = z.object({
   minutes: z.number().int().min(0),
   approved_by: z.string().nullable().default(null),
   updated_at: z.string().nullable().default(null),
+  /*
+   * CUÁNTO HABÍA TRABAJADO DE MÁS AL DECIDIR (26-oct): ver `extra_que_no_cuadra` en `casos.ts`.
+   * Las aprobaciones de antes no lo traen, y un valor raro no tumba la semana.
+   */
+  de_mas_al_decidir: z.number().int().nullable().optional().catch(undefined),
 });
 
 export type HoraExtraAprobada = z.infer<typeof horaExtraSchema>;
@@ -56,6 +61,21 @@ export function aprobadasPorDia(filas: readonly HoraExtraAprobada[]): Map<string
   const mapa = new Map<string, number>();
   for (const fila of filas) {
     mapa.set(claveDelDia(fila.employee_id, fila.work_date), Math.max(0, fila.minutes));
+  }
+  return mapa;
+}
+
+/**
+ * Lo que había trabajado de más cada persona cada día cuando se decidió su extra (26-oct). Solo
+ * los días que lo apuntaron: los decididos antes no están, y `casos.ts` compara entonces con lo
+ * aprobado.
+ */
+export function deMasAlDecidirPorDia(filas: readonly HoraExtraAprobada[]): Map<string, number> {
+  const mapa = new Map<string, number>();
+  for (const fila of filas) {
+    const deMas = fila.de_mas_al_decidir;
+    if (deMas === null || deMas === undefined) continue;
+    mapa.set(claveDelDia(fila.employee_id, fila.work_date), Math.max(0, deMas));
   }
   return mapa;
 }
@@ -122,7 +142,9 @@ export async function fetchHorasExtra(params: {
   return selectRows(z.array(horaExtraSchema), (db) =>
     db
       .from(TABLES.overtimeApprovals)
-      .select('id, employee_id, location_id, work_date, minutes, approved_by, updated_at')
+      .select(
+        'id, employee_id, location_id, work_date, minutes, approved_by, updated_at, de_mas_al_decidir',
+      )
       .eq('organization_id', params.organizationId)
       .eq('location_id', params.locationId)
       .gte('work_date', params.from)
@@ -142,6 +164,12 @@ export async function guardarHoraExtra(params: {
    * pidiendo una respuesta para siempre, en Horas y en Horario. Ahora se guarda como 0.
    */
   minutes: number;
+  /**
+   * Lo que había trabajado de más ese día al decidir (26-oct). Con él, «Por resolver» avisa si
+   * después la jornada cambia y la decisión deja de cuadrar (`extra_que_no_cuadra`). Sin él se
+   * guarda `null` y se compara con lo aprobado.
+   */
+  deMas?: number | null;
 }): Promise<void> {
   const id = idDeLaAprobacion(params);
   const quien = useSessionStore.getState().user?.userId ?? null;
@@ -156,6 +184,10 @@ export async function guardarHoraExtra(params: {
         minutes: Math.max(0, Math.round(params.minutes)),
         approved_by: quien,
         approved_at: new Date().toISOString(),
+        de_mas_al_decidir:
+          params.deMas === undefined || params.deMas === null
+            ? null
+            : Math.max(0, Math.round(params.deMas)),
       },
       { onConflict: 'id' },
     ),
@@ -189,7 +221,12 @@ export function useGuardarHoraExtra(params: {
 }) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (variables: { employeeId: string; workDate: string; minutes: number }) =>
+    mutationFn: (variables: {
+      employeeId: string;
+      workDate: string;
+      minutes: number;
+      deMas?: number | null;
+    }) =>
       guardarHoraExtra({
         organizationId: params.organizationId ?? '',
         locationId: params.locationId ?? '',
@@ -205,6 +242,32 @@ export function useGuardarHoraExtra(params: {
  * antes era un minuto); «0» o vacío, nada de extra. `null` si no se entiende. Como esto decide
  * horas que se pagan, la hoja dice debajo cómo lo va a guardar.
  */
+/**
+ * «REVISAR» UNA EXTRA DECIDIDA (26-oct): se borra la decisión del día y vuelve a ser un día
+ * sin decidir, o sea el caso «trabajó N h más que su turno» de siempre en «Por resolver». Es
+ * lo que hace «Cambiar» con el «no es extra» que acompaña al refrigerio descontado
+ * (`reopenSessionDecision`), aquí para la extra sola; las reglas dejan borrarla a quien
+ * gestiona la sede.
+ */
+export async function reabrirHoraExtra(params: {
+  locationId: string;
+  employeeId: string;
+  workDate: string;
+}): Promise<void> {
+  await execute((db) =>
+    db.from(TABLES.overtimeApprovals).delete().eq('id', idDeLaAprobacion(params)),
+  );
+}
+
+export function useReabrirHoraExtra(params: { locationId: string | null }) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (variables: { employeeId: string; workDate: string }) =>
+      reabrirHoraExtra({ locationId: params.locationId ?? '', ...variables }),
+    onSuccess: () => refrescarVistasDeHoras(queryClient),
+  });
+}
+
 export function leerHorasYMinutos(texto: string): number | null {
   // Vacío es «nada de extra»; lo demás, el lector común (8-oct: «1» es una hora, no un minuto).
   return texto.trim() === '' ? 0 : minutosEscritos(texto);

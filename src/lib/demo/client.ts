@@ -1333,6 +1333,13 @@ function crearRpc(almacen: Almacen) {
                     [caso]: {
                       decision,
                       nota: typeof argumentos.p_note === 'string' ? argumentos.p_note : null,
+                      // Cuánto le faltaba al decidir (26-oct), como `resolveSessionCase`.
+                      ...(caso === 'faltan_horas' &&
+                      typeof argumentos.p_missing_minutes === 'number' &&
+                      Number.isInteger(argumentos.p_missing_minutes) &&
+                      argumentos.p_missing_minutes >= 0
+                        ? { faltaban: argumentos.p_missing_minutes }
+                        : {}),
                     },
                   },
                 },

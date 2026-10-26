@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 
 import type { WorkSession } from './api';
 import { casosPorResolver } from './casos';
-import { aprobadasPorDia, claveDelDia, useHorasExtra } from './horas-extra';
+import { aprobadasPorDia, claveDelDia, deMasAlDecidirPorDia, useHorasExtra } from './horas-extra';
 import { useHorasDebidasDeLaSede } from './horas-debidas';
 import { useWeekShifts } from '@/features/schedules/hooks';
 import { addDaysToKey } from '@/features/schedules/week';
@@ -49,6 +49,7 @@ export function useDiasConCasoAbierto(params: {
           ahoraISO: nowISO,
           timezone,
           aprobadas: aprobadasPorDia(horasExtra.data ?? []),
+          deMasAlDecidir: deMasAlDecidirPorDia(horasExtra.data ?? []),
           umbralExtra,
           debidas: debidas.data ?? [],
         }),

@@ -30,7 +30,7 @@ import {
   useHorasDebidasDeLaSede,
   useSaldarHorasDebidas,
 } from './horas-debidas';
-import { useGuardarHoraExtra } from './horas-extra';
+import { useGuardarHoraExtra, useReabrirHoraExtra } from './horas-extra';
 
 /**
  * Los casos de la semana que mira Horas, escritos y con sus arreglos. La lógica de qué es
@@ -50,6 +50,7 @@ export function PorResolverDeLaSemana({
   timeFormat,
   language,
   aprobadas,
+  deMasAlDecidir,
   onVerJornada,
 }: {
   sesiones: readonly WorkSession[];
@@ -66,6 +67,8 @@ export function PorResolverDeLaSemana({
   language: SupportedLanguage;
   /** Las horas extra aprobadas: una que cuenta el refrigerio como trabajado decide su caso. */
   aprobadas: ReadonlyMap<string, number>;
+  /** Lo trabajado de más al decidir cada extra: ver `extra_que_no_cuadra` (26-oct). */
+  deMasAlDecidir: ReadonlyMap<string, number>;
   onVerJornada: (sesion: WorkSession) => void;
 }) {
   const { t } = useTranslation();
@@ -80,6 +83,7 @@ export function PorResolverDeLaSemana({
    */
   const queryClient = useQueryClient();
   const guardarExtra = useGuardarHoraExtra({ organizationId, locationId });
+  const reabrirExtra = useReabrirHoraExtra({ locationId });
   const darPorVisto = useMutation({
     mutationFn: async (sesiones: readonly WorkSession[]) => {
       for (const sesion of sesiones) await acknowledgeUnusualClock(sesion.id);
@@ -102,6 +106,7 @@ export function PorResolverDeLaSemana({
     ahoraISO: nowISO,
     timezone,
     aprobadas,
+    deMasAlDecidir,
     umbralExtra,
     debidas: debidas.data ?? [],
   }).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
@@ -288,10 +293,14 @@ export function PorResolverDeLaSemana({
       const ocupado =
         (guardarExtra.isPending || darPorVisto.isPending || arreglar.isPending) &&
         enCurso === caso.id;
-      const decidirExtra = (minutos: number) => {
+      /*
+       * Con lo que trabajó de más AL DECIDIR (26-oct): si la jornada cambia después, «Por
+       * resolver» lo ve (`extra_que_no_cuadra`).
+       */
+      const decidirExtra = (minutos: number, deMas: number) => {
         setEnCurso(caso.id);
         guardarExtra.mutate(
-          { employeeId: caso.sesion.employee_id, workDate: caso.dia, minutes: minutos },
+          { employeeId: caso.sesion.employee_id, workDate: caso.dia, minutes: minutos, deMas },
           { onSettled: () => setEnCurso(null) },
         );
       };
@@ -303,13 +312,16 @@ export function PorResolverDeLaSemana({
       const refrigerio = caso.refrigerioSinMarcar;
       const noEsExtra =
         refrigerio === null
-          ? () => decidirExtra(0)
+          ? () => decidirExtra(0, caso.deMas)
           : () =>
               lanzar(
                 caso.id,
                 { tipo: 'descontar_refrigerio', sessionId: refrigerio.sesion.id },
                 () => {
-                  if (caso.deMas > refrigerio.minutos) decidirExtra(0);
+                  // Lo de más que queda con el refrigerio ya descontado: con eso se decide.
+                  if (caso.deMas > refrigerio.minutos) {
+                    decidirExtra(0, caso.deMas - refrigerio.minutos);
+                  }
                 },
               );
       return {
@@ -338,7 +350,7 @@ export function PorResolverDeLaSemana({
         principal: caso.posibleExtra
           ? {
               etiqueta: t('timesheet.cases.approveExtra', { hours: duracion(t, caso.deMas) }),
-              onPress: () => decidirExtra(caso.deMas),
+              onPress: () => decidirExtra(caso.deMas, caso.deMas),
               testID: `caso-${caso.id}-extra`,
             }
           : {
@@ -389,6 +401,7 @@ export function PorResolverDeLaSemana({
                     tipo: 'debe',
                     sessionId: caso.deuda.id,
                     minutos: caso.faltaAhora,
+                    faltaban: caso.faltaAhora,
                     nota: caso.deuda.nota,
                   }),
                 testID: `caso-${caso.id}-poner`,
@@ -407,6 +420,76 @@ export function PorResolverDeLaSemana({
                 },
                 testID: `caso-${caso.id}-quitar`,
               },
+      };
+    }
+    /*
+     * LA EXTRA QUE YA NO CUADRA (26-oct), como la deuda de arriba: la jornada cambió después de
+     * decidir la extra. Con extra aprobada, ponerla en lo que trabajó de más ahora o quitarla;
+     * con «no es extra» y ahora bastante más, volver a decidirlo («Revisar» deja el día sin
+     * decidir, con su «Aprobar como extra» de siempre) o confirmarlo.
+     */
+    if (caso.tipo === 'extra_que_no_cuadra') {
+      const aprobada = duracion(t, caso.aprobada);
+      const ahora = duracion(t, caso.deMasAhora);
+      const guardar = (minutos: number) => {
+        setEnCurso(caso.id);
+        guardarExtra.mutate(
+          {
+            employeeId: caso.sesion.employee_id,
+            workDate: caso.dia,
+            minutes: minutos,
+            deMas: caso.deMasAhora,
+          },
+          { onSettled: () => setEnCurso(null) },
+        );
+      };
+      const quitar = {
+        etiqueta: t('timesheet.cases.extraRemove'),
+        onPress: () => guardar(0),
+        testID: `caso-${caso.id}-quitar`,
+      };
+      const ocupada = (guardarExtra.isPending || reabrirExtra.isPending) && enCurso === caso.id;
+      if (caso.aprobada === 0) {
+        return {
+          ...base,
+          ocupada,
+          que: t('timesheet.cases.extraGrew', { now: ahora }),
+          detalle: t('timesheet.cases.extraGrewDetail'),
+          principal: {
+            etiqueta: t('timesheet.cases.extraReview'),
+            onPress: () => {
+              setEnCurso(caso.id);
+              reabrirExtra.mutate(
+                { employeeId: caso.sesion.employee_id, workDate: caso.dia },
+                { onSettled: () => setEnCurso(null) },
+              );
+            },
+            testID: `caso-${caso.id}-revisar`,
+          },
+          alternativa: {
+            etiqueta: t('timesheet.cases.extraStillNot'),
+            onPress: () => guardar(0),
+            testID: `caso-${caso.id}-no-extra`,
+          },
+        };
+      }
+      return {
+        ...base,
+        ocupada,
+        que:
+          caso.deMasAhora === 0
+            ? t('timesheet.cases.extraStale', { approved: aprobada })
+            : t('timesheet.cases.extraChanged', { approved: aprobada, now: ahora }),
+        detalle: t('timesheet.cases.extraDetail', { approved: aprobada }),
+        principal:
+          caso.deMasAhora === 0
+            ? quitar
+            : {
+                etiqueta: t('timesheet.cases.extraAdjust', { now: ahora }),
+                onPress: () => guardar(caso.deMasAhora),
+                testID: `caso-${caso.id}-ajustar`,
+              },
+        alternativa: caso.deMasAhora === 0 ? null : quitar,
       };
     }
     const propuesta = caso.salidaPropuesta;
@@ -448,7 +531,7 @@ export function PorResolverDeLaSemana({
   });
 
   const error =
-    guardarExtra.error !== null || darPorVisto.error !== null
+    guardarExtra.error !== null || darPorVisto.error !== null || reabrirExtra.error !== null
       ? t('timesheet.cases.decisionFailed')
       : arreglar.error === null || falta !== null || salida !== null
         ? null
@@ -470,8 +553,19 @@ export function PorResolverDeLaSemana({
             lanzar(
               falta.caso.id,
               decision === 'debe'
-                ? { tipo: 'debe', sessionId: falta.caso.sesion.id, minutos, nota: nota || null }
-                : { tipo: 'justificado', sessionId: falta.caso.sesion.id, nota: nota || null },
+                ? {
+                    tipo: 'debe',
+                    sessionId: falta.caso.sesion.id,
+                    minutos,
+                    faltaban: falta.caso.faltan,
+                    nota: nota || null,
+                  }
+                : {
+                    tipo: 'justificado',
+                    sessionId: falta.caso.sesion.id,
+                    faltaban: falta.caso.faltan,
+                    nota: nota || null,
+                  },
               () => setFalta(null),
             )
           }

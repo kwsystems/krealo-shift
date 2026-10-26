@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { docId } from '@/lib/firebase/ids';
 
 import { pisaAOtro, type TurnoEnElTiempo } from './conflicts';
+import { fueraDelEquipoEl } from './fuera-del-equipo';
+import { turnoEnPie } from './turno-en-pie';
 import { conNotaPrivada, fetchNotasPrivadas, guardarNotasPrivadas } from './notas-privadas';
 import { addDaysToKey, dateKeyOf, localTimeOf, shiftInstants, weekRangeInstants } from './week';
 import {
@@ -13,6 +15,7 @@ import {
   selectRows,
   toAdminError,
 } from '@/hooks/use-admin-query';
+import { fetchEmployees } from '@/features/team/api';
 import { useSessionStore } from '@/stores/session-store';
 import { RPC, TABLES } from '@/lib/firebase/tables';
 
@@ -463,9 +466,24 @@ export async function duplicateShift(params: {
   });
 }
 
-/** Borrador: se elimina. Publicado: se cancela, para conservar el historial. */
-export async function removeShift(params: { shiftId: string; status: string }): Promise<void> {
-  if (params.status === 'published') {
+/**
+ * Borrador: se elimina. Publicado: se cancela, para conservar el historial.
+ *
+ * Y EL «CAMBIADO» TAMBIÉN SE CANCELA (26-oct). Un turno publicado que se editó sin volver a
+ * publicar es un borrador con `publication_version > 0`, y se BORRABA: desaparecía del
+ * horario que el equipo ya había visto, sin historial, y las jornadas que se medían contra
+ * él se quedaban midiéndose contra un turno que no existe, porque tampoco se revisaban. Es
+ * un turno en pie (`turnoEnPie`, el mismo criterio con el que lo cuentan Horas y Reportes),
+ * así que se trata como el publicado: se cancela y se revisan sus jornadas. Solo un borrador
+ * NUNCA publicado se elimina. `publicationVersion` es opcional por quien solo descarta
+ * borradores nuevos; sin él se mira solo el estado, como antes.
+ */
+export async function removeShift(params: {
+  shiftId: string;
+  status: string;
+  publicationVersion?: number | null;
+}): Promise<void> {
+  if (turnoEnPie({ status: params.status, publication_version: params.publicationVersion })) {
     await execute((db) =>
       db
         .from(TABLES.shifts)
@@ -504,6 +522,14 @@ export async function removeShift(params: { shiftId: string; status: string }): 
  * día que esta semana ya tiene marcado como descanso: decidir que ese día trabaja no es
  * de una copia. Un descanso tampoco se copia a un día en que la persona ya tiene turno.
  * Lo que se salta se cuenta, y la pantalla lo dice.
+ *
+ * NI LOS TURNOS DE QUIEN YA NO ESTÁ (26-oct). Se copiaban también los de una persona dada
+ * de baja después de esa semana, y la semana nueva salía con turnos de alguien que ya no
+ * viene. Ahora se salta a quien `fueraDelEquipoEl` el día de la copia —el mismo criterio
+ * que deja fuera a los inactivos al pegar un horario—, con sus descansos. Esos turnos van en
+ * `omitidos`, y además en `deBaja`, para que la pantalla diga el motivo de cada uno: «ya
+ * tenía turno o descanso» no es lo que les pasó. Los descansos no se cuentan: un descanso
+ * de quien ya no viene no es algo que se haya dejado de hacer.
  */
 export async function copyPreviousWeek(params: {
   organizationId: string;
@@ -511,7 +537,7 @@ export async function copyPreviousWeek(params: {
   timezone: string;
   targetWeekStart: string;
   employeeId?: string | null;
-}): Promise<{ turnos: number; descansos: number; omitidos: number }> {
+}): Promise<{ turnos: number; descansos: number; omitidos: number; deBaja: number }> {
   const { organizationId, locationId, timezone, targetWeekStart, employeeId } = params;
   const esDeLaPersona = (id: string) =>
     employeeId === undefined || employeeId === null || id === employeeId;
@@ -520,22 +546,32 @@ export async function copyPreviousWeek(params: {
   const range = weekRangeInstants(previousWeekStart, timezone);
   const destino = weekRangeInstants(targetWeekStart, timezone);
 
-  const [turnosOrigen, descansosOrigen, turnosDestino, descansosDestino] = await Promise.all([
-    fetchWeekShifts({ organizationId, locationId, fromISO: range.fromISO, toISO: range.toISO }),
-    fetchWeekRestDays({
-      organizationId,
-      locationId,
-      fromKey: previousWeekStart,
-      toKey: addDaysToKey(previousWeekStart, 6),
-    }),
-    fetchWeekShifts({ organizationId, locationId, fromISO: destino.fromISO, toISO: destino.toISO }),
-    fetchWeekRestDays({
-      organizationId,
-      locationId,
-      fromKey: targetWeekStart,
-      toKey: addDaysToKey(targetWeekStart, 6),
-    }),
-  ]);
+  const [turnosOrigen, descansosOrigen, turnosDestino, descansosDestino, personas] =
+    await Promise.all([
+      fetchWeekShifts({ organizationId, locationId, fromISO: range.fromISO, toISO: range.toISO }),
+      fetchWeekRestDays({
+        organizationId,
+        locationId,
+        fromKey: previousWeekStart,
+        toKey: addDaysToKey(previousWeekStart, 6),
+      }),
+      fetchWeekShifts({
+        organizationId,
+        locationId,
+        fromISO: destino.fromISO,
+        toISO: destino.toISO,
+      }),
+      fetchWeekRestDays({
+        organizationId,
+        locationId,
+        fromKey: targetWeekStart,
+        toKey: addDaysToKey(targetWeekStart, 6),
+      }),
+      fetchEmployees(organizationId),
+    ]);
+  const fichas = new Map(personas.map((persona) => [persona.id, persona]));
+  const yaNoEsta = (employeeId: string, dateKey: string) =>
+    fueraDelEquipoEl(fichas.get(employeeId), dateKey);
 
   const yaHay: TurnoEnElTiempo[] = turnosDestino
     .filter((shift) => shift.status !== 'cancelled')
@@ -550,6 +586,7 @@ export async function copyPreviousWeek(params: {
 
   const createdBy = actorId();
   let omitidos = 0;
+  let deBaja = 0;
   const rows: Record<string, unknown>[] = [];
   const notas: Parameters<typeof guardarNotasPrivadas>[0][number][] = [];
   for (const shift of turnosOrigen) {
@@ -562,6 +599,11 @@ export async function copyPreviousWeek(params: {
       timezone,
     });
     if (instants === null) throw new AdminError('invalid', 'INVALID_SHIFT_TIMES');
+    if (yaNoEsta(shift.employee_id, dateKey)) {
+      omitidos += 1;
+      deBaja += 1;
+      continue;
+    }
 
     const copia = {
       employeeId: shift.employee_id,
@@ -622,13 +664,14 @@ export async function copyPreviousWeek(params: {
       dateKey: addDaysToKey(descanso.date_key, 7),
       note: descanso.note,
     }))
-    .filter((descanso) => !conTurno.has(`${descanso.employeeId}|${descanso.dateKey}`));
+    .filter((descanso) => !conTurno.has(`${descanso.employeeId}|${descanso.dateKey}`))
+    .filter((descanso) => !yaNoEsta(descanso.employeeId, descanso.dateKey));
 
   const descansos = await setRestDays({ organizationId, locationId, days: descansosACopiar });
 
   if (rows.length > 0) await execute((db) => db.from(TABLES.shifts).insert(rows));
   await guardarNotasPrivadas(notas);
-  return { turnos: rows.length, descansos, omitidos };
+  return { turnos: rows.length, descansos, omitidos, deBaja };
 }
 
 /**
