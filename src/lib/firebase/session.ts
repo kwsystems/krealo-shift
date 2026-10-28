@@ -1,8 +1,6 @@
 import { onAuthStateChanged } from 'firebase/auth';
 
-import { getDemoClient } from '@/lib/demo/client';
-import { isDemoMode } from '@/lib/demo/config';
-import { DEMO_VENDEDOR_EMAIL } from '@/lib/demo/seed';
+import { cargarDemo } from '@/lib/demo/config';
 
 import { getFirebaseAuth } from './client';
 
@@ -40,8 +38,8 @@ type DemoAuth = {
   signOut: () => Promise<unknown>;
 };
 
-function demoSource(): AuthSource {
-  const auth = (getDemoClient() as unknown as { auth: DemoAuth }).auth;
+function demoSource(demo: NonNullable<ReturnType<typeof cargarDemo>>): AuthSource {
+  const auth = (demo.getDemoClient() as unknown as { auth: DemoAuth }).auth;
   let cached: SessionUserInfo | null = null;
 
   const leer = async () => {
@@ -67,13 +65,14 @@ function demoSource(): AuthSource {
       await auth.signInWithPassword({ email: 'demo@krealomedia.com', password: 'demostracion' });
     },
     signInDemoVendedor: async () => {
-      await auth.signInWithPassword({ email: DEMO_VENDEDOR_EMAIL, password: 'demostracion' });
+      await auth.signInWithPassword({ email: demo.DEMO_VENDEDOR_EMAIL, password: 'demostracion' });
     },
   };
 }
 
 export function authSource(): AuthSource | null {
-  if (isDemoMode) return demoSource();
+  const demo = cargarDemo();
+  if (demo !== null) return demoSource(demo);
 
   const auth = getFirebaseAuth();
   if (auth === null) return null;

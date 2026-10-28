@@ -1,7 +1,6 @@
 import { httpsCallable, type HttpsCallableResult } from 'firebase/functions';
 
-import { getDemoClient } from '@/lib/demo/client';
-import { isDemoMode } from '@/lib/demo/config';
+import { cargarDemo } from '@/lib/demo/config';
 
 import { getFirebaseFunctions } from './client';
 
@@ -38,8 +37,9 @@ export async function callFunction<T>(
    * cuando de verdad falta configuracion, y mentira cuando lo que hay es una
    * demostracion que si tiene datos que ensenar.
    */
-  if (isDemoMode) {
-    const demo = getDemoClient() as unknown as {
+  const moduloDemo = cargarDemo();
+  if (moduloDemo !== null) {
+    const demo = moduloDemo.getDemoClient() as unknown as {
       functions: { invoke: (n: string, o?: { body?: unknown }) => Promise<unknown> };
     };
     try {

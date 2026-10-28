@@ -1,25 +1,14 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { Stack } from 'expo-router';
+import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import {
-  Archivo_500Medium,
-  Archivo_600SemiBold,
-  Archivo_700Bold,
-} from '@expo-google-fonts/archivo';
-import {
-  Inter_400Regular,
-  Inter_500Medium,
-  Inter_600SemiBold,
-  Inter_700Bold,
-  useFonts,
-} from '@expo-google-fonts/inter';
 
 import { DemoBanner } from '@/components/ui/demo-banner';
+import { RaizDeGestos } from '@/components/ui/raiz-de-gestos';
 import { MissingConfigScreen } from '@/components/ui/missing-config';
 import { NotificationsGate } from '@/features/notifications/notifications-gate';
 import { isEnvConfigured } from '@/lib/env';
@@ -31,6 +20,7 @@ import { usePreferencesStore } from '@/stores/preferences-store';
 import { aplicarBarraDeDesplazamiento } from '@/theme/barra-de-desplazamiento';
 import { aplicarMovimiento, marcarTemaDelMovimiento } from '@/theme/movimiento';
 import { estilosDelTema } from '@/theme/estilos';
+import { ESPERAR_A_LAS_FUENTES, FUENTES } from '@/theme/fuentes';
 import { useTheme } from '@/theme/use-theme';
 
 // i18n se inicializa antes del primer render para que ningún texto aparezca en
@@ -82,23 +72,8 @@ export default function RootLayout() {
   // Las sombras y el brillo del movimiento siguen al tema: ver `movimiento.ts`.
   useEffect(() => marcarTemaDelMovimiento(isDark), [isDark]);
 
-  const [fontsLoaded, fontError] = useFonts({
-    Inter_400Regular,
-    Inter_500Medium,
-    Inter_600SemiBold,
-    Inter_700Bold,
-    /*
-     * ARCHIVO, la cara de los títulos y del reloj. Ver `fontFamily.display` en los
-     * tokens y `docs/DISENO.md` para el porqué de esta cara y no otra.
-     *
-     * Van los TRES pesos que los tokens nombran: si se carga uno de menos, el que falte
-     * cae a la fuente del sistema sin avisar y el título se ve en otra letra. Es de los
-     * fallos que no rompen nada y se ven raros.
-     */
-    Archivo_500Medium,
-    Archivo_600SemiBold,
-    Archivo_700Bold,
-  });
+  // Las fuentes, por plataforma: ver `src/theme/fuentes.ts` y `fuentes.web.ts`.
+  const [fontsLoaded, fontError] = useFonts(FUENTES);
 
   useEffect(() => {
     let stopNetwork: (() => void) | undefined;
@@ -142,7 +117,10 @@ export default function RootLayout() {
 
   // Una fuente que no carga no debe dejar la app en la pantalla de inicio para
   // siempre: seguimos con la fuente del sistema y lo registramos.
-  const fontsSettled = fontsLoaded || fontError !== null;
+  //
+  // EN LA WEB NO SE ESPERA A LAS FUENTES (28-oct): hasta que llegaban todas, la pantalla
+  // estaba en blanco. Ver `src/theme/fuentes.web.ts`.
+  const fontsSettled = !ESPERAR_A_LAS_FUENTES || fontsLoaded || fontError !== null;
 
   useEffect(() => {
     if (ready && fontsSettled) void SplashScreen.hideAsync();
@@ -180,7 +158,7 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={styles.flex}>
+    <RaizDeGestos style={styles.flex}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           {/*
@@ -211,7 +189,7 @@ export default function RootLayout() {
           <NotificationsGate />
         </QueryClientProvider>
       </SafeAreaProvider>
-    </GestureHandlerRootView>
+    </RaizDeGestos>
   );
 }
 

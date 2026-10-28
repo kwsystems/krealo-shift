@@ -1,6 +1,12 @@
 import { TZDate } from '@date-fns/tz';
-import { differenceInMinutes, format, isValid, parseISO } from 'date-fns';
-import { enUS, es } from 'date-fns/locale';
+// IMPORTS DIRECTOS DE DATE-FNS, NO DEL ÍNDICE (28-oct): Metro no descarta lo que no se usa y
+// `from 'date-fns'` metía la librería entera con sus 90 idiomas (1 MB) en la web.
+import { differenceInMinutes } from 'date-fns/differenceInMinutes';
+import { format } from 'date-fns/format';
+import { isValid } from 'date-fns/isValid';
+import { parseISO } from 'date-fns/parseISO';
+import { enUS } from 'date-fns/locale/en-US';
+import { es } from 'date-fns/locale/es';
 
 import type { SupportedLanguage } from '@/i18n';
 

@@ -21,3 +21,18 @@
  * con datos inventados que se confunda con datos reales es peor que no tenerlo.
  */
 export const isDemoMode = process.env.EXPO_PUBLIC_DEMO === '1';
+
+/**
+ * LA DEMO SE CARGA SOLO SI ESTÁ ENCENDIDA (28-oct). Con `import` normal sus 77 KB comprimidos
+ * iban en el paquete de producción, donde nunca se usan. La condición se escribe aquí con
+ * `process.env` literal, no con `isDemoMode`, porque así el empaquetador la resuelve al
+ * construir y deja fuera el `require` entero. Fuera de la demo devuelve `null`.
+ */
+type ModuloDemo = typeof import('./client') & Pick<typeof import('./seed'), 'DEMO_VENDEDOR_EMAIL'>;
+/* eslint-disable @typescript-eslint/no-require-imports -- ver el comentario de arriba */
+export function cargarDemo(): ModuloDemo | null {
+  return process.env.EXPO_PUBLIC_DEMO === '1'
+    ? { ...require('./seed'), ...require('./client') }
+    : null;
+}
+/* eslint-enable @typescript-eslint/no-require-imports */

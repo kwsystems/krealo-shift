@@ -18,8 +18,7 @@ import {
 
 import { deleteObject, ref as storageRef, uploadBytes } from 'firebase/storage';
 
-import { getDemoClient } from '@/lib/demo/client';
-import { isDemoMode } from '@/lib/demo/config';
+import { cargarDemo } from '@/lib/demo/config';
 import { env } from '@/lib/env';
 
 import { getDb, getFirebaseAuth, getFirebaseStorage } from './client';
@@ -688,7 +687,8 @@ class StorageArea {
  * del codigo sigue hablando con lo que cree que es el backend de verdad.
  */
 export function getDataClient(): DataClient | null {
-  if (isDemoMode) return getDemoClient();
+  const demo = cargarDemo();
+  if (demo !== null) return demo.getDemoClient();
   const db = getDb();
   return db === null ? null : new DataClient(db);
 }

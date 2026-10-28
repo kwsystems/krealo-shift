@@ -98,13 +98,18 @@ if (MODO === '--despues') {
     console.error(`\nFALLA: no existe ${carpeta}; algo cambió en el empaquetado.`);
     process.exit(1);
   }
-  const entrada = readdirSync(carpeta).find((f) => /^entry-[a-f0-9]+\.js$/.test(f));
-  if (entrada === undefined) {
+  /*
+   * TODOS LOS ARCHIVOS Y NO SOLO `entry` (28-oct): desde que cada pantalla va en su archivo
+   * (`asyncRoutes` en `app.config.ts`), la configuración vive en `__common`, y una dirección
+   * de emulador podría acabar en cualquiera.
+   */
+  const paquetes = readdirSync(carpeta).filter((f) => f.endsWith('.js'));
+  if (!paquetes.some((f) => /^entry-[a-f0-9]+\.js$/.test(f))) {
     console.error('\nFALLA: no encontré el paquete de entrada; algo cambió en el empaquetado.');
     process.exit(1);
   }
 
-  const texto = readFileSync(join(carpeta, entrada), 'utf8');
+  const texto = paquetes.map((f) => readFileSync(join(carpeta, f), 'utf8')).join('\n');
   const sobran = sobraEnElPaquete(texto);
   if (sobran.length > 0) {
     console.error(`\nFALLA: el paquete construido lleva ${sobran.join(' y ')}.`);
@@ -131,7 +136,7 @@ if (MODO === '--despues') {
     process.exit(1);
   }
 
-  console.log(`El paquete construido lleva su configuración dentro (${entrada}).`);
+  console.log(`El paquete construido lleva su configuración dentro (${paquetes.length} archivos).`);
   process.exit(0);
 }
 

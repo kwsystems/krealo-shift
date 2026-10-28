@@ -162,27 +162,34 @@ if (reintentados > 0 && fallos.length < reintentados) {
  * públicas por diseño, van en el cliente— así que leerlo basta y cuesta una descarga.
  */
 if (fallos.length === 0) {
-  const entrada = aComprobar.find((ruta) => /entry-[a-f0-9]+\.js$/.test(ruta));
-  if (entrada === undefined) {
+  /*
+   * `entry` Y `__common` (28-oct): desde que cada pantalla va en su archivo (`asyncRoutes`), la
+   * configuración ya no está en `entry` sino en `__common`. Se miran juntos.
+   */
+  const paquetes = aComprobar.filter((ruta) => /(entry|__common)-[a-f0-9]+\.js$/.test(ruta));
+  if (!paquetes.some((ruta) => /entry-[a-f0-9]+\.js$/.test(ruta))) {
     console.error('FALLA: no encontré el paquete de entrada; algo cambió en el empaquetado.');
     process.exit(1);
   }
 
-  // La misma construcción que el bucle de arriba: `aComprobar` guarda rutas DEL DISCO,
-  // no URLs. Usarlas tal cual pedía una dirección inexistente y la comprobación acusaba
-  // de «sin configuración» a un despliegue correcto.
-  const urlEntrada = `${BASE}/${relative(DIST, entrada).split(sep).join('/')}`;
-  /*
-   * CON LOS MISMOS REINTENTOS: en plena propagación el paquete también puede llegar como
-   * la página HTML, y entonces «no lleva la configuración» sería otro falso positivo.
-   */
   let paquete = '';
-  for (const espera of [0, ...ESPERAS_MS]) {
-    if (espera > 0) await esperar(espera);
-    const respuesta = await fetch(urlEntrada);
-    paquete = await respuesta.text();
-    const esJs = /javascript/.test(respuesta.headers.get('content-type') ?? '');
-    if (respuesta.ok && esJs && faltaEnElPaquete(paquete).length === 0) break;
+  for (const ruta of paquetes) {
+    // La misma construcción que el bucle de arriba: `aComprobar` guarda rutas DEL DISCO,
+    // no URLs. Usarlas tal cual pedía una dirección inexistente y la comprobación acusaba
+    // de «sin configuración» a un despliegue correcto.
+    const url = `${BASE}/${relative(DIST, ruta).split(sep).join('/')}`;
+    /*
+     * CON LOS MISMOS REINTENTOS: en plena propagación el paquete también puede llegar como
+     * la página HTML, y entonces «no lleva la configuración» sería otro falso positivo.
+     */
+    let texto = '';
+    for (const espera of [0, ...ESPERAS_MS]) {
+      if (espera > 0) await esperar(espera);
+      const respuesta = await fetch(url);
+      texto = await respuesta.text();
+      if (respuesta.ok && /javascript/.test(respuesta.headers.get('content-type') ?? '')) break;
+    }
+    paquete += `${texto}\n`;
   }
   /*
    * LA MISMA FUNCIÓN QUE USA `paquete-check.mjs`, y compartida a propósito: la pregunta

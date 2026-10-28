@@ -115,7 +115,19 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
 
   plugins: [
-    'expo-router',
+    [
+      'expo-router',
+      {
+        /*
+         * CADA PANTALLA EN SU ARCHIVO, EN LA WEB DE PRODUCCIÓN (28-oct). Con `single` todo iba en
+         * un único paquete: quien abría la página de acceso bajaba también Horario, Horas,
+         * Reportes y el reloj antes de ver nada, y PageSpeed daba 56 en móvil. Así cada ruta
+         * se pide al entrar en ella. Solo en la web y solo al exportar: el servidor de
+         * desarrollo y las apps nativas siguen igual.
+         */
+        asyncRoutes: { web: 'production', default: false },
+      },
+    ],
     'expo-localization',
     'expo-secure-store',
     'expo-sqlite',

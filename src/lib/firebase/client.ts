@@ -95,8 +95,15 @@ export function getFirebaseAuth(): Auth | null {
   if (authInstance !== null) return authInstance;
 
   if (Platform.OS === 'web') {
-    authInstance = getAuth(instance);
-    void authInstance.setPersistence(browserLocalPersistence);
+    /*
+     * `initializeAuth` Y NO `getAuth` (28-oct). `getAuth` en el navegador trae el apoyo de
+     * las ventanas de Google y al arrancar ya pide `apis.google.com/js/api.js` y su iframe:
+     * una descarga y un dominio más en el camino de la primera pantalla, que PageSpeed
+     * contaba. La única ventana que se abre es la de «Entrar con Google», y ese apoyo se le
+     * pasa allí mismo (`signInWithPopup` en `auth.ts`). La persistencia es la de siempre:
+     * `localStorage`, así que nadie pierde su sesión.
+     */
+    authInstance = initializeAuth(instance, { persistence: browserLocalPersistence });
     // Solo en el paquete de pruebas de `correo:check`: ver `EXPO_PUBLIC_AUTH_EMULATOR_URL`.
     const emulador = env.EXPO_PUBLIC_AUTH_EMULATOR_URL;
     if (emulador !== undefined)

@@ -5,6 +5,7 @@ import * as WebBrowser from 'expo-web-browser';
 import {
   GoogleAuthProvider,
   signInWithCredential,
+  browserPopupRedirectResolver,
   signInWithPopup,
   type UserCredential,
 } from 'firebase/auth';
@@ -94,7 +95,7 @@ export function useGoogleSignIn(
       // los comparten varias personas y entrar con la cuenta de quien pasó antes
       // es un fichaje atribuido a quien no fue.
       provider.setCustomParameters({ prompt: 'select_account' });
-      const credential = await signInWithPopup(auth, provider);
+      const credential = await signInWithPopup(auth, provider, browserPopupRedirectResolver);
       onSignedIn?.(credential);
       return;
     }
