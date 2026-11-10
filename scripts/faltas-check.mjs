@@ -37,6 +37,7 @@ import { mkdirSync } from 'node:fs';
 import {
   servirExport,
   cargarPlaywright,
+  abrirFaltasRevisadas,
   esperarPantalla,
   MARCADOR_ACCESO,
   MARCADORES,
@@ -68,7 +69,11 @@ const visible = (pagina, selector) =>
       .map((parte) => `${parte.trim()}:not([aria-hidden="true"] *)`)
       .join(', '),
   );
-const cuenta = (pagina, selector) => visible(pagina, selector).count();
+// Las filas de falta ya revisadas están plegadas en Horas: se abren antes (ver `arnes-web`).
+const cuenta = async (pagina, selector) => {
+  if (selector.includes('falta-')) await abrirFaltasRevisadas(pagina);
+  return visible(pagina, selector).count();
+};
 /**
  * El número de una casilla: el ÚLTIMO, porque el valor va abajo y el detalle —«1
  * justificada»— encima, con el rótulo (ver `StatTile`). Con la primera cifra se leía el
@@ -127,9 +132,10 @@ const ESTADOS_DE_FALTA = '[data-testid^="falta-"][data-testid$="-estado"]';
 const BOTONES_POR_QUE = '[data-testid^="falta-"][data-testid$="-porque"]';
 const HOJA = '[data-testid="justificar-falta-hoja"]';
 
-/** Abre «¿Por qué faltó?» de la primera falta, elige tipo y motivo, y guarda. */
-async function justificar(pagina, { tipo, motivo, nota }) {
-  await visible(pagina, BOTONES_POR_QUE).first().click();
+/** Abre «¿Por qué faltó?» de la primera falta (o la de `boton`), elige tipo y motivo, y guarda. */
+async function justificar(pagina, { tipo, motivo, nota, boton = BOTONES_POR_QUE }) {
+  await abrirFaltasRevisadas(pagina);
+  await visible(pagina, boton).first().click();
   await pagina.locator(HOJA).waitFor({ timeout: 8000 });
   await pagina.locator(`[data-testid="justificar-falta-tipo-${tipo}"]`).click();
   await pagina.locator(`[data-testid="justificar-falta-${motivo}"]`).click();
@@ -142,10 +148,12 @@ async function justificar(pagina, { tipo, motivo, nota }) {
   await esperar(pagina, 1200);
 }
 
-const textoDe = (pagina, selector) =>
-  visible(pagina, selector)
+const textoDe = async (pagina, selector) => {
+  if (selector.includes('falta-')) await abrirFaltasRevisadas(pagina);
+  return visible(pagina, selector)
     .allInnerTexts()
     .then((textos) => textos.join(' | '));
+};
 
 try {
   /* ------------------------------------------------- 1 a 5: quien gestiona */
@@ -280,10 +288,13 @@ try {
       `  comentario           faltas ${faltasAntesDeComentar} → ${faltasTrasComentar}, por publicar ${antesDelComentario} → ${trasElComentario}`,
     );
 
-    // --- 8. Cambiarla a «Sin justificar», y «Otro» sin comentario no se guarda.
+    // --- 8. Cambiarla a «Sin justificar», y «Otro» sin comentario no se guarda. La
+    // justificada ya está revisada, así que vive en la línea plegada (10-nov).
+    const PORQUE_REVISADA = `[data-testid="faltas-revisadas"] ${BOTONES_POR_QUE}`;
     await irPorElMenu(pagina, '/hours');
     await semanaAnterior(pagina);
-    await visible(pagina, BOTONES_POR_QUE).first().click();
+    await abrirFaltasRevisadas(pagina);
+    await visible(pagina, PORQUE_REVISADA).first().click();
     await pagina.locator(HOJA).waitFor({ timeout: 8000 });
     await pagina.locator('[data-testid="justificar-falta-other"]').click();
     await pagina.locator('[data-testid="justificar-falta-nota"]').fill('');
@@ -299,7 +310,7 @@ try {
       .waitFor({ state: 'detached', timeout: 4000 })
       .catch(() => pagina.locator('[aria-label="Cerrar"]').first().click());
     await esperar(pagina, 600);
-    await justificar(pagina, { tipo: 'unjustified', motivo: 'no_notice' });
+    await justificar(pagina, { tipo: 'unjustified', motivo: 'no_notice', boton: PORQUE_REVISADA });
     const estadosTras = await textoDe(pagina, ESTADOS_DE_FALTA);
     if (!/Sin justificar · No avisó/.test(estadosTras)) {
       problemas.push(`tras cambiarla Horas no dice «Sin justificar»: «${estadosTras}»`);

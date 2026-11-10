@@ -27,6 +27,7 @@
 import {
   servirExport,
   cargarPlaywright,
+  abrirFaltasRevisadas,
   esperarPantalla,
   MARCADOR_ACCESO,
   MARCADORES,
@@ -222,7 +223,13 @@ try {
     await delante(pagina, '[data-testid="week-previous"]').first().click();
     await esperar(pagina, 1500);
   }
-  const porque = delante(pagina, '[data-testid^="falta-"][data-testid$="-porque"]');
+  // Sin revisar está en el recuadro; la de la semana pasada ya está justificada y vive en la
+  // línea plegada de las revisadas (10-nov).
+  await abrirFaltasRevisadas(pagina);
+  const porque = delante(
+    pagina,
+    `${conSinRevisar ? '[data-testid="faltas-sin-revisar"]' : '[data-testid="faltas-revisadas"]'} [data-testid^="falta-"][data-testid$="-porque"]`,
+  );
   if ((await porque.count()) === 0) {
     problemas.push('Horas no enseña la falta de la vendedora');
   } else {

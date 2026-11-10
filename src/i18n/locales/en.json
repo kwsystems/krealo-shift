@@ -1476,6 +1476,10 @@
     "absences": {
       "title_one": "{{count}} absence this week",
       "title_other": "{{count}} absences this week",
+      "reviewed_one": "{{count}} absence already reviewed this week: it still counts on every screen.",
+      "reviewed_other": "{{count}} absences already reviewed this week: they still count on every screen.",
+      "showReviewed": "Show",
+      "hideReviewed": "Hide",
       "body": "Shifts that ended with no clock-in at all. They count as absences in Schedule, Team, Reports, the bonus and each person's phone. Say why they were absent: an excused absence doesn't cost the bonus. If they came and didn't clock in, record their clock-in and clock-out and the absence goes away on its own.",
       "what": "Had a shift {{range}} and didn't clock in at all.",
       "cameAnyway": "Came, didn't clock in",

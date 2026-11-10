@@ -79,16 +79,36 @@ describe('las faltas de la semana en Horas', () => {
         onPorQue={jest.fn()}
       />,
     );
+    // El recuadro es lo que queda por hacer: solo la sin revisar (10-nov).
+    expect(screen.getByText('Sin revisar')).toBeTruthy();
+    expect(screen.getByText('1 falta esta semana')).toBeTruthy();
+    expect(screen.getByTestId('falta-c-porque')).toHaveTextContent('¿Por qué faltó?');
+    // Las revisadas —justificada o no— quedan en una línea, y se abren para cambiarlas.
+    expect(screen.queryByTestId('falta-a')).toBeNull();
+    expect(screen.getByTestId('faltas-revisadas')).toHaveTextContent(
+      /2 faltas ya revisadas esta semana/,
+    );
+    await fireEvent.press(screen.getByTestId('faltas-revisadas-ver'));
     expect(screen.getByText('Justificada · Descanso médico')).toBeTruthy();
     expect(screen.getByText('Sin justificar · No avisó')).toBeTruthy();
-    expect(screen.getByText('Sin revisar')).toBeTruthy();
     expect(screen.getByText('«Trajo su certificado»')).toBeTruthy();
-    // El título cuenta lo que queda por hacer: una sin revisar, una justificada.
-    expect(screen.getByText('1 sin revisar')).toBeTruthy();
-    expect(screen.getByText('1 justificada')).toBeTruthy();
-    // Sin revisar, la acción pregunta; revisada, deja cambiarlo.
-    expect(screen.getByTestId('falta-c-porque')).toHaveTextContent('¿Por qué faltó?');
     expect(screen.getByTestId('falta-a-porque')).toHaveTextContent('Cambiar');
+  });
+
+  it('con todas revisadas no queda recuadro de aviso', async () => {
+    await renderWithProviders(
+      <FaltasDeLaSemana
+        faltas={[falta('a', {})]}
+        nombres={new Map([['e1', 'Ana Prueba']])}
+        timezone={TZ}
+        timeFormat="24h"
+        language="es-PE"
+        onVino={jest.fn()}
+        onPorQue={jest.fn()}
+      />,
+    );
+    expect(screen.queryByTestId('faltas-sin-revisar')).toBeNull();
+    expect(screen.getByTestId('faltas-revisadas')).toHaveTextContent(/1 falta ya revisada/);
   });
 
   it('«Otro motivo» pide contar qué pasó antes de guardar', async () => {

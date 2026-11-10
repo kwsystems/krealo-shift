@@ -24,7 +24,7 @@ import {
 import { horaEscrita } from '@/domain/hora-escrita';
 import { minutosEscritos } from '@/domain/duracion-escrita';
 import { duracion } from '@/features/timesheets/duracion';
-import { contarFaltas, type Falta } from '@/features/timesheets/faltas';
+import { estadoDeFalta, type Falta } from '@/features/timesheets/faltas';
 import { porQueNoSeRegistro } from '@/features/timesheets/por-que-no-se-registro';
 import {
   MOTIVOS_DE_CUMPLIDO,
@@ -91,114 +91,123 @@ export function FaltasDeLaSemana({
   const estilos = useEstilos();
   const { density } = useResponsive();
   const ancha = density === 'extraWide';
+  const [verRevisadas, setVerRevisadas] = useState(false);
   if (faltas.length === 0) return null;
-  const cuenta = contarFaltas(faltas);
-  // Todas justificadas: ya no hay nada en contra, y el rojo diría lo contrario.
-  const todasJustificadas = cuenta.justificadas === cuenta.total;
+  /*
+   * LO REVISADO SALE DEL RECUADRO (10-nov). Andree: «cuando ya está justificado, debería
+   * desaparecer». El recuadro es lo que queda por hacer, y una falta a la que ya se le dijo
+   * por qué —justificada o no— no pide nada más. Sigue contando igual en todas las
+   * pantallas; aquí solo queda una línea discreta para abrirla, porque este es el único
+   * sitio donde se cambia el motivo.
+   */
+  const pendientes = faltas.filter((falta) => estadoDeFalta(falta) === 'sinRevisar');
+  const revisadas = faltas.filter((falta) => estadoDeFalta(falta) !== 'sinRevisar');
+
+  const filas = (lista: readonly Falta[]) => (
+    <Stack gap={0}>
+      {lista.map((falta, indice) => (
+        <View
+          key={falta.id}
+          style={[
+            estilos.fila,
+            ancha ? estilos.filaAncha : null,
+            indice > 0 ? estilos.conRegla : null,
+          ]}
+          testID={`falta-${falta.id}`}
+        >
+          <Stack gap={spacing.xs} style={ancha ? estilos.textoAncho : undefined}>
+            <Row gap={spacing.sm} align="center" wrap>
+              <AppText variant="bodyStrong">
+                {nombres.get(falta.employeeId) ?? t('team.unknownEmployee')}
+              </AppText>
+              <AppText variant="label" tone="subtle" tabular>
+                {formatDateKeyShort(falta.dia, language)}
+              </AppText>
+              <View testID={`falta-${falta.id}-estado`}>
+                <StatusBadge
+                  label={etiquetaDeFalta(t, falta)}
+                  tone={tonoDeFalta(falta)}
+                  icon={iconoDeFalta(falta)}
+                  compact
+                />
+              </View>
+            </Row>
+            <AppText variant="body">
+              {t('timesheet.absences.what', {
+                range: formatShiftRange(
+                  falta.turno.starts_at,
+                  falta.turno.ends_at,
+                  timezone,
+                  timeFormat,
+                ),
+              })}
+            </AppText>
+            {falta.resolucion?.note ? (
+              <AppText variant="help" tone="muted" testID={`falta-${falta.id}-nota`}>
+                «{falta.resolucion.note}»
+              </AppText>
+            ) : null}
+          </Stack>
+          <Row gap={spacing.sm} wrap align="center">
+            <SecondaryButton
+              label={falta.resolucion === null ? t('absence.why') : t('absence.change')}
+              onPress={() => onPorQue(falta)}
+              fullWidth={false}
+              testID={`falta-${falta.id}-porque`}
+            />
+            <GhostButton
+              label={t('timesheet.absences.cameAnyway')}
+              onPress={() => onVino(falta)}
+              fullWidth={false}
+              testID={`falta-${falta.id}-vino`}
+            />
+          </Row>
+        </View>
+      ))}
+    </Stack>
+  );
 
   return (
-    <View
-      style={[estilos.caja, todasJustificadas ? estilos.cajaJustificada : null]}
-      testID="faltas-de-la-semana"
-    >
-      <Stack gap={spacing.md}>
-        <Row gap={spacing.sm} align="center" wrap>
-          <Ionicons
-            name="person-remove-outline"
-            size={20}
-            color={todasJustificadas ? colors.warning600 : colors.danger600}
-          />
-          <AppText variant="bodyStrong" accessibilityRole="header" style={estilos.crece}>
-            {t('timesheet.absences.title', { count: faltas.length })}
-          </AppText>
-          {cuenta.sinRevisar > 0 ? (
-            <View testID="faltas-sin-revisar">
-              <StatusBadge
-                label={t('absence.pendingCount', { count: cuenta.sinRevisar })}
-                tone="late"
-                icon="help-circle-outline"
-                compact
-              />
-            </View>
-          ) : null}
-          {cuenta.justificadas > 0 ? (
-            <View testID="faltas-justificadas">
-              <StatusBadge
-                label={t('absence.justifiedCount', { count: cuenta.justificadas })}
-                tone="warning"
-                icon="document-text-outline"
-                compact
-              />
-            </View>
-          ) : null}
-        </Row>
-        <AppText variant="help" tone="muted">
-          {t('timesheet.absences.body')}
-        </AppText>
+    <Stack gap={spacing.sm} testID="faltas-de-la-semana">
+      {pendientes.length > 0 ? (
+        <View style={estilos.caja} testID="faltas-sin-revisar">
+          <Stack gap={spacing.md}>
+            <Row gap={spacing.sm} align="center" wrap>
+              <Ionicons name="person-remove-outline" size={20} color={colors.danger600} />
+              <AppText variant="bodyStrong" accessibilityRole="header" style={estilos.crece}>
+                {t('timesheet.absences.title', { count: pendientes.length })}
+              </AppText>
+            </Row>
+            <AppText variant="help" tone="muted">
+              {t('timesheet.absences.body')}
+            </AppText>
+            {filas(pendientes)}
+          </Stack>
+        </View>
+      ) : null}
 
-        <Stack gap={0}>
-          {faltas.map((falta, indice) => (
-            <View
-              key={falta.id}
-              style={[
-                estilos.fila,
-                ancha ? estilos.filaAncha : null,
-                indice > 0 ? estilos.conRegla : null,
-              ]}
-              testID={`falta-${falta.id}`}
-            >
-              <Stack gap={spacing.xs} style={ancha ? estilos.textoAncho : undefined}>
-                <Row gap={spacing.sm} align="center" wrap>
-                  <AppText variant="bodyStrong">
-                    {nombres.get(falta.employeeId) ?? t('team.unknownEmployee')}
-                  </AppText>
-                  <AppText variant="label" tone="subtle" tabular>
-                    {formatDateKeyShort(falta.dia, language)}
-                  </AppText>
-                  <View testID={`falta-${falta.id}-estado`}>
-                    <StatusBadge
-                      label={etiquetaDeFalta(t, falta)}
-                      tone={tonoDeFalta(falta)}
-                      icon={iconoDeFalta(falta)}
-                      compact
-                    />
-                  </View>
-                </Row>
-                <AppText variant="body">
-                  {t('timesheet.absences.what', {
-                    range: formatShiftRange(
-                      falta.turno.starts_at,
-                      falta.turno.ends_at,
-                      timezone,
-                      timeFormat,
-                    ),
-                  })}
-                </AppText>
-                {falta.resolucion?.note ? (
-                  <AppText variant="help" tone="muted" testID={`falta-${falta.id}-nota`}>
-                    «{falta.resolucion.note}»
-                  </AppText>
-                ) : null}
-              </Stack>
-              <Row gap={spacing.sm} wrap align="center">
-                <SecondaryButton
-                  label={falta.resolucion === null ? t('absence.why') : t('absence.change')}
-                  onPress={() => onPorQue(falta)}
-                  fullWidth={false}
-                  testID={`falta-${falta.id}-porque`}
-                />
-                <GhostButton
-                  label={t('timesheet.absences.cameAnyway')}
-                  onPress={() => onVino(falta)}
-                  fullWidth={false}
-                  testID={`falta-${falta.id}-vino`}
-                />
-              </Row>
-            </View>
-          ))}
-        </Stack>
-      </Stack>
-    </View>
+      {revisadas.length > 0 ? (
+        <View style={estilos.revisadas} testID="faltas-revisadas">
+          <Row gap={spacing.sm} align="center" wrap>
+            <Ionicons name="checkmark-done-outline" size={18} color={colors.ink500} />
+            <AppText variant="help" tone="muted" style={estilos.crece}>
+              {t('timesheet.absences.reviewed', { count: revisadas.length })}
+            </AppText>
+            <GhostButton
+              label={
+                verRevisadas
+                  ? t('timesheet.absences.hideReviewed')
+                  : t('timesheet.absences.showReviewed')
+              }
+              onPress={() => setVerRevisadas((abierto) => !abierto)}
+              fullWidth={false}
+              testID="faltas-revisadas-ver"
+            />
+          </Row>
+          {verRevisadas ? filas(revisadas) : null}
+        </View>
+      ) : null}
+    </Stack>
   );
 }
 
@@ -612,13 +621,19 @@ export function JustificarFaltaSheet({
 }
 
 const useEstilos = estilosDelTema((colors) => ({
-  cajaJustificada: { borderColor: colors.warning600 },
   caja: {
     backgroundColor: colors.surface,
     borderRadius: radii.card,
     borderWidth: borderWidth.focus,
     borderColor: colors.danger600,
     padding: spacing.base,
+  },
+  revisadas: {
+    borderRadius: radii.card,
+    borderWidth: borderWidth.hairline,
+    borderColor: colors.border,
+    paddingHorizontal: spacing.base,
+    paddingVertical: spacing.sm,
   },
   crece: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
   fila: { paddingVertical: spacing.md, gap: spacing.sm },

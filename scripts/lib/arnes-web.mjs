@@ -492,3 +492,22 @@ export async function esperarAlgoDeTexto(pagina, minimo, { timeout = 20000 } = {
     return false;
   }
 }
+
+/**
+ * LAS FALTAS YA REVISADAS SE ABREN ANTES DE MIRARLAS (10-nov). En Horas, una falta que ya
+ * tiene su porqué sale del recuadro a una línea plegada (`faltas-de-la-semana.tsx`); los
+ * arneses que cuentan o tocan filas de falta la abren primero para verlas todas. Solo la
+ * pestaña de delante: las de detrás siguen montadas dentro de un `aria-hidden`.
+ */
+export async function abrirFaltasRevisadas(pagina) {
+  const delante = (selector) => pagina.locator(`${selector}:not([aria-hidden="true"] *)`);
+  const boton = delante('[data-testid="faltas-revisadas-ver"]');
+  if ((await boton.count()) === 0) return;
+  if ((await delante('[data-testid="faltas-revisadas"] [data-testid$="-vino"]').count()) > 0)
+    return;
+  await boton
+    .first()
+    .click({ timeout: 3000 })
+    .catch(() => {});
+  await pagina.waitForTimeout(300);
+}

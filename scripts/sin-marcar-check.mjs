@@ -34,6 +34,7 @@
 import {
   servirExport,
   cargarPlaywright,
+  abrirFaltasRevisadas,
   esperarPantalla,
   MARCADOR_ACCESO,
   MARCADORES,
@@ -250,6 +251,8 @@ try {
 
       // Horas: en las faltas de la semana, sin revisar no (ya se dijo), y nada en Por resolver.
       await irPorElMenu(pagina, '/hours');
+      // Ya revisada: está en la línea plegada de las revisadas (10-nov).
+      await abrirFaltasRevisadas(pagina);
       const enFaltas = await delante(pagina, `[data-testid="falta-${turno}"]`).count();
       if (enFaltas === 0) problemas.push('faltó: Horas no la lista en las faltas de la semana');
       const estado = await texto(pagina, `[data-testid="falta-${turno}-estado"]`);
@@ -310,10 +313,12 @@ try {
           }))
           .filter(({ id }) => /^[^\s]+:[a-z_]+$/.test(id)),
       );
-    const faltas = () =>
-      delante(pagina, '[data-testid$="-vino"][data-testid^="falta-"]').evaluateAll((nodos) =>
+    const faltas = async () => {
+      await abrirFaltasRevisadas(pagina);
+      return delante(pagina, '[data-testid$="-vino"][data-testid^="falta-"]').evaluateAll((nodos) =>
         nodos.map((n) => (n.getAttribute('data-testid') ?? '').slice(6, -5)),
       );
+    };
     async function registrar(turno, refrigerio, siNoLleva = null) {
       const nombre = (
         (await texto(pagina, `[data-testid="falta-${turno}"]`)).split('\n')[0] ?? ''

@@ -1476,6 +1476,10 @@
     "absences": {
       "title_one": "{{count}} falta esta semana",
       "title_other": "{{count}} faltas esta semana",
+      "reviewed_one": "{{count}} falta ya revisada esta semana: sigue contando en todas las pantallas.",
+      "reviewed_other": "{{count}} faltas ya revisadas esta semana: siguen contando en todas las pantallas.",
+      "showReviewed": "Ver",
+      "hideReviewed": "Ocultar",
       "body": "Turnos que terminaron sin ninguna marca. Cuentan como falta en Horario, Equipo, Reportes, el bono y el celular de cada persona. Di por qué faltó: una falta justificada no le quita el bono. Si vino y no marcó, registra su entrada y su salida y la falta se quita sola.",
       "what": "Tenía turno de {{range}} y no marcó nada.",
       "cameAnyway": "Vino y no marcó",
