@@ -14,10 +14,41 @@ import { useTheme } from '@/theme/use-theme';
 
 import {
   claveDeCelda,
+  planDePersonal,
   type AnalisisDeOrdenes,
   type Celda,
   type EstadoDeShopify,
 } from './ordenes-por-hora';
+
+/**
+ * LA ESCALA DE CALOR (Andree, 13-nov: «no se nota mucho la diferencia»). Antes iba en el morado
+ * de la marca, de `primary100` a `primary700`; en el tema oscuro los tres primeros pasos eran
+ * casi el mismo violeta oscuro y el mapa se leía plano. Ahora es de amarillo a rojo, igual en
+ * los dos temas —un mapa de calor se lee por el color, no por el tema—, cada paso con su tinta
+ * propia para que el número se lea (oscura en los claros, blanca en el último).
+ */
+const CALOR = [
+  { fondo: '#FFF1B8', tinta: '#3D2B00' },
+  { fondo: '#FFD166', tinta: '#3D2B00' },
+  { fondo: '#FF9F43', tinta: '#2A1600' },
+  { fondo: '#F2542D', tinta: '#2A0A00' },
+  { fondo: '#B3122E', tinta: '#FFFFFF' },
+] as const;
+
+/**
+ * LOS PASOS POR QUINTILES, NO POR FRACCIÓN DEL MÁXIMO. Con la fracción, una sola hora muy alta
+ * (el sábado a las 16:00) aplastaba todas las demás en los dos primeros pasos. Por quintiles
+ * cada color tiene más o menos el mismo número de casillas, y lo flojo y lo fuerte se separan.
+ */
+function cortesPorQuintil(valores: number[]): number[] {
+  // Sobre los valores DISTINTOS: con medias que se repiten mucho (0.5, 1…), los quintiles de
+  // todas las casillas caían en el mismo valor y 0.5 y 1 salían del mismo color.
+  const orden = [...new Set(valores.filter((n) => n > 0 && Number.isFinite(n)))].sort(
+    (a, b) => a - b,
+  );
+  if (orden.length === 0) return [];
+  return [1, 2, 3, 4].map((q) => orden[Math.min(orden.length - 1, Math.floor((orden.length * q) / 5))] ?? 0);
+}
 
 type Modo = 'ordenes' | 'porPersona';
 
@@ -33,8 +64,9 @@ const nombreDelDia = (dia: number, language: SupportedLanguage, weekday: 'short'
  * del periodo, y lo que dice en frases. Los números salen de `analizarOrdenes`; aquí solo se
  * pintan. Ver `ordenes-por-hora.ts`.
  *
- * UN SOLO TONO, de claro a oscuro: es una magnitud, no categorías. El modo «por persona»
- * marca en rojo las horas con órdenes y nadie en turno, que es lo único que pide una acción.
+ * UNA SOLA ESCALA, de amarillo a rojo (`CALOR`): es una magnitud, no categorías. El modo «por
+ * persona» marca con borde rojo y «!» las horas con órdenes y nadie en turno, que es lo único que
+ * pide una acción. Debajo, el plan de personal: `planDePersonal`.
  */
 export function OrdenesPorHoraCard({
   analisis,
@@ -42,12 +74,15 @@ export function OrdenesPorHoraCard({
   weekStartsOn,
   language,
   esAdmin,
+  equipo,
 }: {
   analisis: AnalisisDeOrdenes | null;
   estado: EstadoDeShopify | null;
   weekStartsOn: number;
   language: SupportedLanguage;
   esAdmin: boolean;
+  /** Personas activas en el equipo: el plan de personal lo dice al lado de lo que reparte. */
+  equipo: number;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
@@ -116,25 +151,19 @@ export function OrdenesPorHoraCard({
     if (celda.personas === 0) return celda.ordenes > 0 ? Number.POSITIVE_INFINITY : null;
     return celda.ordenes / celda.personas;
   };
-  const maximo = Math.max(
-    0,
-    ...[...analisis.celdas.values()]
-      .map((celda) => valor(celda) ?? 0)
-      .filter((n) => Number.isFinite(n)),
+  const cortes = cortesPorQuintil(
+    [...analisis.celdas.values()].map((celda) => valor(celda) ?? 0),
   );
-  const RAMPA = [
-    colors.surface,
-    colors.primary100,
-    colors.primary200,
-    colors.primary500,
-    colors.primary700,
-  ];
   const pintar = (n: number | null) => {
-    if (n === null || n <= 0) return { fondo: RAMPA[0], tinta: colors.ink500, paso: 0 };
-    if (!Number.isFinite(n)) return { fondo: colors.danger50, tinta: colors.danger600, paso: -1 };
-    const paso = Math.min(4, Math.max(1, Math.ceil((n / (maximo || 1)) * 4)));
-    return { fondo: RAMPA[paso], tinta: paso >= 3 ? colors.onPrimary : colors.ink900, paso };
+    if (n === null || n <= 0) return { fondo: colors.surface, tinta: colors.ink500, paso: 0, borde: null };
+    // Órdenes y nadie en turno: sin color de calor (sería un rojo más) sino con borde de alerta.
+    if (!Number.isFinite(n))
+      return { fondo: colors.surface, tinta: colors.danger600, paso: -1, borde: colors.danger600 };
+    const paso = cortes.filter((corte) => n > corte).length; // 0…4
+    const { fondo, tinta } = CALOR[paso] ?? CALOR[0];
+    return { fondo, tinta, paso: paso + 1, borde: null };
   };
+  const plan = planDePersonal(analisis, equipo);
 
   const dias = Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7);
   const frases = frasesDelAnalisis(analisis, {
@@ -181,6 +210,12 @@ export function OrdenesPorHoraCard({
           onChange={setModo}
           testID="orders-mode"
         />
+        {/* Lo que dice cada modo, en una línea: «por persona en turno» no se entendía solo. */}
+        <AppText variant="label" tone="muted" testID="orders-mode-help">
+          {modo === 'ordenes'
+            ? t('reports.orders.modeOrdersHelp')
+            : t('reports.orders.modePerPersonHelp')}
+        </AppText>
 
         {/*
           DÍAS EN COLUMNAS Y HORAS EN FILAS, como la rejilla de Horario, y casillas que se
@@ -210,7 +245,7 @@ export function OrdenesPorHoraCard({
               {dias.map((dia) => {
                 const celda = analisis.celdas.get(claveDeCelda(dia, h));
                 const n = valor(celda);
-                const { fondo, tinta, paso } = pintar(n);
+                const { fondo, tinta, paso, borde } = pintar(n);
                 const etiqueta =
                   celda === undefined
                     ? undefined
@@ -229,6 +264,7 @@ export function OrdenesPorHoraCard({
                   estilos.celda,
                   tocable ? estilos.celdaTocable : null,
                   { backgroundColor: fondo },
+                  borde === null ? null : { borderColor: borde, borderWidth: 2 },
                 ];
                 return tocable ? (
                   <Pressable
@@ -274,8 +310,8 @@ export function OrdenesPorHoraCard({
           <AppText variant="label" tone="subtle">
             {t('reports.orders.less')}
           </AppText>
-          {RAMPA.slice(1).map((color) => (
-            <View key={color} style={[estilos.muestra, { backgroundColor: color }]} />
+          {CALOR.map(({ fondo }) => (
+            <View key={fondo} style={[estilos.muestra, { backgroundColor: fondo }]} />
           ))}
           <AppText variant="label" tone="subtle">
             {t('reports.orders.more')}
@@ -295,6 +331,53 @@ export function OrdenesPorHoraCard({
             </AppText>
           ))}
         </Stack>
+
+        {plan === null ? null : (
+          <Stack gap={spacing.xs} testID="orders-staffing">
+            <AppText variant="bodyStrong">{t('reports.orders.staffTitle')}</AppText>
+            <AppText variant="label" tone="muted">
+              {t('reports.orders.staffIntro', {
+                hours: numero(Math.round(plan.horasSemana)),
+                team: plan.equipo,
+                shift: numero(plan.turnoMedio),
+              })}
+            </AppText>
+            {dias
+              .map((dia) => plan.dias.find((d) => d.diaSemana === dia))
+              .filter((d) => d !== undefined)
+              .map((d) => {
+                const cambio = d.personasSugeridas - Math.round(d.personasAhora);
+                const flecha = cambio > 0 ? '↑' : cambio < 0 ? '↓' : '=';
+                return (
+                  <AppText
+                    key={d.diaSemana}
+                    variant="body"
+                    testID={`orders-staff-${d.diaSemana}`}
+                  >
+                    {`${flecha} ${t('reports.orders.staffDay', {
+                      day: nombreDelDia(d.diaSemana, language, 'long'),
+                      orders: numero(d.ordenes),
+                      // Media de personas por día, redondeada: «3.5 personas» no se entiende.
+                      now: Math.round(d.personasAhora),
+                      nowHours: numero(Math.round(d.horasAhora)),
+                      suggested: d.personasSugeridas,
+                      suggestedHours: numero(Math.round(d.horasSugeridas)),
+                    })}${
+                      d.refuerzo === null
+                        ? ''
+                        : ` ${t('reports.orders.staffPeak', {
+                            from: hora(d.refuerzo.desde),
+                            to: hora(d.refuerzo.hasta),
+                          })}`
+                    }`}
+                  </AppText>
+                );
+              })}
+            <AppText variant="label" tone="subtle">
+              {t('reports.orders.staffNote')}
+            </AppText>
+          </Stack>
+        )}
       </Stack>
     </ChartCard>
   );

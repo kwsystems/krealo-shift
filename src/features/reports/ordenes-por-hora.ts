@@ -165,6 +165,10 @@ export type AnalisisDeOrdenes = {
   sinNadie: Celda[];
   /** Con gente y casi sin órdenes (menos de media orden por día). */
   conPocas: Celda[];
+  /** Media de personas DISTINTAS en turno cada día de la semana (no persona-horas). */
+  personasPorDia: Map<number, number>;
+  /** Horas medias de un turno del periodo: para pasar horas de equipo a personas. */
+  turnoMedio: number;
 };
 
 /** Menos de media orden por día en esa hora es «casi ninguna». */
@@ -251,15 +255,35 @@ export function analizarOrdenes(
   // Una persona cuenta una vez por hora, aunque tenga dos turnos que se toquen.
   const formato = reloj(timezone);
   const enTurno = new Set<string>();
+  // Quién vino cada fecha (una vez por persona y día) y cuánto duran los turnos: con eso el
+  // plan de personal habla en personas por día, no solo en horas.
+  const genteDelDia = new Set<string>();
+  let horasDeTurnos = 0;
+  let turnosContados = 0;
   for (const turno of turnos) {
     if (!turnoEnPie(turno) || turno.employee_id === null) continue;
+    let cuenta = false;
     for (const { dia, hora } of horasDelTurno(turno, formato)) {
       if (!diasConDatos.has(dia)) continue;
+      cuenta = true;
+      genteDelDia.add(`${dia}|${turno.employee_id}`);
       const clave = `${dia}|${hora}|${turno.employee_id}`;
       if (enTurno.has(clave)) continue;
       enTurno.add(clave);
       sumar(diaDeLaSemana(dia), hora, 'personas', 1);
     }
+    if (cuenta) {
+      horasDeTurnos += (Date.parse(turno.ends_at) - Date.parse(turno.starts_at)) / 3_600_000;
+      turnosContados += 1;
+    }
+  }
+  const personasPorDia = new Map<number, number>();
+  for (const clave of genteDelDia) {
+    const semana = diaDeLaSemana(clave.split('|')[0] as DateKey);
+    personasPorDia.set(semana, (personasPorDia.get(semana) ?? 0) + 1);
+  }
+  for (const [semana, n] of personasPorDia) {
+    personasPorDia.set(semana, n / (diasPorSemana.get(semana) ?? 1));
   }
 
   const celdas = new Map<string, Celda>();
@@ -326,5 +350,136 @@ export function analizarOrdenes(
       .filter((celda) => celda.personas >= 1 && celda.ordenes < CASI_NINGUNA)
       .sort((a, b) => b.personas - a.personas || a.ordenes - b.ordenes)
       .slice(0, 3),
+    personasPorDia,
+    turnoMedio: turnosContados === 0 ? 0 : horasDeTurnos / turnosContados,
+  };
+}
+
+/**
+ * ¿CUÁNTA GENTE PONER CADA DÍA? (Andree, 13-nov: «cuántas personas deberían estar por día
+ * según la gente contratada, como para tener una idea»).
+ *
+ * NO PIDE CONTRATAR: REPARTE LO QUE YA HAY. Toma las horas de equipo que se ponen de media
+ * cada semana y las reparte entre los días según las órdenes de cada uno. Así la suma de la
+ * semana es la misma y lo único que cambia es dónde caen. Con un mínimo: cada hora que la
+ * tienda tiene gente o vende, una persona —una tienda no se queda sola porque una hora venda
+ * poco—, y lo que ese mínimo añade a un día se le quita a los que van por encima.
+ *
+ * PERSONAS = HORAS ÷ TURNO MEDIO, redondeado y con al menos una el día que abre: «3 personas»
+ * se entiende mejor que «22 h», y el turno medio sale de los turnos del propio periodo.
+ *
+ * ES UNA ORIENTACIÓN. Solo ve órdenes de Shopify: no ve la ceremonia que tarda media hora, la
+ * reposición ni la limpieza. Por eso la pantalla lo dice y no lo llama «lo correcto».
+ */
+export type PlanDelDia = {
+  diaSemana: number;
+  /** Órdenes de media en el día. */
+  ordenes: number;
+  horasAhora: number;
+  personasAhora: number;
+  horasSugeridas: number;
+  personasSugeridas: number;
+  /** Las horas fuertes del día, de la primera a la última: dónde reforzar. */
+  refuerzo: { desde: number; hasta: number } | null;
+};
+
+export type PlanDePersonal = {
+  /** Horas de equipo de media por semana: lo que se reparte. */
+  horasSemana: number;
+  turnoMedio: number;
+  /** Personas activas en el equipo. */
+  equipo: number;
+  dias: PlanDelDia[];
+};
+
+/** Una hora es «fuerte» si llega al 60 % de la hora punta de su día. */
+const FUERTE = 0.6;
+
+export function planDePersonal(
+  analisis: AnalisisDeOrdenes,
+  equipo: number,
+): PlanDePersonal | null {
+  const diasDelPlan = [...new Set([...analisis.celdas.values()].map((c) => c.diaSemana))].sort(
+    (a, b) => a - b,
+  );
+  const celdasDe = (dia: number) =>
+    analisis.horas
+      .map((hora) => analisis.celdas.get(claveDeCelda(dia, hora)))
+      .filter((celda): celda is Celda => celda !== undefined);
+
+  const horasAhora = new Map(
+    diasDelPlan.map((dia) => [dia, celdasDe(dia).reduce((s, c) => s + c.personas, 0)]),
+  );
+  const horasSemana = [...horasAhora.values()].reduce((s, n) => s + n, 0);
+  const ordenesSemana = diasDelPlan.reduce((s, dia) => s + (analisis.porDia.get(dia) ?? 0), 0);
+  if (horasSemana <= 0 || ordenesSemana <= 0 || analisis.turnoMedio <= 0) return null;
+
+  // Una persona por cada hora con gente o con órdenes.
+  const minimo = new Map(
+    diasDelPlan.map((dia) => [
+      dia,
+      celdasDe(dia).filter((c) => c.personas > 0 || c.ordenes > 0).length,
+    ]),
+  );
+  const sugeridas = new Map(
+    diasDelPlan.map((dia) => [
+      dia,
+      Math.max(
+        minimo.get(dia) ?? 0,
+        (horasSemana * (analisis.porDia.get(dia) ?? 0)) / ordenesSemana,
+      ),
+    ]),
+  );
+  // Lo que el mínimo añadió se quita, en proporción, a los días que van por encima de él.
+  const exceso = [...sugeridas.values()].reduce((s, n) => s + n, 0) - horasSemana;
+  const holgura = diasDelPlan.map((dia) => (sugeridas.get(dia) ?? 0) - (minimo.get(dia) ?? 0));
+  const holguraTotal = holgura.reduce((s, n) => s + n, 0);
+  if (exceso > 0 && holguraTotal > 0) {
+    diasDelPlan.forEach((dia, i) => {
+      const quitar = Math.min(holgura[i] ?? 0, (exceso * (holgura[i] ?? 0)) / holguraTotal);
+      sugeridas.set(dia, (sugeridas.get(dia) ?? 0) - quitar);
+    });
+  }
+
+  const aPersonas = (horas: number) =>
+    horas <= 0 ? 0 : Math.max(1, Math.round(horas / analisis.turnoMedio));
+
+  return {
+    horasSemana,
+    turnoMedio: analisis.turnoMedio,
+    equipo,
+    dias: diasDelPlan.map((dia) => {
+      const celdas = celdasDe(dia);
+      // EL TRAMO SEGUIDO ALREDEDOR DE LA PUNTA, no de la primera a la última hora fuerte: con
+      // dos horas fuertes separadas, «de 12:00 a 21:00» decía «todo el día» y no ayudaba.
+      const punta = celdas.reduce<Celda | null>(
+        (mejor, c) => (mejor === null || c.ordenes > mejor.ordenes ? c : mejor),
+        null,
+      );
+      const umbral = Math.max(CASI_NINGUNA, (punta?.ordenes ?? 0) * FUERTE);
+      const esFuerte = (hora: number) =>
+        (analisis.celdas.get(claveDeCelda(dia, hora))?.ordenes ?? 0) >= umbral;
+      const fuertes: number[] = [];
+      if (punta !== null && punta.ordenes >= umbral) {
+        let desde = punta.hora;
+        let hasta = punta.hora;
+        while (esFuerte(desde - 1)) desde -= 1;
+        while (esFuerte(hasta + 1)) hasta += 1;
+        fuertes.push(desde, hasta);
+      }
+      const horasSug = sugeridas.get(dia) ?? 0;
+      return {
+        diaSemana: dia,
+        ordenes: analisis.porDia.get(dia) ?? 0,
+        horasAhora: horasAhora.get(dia) ?? 0,
+        personasAhora: analisis.personasPorDia.get(dia) ?? 0,
+        horasSugeridas: horasSug,
+        personasSugeridas: aPersonas(horasSug),
+        refuerzo:
+          fuertes.length === 0
+            ? null
+            : { desde: Math.min(...fuertes), hasta: Math.max(...fuertes) + 1 },
+      };
+    }),
   };
 }

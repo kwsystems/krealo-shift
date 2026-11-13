@@ -1,4 +1,4 @@
-import { analizarOrdenes, claveDeCelda, type FilaDeOrdenes } from '../ordenes-por-hora';
+import { analizarOrdenes, claveDeCelda, planDePersonal, type FilaDeOrdenes } from '../ordenes-por-hora';
 
 const TZ = 'America/Lima';
 
@@ -65,5 +65,57 @@ describe('las órdenes por hora frente a quién estaba en turno', () => {
   it('las columnas van de la primera a la última hora con algo', () => {
     expect(analisis.horas[0]).toBe(10);
     expect(analisis.horas.at(-1)).toBe(21);
+  });
+});
+
+describe('cuánta gente poner cada día (planDePersonal)', () => {
+  // Una semana: el sábado vende el triple que el lunes, pero los dos tienen la misma gente.
+  const semana = [
+    fila('2026-11-09', { '12': { orders: 1, sales: 100 }, '16': { orders: 1, sales: 100 } }),
+    fila('2026-11-14', {
+      '12': { orders: 2, sales: 200 },
+      '16': { orders: 3, sales: 300 },
+      '17': { orders: 1, sales: 100 },
+    }),
+  ];
+  const turnos = [
+    // Lunes 9 y sábado 14, dos personas de 10:00 a 18:00 cada día (8 h).
+    turno('a', '2026-11-09T15:00:00Z', '2026-11-09T23:00:00Z'),
+    turno('b', '2026-11-09T15:00:00Z', '2026-11-09T23:00:00Z'),
+    turno('a', '2026-11-14T15:00:00Z', '2026-11-14T23:00:00Z'),
+    turno('b', '2026-11-14T15:00:00Z', '2026-11-14T23:00:00Z'),
+  ];
+  const analisis = analizarOrdenes(semana, turnos, TZ);
+  const plan = planDePersonal(analisis, 5);
+
+  it('cuenta personas distintas por día y el turno medio', () => {
+    expect(analisis.personasPorDia.get(1)).toBe(2);
+    expect(analisis.personasPorDia.get(6)).toBe(2);
+    expect(analisis.turnoMedio).toBe(8);
+  });
+
+  it('reparte las mismas horas de la semana según las órdenes', () => {
+    expect(plan).not.toBeNull();
+    const total = plan!.dias.reduce((s, d) => s + d.horasSugeridas, 0);
+    expect(total).toBeCloseTo(plan!.horasSemana, 5);
+    expect(plan!.horasSemana).toBe(32);
+    const lunes = plan!.dias.find((d) => d.diaSemana === 1)!;
+    const sabado = plan!.dias.find((d) => d.diaSemana === 6)!;
+    expect(sabado.horasSugeridas).toBeGreaterThan(lunes.horasSugeridas);
+    expect(sabado.personasSugeridas).toBeGreaterThan(lunes.personasSugeridas);
+    // El lunes no baja de una persona cada hora que abre (8 horas).
+    expect(lunes.horasSugeridas).toBeGreaterThanOrEqual(8);
+    expect(plan!.equipo).toBe(5);
+  });
+
+  it('dice las horas fuertes de cada día', () => {
+    const sabado = plan!.dias.find((d) => d.diaSemana === 6)!;
+    // Punta 3 a las 16:00; fuertes las que llegan a 1,8: 12:00 (2) y 16:00 (3). Son tramos
+    // separados, y el refuerzo es el de la punta, no «de 12:00 a 17:00».
+    expect(sabado.refuerzo).toEqual({ desde: 16, hasta: 17 });
+  });
+
+  it('sin turnos no hay plan: no hay horas que repartir', () => {
+    expect(planDePersonal(analizarOrdenes(semana, [], TZ), 3)).toBeNull();
   });
 });

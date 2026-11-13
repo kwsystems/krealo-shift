@@ -1124,6 +1124,7 @@ export function ReportsScreen() {
                 weekStartsOn={scope.weekStartsOn}
                 language={language}
                 esAdmin={scope.isAdmin}
+                equipo={(empleados.data ?? []).filter((e) => e.status === 'active').length}
               />
 
               {/*
