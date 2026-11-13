@@ -619,6 +619,7 @@
       "staffIntro": "Spreads the {{hours}} h of staff you schedule per week on average ({{team}} active people, {{shift}} h shifts) by each day's orders. No hiring needed: it changes where the hours go.",
       "staffDay": "{{day}} · {{orders}} orders: now {{now}} people ({{nowHours}} h) → suggested {{suggested}} ({{suggestedHours}} h).",
       "staffPeak": "Reinforce from {{from}} to {{to}}.",
+      "staffAll": "That is your whole active team: with more orders, you would need more people.",
       "staffNote": "A guide only: it counts Shopify orders, not ceremonies, restocking or cleaning. At least one person every hour the store is open.",
       "perDay": "Day",
       "less": "Less",

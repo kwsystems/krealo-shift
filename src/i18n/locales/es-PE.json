@@ -619,6 +619,7 @@
       "staffIntro": "Reparte las {{hours}} h de equipo que pones de media por semana ({{team}} personas activas, turnos de {{shift}} h) según las órdenes de cada día. No hay que contratar a nadie: cambia dónde caen las horas.",
       "staffDay": "{{day}} · {{orders}} órdenes: ahora {{now}} personas ({{nowHours}} h) → sugerido {{suggested}} ({{suggestedHours}} h).",
       "staffPeak": "Refuerza de {{from}} a {{to}}.",
+      "staffAll": "Es todo tu equipo activo: con más órdenes, haría falta más gente.",
       "staffNote": "Es una orientación: solo cuenta órdenes de Shopify, no ceremonias, reposición ni limpieza. Mínimo una persona cada hora que la tienda abre.",
       "perDay": "Día",
       "less": "Menos",

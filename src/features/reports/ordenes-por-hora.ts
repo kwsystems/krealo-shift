@@ -379,6 +379,8 @@ export type PlanDelDia = {
   personasAhora: number;
   horasSugeridas: number;
   personasSugeridas: number;
+  /** Las sugeridas llegan a todo el equipo activo: no se puede poner más gente de la que hay. */
+  todoElEquipo: boolean;
   /** Las horas fuertes del día, de la primera a la última: dónde reforzar. */
   refuerzo: { desde: number; hasta: number } | null;
 };
@@ -468,13 +470,18 @@ export function planDePersonal(
         fuertes.push(desde, hasta);
       }
       const horasSug = sugeridas.get(dia) ?? 0;
+      // «Según la gente contratada» (Andree): nunca más personas que el equipo activo. Con
+      // datos reales el domingo pedía 5 con un equipo de 4; ahí se dice «todo el equipo».
+      const personas = aPersonas(horasSug);
+      const tope = equipo > 0 && personas >= equipo;
       return {
         diaSemana: dia,
         ordenes: analisis.porDia.get(dia) ?? 0,
         horasAhora: horasAhora.get(dia) ?? 0,
         personasAhora: analisis.personasPorDia.get(dia) ?? 0,
         horasSugeridas: horasSug,
-        personasSugeridas: aPersonas(horasSug),
+        personasSugeridas: tope ? equipo : personas,
+        todoElEquipo: tope,
         refuerzo:
           fuertes.length === 0
             ? null

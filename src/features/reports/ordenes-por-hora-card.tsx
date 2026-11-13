@@ -362,7 +362,7 @@ export function OrdenesPorHoraCard({
                       nowHours: numero(Math.round(d.horasAhora)),
                       suggested: d.personasSugeridas,
                       suggestedHours: numero(Math.round(d.horasSugeridas)),
-                    })}${
+                    })}${d.todoElEquipo ? ` ${t('reports.orders.staffAll')}` : ''}${
                       d.refuerzo === null
                         ? ''
                         : ` ${t('reports.orders.staffPeak', {

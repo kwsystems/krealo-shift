@@ -119,3 +119,22 @@ describe('cuánta gente poner cada día (planDePersonal)', () => {
     expect(planDePersonal(analizarOrdenes(semana, [], TZ), 3)).toBeNull();
   });
 });
+
+describe('el plan no pide más gente de la que hay', () => {
+  it('con un equipo de 2, el día fuerte se queda en 2 y lo dice', () => {
+    const semana = [
+      fila('2026-11-09', { '12': { orders: 1, sales: 100 } }),
+      fila('2026-11-14', { '12': { orders: 9, sales: 900 }, '16': { orders: 9, sales: 900 } }),
+    ];
+    const turnos = [
+      turno('a', '2026-11-09T15:00:00Z', '2026-11-09T23:00:00Z'),
+      turno('b', '2026-11-09T15:00:00Z', '2026-11-09T23:00:00Z'),
+      turno('a', '2026-11-14T15:00:00Z', '2026-11-14T23:00:00Z'),
+      turno('b', '2026-11-14T15:00:00Z', '2026-11-14T23:00:00Z'),
+    ];
+    const plan = planDePersonal(analizarOrdenes(semana, turnos, TZ), 2)!;
+    const sabado = plan.dias.find((d) => d.diaSemana === 6)!;
+    expect(sabado.personasSugeridas).toBe(2);
+    expect(sabado.todoElEquipo).toBe(true);
+  });
+});
