@@ -1555,6 +1555,32 @@ function crearRpc(almacen: Almacen) {
         return sinError({ vistas: ids.size });
       }
 
+      /*
+       * Shopify (13-nov): en la demostración no hay tienda de verdad a la que llamar. Conectar
+       * deja la tienda como conectada sin traer nada; las órdenes ya vienen sembradas.
+       */
+      case 'connect_shopify': {
+        const tienda = String(argumentos.p_shop ?? '').trim();
+        if (tienda === '') return conError('La tienda se escribe como tutienda.myshopify.com.');
+        almacen.set('shopify_status', [
+          {
+            id: DEMO_ORG_ID,
+            organization_id: DEMO_ORG_ID,
+            shop: tienda,
+            shop_name: tienda,
+            currency: 'PEN',
+            connected_at: new Date().toISOString(),
+            last_sync_at: new Date().toISOString(),
+            last_error: null,
+          },
+        ]);
+        return sinError({ shop_name: tienda, days: 0, orders: 0 });
+      }
+      case 'disconnect_shopify': {
+        almacen.set('shopify_status', []);
+        return sinError({ ok: true });
+      }
+
       /* Como `setEmployeePay`: uno por persona, y sin monto se borra. */
       case 'set_employee_pay': {
         const empleado = String(argumentos.p_employee_id ?? '');

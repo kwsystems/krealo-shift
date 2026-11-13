@@ -29,6 +29,7 @@ import { MembersCard } from './members-card';
 import { PinsCard } from './pins-card';
 import { MarcaCard } from './marca-card';
 import { CampoTipoDeTienda } from './tipo-de-tienda';
+import { ShopifyCard } from './shopify-card';
 import { dateKeyOf } from '@/features/schedules/week';
 import { ConfirmSheet } from '@/components/attendance/kiosk-sheets';
 import { PushPermissionCard } from '@/features/notifications/push-permission-card';
@@ -172,6 +173,8 @@ export function SettingsPanel() {
             */}
             <PinsCard />
             <KiosksCard />
+            {/* La tienda de Shopify, para «Órdenes por hora» en Reportes (13-nov). */}
+            <ShopifyCard organizationId={scope.organization.id} canEdit={scope.isAdmin} />
             <NotificationsCard key={`notifications-${scope.organization.id}`} />
             <SessionCard canSignOutEverywhere={scope.isAdmin} />
             <AboutCard />

@@ -86,6 +86,12 @@ export const TABLES = {
    * en las reglas, asi que lo que queda aqui no tiene nada que esconder.
    */
   kioskDevices: 'kiosk_devices',
+  /**
+   * Las órdenes de Shopify por día y hora, y el estado de la conexión (13-nov). Solo las
+   * escribe el servidor: ver `functions/src/shopify.ts` y `features/reports/ordenes-por-hora.ts`.
+   */
+  ordersByHour: 'orders_by_hour',
+  shopifyStatus: 'shopify_status',
 } as const;
 
 /**
@@ -250,6 +256,9 @@ export const RPC = {
   markAvailabilitySeen: 'mark_availability_seen',
   /** Por qué faltó: justificada o no, y el motivo. Ver `functions/src/faltas.ts`. */
   resolveAbsence: 'resolve_absence',
+  /** Conectar y desconectar la tienda de Shopify (13-nov). Ver `functions/src/shopify.ts`. */
+  connectShopify: 'connect_shopify',
+  disconnectShopify: 'disconnect_shopify',
   clearAbsenceResolution: 'clear_absence_resolution',
   /** El sueldo de una persona, para el sueldo aproximado (13-oct). Ver `functions/src/sueldos.ts`. */
   setEmployeePay: 'set_employee_pay',

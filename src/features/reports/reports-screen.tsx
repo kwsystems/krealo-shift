@@ -42,6 +42,8 @@ import { AsistenciaPorPersona, type FilaDeAsistencia } from './asistencia-por-pe
 import { incidenciasDelPeriodo } from './incidencias';
 import { IncidenciasDelPeriodo } from './incidencias-del-periodo';
 import { FeriadosTrabajados } from './feriados-trabajados';
+import { analizarOrdenes, useEstadoDeShopify, useOrdenesPorHora } from './ordenes-por-hora';
+import { OrdenesPorHoraCard } from './ordenes-por-hora-card';
 import { programadoDelPeriodo } from './programado';
 import { ResumenDelPeriodo } from './resumen-del-periodo';
 import { dentroPorEmpleado, enCursoPorSesionDe } from '@/features/timesheets/en-curso';
@@ -194,6 +196,20 @@ export function ReportsScreen() {
     staleTime: ADMIN_LIST_STALE_MS,
   });
   const empleados = useEmployees(organizationId);
+  // Las órdenes de Shopify del periodo, frente a quién estaba en turno (13-nov).
+  const ordenes = useOrdenesPorHora({ organizationId, from, to });
+  const estadoDeShopify = useEstadoDeShopify(organizationId);
+  // Sin `useMemo`, como el resto: el React Compiler ya memoriza la pantalla (ver arriba).
+  const analisisDeOrdenes =
+    ordenes.data === undefined
+      ? null
+      : analizarOrdenes(
+          ordenes.data.filter(
+            (fila) => soloDias === null || soloDias.split(',').includes(fila.date),
+          ),
+          turnosDelMes.data ?? [],
+          scope.timezone,
+        );
   const inicioDelReloj = useInicioDelReloj({
     organizationId,
     locationId: scope.locationId,
@@ -1099,6 +1115,15 @@ export function ReportsScreen() {
                 language={language}
                 elegida={personaElegida}
                 onElegir={(id) => setPersonaElegida((actual) => (actual === id ? null : id))}
+              />
+
+              {/* Las órdenes de Shopify por hora y quién estaba en turno: `ordenes-por-hora.ts`. */}
+              <OrdenesPorHoraCard
+                analisis={analisisDeOrdenes}
+                estado={estadoDeShopify.data ?? null}
+                weekStartsOn={scope.weekStartsOn}
+                language={language}
+                esAdmin={scope.isAdmin}
               />
 
               {/*

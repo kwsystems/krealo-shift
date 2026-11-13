@@ -580,6 +580,21 @@
           "order": "ASCENDING"
         }
       ]
+    },
+    {
+      "//": "Reportes: las órdenes de Shopify por hora de un periodo (13-nov).",
+      "collectionGroup": "orders_by_hour",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "organization_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "date",
+          "order": "ASCENDING"
+        }
+      ]
     }
   ],
   "fieldOverrides": []

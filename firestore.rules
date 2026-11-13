@@ -593,6 +593,19 @@ service cloud.firestore {
       allow read, write: if false;    // cola interna del enviador
     }
 
+    // LAS ÓRDENES DE SHOPIFY POR HORA (13-nov), para Reportes: solo totales por día y hora,
+    // sin clientes. Las lee el personal; las escribe solo el servidor (functions/src/shopify.ts).
+    // El ID y el secreto de la app viven en `shopify_credentials`, que no tiene regla: la
+    // cierra la de abajo del todo.
+    match /orders_by_hour/{id} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;
+    }
+    match /shopify_status/{orgId} {
+      allow read: if isStaff(resource.data.organization_id);
+      allow write: if false;
+    }
+
     // El registro de auditoria se lee para rendir cuentas y no se escribe desde el
     // cliente jamas: un registro que su propio actor puede editar no prueba nada.
     match /audit_logs/{id} {

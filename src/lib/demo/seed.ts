@@ -149,6 +149,59 @@ function sumarDias(base: Date, dias: number): Date {
   return d;
 }
 
+/** Domingo primero, como `getDay`. */
+const PESO_DEL_DIA = [1.6, 0.5, 0.5, 0.6, 0.7, 1.0, 1.8];
+const PESO_DE_LA_HORA: Record<number, number> = {
+  10: 0.2,
+  11: 0.4,
+  12: 0.6,
+  13: 0.5,
+  14: 0.5,
+  15: 0.8,
+  16: 1.0,
+  17: 1.4,
+  18: 1.2,
+  19: 1.0,
+  20: 0.8,
+  21: 0.5,
+};
+
+/** Un número entre 0 y 1 que depende solo del texto: el «azar» de la demostración. */
+function azarDe(texto: string): number {
+  let h = 2166136261;
+  for (const letra of texto) h = Math.imul(h ^ letra.charCodeAt(0), 16777619);
+  return ((h >>> 0) % 1000) / 1000;
+}
+
+function ordenesSembradas(hoy: Date, ahora: Date): Fila[] {
+  const filas: Fila[] = [];
+  for (let atras = 0; atras < 70; atras += 1) {
+    const fecha = sumarDias(hoy, -atras);
+    const dia = fechaClave(fecha);
+    const hours: Record<string, { orders: number; sales: number }> = {};
+    for (const [hora, peso] of Object.entries(PESO_DE_LA_HORA)) {
+      // Hoy, solo las horas que ya pasaron.
+      if (atras === 0 && Number(hora) >= ahora.getHours()) continue;
+      const azar = azarDe(`${dia}-${hora}`);
+      const orders = Math.round(peso * (PESO_DEL_DIA[fecha.getDay()] ?? 1) * 2.2 + azar - 0.5);
+      if (orders > 0) {
+        hours[hora] = { orders, sales: Math.round(orders * 165 * (0.9 + azar * 0.2) * 100) / 100 };
+      }
+    }
+    const valores = Object.values(hours);
+    filas.push({
+      id: `${DEMO_ORG_ID}_${dia}`,
+      organization_id: DEMO_ORG_ID,
+      date: dia,
+      hours,
+      orders: valores.reduce((suma, h) => suma + h.orders, 0),
+      sales: valores.reduce((suma, h) => suma + h.sales, 0),
+      currency: 'PEN',
+    });
+  }
+  return filas;
+}
+
 function fechaClave(fecha: Date): string {
   const mes = String(fecha.getMonth() + 1).padStart(2, '0');
   const dia = String(fecha.getDate()).padStart(2, '0');
@@ -1329,6 +1382,25 @@ export function crearAlmacen(instante: Date = new Date()): Almacen {
   almacen.set('break_time_by_reason', pausasPorMotivo);
   almacen.set('time_adjustments_with_author', correcciones);
   almacen.set('kiosk_devices_admin', kioscos);
+
+  /*
+   * ÓRDENES DE SHOPIFY POR HORA (13-nov): diez semanas con la forma de una tienda de barrio
+   * —la tarde más que la mañana, sábado y domingo por delante— para que Reportes enseñe el
+   * mapa y su análisis. Deterministas: el mismo número cada vez que se mira el mismo día.
+   */
+  almacen.set('shopify_status', [
+    {
+      id: DEMO_ORG_ID,
+      organization_id: DEMO_ORG_ID,
+      shop: 'cafe-demostracion.myshopify.com',
+      shop_name: 'Café Demostración',
+      currency: 'PEN',
+      connected_at: aISO(sumarDias(hoy, -70)),
+      last_sync_at: aISO(ahora),
+      last_error: null,
+    },
+  ]);
+  almacen.set('orders_by_hour', ordenesSembradas(hoy, ahora));
 
   return almacen;
 }
