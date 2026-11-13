@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { InlineNotice, SegmentedControl } from '@/components/schedule/fields';
 import { ChartCard } from '@/components/charts/chart-frame';
 import { AppText } from '@/components/ui/app-text';
 import { Row, Stack } from '@/components/ui/layout';
+import { useResponsive } from '@/hooks/use-responsive';
 import type { SupportedLanguage } from '@/i18n';
 import { estilosDelTema } from '@/theme/estilos';
 import { spacing } from '@/theme/tokens';
@@ -53,6 +54,8 @@ export function OrdenesPorHoraCard({
   const estilos = useEstilos();
   const [modo, setModo] = useState<Modo>('ordenes');
   const [señalada, setSeñalada] = useState<Celda | null>(null);
+  // En el teléfono no caben siete casillas de 44 px: ahí el mapa se lee sin tocar.
+  const tocable = useResponsive().density !== 'compact';
 
   const numero = (n: number) =>
     new Intl.NumberFormat(language, { maximumFractionDigits: 1 }).format(n);
@@ -179,67 +182,93 @@ export function OrdenesPorHoraCard({
           testID="orders-mode"
         />
 
-        <ScrollView horizontal showsHorizontalScrollIndicator>
-          <View testID="orders-heatmap">
-            <Row gap={GAP}>
-              <View style={estilos.rotulo} />
-              {analisis.horas.map((h) => (
-                <View key={h} style={estilos.columna}>
-                  <AppText variant="label" tone="subtle" tabular>
-                    {String(h)}
-                  </AppText>
-                </View>
-              ))}
-              <View style={estilos.total}>
-                <AppText variant="label" tone="subtle">
-                  {t('reports.orders.perDay')}
+        {/*
+          DÍAS EN COLUMNAS Y HORAS EN FILAS, como la rejilla de Horario, y casillas que se
+          estiran hasta llenar el ancho: así cabe en un teléfono sin esconder nada en una zona
+          que se desliza de lado (`responsive-check`). En pantalla ancha cada casilla se toca
+          para ver su detalle y mide lo que pide el dedo; en el teléfono no hay sitio para 44 px
+          por día, y ahí se lee sin tocar.
+        */}
+        <View testID="orders-heatmap">
+          <Row gap={GAP}>
+            <View style={estilos.rotulo} />
+            {dias.map((dia) => (
+              <View key={dia} style={estilos.columna}>
+                <AppText variant="label" tone="muted">
+                  {nombreDelDia(dia, language, 'short')}
                 </AppText>
               </View>
-            </Row>
-            {dias.map((dia) => (
-              <Row key={dia} gap={GAP} style={estilos.fila}>
-                <View style={estilos.rotulo}>
-                  <AppText variant="label" tone="muted">
-                    {nombreDelDia(dia, language, 'short')}
-                  </AppText>
-                </View>
-                {analisis.horas.map((h) => {
-                  const celda = analisis.celdas.get(claveDeCelda(dia, h));
-                  const n = valor(celda);
-                  const { fondo, tinta, paso } = pintar(n);
-                  return (
-                    <Pressable
-                      key={h}
-                      onPress={() => setSeñalada(celda ?? null)}
-                      onHoverIn={() => setSeñalada(celda ?? null)}
-                      accessibilityLabel={
-                        celda === undefined
-                          ? undefined
-                          : t('reports.orders.readout', {
-                              where: dondeCuando(celda),
-                              orders: numero(celda.ordenes),
-                              people: numero(celda.personas),
-                              sales: dinero(celda.ventas, analisis.moneda),
-                            })
-                      }
-                      style={[estilos.celda, { backgroundColor: fondo }]}
-                      testID={`orders-cell-${dia}-${h}`}
-                    >
-                      <AppText variant="label" tabular style={{ color: tinta }}>
-                        {paso === -1 ? '!' : n === null || n <= 0 ? '' : numero(n)}
-                      </AppText>
-                    </Pressable>
-                  );
-                })}
-                <View style={estilos.total}>
-                  <AppText variant="label" tabular testID={`orders-day-${dia}`}>
-                    {numero(analisis.porDia.get(dia) ?? 0)}
-                  </AppText>
-                </View>
-              </Row>
             ))}
-          </View>
-        </ScrollView>
+          </Row>
+          {analisis.horas.map((h) => (
+            <Row key={h} gap={GAP} style={estilos.fila}>
+              <View style={estilos.rotulo}>
+                <AppText variant="label" tone="subtle" tabular>
+                  {hora(h)}
+                </AppText>
+              </View>
+              {dias.map((dia) => {
+                const celda = analisis.celdas.get(claveDeCelda(dia, h));
+                const n = valor(celda);
+                const { fondo, tinta, paso } = pintar(n);
+                const etiqueta =
+                  celda === undefined
+                    ? undefined
+                    : t('reports.orders.readout', {
+                        where: dondeCuando(celda),
+                        orders: numero(celda.ordenes),
+                        people: numero(celda.personas),
+                        sales: dinero(celda.ventas, analisis.moneda),
+                      });
+                const texto = (
+                  <AppText variant="label" tabular style={{ color: tinta }}>
+                    {paso === -1 ? '!' : n === null || n <= 0 ? '' : numero(n)}
+                  </AppText>
+                );
+                const estilo = [
+                  estilos.celda,
+                  tocable ? estilos.celdaTocable : null,
+                  { backgroundColor: fondo },
+                ];
+                return tocable ? (
+                  <Pressable
+                    key={dia}
+                    onPress={() => setSeñalada(celda ?? null)}
+                    onHoverIn={() => setSeñalada(celda ?? null)}
+                    accessibilityLabel={etiqueta}
+                    style={estilo}
+                    testID={`orders-cell-${dia}-${h}`}
+                  >
+                    {texto}
+                  </Pressable>
+                ) : (
+                  <View
+                    key={dia}
+                    accessibilityLabel={etiqueta}
+                    style={estilo}
+                    testID={`orders-cell-${dia}-${h}`}
+                  >
+                    {texto}
+                  </View>
+                );
+              })}
+            </Row>
+          ))}
+          <Row gap={GAP} style={estilos.fila}>
+            <View style={estilos.rotulo}>
+              <AppText variant="label" tone="subtle">
+                {t('reports.orders.perDay')}
+              </AppText>
+            </View>
+            {dias.map((dia) => (
+              <View key={dia} style={estilos.columna}>
+                <AppText variant="label" tabular testID={`orders-day-${dia}`}>
+                  {numero(analisis.porDia.get(dia) ?? 0)}
+                </AppText>
+              </View>
+            ))}
+          </Row>
+        </View>
 
         <Row gap={spacing.xs} align="center" wrap>
           <AppText variant="label" tone="subtle">
@@ -348,15 +377,16 @@ export function frasesDelAnalisis(
 }
 
 const GAP = 2;
-const ANCHO = 40;
+/** 44: el mínimo táctil del proyecto (`responsive-check`). */
+const TACTIL = 44;
 
 const useEstilos = estilosDelTema((colors) => ({
   fila: { marginTop: GAP },
   rotulo: { width: 44, justifyContent: 'center' as const },
-  columna: { width: ANCHO, alignItems: 'center' as const },
-  total: { width: 56, alignItems: 'flex-end' as const, justifyContent: 'center' as const },
+  columna: { flex: 1, minWidth: 0, alignItems: 'center' as const },
   celda: {
-    width: ANCHO,
+    flex: 1,
+    minWidth: 0,
     height: 30,
     borderRadius: 6,
     alignItems: 'center' as const,
@@ -364,6 +394,7 @@ const useEstilos = estilosDelTema((colors) => ({
     borderWidth: 1,
     borderColor: colors.border,
   },
+  celdaTocable: { height: TACTIL, minWidth: TACTIL },
   muestra: { width: 18, height: 12, borderRadius: 4 },
   aparte: { marginLeft: spacing.md },
 }));
