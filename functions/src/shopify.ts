@@ -233,6 +233,62 @@ export const connectShopify = onCall({ timeoutSeconds: 300 }, async (request) =>
   return { shop_name: tienda.name, days: resumen.dias, orders: resumen.ordenes };
 });
 
+/**
+ * TRAER EL HISTORIAL (13-nov). Andree: «¿por qué no tengo órdenes de agosto?». Porque
+ * `read_orders` solo alcanza 60 días. El historial entero lo da `read_all_orders`, que Shopify
+ * concede a mano (pedido el 13-nov para «Krealo Shift - pedidos»).
+ *
+ * Con la credencial ya guardada: nadie vuelve a pegar el secreto.
+ *
+ * SOLO SI LA APP TIENE `read_all_orders`. Sin él Shopify no da error: devuelve los 60 días y
+ * calla. Y `sincronizar` escribe un documento por día, también los vacíos, así que pedir 365
+ * días sin el permiso dejaría casi diez meses en «0 órdenes» cuando en realidad son «sin
+ * datos». Por eso se pregunta antes a Shopify qué permisos tiene la app, y sin ese permiso se
+ * dice en vez de traer.
+ *
+ * 365 días: un año entero compara cada temporada con la del año anterior, y cabe en un solo
+ * lote de Firestore (500 escrituras) y en las 40 páginas de 250 órdenes de `leerOrdenes`.
+ */
+const DIAS_DE_HISTORIAL = 365;
+
+async function tienePermiso(credenciales: Credenciales, permiso: string): Promise<boolean> {
+  const token = await pedirToken(credenciales);
+  const datos = await graphql<{
+    currentAppInstallation: { accessScopes: { handle: string }[] };
+  }>(credenciales.shop, token, '{ currentAppInstallation { accessScopes { handle } } }');
+  return datos.currentAppInstallation.accessScopes.some((scope) => scope.handle === permiso);
+}
+
+export const backfillShopifyOrders = onCall({ timeoutSeconds: 540 }, async (request) => {
+  const uid = requireUid(request);
+  const organizationId = texto((request.data ?? {}).p_organization_id);
+  if (organizationId === null) throw new HttpsError('invalid-argument', 'Falta la empresa.');
+  requireRole(await membershipOf(uid, organizationId), ['owner', 'admin']);
+
+  const doc = await db.collection(CREDENCIALES).doc(organizationId).get();
+  if (!doc.exists) throw new HttpsError('failed-precondition', 'La tienda no está conectada.');
+  const credenciales = doc.data() as Credenciales;
+
+  if (!(await tienePermiso(credenciales, 'read_all_orders'))) {
+    throw new HttpsError(
+      'failed-precondition',
+      'Shopify todavía no deja leer órdenes de más de 60 días: falta que la app tenga el permiso «read_all_orders».',
+    );
+  }
+
+  const resumen = await sincronizar(organizationId, credenciales, DIAS_DE_HISTORIAL);
+  await audit({
+    organizationId,
+    actorUserId: uid,
+    action: 'shopify_history_backfilled',
+    entityType: 'shopify_status',
+    entityId: organizationId,
+    before: null,
+    after: { days: resumen.dias, orders: resumen.ordenes },
+  });
+  return { days: resumen.dias, orders: resumen.ordenes };
+});
+
 /** Desconectar borra el ID y el secreto; las órdenes por hora ya sumadas se quedan. */
 export const disconnectShopify = onCall(async (request) => {
   const uid = requireUid(request);

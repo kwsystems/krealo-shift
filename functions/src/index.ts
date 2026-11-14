@@ -117,4 +117,9 @@ export { deleteAvailability, markAvailabilitySeen, saveAvailability } from './di
 export { clearAbsenceResolution, resolveAbsence } from './faltas';
 export { setEmployeePay } from './sueldos';
 // Las órdenes de Shopify por hora, para Reportes (13-nov): conectar, desconectar y traerlas.
-export { connectShopify, disconnectShopify, syncShopifyOrders } from './shopify';
+export {
+  backfillShopifyOrders,
+  connectShopify,
+  disconnectShopify,
+  syncShopifyOrders,
+} from './shopify';

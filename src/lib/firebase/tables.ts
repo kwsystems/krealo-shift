@@ -259,6 +259,8 @@ export const RPC = {
   /** Conectar y desconectar la tienda de Shopify (13-nov). Ver `functions/src/shopify.ts`. */
   connectShopify: 'connect_shopify',
   disconnectShopify: 'disconnect_shopify',
+  /** Traer el historial de 12 meses cuando la app tiene read_all_orders (13-nov). */
+  backfillShopifyOrders: 'backfill_shopify_orders',
   clearAbsenceResolution: 'clear_absence_resolution',
   /** El sueldo de una persona, para el sueldo aproximado (13-oct). Ver `functions/src/sueldos.ts`. */
   setEmployeePay: 'set_employee_pay',

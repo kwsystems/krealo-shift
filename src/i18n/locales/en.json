@@ -1043,6 +1043,10 @@
       "neverSynced": "Not updated yet.",
       "syncFailed": "The last update failed",
       "disconnect": "Disconnect",
+      "history": "Bring in the last year",
+      "historyFailed": "Could not bring in the history",
+      "historyDone_one": "Done: {{count}} order in the last {{days}} days.",
+      "historyDone_other": "Done: {{count}} orders in the last {{days}} days.",
       "adminOnly": "Not connected. An administrator can connect it."
     },
     "managerLocations": "Locations they manage",

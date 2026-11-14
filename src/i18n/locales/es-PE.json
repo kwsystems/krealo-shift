@@ -1043,6 +1043,10 @@
       "neverSynced": "Todavía no se ha actualizado.",
       "syncFailed": "La última actualización falló",
       "disconnect": "Desconectar",
+      "history": "Traer el último año",
+      "historyFailed": "No se pudo traer el historial",
+      "historyDone_one": "Listo: {{count}} orden en los últimos {{days}} días.",
+      "historyDone_other": "Listo: {{count}} órdenes en los últimos {{days}} días.",
       "adminOnly": "No está conectada. Quien administra la empresa la puede conectar."
     },
     "managerLocations": "Sedes que gestiona",

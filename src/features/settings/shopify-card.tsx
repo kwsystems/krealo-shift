@@ -28,7 +28,7 @@ export function ShopifyCard({
   const { t } = useTranslation();
   const language = currentLanguage();
   const estado = useEstadoDeShopify(organizationId);
-  const { conectar, desconectar } = useMutacionesDeShopify(organizationId);
+  const { conectar, desconectar, traerHistorial } = useMutacionesDeShopify(organizationId);
   const [tienda, setTienda] = useState('');
   const [clientId, setClientId] = useState('');
   const [secreto, setSecreto] = useState('');
@@ -68,8 +68,40 @@ export function ShopifyCard({
               testID="shopify-error"
             />
           ) : null}
+          {/*
+            EL HISTORIAL (13-nov): al conectar solo entran 60 días, lo que da `read_orders`. Con
+            el permiso `read_all_orders` en la app, esto trae el último año sin volver a pegar
+            el secreto. Sin el permiso, el servidor lo dice y no rellena días con ceros.
+          */}
+          {traerHistorial.isError ? (
+            <InlineNotice
+              tone="late"
+              icon="warning-outline"
+              title={t('settings.shopify.historyFailed')}
+              body={traerHistorial.error.message}
+              testID="shopify-history-error"
+            />
+          ) : null}
+          {traerHistorial.isSuccess ? (
+            <InlineNotice
+              tone="working"
+              icon="checkmark-circle-outline"
+              title={t('settings.shopify.historyDone', {
+                count: Number(traerHistorial.data?.orders ?? 0),
+                days: Number(traerHistorial.data?.days ?? 0),
+              })}
+              testID="shopify-history-done"
+            />
+          ) : null}
           {canEdit ? (
-            <Row gap={spacing.sm}>
+            <Row gap={spacing.sm} wrap>
+              <GhostButton
+                label={t('settings.shopify.history')}
+                loading={traerHistorial.isPending}
+                onPress={() => traerHistorial.mutate()}
+                fullWidth={false}
+                testID="shopify-history"
+              />
               <GhostButton
                 label={t('settings.shopify.disconnect')}
                 loading={desconectar.isPending}

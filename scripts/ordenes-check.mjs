@@ -10,6 +10,7 @@
  *   3. En el teléfono el mapa se desliza dentro de su tarjeta, no la página.
  *   4. Ajustes → Shopify: conectada; desconectar enseña el formulario; conectar la vuelve a
  *      dejar conectada.
+ *   5. «Traer el último año» responde con cuántas órdenes trajo.
  *
  * Uso: node scripts/ordenes-check.mjs <export-demo>
  */
@@ -145,6 +146,22 @@ try {
       .catch(() => false);
     if (!vuelta) fallar(caso4, 'tras conectar no dice que está conectada');
     else pasa(caso4);
+
+    /* ---------------------------------------------------------------- 5 */
+    // «Traer el último año» (13-nov): con la tienda conectada, el botón dice cuánto trajo.
+    const caso5 = 'Ajustes → Shopify: traer el último año';
+    await enAjustes.locator('[data-testid="shopify-history"]').click();
+    const listo = await enAjustes
+      .locator('[data-testid="shopify-history-done"]')
+      .waitFor({ timeout: 8000 })
+      .then(() => true)
+      .catch(() => false);
+    if (!listo) fallar(caso5, 'el botón no dice cuántas órdenes trajo');
+    else
+      pasa(
+        caso5,
+        sinGlifos(await enAjustes.locator('[data-testid="shopify-history-done"]').innerText()),
+      );
   }
   await ajustes.close();
 } finally {

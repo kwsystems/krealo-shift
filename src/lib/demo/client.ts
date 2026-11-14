@@ -1580,6 +1580,15 @@ function crearRpc(almacen: Almacen) {
         almacen.set('shopify_status', []);
         return sinError({ ok: true });
       }
+      /* El historial: en la demo ya están sembradas las semanas; solo se cuentan. */
+      case 'backfill_shopify_orders': {
+        if (filas('shopify_status').length === 0) return conError('La tienda no está conectada.');
+        const dias = filas('orders_by_hour');
+        return sinError({
+          days: dias.length,
+          orders: dias.reduce((suma, fila) => suma + Number(fila.orders ?? 0), 0),
+        });
+      }
 
       /* Como `setEmployeePay`: uno por persona, y sin monto se borra. */
       case 'set_employee_pay': {

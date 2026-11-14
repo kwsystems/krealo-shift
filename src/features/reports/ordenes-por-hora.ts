@@ -130,6 +130,11 @@ export function useMutacionesDeShopify(organizationId: string) {
       mutationFn: () => llamar(RPC.disconnectShopify, { p_organization_id: organizationId }),
       onSuccess: refrescar,
     }),
+    /** El último año, con la conexión guardada (necesita `read_all_orders` en la app). */
+    traerHistorial: useMutation({
+      mutationFn: () => llamar(RPC.backfillShopifyOrders, { p_organization_id: organizationId }),
+      onSuccess: refrescar,
+    }),
   };
 }
 
