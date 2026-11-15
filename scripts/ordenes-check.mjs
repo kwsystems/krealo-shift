@@ -11,6 +11,8 @@
  *   4. Ajustes → Shopify: conectada; desconectar enseña el formulario; conectar la vuelve a
  *      dejar conectada.
  *   5. «Traer el último año» responde con cuántas órdenes trajo.
+ *   6. Un mes con órdenes y sin fichajes enseña el mapa debajo del aviso de vacío, sin el
+ *      selector «por persona» ni el plan de personal (no hay turnos con que compararlas).
  *
  * Uso: node scripts/ordenes-check.mjs <export-demo>
  */
@@ -164,6 +166,39 @@ try {
       );
   }
   await ajustes.close();
+
+  /* ---------------------------------------------------------------- 6 */
+  const caso6 = 'Un mes sin fichajes enseña las órdenes solas';
+  const atras = await navegador.newContext({ viewport: { width: 1440, height: 1000 } });
+  const enAtras = await atras.newPage();
+  await entrarComoDemo(enAtras, base);
+  await reportesDelMes(enAtras);
+  let meses = 0;
+  // Hacia atrás hasta el primer mes sin fichajes; la demo siembra un año de órdenes.
+  while (meses < 12 && (await enAtras.locator('[data-testid="orders-no-shifts"]').count()) === 0) {
+    await enAtras.locator('[data-testid="month-previous"]').click();
+    await enAtras.waitForTimeout(700);
+    meses += 1;
+  }
+  const aviso = await enAtras.locator('[data-testid="orders-no-shifts"]').count();
+  if (aviso === 0) {
+    fallar(caso6, 'en 12 meses hacia atrás ninguno enseña las órdenes sin fichajes');
+  } else {
+    const totalSolo = sinGlifos(
+      (await enAtras.locator('[data-testid="orders-total"]').textContent()) ?? '',
+    );
+    const selector = await enAtras.locator('[data-testid="orders-mode"]').count();
+    const plan = await enAtras.locator('[data-testid="orders-staffing"]').count();
+    const nadie = await enAtras.locator('[data-testid="orders-insight-nobody"]').count();
+    await enAtras
+      .locator('[data-testid="chart-orders"]')
+      .screenshot({ path: 'capturas/ordenes-sin-fichajes.png' });
+    if (!/\d+ órdenes/.test(totalSolo)) fallar(caso6, `el total dice «${totalSolo}»`);
+    else if (selector + plan + nadie > 0)
+      fallar(caso6, 'sin fichajes sigue hablando de quién estaba en turno');
+    else pasa(caso6, `${meses} mes(es) atrás: «${totalSolo}»`);
+  }
+  await atras.close();
 } finally {
   await navegador.close();
   await cerrar();

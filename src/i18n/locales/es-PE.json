@@ -633,6 +633,8 @@
       "nobody": "Con órdenes y nadie en turno: {{list}}.",
       "quiet": "Con gente y casi sin órdenes: el {{where}}, {{people}} personas en turno para {{orders}} órdenes de media.",
       "readout": "{{where}}: {{orders}} órdenes de media, {{people}} personas en turno, {{sales}} vendidos.",
+      "readoutNoShifts": "{{where}}: {{orders}} órdenes de media, {{sales}} vendidos.",
+      "noShifts": "En este periodo no hay fichajes: se ven solo las órdenes de la tienda, sin quién estaba en turno.",
       "footnote": "De {{shop}}. Se actualiza sola cada hora (la última vez: {{when}})",
       "notConnected": "La tienda de Shopify no está conectada",
       "notConnectedAdmin": "Conéctala en Ajustes → Shopify y aquí verás a qué horas de cada día entran más órdenes.",

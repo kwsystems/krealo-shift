@@ -47,7 +47,9 @@ function cortesPorQuintil(valores: number[]): number[] {
     (a, b) => a - b,
   );
   if (orden.length === 0) return [];
-  return [1, 2, 3, 4].map((q) => orden[Math.min(orden.length - 1, Math.floor((orden.length * q) / 5))] ?? 0);
+  return [1, 2, 3, 4].map(
+    (q) => orden[Math.min(orden.length - 1, Math.floor((orden.length * q) / 5))] ?? 0,
+  );
 }
 
 type Modo = 'ordenes' | 'porPersona';
@@ -75,6 +77,7 @@ export function OrdenesPorHoraCard({
   language,
   esAdmin,
   equipo,
+  conTurnos = true,
 }: {
   analisis: AnalisisDeOrdenes | null;
   estado: EstadoDeShopify | null;
@@ -83,11 +86,18 @@ export function OrdenesPorHoraCard({
   esAdmin: boolean;
   /** Personas activas en el equipo: el plan de personal lo dice al lado de lo que reparte. */
   equipo: number;
+  /**
+   * SIN FICHAJES EN EL PERIODO (15-nov): los meses de antes del reloj tienen órdenes y nadie
+   * marcó. Ahí «por persona en turno», «nadie en turno» y el plan de personal mentirían (todo
+   * saldría como «sin nadie»), así que se enseñan solo las órdenes.
+   */
+  conTurnos?: boolean;
 }) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const estilos = useEstilos();
-  const [modo, setModo] = useState<Modo>('ordenes');
+  const [modoElegido, setModo] = useState<Modo>('ordenes');
+  const modo: Modo = conTurnos ? modoElegido : 'ordenes';
   const [señalada, setSeñalada] = useState<Celda | null>(null);
   // En el teléfono no caben siete casillas de 44 px: ahí el mapa se lee sin tocar.
   const tocable = useResponsive().density !== 'compact';
@@ -151,11 +161,10 @@ export function OrdenesPorHoraCard({
     if (celda.personas === 0) return celda.ordenes > 0 ? Number.POSITIVE_INFINITY : null;
     return celda.ordenes / celda.personas;
   };
-  const cortes = cortesPorQuintil(
-    [...analisis.celdas.values()].map((celda) => valor(celda) ?? 0),
-  );
+  const cortes = cortesPorQuintil([...analisis.celdas.values()].map((celda) => valor(celda) ?? 0));
   const pintar = (n: number | null) => {
-    if (n === null || n <= 0) return { fondo: colors.surface, tinta: colors.ink500, paso: 0, borde: null };
+    if (n === null || n <= 0)
+      return { fondo: colors.surface, tinta: colors.ink500, paso: 0, borde: null };
     // Órdenes y nadie en turno: sin color de calor (sería un rojo más) sino con borde de alerta.
     if (!Number.isFinite(n))
       return { fondo: colors.surface, tinta: colors.danger600, paso: -1, borde: colors.danger600 };
@@ -163,7 +172,7 @@ export function OrdenesPorHoraCard({
     const { fondo, tinta } = CALOR[paso] ?? CALOR[0];
     return { fondo, tinta, paso: paso + 1, borde: null };
   };
-  const plan = planDePersonal(analisis, equipo);
+  const plan = conTurnos ? planDePersonal(analisis, equipo) : null;
 
   const dias = Array.from({ length: 7 }, (_, i) => (weekStartsOn + i) % 7);
   const frases = frasesDelAnalisis(analisis, {
@@ -171,16 +180,21 @@ export function OrdenesPorHoraCard({
     numero,
     dondeCuando,
     dia: (d) => nombreDelDia(d, language, 'long'),
-  });
-  const lectura =
-    señalada === null
-      ? null
-      : t('reports.orders.readout', {
-          where: dondeCuando(señalada),
-          orders: numero(señalada.ordenes),
-          people: numero(señalada.personas),
-          sales: dinero(señalada.ventas, analisis.moneda),
+  }).filter((frase) => conTurnos || FRASES_SIN_TURNOS.includes(frase.id));
+  const leerCelda = (celda: Celda) =>
+    conTurnos
+      ? t('reports.orders.readout', {
+          where: dondeCuando(celda),
+          orders: numero(celda.ordenes),
+          people: numero(celda.personas),
+          sales: dinero(celda.ventas, analisis.moneda),
+        })
+      : t('reports.orders.readoutNoShifts', {
+          where: dondeCuando(celda),
+          orders: numero(celda.ordenes),
+          sales: dinero(celda.ventas, analisis.moneda),
         });
+  const lectura = señalada === null ? null : leerCelda(señalada);
 
   return (
     <ChartCard
@@ -200,16 +214,25 @@ export function OrdenesPorHoraCard({
           })}
         </AppText>
 
-        <SegmentedControl<Modo>
-          label={t('reports.orders.mode')}
-          value={modo}
-          options={[
-            { value: 'ordenes', label: t('reports.orders.modeOrders') },
-            { value: 'porPersona', label: t('reports.orders.modePerPerson') },
-          ]}
-          onChange={setModo}
-          testID="orders-mode"
-        />
+        {conTurnos ? (
+          <SegmentedControl<Modo>
+            label={t('reports.orders.mode')}
+            value={modo}
+            options={[
+              { value: 'ordenes', label: t('reports.orders.modeOrders') },
+              { value: 'porPersona', label: t('reports.orders.modePerPerson') },
+            ]}
+            onChange={setModo}
+            testID="orders-mode"
+          />
+        ) : (
+          <InlineNotice
+            tone="info"
+            icon="time-outline"
+            body={t('reports.orders.noShifts')}
+            testID="orders-no-shifts"
+          />
+        )}
         {/* Lo que dice cada modo, en una línea: «por persona en turno» no se entendía solo. */}
         <AppText variant="label" tone="muted" testID="orders-mode-help">
           {modo === 'ordenes'
@@ -246,15 +269,7 @@ export function OrdenesPorHoraCard({
                 const celda = analisis.celdas.get(claveDeCelda(dia, h));
                 const n = valor(celda);
                 const { fondo, tinta, paso, borde } = pintar(n);
-                const etiqueta =
-                  celda === undefined
-                    ? undefined
-                    : t('reports.orders.readout', {
-                        where: dondeCuando(celda),
-                        orders: numero(celda.ordenes),
-                        people: numero(celda.personas),
-                        sales: dinero(celda.ventas, analisis.moneda),
-                      });
+                const etiqueta = celda === undefined ? undefined : leerCelda(celda);
                 const texto = (
                   <AppText variant="label" tabular style={{ color: tinta }}>
                     {paso === -1 ? '!' : n === null || n <= 0 ? '' : numero(n)}
@@ -349,11 +364,7 @@ export function OrdenesPorHoraCard({
                 const cambio = d.personasSugeridas - Math.round(d.personasAhora);
                 const flecha = cambio > 0 ? '↑' : cambio < 0 ? '↓' : '=';
                 return (
-                  <AppText
-                    key={d.diaSemana}
-                    variant="body"
-                    testID={`orders-staff-${d.diaSemana}`}
-                  >
+                  <AppText key={d.diaSemana} variant="body" testID={`orders-staff-${d.diaSemana}`}>
                     {`${flecha} ${t('reports.orders.staffDay', {
                       day: nombreDelDia(d.diaSemana, language, 'long'),
                       orders: numero(d.ordenes),
@@ -458,6 +469,9 @@ export function frasesDelAnalisis(
   }
   return frases;
 }
+
+/** Las frases que solo hablan de órdenes: sin fichajes, las de personas en turno sobran. */
+const FRASES_SIN_TURNOS = ['peak', 'next', 'day'];
 
 const GAP = 2;
 /** 44: el mínimo táctil del proyecto (`responsive-check`). */

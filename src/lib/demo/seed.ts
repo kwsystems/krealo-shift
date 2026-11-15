@@ -173,9 +173,13 @@ function azarDe(texto: string): number {
   return ((h >>> 0) % 1000) / 1000;
 }
 
+/**
+ * UN AÑO DE ÓRDENES, como deja «Traer el último año» (15-nov): así la demo tiene meses con
+ * órdenes y sin fichajes, que en Reportes enseñan el mapa sin la parte de quién estaba en turno.
+ */
 function ordenesSembradas(hoy: Date, ahora: Date): Fila[] {
   const filas: Fila[] = [];
-  for (let atras = 0; atras < 70; atras += 1) {
+  for (let atras = 0; atras < 365; atras += 1) {
     const fecha = sumarDias(hoy, -atras);
     const dia = fechaClave(fecha);
     const hours: Record<string, { orders: number; sales: number }> = {};

@@ -339,6 +339,13 @@ export function ReportsScreen() {
     ahoraISO: nowISO,
     timezone: scope.timezone,
   });
+  /*
+   * SIN FICHAJES NI TURNOS, el periodo no tiene nada que reportar de horas. Pero puede tener
+   * órdenes de Shopify (15-nov: con el historial de un año, los meses de antes del reloj), y
+   * esas se enseñan igual, debajo del aviso: ver el final de la pantalla.
+   */
+  const sinFichajes =
+    filasResumen.length === 0 && filasSesiones.length === 0 && programado.total === 0;
   const dentro = incluyeHoy
     ? dentroPorEmpleado(sessions.data ?? [], enCursoPorSesionDe(workingNow.data), nowISO)
     : new Map<string, { minutos: number }>();
@@ -935,9 +942,7 @@ export function ReportsScreen() {
           <AsyncSection
             isPending={cargando}
             error={error}
-            isEmpty={
-              filasResumen.length === 0 && filasSesiones.length === 0 && programado.total === 0
-            }
+            isEmpty={sinFichajes}
             loadingLabel={t('reports.loading')}
             emptyTitle={t('reports.emptyTitle')}
             emptyBody={t('reports.emptyBody')}
@@ -1400,6 +1405,21 @@ export function ReportsScreen() {
               </View>
             </Stack>
           </AsyncSection>
+
+          {!cargando &&
+          error === null &&
+          sinFichajes &&
+          (analisisDeOrdenes?.totalOrdenes ?? 0) > 0 ? (
+            <OrdenesPorHoraCard
+              analisis={analisisDeOrdenes}
+              estado={estadoDeShopify.data ?? null}
+              weekStartsOn={scope.weekStartsOn}
+              language={language}
+              esAdmin={scope.isAdmin}
+              equipo={(empleados.data ?? []).filter((e) => e.status === 'active').length}
+              conTurnos={false}
+            />
+          ) : null}
         </Stack>
       </ResponsiveContainer>
     </AppScreen>

@@ -633,6 +633,8 @@
       "nobody": "Orders with nobody on shift: {{list}}.",
       "quiet": "Staffed but almost no orders: {{where}}, {{people}} people on shift for {{orders}} orders on average.",
       "readout": "{{where}}: {{orders}} orders on average, {{people}} people on shift, {{sales}} sold.",
+      "readoutNoShifts": "{{where}}: {{orders}} orders on average, {{sales}} sold.",
+      "noShifts": "No clock-ins in this period: only the store's orders are shown, without who was on shift.",
       "footnote": "From {{shop}}. Updates every hour (last time: {{when}})",
       "notConnected": "Your Shopify store isn't connected",
       "notConnectedAdmin": "Connect it in Settings → Shopify to see which hours of each day bring the most orders.",
