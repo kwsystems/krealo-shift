@@ -31,6 +31,10 @@
  *    extra» o «Está bien así». Cualquiera lo quita, y el aviso de Horario de ese día se va
  *    con él: lo que se decide en un sitio no se vuelve a preguntar en otro.
  *
+ * 11. CORREGIR LA JORNADA LA DA POR MIRADA (15-nov): un caso «Salió … después de su turno» sin
+ *    posible extra se va al corregir la jornada desde «Ver jornada», sin pulsar además «Está
+ *    bien así». Andree: «si ya cambié la jornada aquí, ¿por qué sigue ahí?».
+ *
  * La semana es la ANTERIOR: la demostración la siembra entera, así que el arnés no depende
  * del día de la semana en que se corra.
  *
@@ -500,6 +504,62 @@ try {
       problemas.push('9: Horario sigue ofreciendo «Visto»: se decide en Horas');
     }
     console.log(`  horario tras decidir ${siguen.length} avisos de lo decidido`);
+    await contexto.close();
+  }
+
+  /* ---------------------- 11: corregir la jornada la da por mirada (15-nov) */
+  {
+    const contexto = await navegador.newContext({ viewport: { width: 1280, height: 900 } });
+    const pagina = await contexto.newPage();
+    // `?escenario=cambiohorario`: un turno trabajado tres horas más tarde, sin tiempo de más.
+    await pagina.goto(base + '/?escenario=cambiohorario', { waitUntil: 'networkidle' });
+    await esperarPantalla(pagina, MARCADOR_ACCESO, { asentar: 0 });
+    await pagina.locator('[data-testid="sign-in-demo"]').click();
+    await esperarPantalla(pagina, MARCADORES['/'], { asentar: 400 });
+    // Por el menú y no con la URL: recargar la página perdería el escenario.
+    await pagina.locator('a[href$="/hours"]').first().click();
+    await esperar(pagina, 1500);
+    await pagina.locator('[data-testid="week-previous"]').first().click();
+    await esperar(pagina, 1800);
+    const candidatos = await pagina.locator('[data-testid^="caso-"]').evaluateAll((nodos) =>
+      nodos
+        .map((n) => ({ id: n.getAttribute('data-testid').slice('caso-'.length), n }))
+        .filter(({ id }) => id.endsWith(':fuera_de_turno'))
+        .map(({ id, n }) => ({ id, texto: (n.innerText || '').replace(/\s+/g, ' ').trim() })),
+    );
+    let caso;
+    for (const candidato of candidatos) {
+      const sinExtra =
+        (await pagina.locator(`[data-testid="caso-${candidato.id}-extra"]`).count()) === 0 &&
+        (await pagina.locator(`[data-testid="caso-${candidato.id}-visto"]`).count()) > 0;
+      if (sinExtra) {
+        caso = candidato;
+        break;
+      }
+    }
+    if (caso === undefined) {
+      problemas.push('11: no hay un caso fuera de turno sin posible extra para corregir');
+    } else {
+      await clic(pagina, `caso-${caso.id}-jornada`);
+      await pagina.locator('[data-testid="session-detail-sheet"]').waitFor({ timeout: 8000 });
+      const campo = pagina.locator('[data-testid="session-correct-start"]');
+      const [h, m] = (await campo.inputValue()).split(':').map(Number);
+      // Un minuto más tarde: cambia la jornada sin darle tiempo de más.
+      const nueva = `${String(h + Math.floor((m + 1) / 60)).padStart(2, '0')}:${String((m + 1) % 60).padStart(2, '0')}`;
+      await campo.fill(nueva);
+      await pagina.locator('[data-testid="session-correct-reason"]').fill('Cambio horario');
+      await clic(pagina, 'session-correct-submit');
+      await pagina
+        .locator('[data-testid="session-detail-sheet"]')
+        .waitFor({ state: 'detached', timeout: 8000 })
+        .catch(() => problemas.push('11: la hoja de la jornada no se cierra al corregir'));
+      const fuera = await seFue(pagina, caso.id);
+      console.log(`  corregir la jornada  «${caso.texto.slice(0, 70)}» → se va: ${fuera ? 'sí' : 'no'}`);
+      if (!fuera) problemas.push('11: corregida la jornada, el caso fuera de turno sigue por resolver');
+      await pagina.locator('[data-testid="por-resolver"]').screenshot({
+        path: 'capturas/casos-corregir-jornada.png',
+      }).catch(() => {});
+    }
     await contexto.close();
   }
 

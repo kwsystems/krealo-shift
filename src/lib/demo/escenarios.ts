@@ -31,6 +31,7 @@ export const ESCENARIOS = [
   'cumplido',
   'avisos',
   'refrigerio',
+  'cambiohorario',
 ] as const;
 export type Escenario = (typeof ESCENARIOS)[number];
 
@@ -499,6 +500,65 @@ function dejarUnDiaSinRefrigerio(almacen: Almacen): void {
   ]);
 }
 
+/**
+ * EL TURNO TRABAJADO TRES HORAS MÁS TARDE (15-nov), el caso de Michelle: turno de 10:00 a
+ * 19:00 y marcó de 13:00 a 22:00, las mismas horas. No hay tiempo de más, solo la marca de
+ * salir tarde: «Salió 3 h después de su turno», con «Está bien así». Es lo que prueba que
+ * corregir la jornada desde el caso lo quita (`scripts/casos-check.mjs`, caso 11).
+ */
+function moverUnTurnoTresHoras(almacen: Almacen): void {
+  const lunes = localDateTimeToInstant(weekStartOfKey(dateKeyOf(new Date(), TZ), 1), '00:00', TZ);
+  if (lunes === null) return;
+  const lunesPasado = Date.parse(lunes) - 7 * 24 * 3600_000;
+  const turno = (almacen.get('shifts') ?? [])
+    .filter(
+      (fila) =>
+        fila.status === 'published' &&
+        fila.location_id === DEMO_LOCATION_1 &&
+        Date.parse(String(fila.starts_at)) >= lunesPasado &&
+        Date.parse(String(fila.ends_at)) <= Date.parse(lunes),
+    )
+    .sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0];
+  if (turno === undefined) return;
+  const tres = 3 * 3600_000;
+  const desde = Date.parse(String(turno.starts_at));
+  const hasta = Date.parse(String(turno.ends_at));
+  const entrada = new Date(desde + tres).toISOString();
+  const salida = new Date(hasta + tres).toISOString();
+  const brutos = Math.round((hasta - desde) / 60_000);
+  const refrigerio = Math.max(0, Number(turno.planned_unpaid_break_minutes ?? 0));
+  // Sus jornadas de ese día se cambian por una sola, tres horas más tarde.
+  const otras = (almacen.get('work_sessions') ?? []).filter(
+    (sesion) =>
+      sesion.employee_id !== turno.employee_id ||
+      Date.parse(String(sesion.starts_at)) >= hasta + tres ||
+      Date.parse(String(sesion.ends_at ?? sesion.starts_at)) <= desde,
+  );
+  almacen.set('work_sessions', [
+    ...otras,
+    {
+      id: `cambio-horario-${String(turno.id)}`,
+      organization_id: turno.organization_id,
+      employee_id: turno.employee_id,
+      location_id: turno.location_id,
+      shift_id: turno.id,
+      starts_at: entrada,
+      ends_at: salida,
+      gross_minutes: brutos,
+      paid_break_minutes: 0,
+      unpaid_break_minutes: refrigerio,
+      net_minutes: brutos - refrigerio,
+      status: 'complete',
+      flags: ['late_arrival', 'late_departure'],
+      departure_reason: null,
+      auto_clock_out: false,
+      avisos_vistos: [],
+      casos_resueltos: [],
+      updated_at: salida,
+    },
+  ]);
+}
+
 export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almacen {
   // `avisos` es el día de siempre: lo suyo llega después, con el panel abierto.
   if (escenario === 'normal' || escenario === 'avisos') return almacen;
@@ -516,6 +576,11 @@ export function aplicarEscenario(almacen: Almacen, escenario: Escenario): Almace
 
   if (escenario === 'refrigerio') {
     dejarUnDiaSinRefrigerio(almacen);
+    return almacen;
+  }
+
+  if (escenario === 'cambiohorario') {
+    moverUnTurnoTresHoras(almacen);
     return almacen;
   }
 

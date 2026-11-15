@@ -604,6 +604,7 @@ export async function ajustarSesion(
         uid,
         motivo: 'work_session_adjusted',
       });
+      await darPorVistasLasMarcasRaras(sessionRef, uid);
       return;
     }
   }
@@ -680,6 +681,7 @@ export async function ajustarSesion(
     });
   });
 
+  await darPorVistasLasMarcasRaras(sessionRef, uid);
   const sesion = (await sessionRef.get()).data();
   await audit({
     organizationId: sesion?.organization_id as string,
@@ -1757,6 +1759,36 @@ export const acknowledgeUnusualClock = onCall(async (request) => {
   });
   return { vistos };
 });
+
+/**
+ * CORREGIR UNA JORNADA A MANO ES HABERLA MIRADO (15-nov). Andree corrigió la de Michelle del
+ * sábado —«Cambio horario», entró a las 13:00 con turno de 10:00 a 19:00— y en Horas seguía
+ * «Salió 3 h después de su turno» por resolver: la marca `late_departure` se puso al fichar y
+ * nadie la daba por vista, así que había que corregir la jornada y además pulsar «Está bien
+ * así». Quien pone las horas a mano ya sabe a qué hora entró y salió.
+ *
+ * Se apuntan las marcas fuera de turno que la jornada tenga DESPUÉS de corregirla (la salida
+ * corregida la reconstruye y las vuelve a medir). La hora extra NO se decide aquí: si el día
+ * tiene tiempo de más, el caso sigue preguntando, porque eso es otra decisión.
+ */
+async function darPorVistasLasMarcasRaras(
+  ref: FirebaseFirestore.DocumentReference,
+  uid: string,
+): Promise<void> {
+  const sesion = (await ref.get()).data();
+  if (sesion === undefined) return;
+  const marcas = Array.isArray(sesion.flags) ? (sesion.flags as unknown[]).map(String) : [];
+  const antes = Array.isArray(sesion.avisos_vistos)
+    ? (sesion.avisos_vistos as unknown[]).map(String)
+    : [];
+  const nuevas = marcas.filter((marca) => esMarcaFueraDelTurno(marca) && !antes.includes(marca));
+  if (nuevas.length === 0) return;
+  await ref.update({
+    avisos_vistos: [...antes, ...nuevas],
+    aviso_visto_por: uid,
+    aviso_visto_at: nowISO(),
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Alta de empresa

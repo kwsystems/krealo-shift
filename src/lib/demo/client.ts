@@ -494,6 +494,15 @@ function crearRpc(almacen: Almacen) {
                 nuevoFin === null ? fila.status : fila.status === 'open' ? 'complete' : fila.status,
               // Corregida la salida, ya no es la que puso el sistema (5-oct).
               auto_clock_out: typeof fin === 'string' ? false : fila.auto_clock_out,
+              // Corregirla a mano es haberla mirado (15-nov): `darPorVistasLasMarcasRaras`.
+              avisos_vistos: [
+                ...new Set([
+                  ...(Array.isArray(fila.avisos_vistos) ? (fila.avisos_vistos as string[]) : []),
+                  ...(Array.isArray(fila.flags) ? (fila.flags as string[]) : []).filter(
+                    esMarcaFueraDelTurno,
+                  ),
+                ]),
+              ],
               updated_at: new Date().toISOString(),
             };
           }),

@@ -121,6 +121,28 @@ describe('managerAdjustTime', () => {
     expect(s?.starts_at).toBe(ENTRADA);
   });
 
+  it('corregir la jornada da por vista su marca de salir tarde: no queda «por resolver» (15-nov)', async () => {
+    // Michelle, sábado 14: turno de 10 a 19, marcó de 13 a 22 y se corrigió la entrada.
+    await db.collection(COLLECTIONS.workSessions).doc(SESION).update({
+      flags: ['late_arrival', 'late_departure'],
+    });
+    await llamar(
+      {
+        p_work_session_id: SESION,
+        p_reason: 'Cambio horario',
+        p_expected_updated_at: VERSION,
+        p_new_starts_at: '2026-09-21T13:05:00.000Z',
+      },
+      GERENTE,
+    );
+
+    const s = await sesion();
+    expect(s?.avisos_vistos).toEqual(['late_departure']);
+    expect(s?.aviso_visto_por).toBe(GERENTE);
+    // Las marcas no se borran: siguen diciendo lo que pasó.
+    expect(s?.flags).toEqual(['late_arrival', 'late_departure']);
+  });
+
   it('los minutos se TRUNCAN, no se redondean: son dinero', async () => {
     /*
      * 59 segundos de mas no son un minuto de mas. Redondeando, cada sesion podria
