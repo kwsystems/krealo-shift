@@ -401,10 +401,28 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     return mapa;
   }, [allSessions, aprobadas, netosPorDia, planificado, umbralDeAviso, scope.timezone]);
   /*
+   * LA SEMANA SE ENSEÑA ENTERA O NO SE ENSEÑA (21-nov). Al cambiar de semana las consultas
+   * llegan cada una a su ritmo, y las jornadas solían llegar antes que los turnos y las horas
+   * extra. Con los turnos vacíos, cada jornada parecía «de más» o fuera de turno: «Por
+   * resolver» y los avisos de las filas se llenaban de casos que un segundo después
+   * desaparecían. Andree: «carga un rato lo anterior y luego se borra». Mientras falte algo,
+   * la lista dice que está cargando y no afirma nada. Una consulta que falló cuenta como
+   * llegada, para que la pantalla no espere para siempre.
+   */
+  const llego = (consulta: { data: unknown; isError: boolean }) =>
+    consulta.data !== undefined || consulta.isError;
+  const semanaLista =
+    llego(sessions) &&
+    llego(turnosDeLaSemana) &&
+    llego(horasExtra) &&
+    llego(summaries) &&
+    llego(abiertas);
+
+  /*
    * CON EL FILTRO DE PERSONA, como todo lo demás de la hoja (auditoría, 4-oct): con una
    * persona elegida, «3 días por revisar» contaba los de todo el equipo.
    */
-  const diasPorRevisar = allSessions.filter(
+  const diasPorRevisar = (semanaLista ? allSessions : []).filter(
     (sesion) =>
       horaExtraPorSesion.get(sesion.id)?.tipo === 'posible' &&
       (employeeFilter === null || sesion.employee_id === employeeFilter),
@@ -448,6 +466,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
   const reabrir = useReabrirDecision();
 
   const visibleSessions = useMemo(() => {
+    if (!semanaLista) return [];
     const filtradas = allSessions.filter((session) => {
       if (employeeFilter !== null && session.employee_id !== employeeFilter) return false;
       if (statusFilter === 'needsReview') {
@@ -466,6 +485,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
     // Quien está dentro, arriba: ver `dentroPrimero`.
     return dentroPrimero(filtradas, alertsBySession, enCursoPorSesion);
   }, [
+    semanaLista,
     allSessions,
     employeeFilter,
     statusFilter,
@@ -480,7 +500,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
    * servidor no escribe, así que en producción decía siempre 0 mientras el filtro, debajo,
    * enseñaba varias.
    */
-  const porRevisar = allSessions.filter(
+  const porRevisar = (semanaLista ? allSessions : []).filter(
     (session) =>
       (employeeFilter === null || session.employee_id === employeeFilter) &&
       (alertsBySession.get(session.id) ?? []).length > 0,
@@ -616,7 +636,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
               onSelect={setSelected}
               empty={
                 <AsyncSection
-                  isPending={sessions.isPending}
+                  isPending={sessions.isPending || !semanaLista}
                   error={sessions.error}
                   isEmpty
                   emptyTitle={t('timesheet.noEntries')}
@@ -705,6 +725,7 @@ export function TimesheetsScreen({ destino }: { destino?: DestinoEnHoras } = {})
                     aprobadas={aprobadas}
                     deMasAlDecidir={deMasAlDecidir}
                     onVerJornada={setSelected}
+                    listo={semanaLista}
                   />
 
                   <TodaviaNoHaMarcado

@@ -52,6 +52,7 @@ export function PorResolverDeLaSemana({
   aprobadas,
   deMasAlDecidir,
   onVerJornada,
+  listo,
 }: {
   sesiones: readonly WorkSession[];
   turnos: readonly ShiftRow[];
@@ -70,6 +71,11 @@ export function PorResolverDeLaSemana({
   /** Lo trabajado de más al decidir cada extra: ver `extra_que_no_cuadra` (26-oct). */
   deMasAlDecidir: ReadonlyMap<string, number>;
   onVerJornada: (sesion: WorkSession) => void;
+  /**
+   * Si ya llegó todo lo de la semana (21-nov). Mientras no, no se enseña ningún caso: con los
+   * turnos o las extras todavía en camino salían casos que un segundo después desaparecían.
+   */
+  listo: boolean;
 }) {
   const { t } = useTranslation();
   const arreglar = useArreglarCaso();
@@ -100,16 +106,21 @@ export function PorResolverDeLaSemana({
   > | null>(null);
   const [enCurso, setEnCurso] = useState<string | null>(null);
 
-  const casos = casosPorResolver({
-    sesiones,
-    turnos,
-    ahoraISO: nowISO,
-    timezone,
-    aprobadas,
-    deMasAlDecidir,
-    umbralExtra,
-    debidas: debidas.data ?? [],
-  }).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
+  const deudasListas = debidas.data !== undefined || debidas.isError;
+  const casos = (
+    !listo || !deudasListas
+      ? []
+      : casosPorResolver({
+          sesiones,
+          turnos,
+          ahoraISO: nowISO,
+          timezone,
+          aprobadas,
+          deMasAlDecidir,
+          umbralExtra,
+          debidas: debidas.data ?? [],
+        })
+  ).filter((caso) => personaFiltrada === null || caso.sesion.employee_id === personaFiltrada);
   const hora = (iso: string) => formatClockTime(iso, timezone, timeFormat, language);
   const nombre = (caso: CasoPorResolver) =>
     nombres.get(caso.sesion.employee_id) ?? t('team.unknownEmployee');

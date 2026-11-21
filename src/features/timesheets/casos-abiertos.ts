@@ -40,20 +40,26 @@ export function useDiasConCasoAbierto(params: {
     to: addDaysToKey(weekStart, 6),
   });
   const debidas = useHorasDebidasDeLaSede({ organizationId, locationId });
+  // Sin turnos, extras y deudas, «Por resolver» saldría con casos falsos: ver `use-faltas.ts`.
+  const llego = (consulta: { data: unknown; isError: boolean }) =>
+    consulta.data !== undefined || consulta.isError;
+  const listo = llego(turnos) && llego(horasExtra) && llego(debidas);
   return useMemo(
     () =>
-      diasConCasoAbierto(
-        casosPorResolver({
-          sesiones,
-          turnos: turnos.data ?? [],
-          ahoraISO: nowISO,
-          timezone,
-          aprobadas: aprobadasPorDia(horasExtra.data ?? []),
-          deMasAlDecidir: deMasAlDecidirPorDia(horasExtra.data ?? []),
-          umbralExtra,
-          debidas: debidas.data ?? [],
-        }),
-      ),
-    [sesiones, turnos.data, nowISO, timezone, horasExtra.data, umbralExtra, debidas.data],
+      !listo
+        ? new Set<string>()
+        : diasConCasoAbierto(
+            casosPorResolver({
+              sesiones,
+              turnos: turnos.data ?? [],
+              ahoraISO: nowISO,
+              timezone,
+              aprobadas: aprobadasPorDia(horasExtra.data ?? []),
+              deMasAlDecidir: deMasAlDecidirPorDia(horasExtra.data ?? []),
+              umbralExtra,
+              debidas: debidas.data ?? [],
+            }),
+          ),
+    [listo, sesiones, turnos.data, nowISO, timezone, horasExtra.data, umbralExtra, debidas.data],
   );
 }

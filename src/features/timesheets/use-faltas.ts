@@ -60,10 +60,21 @@ export function useFaltasDeLaSemana(params: {
   // Lo que se dijo de cada falta: la misma consulta en Horas, Horario, Equipo y Reportes.
   const justificaciones = useJustificaciones(organizationId, locationId);
 
+  /*
+   * SIN LAS TRES CONSULTAS NO SE AFIRMA NADA (21-nov). Antes bastaban las jornadas: al cambiar
+   * de semana llegaban antes que los turnos o que las justificaciones, y durante ese rato salían
+   * faltas que la consulta siguiente borraba. Andree lo vio en Horas como «carga un rato lo
+   * anterior y luego desaparece». Una consulta que falló cuenta como llegada: si no, la
+   * pantalla esperaría para siempre.
+   */
+  const llego = (consulta: { data: unknown; isError: boolean }) =>
+    consulta.data !== undefined || consulta.isError;
+  const listo = llego(jornadas) && llego(turnos) && llego(justificaciones);
+
   return useMemo(() => {
     // Sin las jornadas no se sabe quién vino: no se afirma ninguna falta.
     const faltas =
-      jornadas.data === undefined
+      !listo || jornadas.data === undefined
         ? []
         : faltasDeLosTurnos({
             turnos: turnos.data ?? [],
@@ -75,7 +86,7 @@ export function useFaltasDeLaSemana(params: {
           });
     // Igual que las faltas: sin las jornadas no se sabe quién vino, y no se afirma nada.
     const turnosSinLlegar =
-      jornadas.data === undefined
+      !listo || jornadas.data === undefined
         ? []
         : (turnos.data ?? []).filter((turno) =>
             turnoSinLlegar({
@@ -94,6 +105,7 @@ export function useFaltasDeLaSemana(params: {
       turnosSinLlegar,
     };
   }, [
+    listo,
     turnos.data,
     jornadas.data,
     relojDesde,
